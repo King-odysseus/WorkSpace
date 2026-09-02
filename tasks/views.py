@@ -591,7 +591,11 @@ def task_attachment_download(request, attachment_id):
         return JsonResponse({'error': 'Attachment was not found.'}, status=404)
     if not attachment.file:
         return JsonResponse({'error': 'Attachment file is unavailable.'}, status=404)
-    return FileResponse(attachment.file.open('rb'), as_attachment=True, filename=attachment.original_name)
+    try:
+        attachment_file = attachment.file.open('rb')
+    except FileNotFoundError:
+        return JsonResponse({'error': 'Attachment file is unavailable.'}, status=404)
+    return FileResponse(attachment_file, as_attachment=True, filename=attachment.original_name)
 
 
 @require_http_methods(['GET', 'PATCH'])

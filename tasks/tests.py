@@ -402,6 +402,11 @@ class TaskApiTests(TestCase):
         response = self.client.delete(reverse('task-attachment-detail', args=[attachment.id]))
         self.assertEqual(response.status_code, 403)
         self.assertTrue(TaskAttachment.objects.filter(id=attachment.id).exists())
+        missing = TaskAttachment.objects.create(task=task, uploaded_by=self.user, file='task-attachments/missing.txt', original_name='missing.txt')
+        self.client.force_login(self.user)
+        missing_response = self.client.get(reverse('task-attachment-download', args=[missing.id]))
+        self.assertEqual(missing_response.status_code, 404)
+        missing.delete()
 
     def test_calendar_reminders_and_ics_export(self):
         create_response = self.client.post(
