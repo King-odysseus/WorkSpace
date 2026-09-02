@@ -9,21 +9,6 @@ import {
 import './styles.css'
 import './tijhabooks-theme.css'
 
-const members = [
-  { name: 'Sarah Chen', initials: 'SC', color: 'blue', role: 'Design lead' },
-  { name: 'James Wilson', initials: 'JW', color: 'blue', role: 'Product' },
-  { name: 'Priya Shah', initials: 'PS', color: 'green', role: 'Engineering' },
-  { name: 'Marcus Lee', initials: 'ML', color: 'orange', role: 'Marketing' },
-]
-
-const initialTasks = [
-  { id: 1, title: 'Finalize homepage concepts', member: 'Sarah Chen', tag: 'Website refresh', status: 'in progress', priority: 'high', due: 'Today', estimate: '2h' },
-  { id: 2, title: 'Review onboarding flow', member: 'Sarah Chen', tag: 'Product design', status: 'review', priority: 'normal', due: 'Today', estimate: '45m' },
-  { id: 3, title: 'Prepare launch checklist', member: 'James Wilson', tag: 'Q3 launch', status: 'in progress', priority: 'high', due: 'Today', estimate: '1h' },
-  { id: 4, title: 'Update analytics events', member: 'Priya Shah', tag: 'Q3 launch', status: 'blocked', priority: 'urgent', due: 'Overdue', estimate: '3h' },
-  { id: 5, title: 'Draft customer update', member: 'Marcus Lee', tag: 'Communications', status: 'todo', priority: 'normal', due: 'Today', estimate: '1h' },
-]
-
 function Avatar({ member, small = false }) {
   return <span className={`avatar ${member.color} ${small ? 'small' : ''}`}>{member.initials}</span>
 }
@@ -61,7 +46,7 @@ function App() {
   const today = new Date().toISOString().slice(0, 10)
   const todayLabel = new Intl.DateTimeFormat('en-GB', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${today}T12:00:00`))
   const [active, setActive] = useState('Today')
-  const [tasks, setTasks] = useState(initialTasks)
+  const [tasks, setTasks] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
   const [newTask, setNewTask] = useState('')
@@ -124,18 +109,16 @@ function App() {
     ])
       .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData]) => {
         if (!isCurrent) return
-        if (taskData.tasks.length > 0) {
-          setTasks(taskData.tasks.map(task => ({
-            id: task.id,
-            title: task.title,
-            member: task.assignee_name || 'Unassigned',
-            tag: task.project || 'General',
-            status: task.status === 'in_progress' ? 'in progress' : task.status,
-            priority: 'normal',
-            due: task.due_date || 'No due date',
-            estimate: 'n/a',
-          })))
-        }
+        setTasks(taskData.tasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          member: task.assignee_name || 'Unassigned',
+          tag: task.project || 'General',
+          status: task.status === 'in_progress' ? 'in progress' : task.status,
+          priority: 'normal',
+          due: task.due_date || 'No due date',
+          estimate: 'n/a',
+        })))
         setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations })
       })
       .catch(error => console.warn('Workspace data could not be loaded.', error.message))
@@ -228,12 +211,18 @@ function App() {
   ]
   const workspaceId = activeWorkspaceId
   const currentWorkspace = session.user.workspaces.find(workspace => workspace.id === activeWorkspaceId) || session.user.workspaces[0]
-  const teamMembers = workspaceData.members.length ? workspaceData.members.map(member => ({
+  const teamMembers = workspaceData.members.map(member => ({
     name: [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email,
     initials: [member.first_name, member.last_name].filter(Boolean).map(name => name[0]).join('').slice(0, 2).toUpperCase() || member.email.slice(0, 2).toUpperCase(),
     color: 'blue',
     role: member.role,
-  })) : members
+  }))
+  const currentUserName = [session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email
+  const completedTaskCount = tasks.filter(task => task.status === 'done').length
+  const attentionTaskCount = tasks.filter(task => ['blocked', 'review'].includes(task.status) || task.due === 'Overdue').length
+  const completionPercent = tasks.length ? Math.round((completedTaskCount / tasks.length) * 100) : 0
+  const myTasks = tasks.filter(task => task.member === currentUserName)
+  const myCompletedTaskCount = myTasks.filter(task => task.status === 'done').length
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -255,10 +244,10 @@ function App() {
         {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onComplete={completeTask} onStatusChange={changeTaskStatus} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
-        <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>68%</strong></div><em className="positive">+12% <small>vs last week</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>6 tasks</strong></div><em className="negative">2 overdue</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus time</span><strong>24h 30m</strong></div><em>this week</em></div></section>
+        <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>{completionPercent}%</strong></div><em><small>{completedTaskCount} of {tasks.length} tasks complete</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>{attentionTaskCount} tasks</strong></div><em className={attentionTaskCount ? 'negative' : 'positive'}>{attentionTaskCount ? 'Blocked, review, or overdue' : 'Nothing urgent'}</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus tasks</span><strong>{myTasks.length}</strong></div><em><small>{myCompletedTaskCount} complete</small></em></div></section>
         <div className="content-grid">
           <section className="board-section"><div className="section-header"><div><h2>Team pulse</h2><p>Today's commitments across your team</p></div><div className="header-actions"><button className="filter-button"><Filter size={15} /> Filters <ChevronDown size={14} /></button><button className="more-button"><MoreHorizontal size={19} /></button></div></div><div className="board-tabs"><button className="tab active">People</button><button className="tab">Status</button><button className="tab">Priority</button><label className="filter-select"><span className="status-dot all" /><select value={selectedFilter} onChange={event => setSelectedFilter(event.target.value)}><option>All work</option><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option></select></label></div><div className="team-board">{teamMembers.map(member => { const memberTasks = visibleTasks.filter(task => task.member === member.name); return <div className="member-row" key={member.name}><div className="member-cell"><Avatar member={member} /><div><strong>{member.name}</strong><span>{member.role}</span></div></div><div className="task-stack">{memberTasks.length ? memberTasks.map(task => <TaskCard key={task.id} task={task} onComplete={completeTask} onStatusChange={changeTaskStatus} onDelete={deleteTask} onOpenTask={setSelectedTask} />) : <div className="empty-task">No tasks in this view</div>}</div><button className="row-add"><Plus size={16} /></button></div> })}</div><button className="add-person" onClick={() => setActive('Team board')}><Plus size={16} /> Add team member</button></section>
-          <aside className="right-column"><section className="focus-card"><div className="section-header"><div><h2>My focus</h2><p>Your personal priorities</p></div><button className="more-button"><MoreHorizontal size={19} /></button></div><div className="focus-progress"><div><strong>4 of 6</strong><span>tasks completed</span></div><div className="progress-ring"><span>67%</span></div></div><div className="focus-list"><div className="focus-item done"><span className="check checked"><Check size={13} /></span><div><strong>Review team priorities</strong><span>Completed 9:12 AM</span></div></div><div className="focus-item"><span className="check" /><div><strong>Finalize homepage concepts</strong><span>Due today - 2h</span></div><span className="priority-dot high" /></div><div className="focus-item"><span className="check" /><div><strong>Schedule launch sync</strong><span>Due today - 30m</span></div></div></div><button className="text-button" onClick={() => setActive('My tasks')}>View all my tasks <ArrowUpRight size={15} /></button></section><section className="checkin-card"><div className="checkin-heading"><div className="checkin-icon"><MessageSquare size={17} /></div><div><h3>Daily check-in</h3><p>Share a quick update with the team</p></div></div><div className="checkin-questions"><span><i />What did you complete?</span><span><i />What's next?</span><span><i />Any blockers?</span></div><button className="secondary-button" onClick={() => setActive('Check-ins')}><Plus size={16} /> Start check-in</button></section><section className="activity-card"><div className="section-header"><div><h2>Recent activity</h2><p>Updates from your workspace</p></div><button className="more-button"><MoreHorizontal size={19} /></button></div><div className="activity-list"><Activity avatar="PS" color="green" text="Priya marked" strong="API integration" suffix="as blocked" time="8m ago" /><Activity avatar="JW" color="blue" text="James completed" strong="Campaign brief" suffix="" time="24m ago" /><Activity avatar="SC" color="blue" text="Sarah commented on" strong="Homepage concepts" suffix="" time="1h ago" /></div></section></aside>
+          <aside className="right-column"><section className="focus-card"><div className="section-header"><div><h2>My focus</h2><p>Your personal priorities</p></div><button className="more-button" onClick={() => setActive('My tasks')} aria-label="Open my tasks"><MoreHorizontal size={19} /></button></div><div className="focus-progress"><div><strong>{myCompletedTaskCount} of {myTasks.length}</strong><span>tasks completed</span></div><div className="progress-ring"><span>{myTasks.length ? Math.round((myCompletedTaskCount / myTasks.length) * 100) : 0}%</span></div></div><div className="focus-list">{myTasks.length ? myTasks.slice(0, 4).map(task => <div className={`focus-item ${task.status === 'done' ? 'done' : ''}`} key={task.id}><span className={`check ${task.status === 'done' ? 'checked' : ''}`}>{task.status === 'done' && <Check size={13} />}</span><div><button className="task-title-button" onClick={() => setSelectedTask(task)}>{task.title}</button><span>{task.due}</span></div></div>) : <EmptyState text="No tasks assigned to you yet." />}</div><button className="text-button" onClick={() => setActive('My tasks')}>View all my tasks <ArrowUpRight size={15} /></button></section><section className="checkin-card"><div className="checkin-heading"><div className="checkin-icon"><MessageSquare size={17} /></div><div><h3>Daily check-in</h3><p>Share a quick update with the team</p></div></div><div className="checkin-questions"><span><i />What did you complete?</span><span><i />What's next?</span><span><i />Any blockers?</span></div><button className="secondary-button" onClick={() => setActive('Check-ins')}><Plus size={16} /> Start check-in</button></section><section className="activity-card"><div className="section-header"><div><h2>Recent activity</h2><p>Updates from your workspace</p></div><button className="more-button" onClick={() => setActive('Chat')} aria-label="Open team chat"><MoreHorizontal size={19} /></button></div>{workspaceData.messages.length || workspaceData.checkIns.length || workspaceData.followUps.length ? <div className="activity-list">{workspaceData.messages.slice(-3).reverse().map(message => <Activity key={`message-${message.id}`} avatar={message.author_name.slice(0, 2).toUpperCase()} color="blue" text={`${message.author_name} posted`} strong={message.message.slice(0, 45)} suffix="in chat" time="recently" />)}{workspaceData.checkIns.slice(0, 2).map(checkIn => <Activity key={`checkin-${checkIn.id}`} avatar={checkIn.user_initials} color="green" text={`${checkIn.user_name} submitted`} strong="a check-in" suffix="" time={checkIn.date} />)}</div> : <EmptyState text="No workspace activity yet." />}</section></aside>
         </div>
         </>}
       </div>
