@@ -640,6 +640,17 @@ class TaskApiTests(TestCase):
 
 
 class AuthenticationApiTests(TestCase):
+    def test_authenticated_user_can_discover_pending_invitations_for_their_email(self):
+        owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=workspace, user=owner, role='owner')
+        invitation = WorkspaceInvitation.objects.create(workspace=workspace, email='invitee@example.com', invited_by=owner, role='member')
+        invitee = User.objects.create_user(username='invitee@example.com', email='invitee@example.com', password='secure-pass-123')
+        self.client.force_login(invitee)
+        response = self.client.get(reverse('auth-me'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['user']['pending_invitations'][0]['id'], invitation.id)
+
     def test_signup_creates_user_workspace_and_session(self):
         response = self.client.post(
             reverse('auth-me'),

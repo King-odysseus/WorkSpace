@@ -240,6 +240,21 @@ function App() {
       setSession({ loading: false, user: null, error: '' })
     }
   }
+  const acceptInvitation = async invitation => {
+    setWorkspaceError('')
+    try {
+      const response = await fetch(`/api/invitations/${invitation.id}/accept/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+      const responseData = await response.json()
+      if (!response.ok) throw new Error(responseData.error || 'Invitation could not be accepted.')
+      const sessionResponse = await fetch('/api/auth/me/', { credentials: 'include' })
+      const sessionData = await sessionResponse.json()
+      if (!sessionResponse.ok || !sessionData.user) throw new Error('Workspace access could not be refreshed.')
+      setSession(current => ({ ...current, user: sessionData.user }))
+      setActiveWorkspaceId(responseData.workspace.id)
+    } catch (acceptError) {
+      setWorkspaceError(acceptError.message)
+    }
+  }
   const markNotificationsRead = async () => {
     const response = await fetch(`/api/workspaces/${activeWorkspaceId}/notifications/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ read_all: true }) })
     if (!response.ok) return
@@ -319,6 +334,7 @@ function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <button type="button" className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id} onClick={() => markNotificationRead(notification.id)} aria-label={`Mark ${notification.title} as read`}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></button>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button" onClick={() => setActive('Settings')}><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
       <div className="page-content">
+        {session.user.pending_invitations?.map(invitation => <div className="workspace-status" key={invitation.id}><span>You are invited to join {invitation.workspace_name} as a {invitation.role}.</span><button className="secondary-button" onClick={() => acceptInvitation(invitation)}>Accept invitation</button></div>)}
         {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}
         {workspaceError && <div className="workspace-status error" role="alert"><span>Workspace data could not be loaded: {workspaceError}</span><button className="secondary-button" onClick={() => setWorkspaceReload(current => current + 1)}>Retry</button></div>}
         {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} theme={theme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} currentUserId={session.user.id} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} onActionError={message => setWorkspaceError(message)} />}

@@ -8,7 +8,7 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from .models import Membership, Workspace
+from .models import Membership, Workspace, WorkspaceInvitation
 
 
 def user_payload(user):
@@ -21,6 +21,10 @@ def user_payload(user):
         'workspaces': [
             {'id': membership.workspace.id, 'name': membership.workspace.name, 'slug': membership.workspace.slug, 'role': membership.role}
             for membership in user.workspace_memberships.select_related('workspace').all()
+        ],
+        'pending_invitations': [
+            {'id': invitation.id, 'workspace_id': invitation.workspace_id, 'workspace_name': invitation.workspace.name, 'role': invitation.role, 'created_at': invitation.created_at.isoformat()}
+            for invitation in WorkspaceInvitation.objects.filter(email__iexact=user.email, status='pending').select_related('workspace')
         ],
     }
 
