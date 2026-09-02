@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createRoot } from 'react-dom/client'
 import {
   AlertCircle, ArrowUpRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Filter, Hash, LayoutDashboard, MessageSquare, MoreHorizontal,
@@ -88,3 +89,5 @@ function TaskCard({ task, onComplete }) { const statusLabel = task.status === 'i
 function Activity({ avatar, color, text, strong, suffix, time }) { return <div className="activity-item"><span className={`avatar small ${color}`}>{avatar}</span><p>{text} <strong>{strong}</strong> {suffix}<span>{time}</span></p></div> }
 
 export default App
+
+createRoot(document.getElementById('root')).render(<App />)
