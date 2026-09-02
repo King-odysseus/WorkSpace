@@ -149,6 +149,19 @@ def require_task_editor(request, task):
     return None
 
 
+def require_follow_up_editor(request, follow_up, fields):
+    membership, error = require_workspace_member(request, follow_up.workspace_id)
+    if error:
+        return error
+    if membership.role in {'owner', 'manager'}:
+        return None
+    if request.user.id not in {follow_up.created_by_id, follow_up.assigned_to_id}:
+        return JsonResponse({'error': 'Only the follow-up creator, assignee, or a workspace leader can update it.'}, status=403)
+    if request.user.id != follow_up.created_by_id and fields - {'status'}:
+        return JsonResponse({'error': 'Assigned members can only update follow-up status.'}, status=403)
+    return None
+
+
 def health(request):
     return JsonResponse({'status': 'ok', 'service': 'workspace-api'})
 
@@ -1050,6 +1063,9 @@ def follow_up_detail(request, follow_up_id):
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     if set(payload) - {'status', 'note', 'due_date', 'assigned_to'}:
         return JsonResponse({'error': 'Only status, note, due_date, and assigned_to can be updated.'}, status=400)
+    permission_error = require_follow_up_editor(request, follow_up, set(payload))
+    if permission_error:
+        return permission_error
     if 'status' in payload:
         if payload['status'] not in {choice[0] for choice in FollowUp.STATUS_CHOICES}:
             return JsonResponse({'error': 'Invalid follow-up status.'}, status=400)

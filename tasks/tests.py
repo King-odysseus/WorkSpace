@@ -317,6 +317,43 @@ class TaskApiTests(TestCase):
         self.assertEqual(reopen_response.json()['follow_up']['status'], 'open')
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_status').count(), 2)
 
+    def test_follow_up_permissions_limit_member_edits(self):
+        creator_follow_up = self.client.post(
+            reverse('follow-up-list', args=[self.workspace.id]),
+            data=json.dumps({'note': 'Review the contract'}),
+            content_type='application/json',
+        ).json()['follow_up']
+        teammate = User.objects.create_user(username='follow-up-outsider@example.com', email='follow-up-outsider@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+
+        forbidden_response = self.client.patch(
+            reverse('follow-up-detail', args=[creator_follow_up['id']]),
+            data=json.dumps({'status': 'completed'}),
+            content_type='application/json',
+        )
+        self.assertEqual(forbidden_response.status_code, 403)
+
+        self.client.force_login(self.user)
+        assigned_response = self.client.post(
+            reverse('follow-up-list', args=[self.workspace.id]),
+            data=json.dumps({'note': 'Confirm the handoff', 'assigned_to': teammate.id}),
+            content_type='application/json',
+        ).json()['follow_up']
+        self.client.force_login(teammate)
+        allowed_response = self.client.patch(
+            reverse('follow-up-detail', args=[assigned_response['id']]),
+            data=json.dumps({'status': 'completed'}),
+            content_type='application/json',
+        )
+        self.assertEqual(allowed_response.status_code, 200)
+        reassignment_response = self.client.patch(
+            reverse('follow-up-detail', args=[assigned_response['id']]),
+            data=json.dumps({'assigned_to': None}),
+            content_type='application/json',
+        )
+        self.assertEqual(reassignment_response.status_code, 403)
+
     def test_task_attachment_upload_is_scoped_and_validated(self):
         task = Task.objects.create(workspace=self.workspace, title='Attach brief')
         upload = SimpleUploadedFile('brief.txt', b'project notes', content_type='text/plain')
