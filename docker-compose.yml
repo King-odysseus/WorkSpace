@@ -1,0 +1,43 @@
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${WORKSPACE_DB_NAME:-workspace}
+      POSTGRES_USER: ${WORKSPACE_DB_USER:-workspace}
+      POSTGRES_PASSWORD: ${WORKSPACE_DB_PASSWORD:?Set WORKSPACE_DB_PASSWORD before starting compose}
+    volumes:
+      - workspace-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      WORKSPACE_DEBUG: "false"
+      WORKSPACE_SECRET_KEY: ${WORKSPACE_SECRET_KEY:?Set WORKSPACE_SECRET_KEY before starting compose}
+      WORKSPACE_ALLOWED_HOSTS: ${WORKSPACE_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      WORKSPACE_DB_NAME: ${WORKSPACE_DB_NAME:-workspace}
+      WORKSPACE_DB_USER: ${WORKSPACE_DB_USER:-workspace}
+      WORKSPACE_DB_PASSWORD: ${WORKSPACE_DB_PASSWORD:?Set WORKSPACE_DB_PASSWORD before starting compose}
+      WORKSPACE_DB_HOST: database
+      WORKSPACE_DB_PORT: 5432
+    depends_on:
+      database:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "${WORKSPACE_WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  workspace-postgres:

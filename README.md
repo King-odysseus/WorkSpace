@@ -33,6 +33,14 @@ Copy `.env.example` to a protected environment configuration and set a unique ra
 
 The default local database is SQLite. PostgreSQL is supported for production by setting `WORKSPACE_DB_NAME`, `WORKSPACE_DB_USER`, `WORKSPACE_DB_PASSWORD`, `WORKSPACE_DB_HOST`, and `WORKSPACE_DB_PORT` in the environment.
 
+For a containerized deployment, set `WORKSPACE_SECRET_KEY` and `WORKSPACE_DB_PASSWORD` in a protected `.env` file, then run:
+
+```powershell
+docker compose up --build
+```
+
+The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data in a named volume and proxies `/api/` requests through Nginx to Django.
+
 ## Verification
 
 ```powershell
