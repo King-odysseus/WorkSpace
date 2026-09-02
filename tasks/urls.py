@@ -1,11 +1,12 @@
 from django.urls import path
 
-from .auth_views import auth_login, auth_logout, auth_me
+from .auth_views import auth_csrf, auth_login, auth_logout, auth_me
 from .views import health, task_detail, task_list
 
 urlpatterns = [
     path('health/', health, name='health'),
     path('auth/me/', auth_me, name='auth-me'),
+    path('auth/csrf/', auth_csrf, name='auth-csrf'),
     path('auth/login/', auth_login, name='auth-login'),
     path('auth/logout/', auth_logout, name='auth-logout'),
     path('tasks/', task_list, name='task-list'),

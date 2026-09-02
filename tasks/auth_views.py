@@ -6,6 +6,7 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .models import Membership, Workspace
 
@@ -29,6 +30,12 @@ def parse_json(request):
         return json.loads(request.body or '{}'), None
     except json.JSONDecodeError:
         return None, JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+
+
+@ensure_csrf_cookie
+@require_http_methods(['GET'])
+def auth_csrf(request):
+    return JsonResponse({'status': 'ok'})
 
 
 @require_http_methods(['GET', 'POST'])

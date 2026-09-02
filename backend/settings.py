@@ -4,6 +4,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'dev-only-change-before-production'
 DEBUG = True
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:5175', 'http://localhost:5175', 'http://192.168.68.55:5175']
 
 INSTALLED_APPS = [
     'django.contrib.admin',

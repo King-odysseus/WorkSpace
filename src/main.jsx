@@ -34,6 +34,7 @@ function App() {
   const [newTask, setNewTask] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('All work')
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
+  const [session, setSession] = useState({ loading: true, user: null, error: '' })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -41,6 +42,14 @@ function App() {
   }, [theme])
 
   useEffect(() => {
+    fetch('/api/auth/me/', { credentials: 'include' })
+      .then(response => response.json())
+      .then(data => setSession({ loading: false, user: data.user || null, error: '' }))
+      .catch(error => setSession({ loading: false, user: null, error: error.message }))
+  }, [])
+
+  useEffect(() => {
+    if (!session.user) return undefined
     let isCurrent = true
 
     fetch('/api/tasks/')
@@ -67,9 +76,11 @@ function App() {
     return () => {
       isCurrent = false
     }
-  }, [])
+  }, [session.user])
 
   const visibleTasks = useMemo(() => selectedFilter === 'All work' ? tasks : tasks.filter(task => task.status === selectedFilter), [tasks, selectedFilter])
+  if (session.loading) return <div className="auth-loading">Loading WorkSpace...</div>
+  if (!session.user) return <AuthScreen onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
   const completeTask = (id) => setTasks(current => current.map(task => task.id === id ? { ...task, status: 'done' } : task))
   const addTask = (event) => {
     event.preventDefault()
@@ -116,6 +127,41 @@ function App() {
 
 function TaskCard({ task, onComplete }) { const statusLabel = task.status === 'in progress' ? 'In progress' : task.status === 'todo' ? 'To do' : task.status === 'review' ? 'Review' : task.status === 'blocked' ? 'Blocked' : 'Done'; return <div className={`task-card ${task.status}`}><button className={`task-check ${task.status === 'done' ? 'checked' : ''}`} onClick={() => onComplete(task.id)}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><strong>{task.title}</strong><div><span className={`task-status ${task.status}`}>{statusLabel}</span><span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span><MoreHorizontal size={16} className="task-more" /></div> }
 function Activity({ avatar, color, text, strong, suffix, time }) { return <div className="activity-item"><span className={`avatar small ${color}`}>{avatar}</span><p>{text} <strong>{strong}</strong> {suffix}<span>{time}</span></p></div> }
+
+function AuthScreen({ onAuthenticated, connectionError }) {
+  const [mode, setMode] = useState('login')
+  const [form, setForm] = useState({ email: '', password: '', first_name: '', workspace_name: '' })
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const updateField = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }))
+  const submit = async event => {
+    event.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      await fetch('/api/auth/csrf/', { credentials: 'include' })
+      const csrfCookie = document.cookie.split('; ').find(cookie => cookie.startsWith('csrftoken='))
+      const csrfToken = csrfCookie?.split('=')[1]
+      const endpoint = mode === 'login' ? '/api/auth/login/' : '/api/auth/me/'
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken || '' },
+        body: JSON.stringify(form),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Unable to authenticate.')
+      onAuthenticated(data.user)
+    } catch (submitError) {
+      setError(submitError.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return <div className="auth-screen"><div className="auth-panel"><div className="auth-brand"><span className="brand-mark">W</span><span>WorkSpace</span></div><p className="eyebrow">Team operations</p><h1>{mode === 'login' ? 'Welcome back' : 'Create your workspace'}</h1><p className="auth-subtitle">{mode === 'login' ? 'Sign in to see your team pulse and priorities.' : 'Bring your team, tasks, and follow-ups into one calm workspace.'}</p><form onSubmit={submit}>{mode === 'signup' && <><label>First name<input name="first_name" value={form.first_name} onChange={updateField} placeholder="Your first name" required /></label><label>Workspace name<input name="workspace_name" value={form.workspace_name} onChange={updateField} placeholder="Your team or company" required /></label></>}<label>Email<input name="email" type="email" value={form.email} onChange={updateField} placeholder="you@company.com" required /></label><label>Password<input name="password" type="password" value={form.password} onChange={updateField} placeholder="At least 8 characters" minLength="8" required /></label>{error && <p className="auth-error">{error}</p>}{connectionError && !error && <p className="auth-error">The API is unavailable. Start Django on port 8000.</p>}<button className="primary-button auth-submit" disabled={submitting}>{submitting ? 'Connecting...' : mode === 'login' ? 'Sign in' : 'Create workspace'}</button></form><button className="auth-switch" onClick={() => { setMode(current => current === 'login' ? 'signup' : 'login'); setError('') }}>{mode === 'login' ? 'New to WorkSpace? Create an account' : 'Already have an account? Sign in'}</button></div></div>
+}
 
 export default App
 
