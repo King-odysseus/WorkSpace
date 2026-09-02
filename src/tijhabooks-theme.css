@@ -71,10 +71,15 @@ body,
   display: grid;
   place-items: center;
   border: 1px solid var(--brand-accent);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--navy2);
   color: #F1E4D0;
   cursor: pointer;
+}
+
+.primary-button,
+.secondary-button {
+  border-radius: 999px;
 }
 
 .theme-toggle:hover {
