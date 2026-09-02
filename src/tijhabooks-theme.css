@@ -488,4 +488,9 @@ html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .audit-row span { color: var(--workspace-text-soft); }
 .audit-row time { color: var(--workspace-text-soft); font-size: 10px; white-space: nowrap; }
 .audit-action { color: #C49A6C !important; font-weight: 700; text-transform: capitalize; }
+.drawer-task-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.drawer-task-form label { display: grid; gap: 6px; color: var(--workspace-text-soft); font-size: 11px; font-weight: 700; }
+.drawer-task-form input, .drawer-task-form select { width: 100%; padding: 9px 10px; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface-soft); color: var(--workspace-text); font: 500 12px 'DM Sans'; }
+.drawer-task-form .secondary-button { grid-column: 1 / -1; width: auto; justify-self: start; }
 @media (max-width: 520px) { .workspace-status { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 520px) { .drawer-task-form { grid-template-columns: 1fr; } .drawer-task-form .secondary-button { grid-column: auto; } }
