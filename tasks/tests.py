@@ -422,7 +422,10 @@ class TaskApiTests(TestCase):
         ics_response = self.client.get(reverse('calendar-ics', args=[self.workspace.id]))
         self.assertEqual(ics_response.status_code, 200)
         self.assertEqual(ics_response['Content-Type'], 'text/calendar; charset=utf-8')
-        self.assertIn('SUMMARY:Planning', ics_response.content.decode())
+        ics_body = ics_response.content.decode()
+        self.assertIn('CALSCALE:GREGORIAN', ics_body)
+        self.assertIn('METHOD:PUBLISH', ics_body)
+        self.assertIn('SUMMARY:Planning', ics_body)
 
     def test_calendar_reminder_is_delivered_once_when_due(self):
         start_at = timezone.now() + timedelta(minutes=10)

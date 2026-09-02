@@ -944,7 +944,7 @@ def calendar_ics(request, workspace_id):
     if error:
         return error
     events = CalendarEvent.objects.filter(workspace_id=workspace_id)
-    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WorkSpace//Team Calendar//EN']
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WorkSpace//Team Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH']
     for event in events:
         start = event.start_at.astimezone(datetime_timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         end = event.end_at.astimezone(datetime_timezone.utc).strftime('%Y%m%dT%H%M%SZ')
