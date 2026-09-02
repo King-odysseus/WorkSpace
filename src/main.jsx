@@ -239,6 +239,7 @@ function App() {
       const responseData = await response.json()
       if (!response.ok) throw new Error(responseData.error || `Task update returned ${response.status}`)
       if (responseData.next_task) setTasks(current => current.some(task => task.id === responseData.next_task.id) ? current : [...current, mapApiTask(responseData.next_task)])
+      setWorkspaceReload(current => current + 1)
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
       setWorkspaceError(error.message || 'Task status could not be saved.')
@@ -254,6 +255,7 @@ function App() {
       const responseData = await response.json()
       if (!response.ok) throw new Error(responseData.error || `Task update returned ${response.status}`)
       if (responseData.next_task) setTasks(current => current.some(task => task.id === responseData.next_task.id) ? current : [...current, mapApiTask(responseData.next_task)])
+      setWorkspaceReload(current => current + 1)
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
       setWorkspaceError(error.message || 'Task status could not be saved.')
@@ -266,6 +268,7 @@ function App() {
     try {
       const response = await fetch(`/api/tasks/${id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') }, body: JSON.stringify({ bucket }) })
       if (!response.ok) throw new Error(`Task bucket update returned ${response.status}`)
+      setWorkspaceReload(current => current + 1)
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
       setWorkspaceError(error.message || 'Task bucket could not be saved.')
@@ -278,6 +281,7 @@ function App() {
       const response = await fetch(`/api/tasks/${id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') } })
       if (!response.ok) return setWorkspaceError('Task could not be deleted.')
       setTasks(current => current.filter(task => task.id !== id))
+      setWorkspaceReload(current => current + 1)
     } catch (error) {
       setWorkspaceError(error.message || 'Task could not be deleted.')
     }
@@ -352,6 +356,7 @@ function App() {
       setNewRecurrence('none')
       setNewPriority('normal')
       setShowModal(false)
+      setWorkspaceReload(current => current + 1)
     } catch (error) {
       setTaskError(error.message || 'Task could not be created.')
       console.error('Task could not be created.', error.message)
