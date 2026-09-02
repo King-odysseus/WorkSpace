@@ -242,6 +242,29 @@ class TaskApiTests(TestCase):
         self.assertEqual(reply_response.json()['message']['parent_id'], message_id)
         self.assertEqual(self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages'][0]['reply_count'], 1)
 
+    def test_follow_up_can_be_assigned_and_notifies_teammate(self):
+        teammate = User.objects.create_user(username='follow-up-member@example.com', email='follow-up-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        response = self.client.post(
+            reverse('follow-up-list', args=[self.workspace.id]),
+            data=json.dumps({'note': 'Confirm launch approval', 'assigned_to': teammate.id, 'due_date': '2026-09-04'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['follow_up']['assigned_to'], teammate.id)
+        self.assertEqual(response.json()['follow_up']['assigned_to_name'], 'follow-up-member@example.com')
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='follow_up_assigned').count(), 1)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_created').count(), 1)
+
+        follow_up_id = response.json()['follow_up']['id']
+        update_response = self.client.patch(
+            reverse('follow-up-detail', args=[follow_up_id]),
+            data=json.dumps({'assigned_to': None}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertIsNone(update_response.json()['follow_up']['assigned_to'])
+
     def test_task_attachment_upload_is_scoped_and_validated(self):
         task = Task.objects.create(workspace=self.workspace, title='Attach brief')
         upload = SimpleUploadedFile('brief.txt', b'project notes', content_type='text/plain')

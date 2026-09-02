@@ -238,6 +238,7 @@ class FollowUp(models.Model):
             'task_id': self.task_id,
             'created_by': self.created_by_id,
             'assigned_to': self.assigned_to_id,
+            'assigned_to_name': (self.assigned_to.get_full_name() or self.assigned_to.email) if self.assigned_to else None,
             'note': self.note,
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'status': self.status,

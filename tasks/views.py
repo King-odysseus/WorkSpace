@@ -946,7 +946,15 @@ def follow_up_list(request, workspace_id):
         task = Task.objects.filter(id=payload['task_id'], workspace_id=workspace_id).first()
         if task is None:
             return JsonResponse({'error': 'Task was not found in this workspace.'}, status=404)
-    follow_up = FollowUp.objects.create(workspace_id=workspace_id, task=task, created_by=request.user, note=note, due_date=due_date)
+    assigned_to = None
+    if payload.get('assigned_to'):
+        assigned_to = User.objects.filter(id=payload['assigned_to'], workspace_memberships__workspace_id=workspace_id).first()
+        if assigned_to is None:
+            return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
+    follow_up = FollowUp.objects.create(workspace_id=workspace_id, task=task, created_by=request.user, assigned_to=assigned_to, note=note, due_date=due_date)
+    record_activity(workspace_id, request.user, 'follow_up_created', f'{request.user.get_full_name() or request.user.email} created a follow-up.')
+    if assigned_to and assigned_to != request.user:
+        create_notification(workspace_id, assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', note)
     return JsonResponse({'follow_up': follow_up.as_dict()}, status=201)
 
 
@@ -961,8 +969,8 @@ def follow_up_detail(request, follow_up_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    if set(payload) - {'status', 'note', 'due_date'}:
-        return JsonResponse({'error': 'Only status, note, and due_date can be updated.'}, status=400)
+    if set(payload) - {'status', 'note', 'due_date', 'assigned_to'}:
+        return JsonResponse({'error': 'Only status, note, due_date, and assigned_to can be updated.'}, status=400)
     if 'status' in payload:
         if payload['status'] not in {choice[0] for choice in FollowUp.STATUS_CHOICES}:
             return JsonResponse({'error': 'Invalid follow-up status.'}, status=400)
@@ -977,5 +985,9 @@ def follow_up_detail(request, follow_up_id):
             follow_up.due_date = date.fromisoformat(str(payload['due_date'])) if payload['due_date'] else None
         except ValueError:
             return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
+    if 'assigned_to' in payload:
+        follow_up.assigned_to = User.objects.filter(id=payload['assigned_to'], workspace_memberships__workspace_id=follow_up.workspace_id).first() if payload['assigned_to'] else None
+        if payload['assigned_to'] and follow_up.assigned_to is None:
+            return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     follow_up.save()
     return JsonResponse({'follow_up': follow_up.as_dict()})
