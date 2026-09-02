@@ -282,6 +282,7 @@ html[data-theme='light'] .theme-toggle {
 .directory-row strong { color: #253047; font-size: 11px; }
 .directory-row span:not(.avatar):not(.invite-dot) { color: #8B97A7; font-size: 10px; }
 .directory-row em { color: #6B7280; font-size: 10px; font-style: normal; text-transform: capitalize; }
+.member-role-select { padding: 5px 7px; border: 1px solid #E2E2E6; border-radius: 6px; background: #FFFFFF; color: #4B5563; font: 600 10px 'DM Sans'; }
 .top-search { display: flex; align-items: center; gap: 7px; width: 185px; padding: 7px 9px; border: 1px solid #294461; border-radius: 8px; color: #B6C7D8; }
 .top-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #FFFFFF; font: 500 11px 'DM Sans'; }
 .top-search input::placeholder { color: #8EA3B8; }

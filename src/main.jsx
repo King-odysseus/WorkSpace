@@ -227,7 +227,7 @@ function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><button className="icon-button notification"><Bell size={18} /><i /></button><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
       <div className="page-content">
-        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} />}
+        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>68%</strong></div><em className="positive">+12% <small>vs last week</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>6 tasks</strong></div><em className="negative">2 overdue</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus time</span><strong>24h 30m</strong></div><em>this week</em></div></section>
@@ -242,7 +242,7 @@ function App() {
   </div>
 }
 
-function WorkspaceView({ active, data, tasks, workspaceId, currentUserName }) {
+function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canManageMembers }) {
   const today = new Date().toISOString().slice(0, 10)
   const [localData, setLocalData] = useState(data)
   const [composerOpen, setComposerOpen] = useState(false)
@@ -299,6 +299,18 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName }) {
     const responseData = await response.json()
     setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === project.id ? responseData.project : item) }))
   }
+  const updateMemberRole = async (member, role) => {
+    const response = await fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ role }) })
+    if (!response.ok) return
+    const responseData = await response.json()
+    setLocalData(current => ({ ...current, members: current.members.map(item => item.id === member.id ? responseData.member : item) }))
+  }
+  const removeMember = async member => {
+    if (member.role === 'owner' || !window.confirm(`Remove ${member.email} from this workspace?`)) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+    if (!response.ok) return
+    setLocalData(current => ({ ...current, members: current.members.filter(item => item.id !== member.id) }))
+  }
   const title = active === 'My tasks' ? 'My tasks' : active
   const subtitle = {
     'My tasks': 'Your personal work, deadlines, and follow-ups.',
@@ -331,7 +343,7 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName }) {
   }
 
   if (active === 'Team board') {
-    return <section className="workspace-view"><WorkspaceViewHeading title="Team board" subtitle={subtitle} action="Invite member" onAction={() => openComposer('invite')} /><div className="workspace-card team-directory"><h3>Workspace members</h3>{localData.members.map(member => <div className="directory-row" key={member.id}><span className="avatar blue small">{[member.first_name, member.last_name].filter(Boolean).map(name => name[0]).join('').slice(0, 2).toUpperCase() || member.email.slice(0, 2).toUpperCase()}</span><div><strong>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</strong><span>{member.email}</span></div><em>{member.role}</em></div>)}<h3 className="pending-heading">Pending invitations</h3>{localData.invitations.length ? localData.invitations.map(invitation => <div className="directory-row" key={invitation.id}><span className="invite-dot" /><div><strong>{invitation.email}</strong><span>Invited as {invitation.role}</span></div><em>{invitation.status}</em></div>) : <EmptyState text="No pending invitations." />}</div>{composerOpen && <WorkspaceComposer type="invite" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
+    return <section className="workspace-view"><WorkspaceViewHeading title="Team board" subtitle={subtitle} action="Invite member" onAction={() => openComposer('invite')} /><div className="workspace-card team-directory"><h3>Workspace members</h3>{localData.members.map(member => <div className="directory-row" key={member.id}><span className="avatar blue small">{[member.first_name, member.last_name].filter(Boolean).map(name => name[0]).join('').slice(0, 2).toUpperCase() || member.email.slice(0, 2).toUpperCase()}</span><div><strong>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</strong><span>{member.email}</span></div>{canManageMembers && member.role !== 'owner' ? <><select className="member-role-select" value={member.role} onChange={event => updateMemberRole(member, event.target.value)} aria-label={`Change role for ${member.email}`}><option value="member">Member</option><option value="manager">Manager</option></select><button className="inline-delete" onClick={() => removeMember(member)} aria-label={`Remove ${member.email}`}><X size={14} /></button></> : <em>{member.role}</em>}</div>)}<h3 className="pending-heading">Pending invitations</h3>{localData.invitations.length ? localData.invitations.map(invitation => <div className="directory-row" key={invitation.id}><span className="invite-dot" /><div><strong>{invitation.email}</strong><span>Invited as {invitation.role}</span></div><em>{invitation.status}</em></div>) : <EmptyState text="No pending invitations." />}</div>{composerOpen && <WorkspaceComposer type="invite" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
   }
 
   const filteredTasks = active === 'My tasks' ? tasks.filter(task => task.member === currentUserName || task.member === 'Unassigned') : tasks
