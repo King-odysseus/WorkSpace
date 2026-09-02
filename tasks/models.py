@@ -27,6 +27,47 @@ class Membership(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=['workspace', 'user'], name='unique_workspace_member')]
 
+    def as_dict(self):
+        return {
+            'id': self.user_id,
+            'email': self.user.email,
+            'first_name': self.user.first_name,
+            'last_name': self.user.last_name,
+            'role': self.role,
+            'joined_at': self.joined_at.isoformat(),
+        }
+
+
+class Project(models.Model):
+    STATUS_CHOICES = [
+        ('planning', 'Planning'),
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('completed', 'Completed'),
+    ]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='projects')
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
+    due_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['status', 'due_date', 'name']
+        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='unique_project_per_workspace')]
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'name': self.name,
+            'description': self.description,
+            'status': self.status,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+        }
+
 
 class Task(models.Model):
     STATUS_CHOICES = [

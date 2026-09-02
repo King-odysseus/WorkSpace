@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import Task
+from .models import Membership, Project, Task, Workspace
 
 
 def user_workspace_ids(user):
@@ -33,6 +33,15 @@ def require_authenticated(request):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
     return None
+
+
+def require_workspace_member(request, workspace_id):
+    if not request.user.is_authenticated:
+        return None, JsonResponse({'error': 'Authentication is required.'}, status=401)
+    membership = Membership.objects.select_related('workspace', 'user').filter(workspace_id=workspace_id, user=request.user).first()
+    if membership is None:
+        return None, JsonResponse({'error': 'You do not belong to this workspace.'}, status=403)
+    return membership, None
 
 
 def health(request):
@@ -120,3 +129,36 @@ def task_detail(request, task_id):
 
     task.save()
     return JsonResponse({'task': task.as_dict()})
+
+
+@require_http_methods(['GET'])
+def member_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    members = Membership.objects.filter(workspace_id=workspace_id).select_related('user')
+    return JsonResponse({'members': [member.as_dict() for member in members]})
+
+
+@require_http_methods(['GET', 'POST'])
+def project_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        projects = Project.objects.filter(workspace_id=workspace_id)
+        return JsonResponse({'projects': [project.as_dict() for project in projects]})
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    if not name:
+        return JsonResponse({'error': 'Project name is required.'}, status=400)
+    if len(name) > 160:
+        return JsonResponse({'error': 'Project name must be 160 characters or fewer.'}, status=400)
+    if Project.objects.filter(workspace_id=workspace_id, name=name).exists():
+        return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
+    project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip())
+    return JsonResponse({'project': project.as_dict()}, status=201)
