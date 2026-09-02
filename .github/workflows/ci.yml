@@ -70,3 +70,6 @@ jobs:
 
       - name: Validate compose configuration
         run: docker compose config
+
+      - name: Build production containers
+        run: docker compose build --pull
