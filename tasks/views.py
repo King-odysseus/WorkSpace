@@ -215,7 +215,10 @@ def task_list(request):
         return auth_error
 
     if request.method == 'GET':
-        tasks = Task.objects.filter(workspace_id__in=user_workspace_ids(request.user))
+        workspace_id, error = requested_workspace(request, request.user)
+        if error:
+            return error
+        tasks = Task.objects.filter(workspace_id=workspace_id)
         return JsonResponse({'tasks': [task.as_dict() for task in tasks]})
 
     try:

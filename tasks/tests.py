@@ -562,6 +562,25 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['tasks'], [])
 
+    def test_task_list_is_scoped_to_the_requested_workspace(self):
+        other_workspace = Workspace.objects.create(name='Sister', slug='sister')
+        Membership.objects.create(workspace=other_workspace, user=self.user, role='owner')
+        Task.objects.create(workspace=self.workspace, title='Northstar task')
+        Task.objects.create(workspace=other_workspace, title='Sister task')
+
+        scoped_response = self.client.get(reverse('task-list'), HTTP_X_WORKSPACE_ID=str(self.workspace.id))
+        self.assertEqual(scoped_response.status_code, 200)
+        self.assertEqual([task['title'] for task in scoped_response.json()['tasks']], ['Northstar task'])
+
+        other_response = self.client.get(reverse('task-list'), HTTP_X_WORKSPACE_ID=str(other_workspace.id))
+        self.assertEqual(other_response.status_code, 200)
+        self.assertEqual([task['title'] for task in other_response.json()['tasks']], ['Sister task'])
+
+    def test_task_list_rejects_a_workspace_the_user_does_not_belong_to(self):
+        other_workspace = Workspace.objects.create(name='Foreign', slug='foreign')
+        response = self.client.get(reverse('task-list'), HTTP_X_WORKSPACE_ID=str(other_workspace.id))
+        self.assertEqual(response.status_code, 403)
+
     def test_calendar_event_requires_valid_time_range(self):
         response = self.client.post(
             reverse('calendar-event-list', args=[self.workspace.id]),
