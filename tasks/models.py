@@ -122,6 +122,8 @@ class CheckIn(models.Model):
             'id': self.id,
             'workspace_id': self.workspace_id,
             'user_id': self.user_id,
+            'user_name': self.user.get_full_name() or self.user.email,
+            'user_initials': ''.join(part[0] for part in [self.user.first_name, self.user.last_name] if part).upper()[:2] or self.user.email[:2].upper(),
             'date': self.date.isoformat(),
             'completed': self.completed,
             'next_steps': self.next_steps,

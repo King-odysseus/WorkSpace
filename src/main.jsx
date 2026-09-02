@@ -34,6 +34,8 @@ async function getCsrfToken() {
 }
 
 function App() {
+  const today = new Date().toISOString().slice(0, 10)
+  const todayLabel = new Intl.DateTimeFormat('en-GB', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${today}T12:00:00`))
   const [active, setActive] = useState('Today')
   const [tasks, setTasks] = useState(initialTasks)
   const [showModal, setShowModal] = useState(false)
@@ -71,7 +73,7 @@ function App() {
       read(`/api/workspaces/${workspaceId}/members/`),
       read(`/api/workspaces/${workspaceId}/projects/`),
       read(`/api/workspaces/${workspaceId}/calendar-events/`),
-      read(`/api/workspaces/${workspaceId}/check-ins/?date=2026-09-02`),
+      read(`/api/workspaces/${workspaceId}/check-ins/?date=${today}`),
       read(`/api/workspaces/${workspaceId}/chat-messages/`),
       read(`/api/workspaces/${workspaceId}/follow-ups/`),
     ])
@@ -96,12 +98,13 @@ function App() {
     return () => {
       isCurrent = false
     }
-  }, [session.user])
+  }, [session.user, today])
 
   const visibleTasks = useMemo(() => selectedFilter === 'All work' ? tasks : tasks.filter(task => task.status === selectedFilter), [tasks, selectedFilter])
   if (session.loading) return <div className="auth-loading">Loading WorkSpace...</div>
   if (!session.user) return <AuthScreen onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
   const completeTask = async id => {
+    const previousTask = tasks.find(task => task.id === id)
     setTasks(current => current.map(task => task.id === id ? { ...task, status: 'done' } : task))
     try {
       const response = await fetch(`/api/tasks/${id}/`, {
@@ -112,6 +115,7 @@ function App() {
       })
       if (!response.ok && response.status !== 404) throw new Error(`Task update returned ${response.status}`)
     } catch (error) {
+      if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
       console.warn('Task status could not be saved.', error.message)
     }
   }
@@ -141,11 +145,18 @@ function App() {
     { label: 'Projects', icon: Target }, { label: 'Chat', icon: MessageSquare },
   ]
   const workspaceId = session.user.workspaces[0]?.id
+  const currentWorkspace = session.user.workspaces[0]
+  const teamMembers = workspaceData.members.length ? workspaceData.members.map(member => ({
+    name: [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email,
+    initials: [member.first_name, member.last_name].filter(Boolean).map(name => name[0]).join('').slice(0, 2).toUpperCase() || member.email.slice(0, 2).toUpperCase(),
+    color: 'blue',
+    role: member.role,
+  })) : members
 
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">W</div><span>WorkSpace</span></div>
-      <button className="workspace-switcher"><span className="workspace-dot" />Northstar Studio <ChevronDown size={14} /></button>
+      <button className="workspace-switcher"><span className="workspace-dot" />{currentWorkspace?.name || 'Your workspace'} <ChevronDown size={14} /></button>
       <nav className="main-nav">
         <p className="nav-label">Workspace</p>
         {navItems.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)}><Icon size={18} /><span>{label}</span>{label === 'Chat' && <span className="nav-badge">4</span>}</button>)}
@@ -161,10 +172,10 @@ function App() {
       <div className="page-content">
         {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} />}
         {active === 'Today' && <>
-        <section className="page-heading"><div><p className="eyebrow">Tuesday, September 2, 2026</p><h1>Good morning, King</h1><p className="subtitle">Here is what is moving across Northstar today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
+        <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>68%</strong></div><em className="positive">+12% <small>vs last week</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>6 tasks</strong></div><em className="negative">2 overdue</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus time</span><strong>24h 30m</strong></div><em>this week</em></div></section>
         <div className="content-grid">
-          <section className="board-section"><div className="section-header"><div><h2>Team pulse</h2><p>Today's commitments across your team</p></div><div className="header-actions"><button className="filter-button"><Filter size={15} /> Filters <ChevronDown size={14} /></button><button className="more-button"><MoreHorizontal size={19} /></button></div></div><div className="board-tabs"><button className="tab active">People</button><button className="tab">Status</button><button className="tab">Priority</button><div className="filter-select"><span className="status-dot all" />{selectedFilter}<ChevronDown size={14} /></div></div><div className="team-board">{members.map(member => { const memberTasks = visibleTasks.filter(task => task.member === member.name); return <div className="member-row" key={member.name}><div className="member-cell"><Avatar member={member} /><div><strong>{member.name}</strong><span>{member.role}</span></div></div><div className="task-stack">{memberTasks.length ? memberTasks.map(task => <TaskCard key={task.id} task={task} onComplete={completeTask} />) : <div className="empty-task">No tasks in this view</div>}</div><button className="row-add"><Plus size={16} /></button></div> })}</div><button className="add-person"><Plus size={16} /> Add team member</button></section>
+          <section className="board-section"><div className="section-header"><div><h2>Team pulse</h2><p>Today's commitments across your team</p></div><div className="header-actions"><button className="filter-button"><Filter size={15} /> Filters <ChevronDown size={14} /></button><button className="more-button"><MoreHorizontal size={19} /></button></div></div><div className="board-tabs"><button className="tab active">People</button><button className="tab">Status</button><button className="tab">Priority</button><div className="filter-select"><span className="status-dot all" />{selectedFilter}<ChevronDown size={14} /></div></div><div className="team-board">{teamMembers.map(member => { const memberTasks = visibleTasks.filter(task => task.member === member.name); return <div className="member-row" key={member.name}><div className="member-cell"><Avatar member={member} /><div><strong>{member.name}</strong><span>{member.role}</span></div></div><div className="task-stack">{memberTasks.length ? memberTasks.map(task => <TaskCard key={task.id} task={task} onComplete={completeTask} />) : <div className="empty-task">No tasks in this view</div>}</div><button className="row-add"><Plus size={16} /></button></div> })}</div><button className="add-person"><Plus size={16} /> Add team member</button></section>
           <aside className="right-column"><section className="focus-card"><div className="section-header"><div><h2>My focus</h2><p>Your personal priorities</p></div><button className="more-button"><MoreHorizontal size={19} /></button></div><div className="focus-progress"><div><strong>4 of 6</strong><span>tasks completed</span></div><div className="progress-ring"><span>67%</span></div></div><div className="focus-list"><div className="focus-item done"><span className="check checked"><Check size={13} /></span><div><strong>Review team priorities</strong><span>Completed 9:12 AM</span></div></div><div className="focus-item"><span className="check" /><div><strong>Finalize homepage concepts</strong><span>Due today - 2h</span></div><span className="priority-dot high" /></div><div className="focus-item"><span className="check" /><div><strong>Schedule launch sync</strong><span>Due today - 30m</span></div></div></div><button className="text-button">View all my tasks <ArrowUpRight size={15} /></button></section><section className="checkin-card"><div className="checkin-heading"><div className="checkin-icon"><MessageSquare size={17} /></div><div><h3>Daily check-in</h3><p>Share a quick update with the team</p></div></div><div className="checkin-questions"><span><i />What did you complete?</span><span><i />What's next?</span><span><i />Any blockers?</span></div><button className="secondary-button"><Plus size={16} /> Start check-in</button></section><section className="activity-card"><div className="section-header"><div><h2>Recent activity</h2><p>Updates from your workspace</p></div><button className="more-button"><MoreHorizontal size={19} /></button></div><div className="activity-list"><Activity avatar="PS" color="green" text="Priya marked" strong="API integration" suffix="as blocked" time="8m ago" /><Activity avatar="JW" color="blue" text="James completed" strong="Campaign brief" suffix="" time="24m ago" /><Activity avatar="SC" color="blue" text="Sarah commented on" strong="Homepage concepts" suffix="" time="1h ago" /></div></section></aside>
         </div>
         </>}
@@ -191,7 +202,7 @@ function WorkspaceView({ active, data, tasks }) {
   }
 
   if (active === 'Check-ins') {
-    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Start check-in" /><div className="checkin-grid">{data.checkIns.length ? data.checkIns.map(checkIn => <article className="workspace-card" key={checkIn.id}><div className="card-person"><span className="avatar blue small">{checkIn.user_id === 1 ? 'KO' : 'TM'}</span><div><strong>Team member</strong><span>{checkIn.date}</span></div></div><p><b>Completed</b> {checkIn.completed || 'No update yet'}</p><p><b>Next</b> {checkIn.next_steps || 'No next step recorded'}</p><p><b>Blockers</b> {checkIn.blockers || 'None reported'}</p></article>) : <EmptyState text="No check-ins for today. Start the first update." />}</div></section>
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Start check-in" /><div className="checkin-grid">{data.checkIns.length ? data.checkIns.map(checkIn => <article className="workspace-card" key={checkIn.id}><div className="card-person"><span className="avatar blue small">{checkIn.user_initials}</span><div><strong>{checkIn.user_name}</strong><span>{checkIn.date}</span></div></div><p><b>Completed</b> {checkIn.completed || 'No update yet'}</p><p><b>Next</b> {checkIn.next_steps || 'No next step recorded'}</p><p><b>Blockers</b> {checkIn.blockers || 'None reported'}</p></article>) : <EmptyState text="No check-ins for today. Start the first update." />}</div></section>
   }
 
   if (active === 'Projects') {

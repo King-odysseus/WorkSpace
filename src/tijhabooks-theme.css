@@ -8,6 +8,7 @@
   --line: #E2E2E6;
   --muted: #6B7280;
   --blue: #1D4ED8;
+  --teal: #0A9E87;
 }
 
 body,
@@ -69,15 +70,15 @@ body,
   height: 34px;
   display: grid;
   place-items: center;
-  border: 1px solid #C49A6C;
+  border: 1px solid var(--brand-accent);
   border-radius: 8px;
-  background: #15155C;
+  background: var(--navy2);
   color: #F1E4D0;
   cursor: pointer;
 }
 
 .theme-toggle:hover {
-  background: #1C1C6E;
+  background: var(--brand-navy-soft);
 }
 
 html[data-theme='light'] body,
