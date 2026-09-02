@@ -12,28 +12,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      WORKSPACE_SECRET_KEY: ci-only-secret-key-that-is-longer-than-fifty-characters-123456
+      WORKSPACE_DB_PASSWORD: ci-only-database-password
+      WORKSPACE_DEBUG: "false"
+      WORKSPACE_ALLOWED_HOSTS: localhost,127.0.0.1
+      WORKSPACE_CSRF_TRUSTED_ORIGINS: http://localhost:8080
     steps:
-      - name: Check out repository
+      - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-          cache: pip
-
-      - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt
-
-      - name: Run Django checks and tests
-        run: |
-          python manage.py check
-          python manage.py test tasks -v 1
-
-      - name: Set up Node
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 22
           cache: npm
 
       - name: Install frontend dependencies
@@ -41,3 +33,32 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run Django checks
+        run: python manage.py check
+
+      - name: Check migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run backend tests
+        run: python manage.py test tasks --verbosity 1
+
+      - name: Check source hygiene
+        shell: bash
+        run: |
+          if rg -n '—|–|TODO|FIXME' src tasks; then
+            echo 'Source hygiene check failed.'
+            exit 1
+          fi
+
+      - name: Validate compose configuration
+        run: docker compose config
