@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import {
   AlertCircle, ArrowUpRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Filter, Hash, LayoutDashboard, LayoutGrid, MessageSquare, MoreHorizontal,
+  PanelLeftClose, PanelLeftOpen,
   ChevronLeft, ChevronRight,
   Plus, Search, Settings, Sparkles, Target, Users, X, Sun, Moon
 } from 'lucide-react'
@@ -50,6 +51,7 @@ function App() {
   const [showModal, setShowModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
   const [notificationOpen, setNotificationOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('workspace-sidebar-collapsed') === 'true')
   const [newTask, setNewTask] = useState('')
   const [newAssigneeId, setNewAssigneeId] = useState('')
   const [newProjectId, setNewProjectId] = useState('')
@@ -66,6 +68,10 @@ function App() {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('workspace-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem('workspace-sidebar-collapsed', String(sidebarCollapsed))
+  }, [sidebarCollapsed])
 
   useEffect(() => {
     if (session.user && !session.user.workspaces.some(workspace => workspace.id === activeWorkspaceId)) {
@@ -237,19 +243,20 @@ function App() {
   const myTasks = tasks.filter(task => task.member === currentUserName)
   const myCompletedTaskCount = myTasks.filter(task => task.status === 'done').length
 
-  return <div className="app-shell">
+  return <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">W</div><span>WorkSpace</span></div>
+      <div className="brand"><div className="brand-mark">W</div><span>WorkSpace</span><button className="sidebar-toggle" onClick={() => setSidebarCollapsed(current => !current)} aria-label={`${sidebarCollapsed ? 'Expand' : 'Collapse'} navigation`} aria-expanded={!sidebarCollapsed}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
       <label className="workspace-switcher"><span className="workspace-dot" /><select value={activeWorkspaceId || ''} onChange={event => setActiveWorkspaceId(Number(event.target.value))}>{session.user.workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select><ChevronDown size={14} /></label>
       <nav className="main-nav">
         <p className="nav-label">Workspace</p>
-        {navItems.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)}><Icon size={18} /><span>{label}</span>{label === 'Chat' && <span className="nav-badge">4</span>}</button>)}
+        {navItems.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)} title={sidebarCollapsed ? label : undefined}><Icon size={18} /><span>{label}</span>{label === 'Chat' && workspaceData.messages.length > 0 && <span className="nav-badge">{workspaceData.messages.length}</span>}</button>)}
         <p className="nav-label space-top">Manage</p>
-        <button className={`nav-item ${active === 'Follow-up' ? 'active' : ''}`} onClick={() => setActive('Follow-up')}><Bell size={18} /><span>Follow-up</span><span className="nav-badge alert">6</span></button>
-        <button className={`nav-item ${active === 'Check-ins' ? 'active' : ''}`} onClick={() => setActive('Check-ins')}><Hash size={18} /><span>Check-ins</span></button>
+        <button className={`nav-item ${active === 'Follow-up' ? 'active' : ''}`} onClick={() => setActive('Follow-up')} title={sidebarCollapsed ? 'Follow-up' : undefined}><Bell size={18} /><span>Follow-up</span>{workspaceData.followUps.filter(item => item.status !== 'completed').length > 0 && <span className="nav-badge alert">{workspaceData.followUps.filter(item => item.status !== 'completed').length}</span>}</button>
+        <button className={`nav-item ${active === 'Check-ins' ? 'active' : ''}`} onClick={() => setActive('Check-ins')} title={sidebarCollapsed ? 'Check-ins' : undefined}><Hash size={18} /><span>Check-ins</span></button>
       </nav>
-      <div className="sidebar-bottom"><div className="upgrade-card"><Sparkles size={16} /><div><strong>Make your week flow</strong><span>Set your priorities</span></div><ArrowUpRight size={15} /></div><button className="nav-item"><Settings size={18} /><span>Settings</span></button><div className="profile"><div className="avatar navy">KO</div><div><strong>King Odysseus</strong><span>Admin</span></div><MoreHorizontal size={17} /></div></div>
+      <div className="sidebar-bottom"><div className="upgrade-card"><Sparkles size={16} /><div><strong>Make your week flow</strong><span>Set your priorities</span></div><ArrowUpRight size={15} /></div><button className="nav-item" title={sidebarCollapsed ? 'Settings' : undefined}><Settings size={18} /><span>Settings</span></button><div className="profile"><div className="avatar navy">KO</div><div><strong>{currentUserName}</strong><span>{currentWorkspace?.role || 'Member'}</span></div><MoreHorizontal size={17} /></div></div>
     </aside>
+    <nav className="mobile-pill-nav" aria-label="Mobile workspace navigation">{[...navItems.slice(0, 4), { label: 'Chat', icon: MessageSquare }].map(({ label, icon: Icon }) => <button key={label} className={active === label ? 'active' : ''} onClick={() => setActive(label)} aria-label={label}><Icon size={18} /></button>)}</nav>
 
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <div className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></div>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>

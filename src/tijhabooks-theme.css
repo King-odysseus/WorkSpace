@@ -397,3 +397,12 @@ html[data-theme='dark'] .notification-panel { border-color: #303078; background:
 html[data-theme='dark'] .notification-panel-heading, html[data-theme='dark'] .notification-row strong { color: #FFFFFF; }
 html[data-theme='dark'] .notification-panel-heading { border-color: #303078; }
 html[data-theme='dark'] .notification-row { border-color: #303078; color: #B9BDD8; }
+.sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; width: 28px; height: 28px; border: 1px solid #303078; border-radius: 9px; background: transparent; color: #B9BDD8; cursor: pointer; }
+.sidebar-collapsed .sidebar { width: 78px; padding-inline: 10px; }
+.sidebar-collapsed .brand { justify-content: center; padding-inline: 0; }
+.sidebar-collapsed .brand > span, .sidebar-collapsed .workspace-switcher, .sidebar-collapsed .nav-label, .sidebar-collapsed .nav-item > span, .sidebar-collapsed .upgrade-card, .sidebar-collapsed .profile > div, .sidebar-collapsed .profile > svg { display: none; }
+.sidebar-collapsed .brand .sidebar-toggle { margin-left: 0; }
+.sidebar-collapsed .nav-item { justify-content: center; padding-inline: 0; }
+.sidebar-collapsed .profile { justify-content: center; padding-inline: 0; }
+.mobile-pill-nav { display: none; }
+@media (max-width: 750px) { .sidebar, .sidebar-collapsed .sidebar { display: none; } .mobile-pill-nav { position: fixed; left: 50%; bottom: 16px; z-index: 25; display: flex; transform: translateX(-50%); gap: 4px; padding: 5px; border: 1px solid #303078; border-radius: 18px; background: #10104BEE; box-shadow: 0 12px 28px #02051f40; } .mobile-pill-nav button { display: grid; place-items: center; width: 40px; height: 36px; border: 0; border-radius: 13px; background: transparent; color: #B9BDD8; cursor: pointer; } .mobile-pill-nav button.active { background: #C49A6C; color: #0B0B45; } .page-content { padding-bottom: 92px; } }
