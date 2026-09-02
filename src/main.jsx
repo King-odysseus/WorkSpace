@@ -204,11 +204,12 @@ function App() {
   const visibleTasks = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
     return tasks.filter(task => {
+      const isDailyBoardTask = !task.due_date || task.due_date <= today
       const matchesStatus = selectedFilter === 'All work' || task.status === selectedFilter
       const matchesSearch = !normalizedQuery || [task.title, task.member, task.tag].some(value => value.toLowerCase().includes(normalizedQuery))
-      return matchesStatus && matchesSearch
+      return isDailyBoardTask && matchesStatus && matchesSearch
     })
-  }, [tasks, selectedFilter, searchQuery])
+  }, [tasks, selectedFilter, searchQuery, today])
   if (session.loading) return <div className="auth-loading">Loading WorkSpace...</div>
   if (!session.user) return <AuthScreen onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
   const completeTask = async id => {
