@@ -147,13 +147,14 @@ function App() {
     const refreshCollaboration = () => Promise.all([
       read(`/api/workspaces/${workspaceId}/chat-messages/`),
       read(`/api/workspaces/${workspaceId}/follow-ups/`),
+      read(`/api/workspaces/${workspaceId}/calendar-events/`),
       read(`/api/workspaces/${workspaceId}/notifications/`),
       read(`/api/workspaces/${workspaceId}/activity/`),
       read(`/api/workspaces/${workspaceId}/plan-buckets/`),
       read(`/api/workspaces/${workspaceId}/reports/summary/`),
-    ]).then(([messageData, followUpData, notificationData, activityData, bucketData, reportData]) => {
+    ]).then(([messageData, followUpData, eventData, notificationData, activityData, bucketData, reportData]) => {
       if (!isCurrent) return
-      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, reports: reportData.summary }))
+      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, events: eventData.events, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, reports: reportData.summary }))
     }).catch(error => {
       if (!isCurrent) return
       setWorkspaceError(error.message || 'Collaboration data could not be refreshed.')
