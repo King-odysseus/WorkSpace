@@ -505,7 +505,7 @@ html[data-theme='dark'] .planner-filter-controls > select { border-color: #28516
 
 /* Keep shared surfaces and controls aligned with the selected theme. */
 :root { --workspace-surface: #FFFFFF; --workspace-surface-soft: #F7F9FC; --workspace-text: #071A2E; --workspace-text-soft: #4B5563; --workspace-border: #E2E2E6; }
-html[data-theme='dark'] { --navy: #071A2E; --navy2: #0D2945; --brand-navy-soft: #123A5B; --workspace-surface: #0E2A46; --workspace-surface-soft: #092038; --workspace-text: #FFFFFF; --workspace-text-soft: #B9CCDD; --workspace-border: #28516F; }
+html[data-theme='dark'] { color-scheme: dark; --navy: #071A2E; --navy2: #0D2945; --brand-navy-soft: #123A5B; --workspace-surface: #0E2A46; --workspace-surface-soft: #092038; --workspace-text: #FFFFFF; --workspace-text-soft: #B9CCDD; --workspace-border: #28516F; }
 body, .topbar, .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal, .task-drawer, .notification-panel, .settings-panel, .report-panel, .report-stat { color: var(--workspace-text); }
 .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal { background: var(--workspace-surface); border-color: var(--workspace-border); }
 .section-header h2, .section-header h3, .page-heading h1, .workspace-view-heading h1, .workspace-view-heading h2, .metric-card strong, .focus-card strong, .checkin-card h3, .activity-card h2, .modal h2 { color: var(--workspace-text); }
