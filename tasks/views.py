@@ -1,11 +1,12 @@
 import json
 from datetime import date
 
+from django.utils.dateparse import parse_datetime
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import Membership, Project, Task, Workspace
+from .models import CalendarEvent, CheckIn, Membership, Project, Task, Workspace
 
 
 def user_workspace_ids(user):
@@ -162,3 +163,89 @@ def project_list(request, workspace_id):
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
     project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip())
     return JsonResponse({'project': project.as_dict()}, status=201)
+
+
+def parse_event_datetime(value, field_name):
+    parsed = parse_datetime(str(value or ''))
+    if parsed is None:
+        return None, JsonResponse({'error': f'{field_name} must be a valid ISO datetime.'}, status=400)
+    return parsed, None
+
+
+@require_http_methods(['GET', 'POST'])
+def calendar_event_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        events = CalendarEvent.objects.filter(workspace_id=workspace_id).select_related('created_by')
+        return JsonResponse({'events': [event.as_dict() for event in events]})
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+
+    title = str(payload.get('title', '')).strip()
+    if not title:
+        return JsonResponse({'error': 'Event title is required.'}, status=400)
+    if len(title) > 200:
+        return JsonResponse({'error': 'Event title must be 200 characters or fewer.'}, status=400)
+    start_at, error = parse_event_datetime(payload.get('start_at'), 'Start time')
+    if error:
+        return error
+    end_at, error = parse_event_datetime(payload.get('end_at'), 'End time')
+    if error:
+        return error
+    if end_at <= start_at:
+        return JsonResponse({'error': 'End time must be after start time.'}, status=400)
+    event_type = payload.get('event_type', 'meeting')
+    if event_type not in {choice[0] for choice in CalendarEvent.EVENT_TYPES}:
+        return JsonResponse({'error': 'Invalid event type.'}, status=400)
+    event = CalendarEvent.objects.create(
+        workspace_id=workspace_id,
+        title=title,
+        description=str(payload.get('description', '')).strip(),
+        start_at=start_at,
+        end_at=end_at,
+        event_type=event_type,
+        created_by=request.user,
+    )
+    return JsonResponse({'event': event.as_dict()}, status=201)
+
+
+@require_http_methods(['GET', 'POST'])
+def check_in_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        check_ins = CheckIn.objects.filter(workspace_id=workspace_id).select_related('user')
+        requested_date = request.GET.get('date')
+        if requested_date:
+            try:
+                check_ins = check_ins.filter(date=date.fromisoformat(requested_date))
+            except ValueError:
+                return JsonResponse({'error': 'Date must use YYYY-MM-DD format.'}, status=400)
+        return JsonResponse({'check_ins': [check_in.as_dict() for check_in in check_ins]})
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    try:
+        check_in_date = date.fromisoformat(str(payload.get('date', date.today().isoformat())))
+    except ValueError:
+        return JsonResponse({'error': 'Date must use YYYY-MM-DD format.'}, status=400)
+
+    check_in, created = CheckIn.objects.update_or_create(
+        workspace_id=workspace_id,
+        user=request.user,
+        date=check_in_date,
+        defaults={
+            'completed': str(payload.get('completed', '')).strip(),
+            'next_steps': str(payload.get('next_steps', '')).strip(),
+            'blockers': str(payload.get('blockers', '')).strip(),
+        },
+    )
+    return JsonResponse({'check_in': check_in.as_dict()}, status=201 if created else 200)

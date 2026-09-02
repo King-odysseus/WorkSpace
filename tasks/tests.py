@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import Membership, Task, Workspace
+from .models import CalendarEvent, CheckIn, Membership, Task, Workspace
 
 
 class TaskApiTests(TestCase):
@@ -68,6 +68,35 @@ class TaskApiTests(TestCase):
         response = self.client.get(reverse('task-list'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['tasks'], [])
+
+    def test_calendar_event_requires_valid_time_range(self):
+        response = self.client.post(
+            reverse('calendar-event-list', args=[self.workspace.id]),
+            data=json.dumps({'title': 'Daily sync', 'start_at': '2026-09-02T10:00:00Z', 'end_at': '2026-09-02T09:00:00Z'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(CalendarEvent.objects.count(), 0)
+
+    def test_calendar_event_is_scoped_to_workspace(self):
+        response = self.client.post(
+            reverse('calendar-event-list', args=[self.workspace.id]),
+            data=json.dumps({'title': 'Daily sync', 'start_at': '2026-09-02T10:00:00Z', 'end_at': '2026-09-02T10:30:00Z'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        list_response = self.client.get(reverse('calendar-event-list', args=[self.workspace.id]))
+        self.assertEqual(len(list_response.json()['events']), 1)
+
+    def test_daily_check_in_is_idempotent_for_a_member(self):
+        url = reverse('check-in-list', args=[self.workspace.id])
+        payload = {'date': '2026-09-02', 'completed': 'Reviewed launch brief', 'next_steps': 'Share with team'}
+        first = self.client.post(url, data=json.dumps(payload), content_type='application/json')
+        second = self.client.post(url, data=json.dumps({**payload, 'blockers': 'Waiting on approval'}), content_type='application/json')
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(CheckIn.objects.count(), 1)
+        self.assertEqual(second.json()['check_in']['blockers'], 'Waiting on approval')
 
 
 class AuthenticationApiTests(TestCase):
