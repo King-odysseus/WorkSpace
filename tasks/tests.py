@@ -164,6 +164,23 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_invited_user_can_accept_an_invitation(self):
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='invitee@example.com', role='member', invited_by=self.user)
+        invitee = User.objects.create_user(username='invitee@example.com', email='invitee@example.com', password='secure-pass-123')
+        self.client.login(username=invitee.username, password='secure-pass-123')
+        response = self.client.post(reverse('invitation-accept', args=[invitation.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Membership.objects.filter(workspace=self.workspace, user=invitee).exists())
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, 'accepted')
+
+    def test_invitation_cannot_be_accepted_by_a_different_email(self):
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='invitee@example.com', role='member', invited_by=self.user)
+        other = User.objects.create_user(username='other-invitee@example.com', email='other-invitee@example.com', password='secure-pass-123')
+        self.client.login(username=other.username, password='secure-pass-123')
+        response = self.client.post(reverse('invitation-accept', args=[invitation.id]))
+        self.assertEqual(response.status_code, 403)
+
     def test_owner_can_update_and_delete_a_project(self):
         project = Project.objects.create(workspace=self.workspace, name='Launch')
         update = self.client.patch(

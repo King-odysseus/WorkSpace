@@ -216,6 +216,21 @@ def invitation_list(request, workspace_id):
     return JsonResponse({'invitation': invitation.as_dict()}, status=201 if created else 200)
 
 
+@require_http_methods(['POST'])
+def invitation_accept(request, invitation_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    invitation = WorkspaceInvitation.objects.select_related('workspace').filter(id=invitation_id, status='pending').first()
+    if invitation is None:
+        return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
+    if invitation.email.lower() != request.user.email.lower():
+        return JsonResponse({'error': 'This invitation belongs to a different email address.'}, status=403)
+    membership, _ = Membership.objects.get_or_create(workspace=invitation.workspace, user=request.user, defaults={'role': invitation.role})
+    invitation.status = 'accepted'
+    invitation.save(update_fields=['status'])
+    return JsonResponse({'workspace': {'id': invitation.workspace_id, 'name': invitation.workspace.name, 'slug': invitation.workspace.slug}, 'membership': membership.as_dict()})
+
+
 @require_http_methods(['GET', 'POST'])
 def project_list(request, workspace_id):
     membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
