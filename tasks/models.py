@@ -175,6 +175,7 @@ class CheckIn(models.Model):
 class ChatMessage(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='chat_messages')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_messages')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     channel = models.CharField(max_length=80, default='general')
     message = models.TextField(max_length=4000)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -188,6 +189,8 @@ class ChatMessage(models.Model):
             'workspace_id': self.workspace_id,
             'author_id': self.author_id,
             'author_name': self.author.get_full_name() or self.author.email,
+            'parent_id': self.parent_id,
+            'reply_count': self.replies.count(),
             'channel': self.channel,
             'message': self.message,
             'created_at': self.created_at.isoformat(),

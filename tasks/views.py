@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date, timedelta
 
 from django.utils.dateparse import parse_datetime
@@ -687,7 +688,20 @@ def chat_message_list(request, workspace_id):
         return JsonResponse({'error': 'Message must be 4000 characters or fewer.'}, status=400)
     if not channel or len(channel) > 80:
         return JsonResponse({'error': 'Channel must be between 1 and 80 characters.'}, status=400)
-    message = ChatMessage.objects.create(workspace_id=workspace_id, author=request.user, channel=channel, message=message_text)
+    parent = None
+    if payload.get('parent_id'):
+        parent = ChatMessage.objects.filter(id=payload['parent_id'], workspace_id=workspace_id, channel=channel, parent__isnull=True).first()
+        if parent is None:
+            return JsonResponse({'error': 'The parent message was not found in this channel.'}, status=404)
+    message = ChatMessage.objects.create(workspace_id=workspace_id, author=request.user, channel=channel, parent=parent, message=message_text)
+    record_activity(workspace_id, request.user, 'chat_message', f'{request.user.get_full_name() or request.user.email} posted in #{channel}.')
+    mentioned_tokens = {token.lower() for token in re.findall(r'@([A-Za-z0-9_.-]+)', message_text)}
+    if mentioned_tokens:
+        members = Membership.objects.filter(workspace_id=workspace_id).select_related('user')
+        for member in members:
+            aliases = {member.user.email.split('@')[0].lower(), member.user.first_name.lower(), member.user.last_name.lower()}
+            if mentioned_tokens.intersection(aliases) and member.user != request.user:
+                create_notification(workspace_id, member.user, 'mention', f'{request.user.get_full_name() or request.user.email} mentioned you', message_text[:120])
     return JsonResponse({'message': message.as_dict()}, status=201)
 
 

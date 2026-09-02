@@ -169,6 +169,26 @@ class TaskApiTests(TestCase):
         self.assertEqual(list_response.json()['buckets'][0]['name'], 'Review queue')
         self.assertEqual(PlanBucket.objects.count(), 1)
 
+    def test_chat_replies_and_mentions_are_supported(self):
+        teammate = User.objects.create_user(username='member@example.com', email='member@example.com', first_name='Team', last_name='Member', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        message_response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': '@member please review this.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(message_response.status_code, 201)
+        message_id = message_response.json()['message']['id']
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='mention').count(), 1)
+        reply_response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': 'I will review it.', 'parent_id': message_id}),
+            content_type='application/json',
+        )
+        self.assertEqual(reply_response.status_code, 201)
+        self.assertEqual(reply_response.json()['message']['parent_id'], message_id)
+        self.assertEqual(self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages'][0]['reply_count'], 1)
+
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
         other_workspace = Workspace.objects.create(name='Other', slug='other')

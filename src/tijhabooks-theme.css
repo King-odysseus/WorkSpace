@@ -397,6 +397,11 @@ html[data-theme='dark'] .notification-panel { border-color: #303078; background:
 html[data-theme='dark'] .notification-panel-heading, html[data-theme='dark'] .notification-row strong { color: #FFFFFF; }
 html[data-theme='dark'] .notification-panel-heading { border-color: #303078; }
 html[data-theme='dark'] .notification-row { border-color: #303078; color: #B9BDD8; }
+.chat-reply { margin-left: 28px; padding-left: 12px; border-left: 2px solid #E2E2E6; }
+.chat-reply-button { border: 0; background: transparent; color: #1D4ED8; cursor: pointer; font-size: 11px; font-weight: 700; padding: 0; }
+.reply-context { margin: 0 0 12px; padding: 8px 10px; border-left: 3px solid #C49A6C; border-radius: 5px; background: #F7F9FC; color: #6B7280; font-size: 11px; }
+html[data-theme='dark'] .chat-reply { border-color: #303078; }
+html[data-theme='dark'] .reply-context { background: #15155C; color: #B9BDD8; }
 .bucket-create-form { display: flex; gap: 8px; align-items: center; }
 .bucket-create-form input { width: 150px; padding: 8px 10px; border: 1px solid #E2E2E6; border-radius: 9px; background: #FFFFFF; color: #374151; font: 500 11px 'DM Sans'; }
 .bucket-create-form .secondary-button { width: auto; padding: 8px 11px; }
