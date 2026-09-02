@@ -123,6 +123,13 @@ function App() {
   }, [session.user, activeWorkspaceId])
 
   useEffect(() => {
+    setTasks([])
+    setSelectedTask(null)
+    setNotificationOpen(false)
+    setWorkspaceData({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], savedViews: [], reports: null })
+  }, [activeWorkspaceId])
+
+  useEffect(() => {
     fetch('/api/auth/me/', { credentials: 'include' })
       .then(response => response.json().then(data => ({ ok: response.ok, data })))
       .then(({ ok, data }) => {
@@ -415,7 +422,7 @@ function App() {
   return <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">W</div><span>WorkSpace</span><button className="sidebar-toggle" onClick={() => setSidebarCollapsed(current => !current)} aria-label={`${sidebarCollapsed ? 'Expand' : 'Collapse'} navigation`} aria-expanded={!sidebarCollapsed}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
-      <label className="workspace-switcher"><span className="workspace-dot" /><select value={activeWorkspaceId || ''} onChange={event => setActiveWorkspaceId(Number(event.target.value))}>{session.user.workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select><ChevronDown size={14} /></label>
+      <label className="workspace-switcher"><span className="workspace-dot" /><select aria-label="Select workspace" value={activeWorkspaceId || ''} onChange={event => setActiveWorkspaceId(Number(event.target.value))}>{session.user.workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select><ChevronDown size={14} /></label>
       <nav className="main-nav">
         <p className="nav-label">Workspace</p>
         {navItems.map(({ label, icon: Icon }) => <button type="button" key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)} title={sidebarCollapsed ? label : undefined} aria-current={active === label ? 'page' : undefined}><Icon size={18} /><span>{label}</span>{label === 'Chat' && workspaceData.messages.length > 0 && <span className="nav-badge">{workspaceData.messages.length}</span>}</button>)}
