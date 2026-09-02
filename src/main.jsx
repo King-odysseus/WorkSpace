@@ -96,6 +96,10 @@ function App() {
   const [workspaceError, setWorkspaceError] = useState('')
   const [workspaceReload, setWorkspaceReload] = useState(0)
   const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], savedViews: [], reports: null })
+  const [inviteComposerOpen, setInviteComposerOpen] = useState(false)
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'member' })
+  const [inviteError, setInviteError] = useState('')
+  const [inviteSubmitting, setInviteSubmitting] = useState(false)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -300,6 +304,30 @@ function App() {
     setTaskError('')
     setShowModal(true)
   }
+  const openComposer = type => {
+    if (type === 'invite') {
+      setInviteForm({ email: '', role: 'member' })
+      setInviteError('')
+      setInviteComposerOpen(true)
+    }
+  }
+  const submitInvite = async event => {
+    event.preventDefault()
+    setInviteError('')
+    setInviteSubmitting(true)
+    try {
+      const response = await fetch(`/api/workspaces/${activeWorkspaceId}/invitations/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId) }, body: JSON.stringify({ email: inviteForm.email, role: inviteForm.role }) })
+      const responseData = await response.json()
+      if (!response.ok) throw new Error(responseData.error || 'Invitation could not be sent.')
+      setWorkspaceData(current => ({ ...current, invitations: [...current.invitations, responseData.invitation] }))
+      setWorkspaceReload(current => current + 1)
+      setInviteComposerOpen(false)
+    } catch (submitError) {
+      setInviteError(submitError.message)
+    } finally {
+      setInviteSubmitting(false)
+    }
+  }
   const logout = async () => {
     try {
       await fetch('/api/auth/logout/', { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
@@ -433,6 +461,7 @@ function App() {
       </div>
     </main>
     {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" role="dialog" aria-modal="true" aria-labelledby="add-task-title" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2 id="add-task-title">Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)} aria-label="Close add task dialog"><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => { setNewTask(event.target.value); setTaskError('') }} placeholder="What needs to happen?" /></label><label>Description<textarea value={newDescription} onChange={event => setNewDescription(event.target.value)} placeholder="Add more detail about this task" maxLength="4000" /></label>{taskError && <p className="auth-error" role="alert">{taskError}</p>}<div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><div className="modal-grid"><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Priority<select value={newPriority} onChange={event => setNewPriority(event.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label></div><label>Planner bucket<select value={newBucket} onChange={event => setNewBucket(event.target.value)}>{(workspaceData.buckets.length ? workspaceData.buckets : [{ id: 'backlog', name: 'Backlog' }]).map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</select></label><label>Repeat<select value={newRecurrence} onChange={event => setNewRecurrence(event.target.value)}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
+        {inviteComposerOpen && <WorkspaceComposer type="invite" form={inviteForm} setForm={setInviteForm} error={inviteError} submitting={inviteSubmitting} onClose={() => setInviteComposerOpen(false)} onSubmit={submitInvite} />}
         {selectedTask && <TaskDetailDrawer task={selectedTask} workspaceId={activeWorkspaceId} members={workspaceData.members} projects={workspaceData.projects} buckets={workspaceData.buckets} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} onClose={() => setSelectedTask(null)} onTaskUpdated={updatedTask => setTasks(current => current.map(item => item.id === updatedTask.id ? { ...item, title: updatedTask.title, description: updatedTask.description || '', member: updatedTask.assignee_name || 'Unassigned', tag: updatedTask.project || 'General', status: updatedTask.status === 'in_progress' ? 'in progress' : updatedTask.status, priority: updatedTask.priority || 'normal', due: taskDueLabel(updatedTask.due_date, today), due_date: updatedTask.due_date || '', recurrence: updatedTask.recurrence || 'none', bucket: updatedTask.bucket || 'Backlog', labels: updatedTask.labels || [] } : item))} />}
   </div>
 }
