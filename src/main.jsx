@@ -238,6 +238,10 @@ function App() {
     }
   }, [session.user, activeWorkspaceId, today, workspaceReload])
 
+  useEffect(() => {
+    if (selectedTask && !tasks.some(task => task.id === selectedTask.id)) setSelectedTask(null)
+  }, [tasks, selectedTask])
+
   const visibleTasks = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
     return tasks.filter(task => {
