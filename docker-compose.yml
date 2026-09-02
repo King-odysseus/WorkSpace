@@ -33,6 +33,12 @@ services:
       WORKSPACE_DB_PORT: 5432
     volumes:
       - workspace-media:/app/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
     depends_on:
       database:
         condition: service_healthy
@@ -46,7 +52,8 @@ services:
     volumes:
       - workspace-media:/var/www/media:ro
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   workspace-postgres:

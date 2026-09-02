@@ -39,7 +39,7 @@ For a containerized deployment, set `WORKSPACE_SECRET_KEY` and `WORKSPACE_DB_PAS
 docker compose up --build
 ```
 
-The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves `/media/` through Nginx, and proxies `/api/` requests through Nginx to Django.
+The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves `/media/` through Nginx, proxies `/api/` requests through Nginx to Django, and waits for the API health check before starting the web dependency.
 
 ## Verification
 
