@@ -2,6 +2,7 @@ import json
 from datetime import date
 
 from django.utils.dateparse import parse_datetime
+from django.db import IntegrityError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
@@ -161,7 +162,10 @@ def project_list(request, workspace_id):
         return JsonResponse({'error': 'Project name must be 160 characters or fewer.'}, status=400)
     if Project.objects.filter(workspace_id=workspace_id, name=name).exists():
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
-    project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip())
+    try:
+        project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip())
+    except IntegrityError:
+        return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
@@ -257,7 +261,8 @@ def chat_message_list(request, workspace_id):
     if error:
         return error
     if request.method == 'GET':
-        messages = ChatMessage.objects.filter(workspace_id=workspace_id).select_related('author')[:100]
+        recent_messages = list(ChatMessage.objects.filter(workspace_id=workspace_id).select_related('author').order_by('-created_at')[:100])
+        messages = reversed(recent_messages)
         return JsonResponse({'messages': [message.as_dict() for message in messages]})
     try:
         payload = json.loads(request.body or '{}')
