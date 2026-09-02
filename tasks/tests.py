@@ -1,10 +1,11 @@
 import json
 
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 class TaskApiTests(TestCase):
@@ -188,6 +189,18 @@ class TaskApiTests(TestCase):
         self.assertEqual(reply_response.status_code, 201)
         self.assertEqual(reply_response.json()['message']['parent_id'], message_id)
         self.assertEqual(self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages'][0]['reply_count'], 1)
+
+    def test_task_attachment_upload_is_scoped_and_validated(self):
+        task = Task.objects.create(workspace=self.workspace, title='Attach brief')
+        upload = SimpleUploadedFile('brief.txt', b'project notes', content_type='text/plain')
+        response = self.client.post(reverse('task-attachment-list', args=[task.id]), data={'file': upload})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['attachment']['original_name'], 'brief.txt')
+        attachment = TaskAttachment.objects.get()
+        self.assertEqual(self.client.get(reverse('task-attachment-list', args=[task.id])).json()['attachments'][0]['id'], attachment.id)
+        delete_response = self.client.delete(reverse('task-attachment-detail', args=[attachment.id]))
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertFalse(TaskAttachment.objects.exists())
 
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')

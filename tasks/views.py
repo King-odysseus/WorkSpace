@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 from datetime import date, timedelta
 
 from django.utils.dateparse import parse_datetime
@@ -10,7 +11,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
 
 
 def user_workspace_ids(user):
@@ -370,6 +371,43 @@ def task_subtask_detail(request, subtask_id):
     subtask.save()
     record_activity(subtask.task.workspace_id, request.user, 'subtask_updated', f'{request.user.get_full_name() or request.user.email} updated a subtask on {subtask.task.title}.')
     return JsonResponse({'subtask': subtask.as_dict()})
+
+
+@require_http_methods(['GET', 'POST'])
+def task_attachment_list(request, task_id):
+    auth_error = require_authenticated(request)
+    if auth_error:
+        return auth_error
+    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    if task is None:
+        return JsonResponse({'error': 'Task was not found.'}, status=404)
+    if request.method == 'GET':
+        attachments = TaskAttachment.objects.filter(task=task).select_related('uploaded_by')
+        return JsonResponse({'attachments': [attachment.as_dict() for attachment in attachments]})
+    uploaded_file = request.FILES.get('file')
+    if uploaded_file is None:
+        return JsonResponse({'error': 'A file is required.'}, status=400)
+    if uploaded_file.size > 10 * 1024 * 1024:
+        return JsonResponse({'error': 'Files must be 10 MB or smaller.'}, status=400)
+    allowed_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.zip'}
+    if Path(uploaded_file.name).suffix.lower() not in allowed_extensions:
+        return JsonResponse({'error': 'This file type is not supported.'}, status=400)
+    attachment = TaskAttachment.objects.create(task=task, uploaded_by=request.user, file=uploaded_file, original_name=uploaded_file.name[:255])
+    record_activity(task.workspace_id, request.user, 'task_attachment', f'{request.user.get_full_name() or request.user.email} attached {attachment.original_name} to {task.title}.')
+    return JsonResponse({'attachment': attachment.as_dict()}, status=201)
+
+
+@require_http_methods(['DELETE'])
+def task_attachment_detail(request, attachment_id):
+    auth_error = require_authenticated(request)
+    if auth_error:
+        return auth_error
+    attachment = TaskAttachment.objects.filter(id=attachment_id, task__workspace_id__in=user_workspace_ids(request.user)).first()
+    if attachment is None:
+        return JsonResponse({'error': 'Attachment was not found.'}, status=404)
+    attachment.file.delete(save=False)
+    attachment.delete()
+    return JsonResponse({'deleted': attachment_id})
 
 
 @require_http_methods(['GET', 'PATCH'])

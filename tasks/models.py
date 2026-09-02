@@ -320,6 +320,27 @@ class TaskSubtask(models.Model):
         }
 
 
+class TaskAttachment(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='attachments')
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='task_attachments')
+    file = models.FileField(upload_to='task-attachments/%Y/%m/')
+    original_name = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'task_id': self.task_id,
+            'original_name': self.original_name,
+            'file_url': self.file.url,
+            'uploaded_by': self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown user',
+            'created_at': self.created_at.isoformat(),
+        }
+
+
 class WorkspaceNotification(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='notifications')
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_notifications')

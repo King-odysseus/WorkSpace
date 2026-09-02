@@ -480,6 +480,7 @@ function TaskCard({ task, onComplete, onStatusChange = () => undefined, onDelete
 function TaskDetailDrawer({ task, workspaceId, onClose }) {
   const [comments, setComments] = useState([])
   const [subtasks, setSubtasks] = useState([])
+  const [attachments, setAttachments] = useState([])
   const [comment, setComment] = useState('')
   const [subtask, setSubtask] = useState('')
   const [labelInput, setLabelInput] = useState((task.labels || []).join(', '))
@@ -487,11 +488,12 @@ function TaskDetailDrawer({ task, workspaceId, onClose }) {
   const [loading, setLoading] = useState(true)
   const request = async (path, options = {}) => fetch(path, { ...options, credentials: 'include', headers: { ...(options.headers || {}), 'X-Workspace-Id': String(workspaceId) } })
   useEffect(() => {
-    Promise.all([request(`/api/tasks/${task.id}/comments/`), request(`/api/tasks/${task.id}/subtasks/`)]).then(async ([commentResponse, subtaskResponse]) => {
-      if (!commentResponse.ok || !subtaskResponse.ok) throw new Error('Task details could not be loaded.')
-      const [commentData, subtaskData] = await Promise.all([commentResponse.json(), subtaskResponse.json()])
+    Promise.all([request(`/api/tasks/${task.id}/comments/`), request(`/api/tasks/${task.id}/subtasks/`), request(`/api/tasks/${task.id}/attachments/`)]).then(async ([commentResponse, subtaskResponse, attachmentResponse]) => {
+      if (!commentResponse.ok || !subtaskResponse.ok || !attachmentResponse.ok) throw new Error('Task details could not be loaded.')
+      const [commentData, subtaskData, attachmentData] = await Promise.all([commentResponse.json(), subtaskResponse.json(), attachmentResponse.json()])
       setComments(commentData.comments)
       setSubtasks(subtaskData.subtasks)
+      setAttachments(attachmentData.attachments)
     }).catch(loadError => setError(loadError.message)).finally(() => setLoading(false))
   }, [task.id, workspaceId])
   const addComment = async event => {
@@ -526,7 +528,23 @@ function TaskDetailDrawer({ task, workspaceId, onClose }) {
     if (!response.ok) return setError(data.error || 'Labels could not be saved.')
     setLabelInput((data.task.labels || []).join(', '))
   }
-  return <div className="drawer-backdrop" onMouseDown={onClose}><aside className="task-drawer" onMouseDown={event => event.stopPropagation()}><div className="drawer-heading"><div><p className="eyebrow">Task details</p><h2>{task.title}</h2><span>{task.member} | {task.due}</span></div><button className="close-button" onClick={onClose} aria-label="Close task details"><X size={18} /></button></div>{error && <p className="auth-error">{error}</p>}{loading ? <p className="drawer-muted">Loading task details...</p> : <><section className="drawer-section"><div className="drawer-section-heading"><h3>Labels</h3><span>Comma separated</span></div><form className="inline-form" onSubmit={saveLabels}><input value={labelInput} onChange={event => setLabelInput(event.target.value)} placeholder="priority, client, risk" aria-label="Task labels" /><button className="secondary-button">Save</button></form></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Subtasks</h3><span>{subtasks.filter(item => item.completed).length} of {subtasks.length}</span></div>{subtasks.map(item => <label className="subtask-row" key={item.id}><input type="checkbox" checked={item.completed} onChange={() => toggleSubtask(item)} /><span className={item.completed ? 'completed' : ''}>{item.title}</span></label>)}<form className="inline-form" onSubmit={addSubtask}><input value={subtask} onChange={event => setSubtask(event.target.value)} placeholder="Add a subtask" aria-label="Add a subtask" /><button className="secondary-button">Add</button></form></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Comments</h3><span>{comments.length}</span></div>{comments.length ? comments.map(item => <article className="drawer-comment" key={item.id}><strong>{item.author_name}</strong><p>{item.body}</p></article>) : <p className="drawer-muted">No comments yet.</p>}<form className="drawer-comment-form" onSubmit={addComment}><textarea value={comment} onChange={event => setComment(event.target.value)} placeholder="Write an update for the team" aria-label="Write a task comment" /><button className="primary-button">Post comment</button></form></section></>}</aside></div>
+  const uploadAttachment = async event => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await request(`/api/tasks/${task.id}/attachments/`, { method: 'POST', headers: { 'X-CSRFToken': await getCsrfToken() }, body: formData })
+    const data = await response.json()
+    if (!response.ok) return setError(data.error || 'Attachment could not be uploaded.')
+    setAttachments(current => [data.attachment, ...current])
+    event.target.value = ''
+  }
+  const deleteAttachment = async attachment => {
+    const response = await request(`/api/attachments/${attachment.id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': await getCsrfToken() } })
+    if (!response.ok) return setError('Attachment could not be deleted.')
+    setAttachments(current => current.filter(item => item.id !== attachment.id))
+  }
+  return <div className="drawer-backdrop" onMouseDown={onClose}><aside className="task-drawer" onMouseDown={event => event.stopPropagation()}><div className="drawer-heading"><div><p className="eyebrow">Task details</p><h2>{task.title}</h2><span>{task.member} | {task.due}</span></div><button className="close-button" onClick={onClose} aria-label="Close task details"><X size={18} /></button></div>{error && <p className="auth-error">{error}</p>}{loading ? <p className="drawer-muted">Loading task details...</p> : <><section className="drawer-section"><div className="drawer-section-heading"><h3>Labels</h3><span>Comma separated</span></div><form className="inline-form" onSubmit={saveLabels}><input value={labelInput} onChange={event => setLabelInput(event.target.value)} placeholder="priority, client, risk" aria-label="Task labels" /><button className="secondary-button">Save</button></form></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Attachments</h3><span>{attachments.length}</span></div>{attachments.map(attachment => <div className="attachment-row" key={attachment.id}><a href={attachment.file_url} target="_blank" rel="noreferrer">{attachment.original_name}</a><button className="inline-delete" onClick={() => deleteAttachment(attachment)} aria-label={`Delete ${attachment.original_name}`}><X size={14} /></button></div>)}<label className="attachment-upload"><span>Upload file</span><input type="file" onChange={uploadAttachment} /></label></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Subtasks</h3><span>{subtasks.filter(item => item.completed).length} of {subtasks.length}</span></div>{subtasks.map(item => <label className="subtask-row" key={item.id}><input type="checkbox" checked={item.completed} onChange={() => toggleSubtask(item)} /><span className={item.completed ? 'completed' : ''}>{item.title}</span></label>)}<form className="inline-form" onSubmit={addSubtask}><input value={subtask} onChange={event => setSubtask(event.target.value)} placeholder="Add a subtask" aria-label="Add a subtask" /><button className="secondary-button">Add</button></form></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Comments</h3><span>{comments.length}</span></div>{comments.length ? comments.map(item => <article className="drawer-comment" key={item.id}><strong>{item.author_name}</strong><p>{item.body}</p></article>) : <p className="drawer-muted">No comments yet.</p>}<form className="drawer-comment-form" onSubmit={addComment}><textarea value={comment} onChange={event => setComment(event.target.value)} placeholder="Write an update for the team" aria-label="Write a task comment" /><button className="primary-button">Post comment</button></form></section></>}</aside></div>
 }
 function Activity({ avatar, color, text, strong, suffix, time }) { return <div className="activity-item"><span className={`avatar small ${color}`}>{avatar}</span><p>{text} <strong>{strong}</strong> {suffix}<span>{time}</span></p></div> }
 

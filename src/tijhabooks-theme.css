@@ -397,6 +397,12 @@ html[data-theme='dark'] .notification-panel { border-color: #303078; background:
 html[data-theme='dark'] .notification-panel-heading, html[data-theme='dark'] .notification-row strong { color: #FFFFFF; }
 html[data-theme='dark'] .notification-panel-heading { border-color: #303078; }
 html[data-theme='dark'] .notification-row { border-color: #303078; color: #B9BDD8; }
+.attachment-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #EEF0F3; }
+.attachment-row a { overflow: hidden; color: #1D4ED8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-upload { display: flex; align-items: center; justify-content: center; margin-top: 12px; padding: 10px; border: 1px dashed #B8C1CC; border-radius: 9px; color: #6B7280; cursor: pointer; font-size: 12px; }
+.attachment-upload input { display: none; }
+html[data-theme='dark'] .attachment-row { border-color: #303078; }
+html[data-theme='dark'] .attachment-upload { border-color: #59609C; color: #B9BDD8; }
 .chat-reply { margin-left: 28px; padding-left: 12px; border-left: 2px solid #E2E2E6; }
 .chat-reply-button { border: 0; background: transparent; color: #1D4ED8; cursor: pointer; font-size: 11px; font-weight: 700; padding: 0; }
 .reply-context { margin: 0 0 12px; padding: 8px 10px; border-left: 3px solid #C49A6C; border-radius: 5px; background: #F7F9FC; color: #6B7280; font-size: 11px; }
