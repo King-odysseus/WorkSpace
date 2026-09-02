@@ -1,11 +1,15 @@
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.environ.get('WORKSPACE_SECRET_KEY', 'local-development-only-key-change-before-deploy')
+development_secret = 'local-development-only-key-change-before-deploy'
+SECRET_KEY = os.environ.get('WORKSPACE_SECRET_KEY', development_secret)
 DEBUG = os.environ.get('WORKSPACE_DEBUG', 'true').lower() == 'true'
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('WORKSPACE_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
 CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:5175', 'http://localhost:5175', 'http://192.168.68.55:5175']
+if not DEBUG and (not SECRET_KEY or SECRET_KEY == development_secret):
+    raise ImproperlyConfigured('WORKSPACE_SECRET_KEY must be set when WORKSPACE_DEBUG is false.')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -61,3 +65,8 @@ USE_I18N = True
 USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
