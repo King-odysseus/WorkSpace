@@ -513,6 +513,9 @@ html[data-theme='dark'] .report-member-row,
 html[data-theme='dark'] .tab.active { background-color: #173150; }
 html[data-theme='dark'] .calendar-view-switcher button.active,
 html[data-theme='dark'] .mobile-pill-nav button.active { background: var(--brand-accent); color: #071A2E; }
+html[data-theme='dark'] .notification-panel-heading,
+html[data-theme='dark'] .notification-row { border-color: #294461; }
+html[data-theme='dark'] .notification-row:hover { background: #173150; }
 html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .workspace-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 11px 14px; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 12px; }
 .workspace-status.error { border-color: #E36B43; color: var(--workspace-text); }
