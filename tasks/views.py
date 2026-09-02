@@ -73,6 +73,7 @@ def parse_reminder_minutes(value):
 def deliver_due_calendar_reminders(workspace_id):
     now = timezone.now()
     horizon = now + timedelta(days=7)
+    delivered_count = 0
     due_events = CalendarEvent.objects.filter(
         workspace_id=workspace_id,
         created_by__isnull=False,
@@ -97,6 +98,8 @@ def deliver_due_calendar_reminders(workspace_id):
             )
             locked_event.reminder_sent_at = now
             locked_event.save(update_fields=['reminder_sent_at'])
+            delivered_count += 1
+    return delivered_count
 
 
 def requested_workspace(request, user):

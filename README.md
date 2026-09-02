@@ -39,7 +39,7 @@ For a containerized deployment, set `WORKSPACE_SECRET_KEY` and `WORKSPACE_DB_PAS
 docker compose up --build
 ```
 
-The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves authorized attachment downloads through the Django API, proxies `/api/` requests through Nginx to Django, accepts task uploads up to 10 MB, and waits for the API health check before starting the web dependency.
+The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves authorized attachment downloads through the Django API, proxies `/api/` requests through Nginx to Django, accepts task uploads up to 10 MB, runs a reminder worker every 60 seconds, and waits for the API health check before starting the web dependency.
 
 ## Verification
 
@@ -47,4 +47,5 @@ The web application will be available at `http://localhost:8080`. The compose se
 npm run build
 python manage.py test tasks
 python manage.py check
+python manage.py deliver_calendar_reminders
 ```
