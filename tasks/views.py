@@ -350,6 +350,8 @@ def task_detail(request, task_id):
         if membership.role not in {'owner', 'manager'}:
             return JsonResponse({'error': 'Only owners and managers can delete tasks.'}, status=403)
         record_activity(task.workspace_id, request.user, 'task_deleted', f'{request.user.get_full_name() or request.user.email} deleted task {task.title}.')
+        for attachment in task.attachments.all():
+            attachment.file.delete(save=False)
         task.delete()
         return JsonResponse({'deleted': task_id})
 

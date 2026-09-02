@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from pathlib import Path
 
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -379,6 +380,20 @@ class TaskApiTests(TestCase):
         self.assertEqual(delete_response.status_code, 200)
         self.assertFalse(TaskAttachment.objects.exists())
         self.assertTrue(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_attachment_deleted').exists())
+
+    def test_deleting_task_removes_attachment_file(self):
+        task = Task.objects.create(workspace=self.workspace, title='Delete attachment with task')
+        attachment = TaskAttachment.objects.create(
+            task=task,
+            uploaded_by=self.user,
+            file=SimpleUploadedFile('cleanup.txt', b'private notes', content_type='text/plain'),
+            original_name='cleanup.txt',
+        )
+        file_path = Path(attachment.file.path)
+        response = self.client.delete(reverse('task-detail', args=[task.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(file_path.exists())
+        self.assertFalse(TaskAttachment.objects.filter(id=attachment.id).exists())
 
     def test_members_cannot_delete_attachments_on_unassigned_tasks(self):
         task = Task.objects.create(workspace=self.workspace, title='Owner task', assignee=self.user)
