@@ -632,13 +632,18 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
       event.preventDefault()
       const name = savedViewName.trim()
       if (!name) return
-      const response = await fetch(`/api/workspaces/${workspaceId}/saved-views/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ name, filter: plannerFilter, search: searchQuery }) })
-      const responseData = await response.json()
-      if (!response.ok) return setBucketError(responseData.error || 'Saved view could not be created.')
-      const nextViews = [...savedViews.filter(view => view.name !== name), responseData.saved_view]
-      setSavedViews(nextViews)
-      localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
-      setSavedViewName('')
+      setBucketError('')
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/saved-views/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ name, filter: plannerFilter, search: searchQuery }) })
+        const responseData = await response.json()
+        if (!response.ok) return setBucketError(responseData.error || 'Saved view could not be created.')
+        const nextViews = [...savedViews.filter(view => view.name !== name), responseData.saved_view]
+        setSavedViews(nextViews)
+        localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
+        setSavedViewName('')
+      } catch (error) {
+        setBucketError(error.message || 'Saved view could not be created.')
+      }
     }
     const applyView = event => {
       setSelectedSavedView(event.target.value)
@@ -651,12 +656,17 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
     const deleteSavedView = async () => {
       const view = savedViews.find(item => item.name === selectedSavedView)
       if (!view || !window.confirm(`Delete saved view ${view.name}?`)) return
-      const response = await fetch(`/api/workspaces/${workspaceId}/saved-views/${view.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-      if (!response.ok) return setBucketError('Saved view could not be deleted.')
-      const nextViews = savedViews.filter(item => item.id !== view.id)
-      setSavedViews(nextViews)
-      setSelectedSavedView('')
-      localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
+      setBucketError('')
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/saved-views/${view.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+        if (!response.ok) return setBucketError('Saved view could not be deleted.')
+        const nextViews = savedViews.filter(item => item.id !== view.id)
+        setSavedViews(nextViews)
+        setSelectedSavedView('')
+        localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
+      } catch (error) {
+        setBucketError(error.message || 'Saved view could not be deleted.')
+      }
     }
     return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{filteredTasks.length} of {tasks.length} tasks shown</span><div className="planner-filter-controls"><select value={plannerFilter} onChange={event => setPlannerFilter(event.target.value)} aria-label="Filter Planner tasks"><option value="all">All tasks</option><option value="mine">My tasks</option><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option>{buckets.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}{availableLabels.map(label => <option key={label} value={label}>Label: {label}</option>)}</select><select value={selectedSavedView} onChange={applyView} aria-label="Load saved Planner view"><option value="">Saved views</option>{savedViews.map(view => <option key={view.name} value={view.name}>{view.name}</option>)}</select><button type="button" className="secondary-button" onClick={deleteSavedView} disabled={!selectedSavedView}>Delete view</button><form className="bucket-create-form" onSubmit={saveView}><input value={savedViewName} onChange={event => setSavedViewName(event.target.value)} placeholder="Save view as" aria-label="Saved view name" /><button type="submit" className="secondary-button">Save</button></form><form className="bucket-create-form" onSubmit={createBucket}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket" aria-label="New bucket name" /><button type="submit" className="secondary-button">Add bucket</button></form></div></div>{bucketError && <p className="auth-error">{bucketError}</p>}<div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.id} onDragOver={event => event.preventDefault()} onDrop={event => { const taskId = Number(event.dataTransfer.getData('text/plain')); if (taskId) onBucketChange?.(taskId, bucket.name) }}><div className="planner-column-heading"><strong>{bucket.name}</strong><span>{filteredTasks.filter(task => task.bucket === bucket.name).length}</span></div><div className="planner-column-tasks">{filteredTasks.filter(task => task.bucket === bucket.name).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} onOpenTask={onOpenTask} onBucketChange={onBucketChange} bucketOptions={buckets} canDelete={canManageTasks} draggable />)}{!filteredTasks.some(task => task.bucket === bucket.name) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
   }
