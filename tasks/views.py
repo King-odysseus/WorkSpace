@@ -241,13 +241,22 @@ def task_detail(request, task_id):
     task = get_object_or_404(Task, id=task_id, workspace_id__in=user_workspace_ids(request.user)) if request.user.is_authenticated else None
     if task is None:
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    membership = Membership.objects.filter(workspace_id=task.workspace_id, user=request.user).first()
+    if membership is None:
+        return JsonResponse({'error': 'You do not belong to this workspace.'}, status=403)
 
     if request.method == 'GET':
         return JsonResponse({'task': task.as_dict()})
 
     if request.method == 'DELETE':
+        if membership.role not in {'owner', 'manager'}:
+            return JsonResponse({'error': 'Only owners and managers can delete tasks.'}, status=403)
+        record_activity(task.workspace_id, request.user, 'task_deleted', f'{request.user.get_full_name() or request.user.email} deleted task {task.title}.')
         task.delete()
         return JsonResponse({'deleted': task_id})
+
+    if membership.role == 'member' and task.assignee_id != request.user.id:
+        return JsonResponse({'error': 'Members can only update tasks assigned to them.'}, status=403)
 
     try:
         payload = json.loads(request.body or '{}')

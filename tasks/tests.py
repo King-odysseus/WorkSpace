@@ -229,6 +229,16 @@ class TaskApiTests(TestCase):
         self.assertEqual(summary['status_counts']['done'], 1)
         self.assertEqual(summary['workload'][0]['open'], 1)
 
+    def test_member_task_permissions_are_scoped_by_assignment(self):
+        teammate = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        task = Task.objects.create(workspace=self.workspace, title='Owner task', assignee=self.user)
+        self.client.force_login(teammate)
+        update_response = self.client.patch(reverse('task-detail', args=[task.id]), data=json.dumps({'status': 'done'}), content_type='application/json')
+        self.assertEqual(update_response.status_code, 403)
+        delete_response = self.client.delete(reverse('task-detail', args=[task.id]))
+        self.assertEqual(delete_response.status_code, 403)
+
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
         other_workspace = Workspace.objects.create(name='Other', slug='other')
