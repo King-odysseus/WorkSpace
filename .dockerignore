@@ -1,9 +1,15 @@
 .git
+.github
 .env
 .env.*
 !.env.example
 node_modules
 dist
-db.sqlite3
+media
+*.sqlite3
 __pycache__
 *.py[cod]
+.pytest_cache
+.mypy_cache
+coverage.xml
+htmlcov
