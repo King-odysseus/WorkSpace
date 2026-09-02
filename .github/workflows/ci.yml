@@ -76,7 +76,7 @@ jobs:
 
       - name: Smoke test production stack
         run: |
-          docker compose up -d
+          docker compose up -d --wait --wait-timeout 90
           trap 'docker compose down -v' EXIT
-          curl --fail --retry 20 --retry-delay 3 http://127.0.0.1:8080/
-          curl --fail --retry 20 --retry-delay 3 http://127.0.0.1:8080/api/health/
+          curl --fail --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8080/
+          curl --fail --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8080/api/health/
