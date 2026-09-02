@@ -285,6 +285,8 @@ html[data-theme='light'] .theme-toggle {
 .top-search { display: flex; align-items: center; gap: 7px; width: 185px; padding: 7px 9px; border: 1px solid #294461; border-radius: 8px; color: #B6C7D8; }
 .top-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #FFFFFF; font: 500 11px 'DM Sans'; }
 .top-search input::placeholder { color: #8EA3B8; }
+.workspace-switcher select { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #F5F8FB; font: 600 12px 'DM Sans'; cursor: pointer; }
+.workspace-switcher option { color: #0B0B45; background: #FFFFFF; }
 .invite-dot { width: 8px; height: 8px; margin: 0 12px; border-radius: 50%; background: #C49A6C; }
 .pending-heading { margin-top: 28px !important; }
 .task-status-select { border: 0; cursor: pointer; appearance: auto; }

@@ -47,12 +47,19 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
   const [session, setSession] = useState({ loading: true, user: null, error: '' })
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
   const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [] })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('workspace-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    if (session.user && !session.user.workspaces.some(workspace => workspace.id === activeWorkspaceId)) {
+      setActiveWorkspaceId(session.user.workspaces[0]?.id || null)
+    }
+  }, [session.user, activeWorkspaceId])
 
   useEffect(() => {
     fetch('/api/auth/me/', { credentials: 'include' })
@@ -64,7 +71,7 @@ function App() {
   useEffect(() => {
     if (!session.user) return undefined
     let isCurrent = true
-    const workspaceId = session.user.workspaces[0]?.id
+    const workspaceId = activeWorkspaceId
     if (!workspaceId) return undefined
 
     const read = path => fetch(path, { credentials: 'include', headers: { 'X-Workspace-Id': String(workspaceId) } }).then(response => {
@@ -113,7 +120,7 @@ function App() {
       isCurrent = false
       window.clearInterval(refreshTimer)
     }
-  }, [session.user, today])
+  }, [session.user, activeWorkspaceId, today])
 
   const visibleTasks = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -132,7 +139,7 @@ function App() {
       const response = await fetch(`/api/tasks/${id}/`, {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(session.user.workspaces[0]?.id || '') },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
         body: JSON.stringify({ status: 'done' }),
       })
       if (!response.ok && response.status !== 404) throw new Error(`Task update returned ${response.status}`)
@@ -146,7 +153,7 @@ function App() {
     setTasks(current => current.map(task => task.id === id ? { ...task, status } : task))
     try {
       const apiStatus = status === 'in progress' ? 'in_progress' : status
-      const response = await fetch(`/api/tasks/${id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(session.user.workspaces[0]?.id || '') }, body: JSON.stringify({ status: apiStatus }) })
+      const response = await fetch(`/api/tasks/${id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') }, body: JSON.stringify({ status: apiStatus }) })
       if (!response.ok && response.status !== 404) throw new Error(`Task update returned ${response.status}`)
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
@@ -155,7 +162,7 @@ function App() {
   }
   const deleteTask = async id => {
     if (!window.confirm('Delete this task?')) return
-    const response = await fetch(`/api/tasks/${id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(session.user.workspaces[0]?.id || '') } })
+    const response = await fetch(`/api/tasks/${id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') } })
     if (!response.ok) return
     setTasks(current => current.filter(task => task.id !== id))
   }
@@ -173,7 +180,7 @@ function App() {
       const response = await fetch('/api/tasks/', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(session.user.workspaces[0]?.id || '') },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
         body: JSON.stringify({ title: newTask.trim(), assignee_id: newAssigneeId || null, project_id: newProjectId || null, due_date: newDueDate || null }),
       })
       const data = await response.json()
@@ -194,8 +201,8 @@ function App() {
     { label: 'Team board', icon: Users }, { label: 'Calendar', icon: CalendarDays },
     { label: 'Projects', icon: Target }, { label: 'Chat', icon: MessageSquare },
   ]
-  const workspaceId = session.user.workspaces[0]?.id
-  const currentWorkspace = session.user.workspaces[0]
+  const workspaceId = activeWorkspaceId
+  const currentWorkspace = session.user.workspaces.find(workspace => workspace.id === activeWorkspaceId) || session.user.workspaces[0]
   const teamMembers = workspaceData.members.length ? workspaceData.members.map(member => ({
     name: [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email,
     initials: [member.first_name, member.last_name].filter(Boolean).map(name => name[0]).join('').slice(0, 2).toUpperCase() || member.email.slice(0, 2).toUpperCase(),
@@ -206,7 +213,7 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">W</div><span>WorkSpace</span></div>
-      <button className="workspace-switcher"><span className="workspace-dot" />{currentWorkspace?.name || 'Your workspace'} <ChevronDown size={14} /></button>
+      <label className="workspace-switcher"><span className="workspace-dot" /><select value={activeWorkspaceId || ''} onChange={event => setActiveWorkspaceId(Number(event.target.value))}>{session.user.workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select><ChevronDown size={14} /></label>
       <nav className="main-nav">
         <p className="nav-label">Workspace</p>
         {navItems.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)}><Icon size={18} /><span>{label}</span>{label === 'Chat' && <span className="nav-badge">4</span>}</button>)}
