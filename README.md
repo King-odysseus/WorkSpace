@@ -31,7 +31,7 @@ Open `http://localhost:5175` to use the application. The Django administration s
 
 Copy `.env.example` to a protected environment configuration and set a unique random `WORKSPACE_SECRET_KEY`. Set `WORKSPACE_DEBUG=false`, configure `WORKSPACE_ALLOWED_HOSTS`, and use a production database and HTTPS reverse proxy before deployment.
 
-The default local database is SQLite. PostgreSQL is recommended for production by adding a PostgreSQL database configuration in `backend/settings.py` and supplying its connection values through environment variables.
+The default local database is SQLite. PostgreSQL is supported for production by setting `WORKSPACE_DB_NAME`, `WORKSPACE_DB_USER`, `WORKSPACE_DB_PASSWORD`, `WORKSPACE_DB_HOST`, and `WORKSPACE_DB_PORT` in the environment.
 
 ## Verification
 
