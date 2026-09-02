@@ -769,7 +769,13 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const [taskFields, setTaskFields] = useState({ title: task.title, description: task.description || '', status: task.status === 'in progress' ? 'in_progress' : task.status, priority: task.priority || 'normal', due_date: task.due_date || '', recurrence: task.recurrence || 'none', assignee_id: task.assignee_id || '', project_id: task.project_id || '', bucket: task.bucket || 'Backlog' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const request = async (path, options = {}) => fetch(path, { ...options, credentials: 'include', headers: { ...(options.headers || {}), 'X-Workspace-Id': String(workspaceId) } })
+  const request = async (path, options = {}) => {
+    try {
+      return await fetch(path, { ...options, credentials: 'include', headers: { ...(options.headers || {}), 'X-Workspace-Id': String(workspaceId) } })
+    } catch {
+      return new Response(JSON.stringify({ error: 'The task service is unavailable. Try again.' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+    }
+  }
   useEffect(() => {
     Promise.all([request(`/api/tasks/${task.id}/comments/`), request(`/api/tasks/${task.id}/subtasks/`), request(`/api/tasks/${task.id}/attachments/`)]).then(async ([commentResponse, subtaskResponse, attachmentResponse]) => {
       if (!commentResponse.ok || !subtaskResponse.ok || !attachmentResponse.ok) throw new Error('Task details could not be loaded.')
