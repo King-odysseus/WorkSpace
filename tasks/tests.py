@@ -436,6 +436,7 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['project']['due_date'], '2026-10-15')
+        self.assertTrue(ActivityEvent.objects.filter(workspace=self.workspace, kind='project_created').exists())
 
         invalid_response = self.client.post(
             reverse('project-list', args=[self.workspace.id]),

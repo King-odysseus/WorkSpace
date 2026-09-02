@@ -632,6 +632,7 @@ def project_list(request, workspace_id):
         project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip(), due_date=due_date)
     except IntegrityError:
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
+    record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name}.')
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
@@ -644,6 +645,7 @@ def project_detail(request, workspace_id, project_id):
     if project is None:
         return JsonResponse({'error': 'Project was not found.'}, status=404)
     if request.method == 'DELETE':
+        record_activity(workspace_id, request.user, 'project_deleted', f'{request.user.get_full_name() or request.user.email} deleted project {project.name}.')
         project.delete()
         return JsonResponse({'deleted': project_id})
     try:
@@ -673,6 +675,7 @@ def project_detail(request, workspace_id, project_id):
         except ValueError:
             return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
     project.save()
+    record_activity(workspace_id, request.user, 'project_updated', f'{request.user.get_full_name() or request.user.email} updated project {project.name}.')
     return JsonResponse({'project': project.as_dict()})
 
 
@@ -726,6 +729,7 @@ def calendar_event_list(request, workspace_id):
         reminder_minutes=reminder_minutes,
         created_by=request.user,
     )
+    record_activity(workspace_id, request.user, 'calendar_created', f'{request.user.get_full_name() or request.user.email} created calendar event {event.title}.')
     return JsonResponse({'event': event.as_dict()}, status=201)
 
 
@@ -738,6 +742,7 @@ def calendar_event_detail(request, workspace_id, event_id):
     if event is None:
         return JsonResponse({'error': 'Calendar event was not found.'}, status=404)
     if request.method == 'DELETE':
+        record_activity(workspace_id, request.user, 'calendar_deleted', f'{request.user.get_full_name() or request.user.email} deleted calendar event {event.title}.')
         event.delete()
         return JsonResponse({'deleted': event_id})
     try:
@@ -778,6 +783,7 @@ def calendar_event_detail(request, workspace_id, event_id):
     event.start_at = start_at
     event.end_at = end_at
     event.save()
+    record_activity(workspace_id, request.user, 'calendar_updated', f'{request.user.get_full_name() or request.user.email} updated calendar event {event.title}.')
     return JsonResponse({'event': event.as_dict()})
 
 
