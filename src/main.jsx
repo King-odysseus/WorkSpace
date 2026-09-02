@@ -289,8 +289,14 @@ function App() {
     }
   }
   const openTaskModal = assigneeId => {
-    setNewAssigneeId(assigneeId ? String(assigneeId) : '')
+    setNewTask('')
     setNewDescription('')
+    setNewAssigneeId(assigneeId ? String(assigneeId) : '')
+    setNewProjectId('')
+    setNewDueDate('')
+    setNewBucket('Backlog')
+    setNewRecurrence('none')
+    setNewPriority('normal')
     setTaskError('')
     setShowModal(true)
   }
