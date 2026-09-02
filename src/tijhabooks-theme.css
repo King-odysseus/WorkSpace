@@ -646,6 +646,25 @@ html[data-theme='dark'] .project-progress-track { background: #123A5B; }
   outline-offset: 2px;
 }
 
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--navy);
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-180%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
