@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 class TaskApiTests(TestCase):
@@ -155,6 +155,19 @@ class TaskApiTests(TestCase):
         notification_id = notification_response.json()['notifications'][0]['id']
         read_response = self.client.patch(reverse('notification-list', args=[self.workspace.id]), data=json.dumps({'notification_id': notification_id}), content_type='application/json')
         self.assertEqual(read_response.status_code, 200)
+
+    def test_owner_can_create_and_read_plan_buckets(self):
+        create_response = self.client.post(
+            reverse('plan-bucket-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Review queue'}),
+            content_type='application/json',
+        )
+        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(create_response.json()['bucket']['name'], 'Review queue')
+        list_response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]))
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.json()['buckets'][0]['name'], 'Review queue')
+        self.assertEqual(PlanBucket.objects.count(), 1)
 
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')

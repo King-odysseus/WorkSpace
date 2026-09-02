@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 @admin.register(Workspace)
@@ -62,6 +62,12 @@ class ActivityEventAdmin(admin.ModelAdmin):
     list_display = ('workspace', 'actor', 'kind', 'message', 'created_at')
     list_filter = ('kind',)
     search_fields = ('message', 'actor__email')
+
+
+@admin.register(PlanBucket)
+class PlanBucketAdmin(admin.ModelAdmin):
+    list_display = ('name', 'workspace', 'position')
+    search_fields = ('name', 'workspace__name')
 
 
 @admin.register(CalendarEvent)

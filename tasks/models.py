@@ -12,6 +12,20 @@ class Workspace(models.Model):
         ordering = ['name']
 
 
+class PlanBucket(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='plan_buckets')
+    name = models.CharField(max_length=80)
+    position = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='unique_plan_bucket_name')]
+
+    def as_dict(self):
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'position': self.position}
+
+
 class Membership(models.Model):
     ROLE_CHOICES = [
         ('owner', 'Owner'),

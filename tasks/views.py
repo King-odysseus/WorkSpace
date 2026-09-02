@@ -9,7 +9,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
 
 
 def user_workspace_ids(user):
@@ -146,6 +146,30 @@ def task_list(request):
     if assignee and assignee != request.user:
         create_notification(workspace_id, assignee, 'task_assigned', 'You were assigned a task.', task.title)
     return JsonResponse({'task': task.as_dict()}, status=201)
+
+
+@require_http_methods(['GET', 'POST'])
+def plan_bucket_list(request, workspace_id):
+    membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
+    _, error = membership_check(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        buckets = PlanBucket.objects.filter(workspace_id=workspace_id)
+        return JsonResponse({'buckets': [bucket.as_dict() for bucket in buckets]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    if not name or len(name) > 80:
+        return JsonResponse({'error': 'Bucket name must be between 1 and 80 characters.'}, status=400)
+    try:
+        bucket = PlanBucket.objects.create(workspace_id=workspace_id, name=name, position=PlanBucket.objects.filter(workspace_id=workspace_id).count())
+    except IntegrityError:
+        return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
+    record_activity(workspace_id, request.user, 'bucket_created', f'{request.user.get_full_name() or request.user.email} created the {name} bucket.')
+    return JsonResponse({'bucket': bucket.as_dict()}, status=201)
 
 
 @require_http_methods(['GET', 'PATCH', 'DELETE'])

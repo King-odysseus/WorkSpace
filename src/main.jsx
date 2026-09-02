@@ -62,7 +62,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
   const [session, setSession] = useState({ loading: true, user: null, error: '' })
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
-  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [] })
+  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], buckets: [] })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -102,9 +102,10 @@ function App() {
       read(`/api/workspaces/${workspaceId}/follow-ups/`),
       read(`/api/workspaces/${workspaceId}/notifications/`),
       read(`/api/workspaces/${workspaceId}/activity/`),
-    ]).then(([messageData, followUpData, notificationData, activityData]) => {
+      read(`/api/workspaces/${workspaceId}/plan-buckets/`),
+    ]).then(([messageData, followUpData, notificationData, activityData, bucketData]) => {
       if (!isCurrent) return
-      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, notifications: notificationData.notifications, activity: activityData.activity }))
+      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets }))
     }).catch(error => console.warn('Collaboration data could not be refreshed.', error.message))
 
     Promise.all([
@@ -118,8 +119,9 @@ function App() {
       read(`/api/workspaces/${workspaceId}/invitations/`),
       read(`/api/workspaces/${workspaceId}/notifications/`),
       read(`/api/workspaces/${workspaceId}/activity/`),
+      read(`/api/workspaces/${workspaceId}/plan-buckets/`),
     ])
-      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData]) => {
+      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData]) => {
         if (!isCurrent) return
         setTasks(taskData.tasks.map(task => ({
           id: task.id,
@@ -131,8 +133,9 @@ function App() {
           due: task.due_date || 'No due date',
           estimate: 'n/a',
           recurrence: task.recurrence || 'none',
+          bucket: task.bucket || 'Backlog',
         })))
-        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity })
+        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets })
       })
       .catch(error => console.warn('Workspace data could not be loaded.', error.message))
     const refreshTimer = window.setInterval(refreshCollaboration, 15000)
@@ -181,6 +184,17 @@ function App() {
       console.warn('Task status could not be saved.', error.message)
     }
   }
+  const changeTaskBucket = async (id, bucket) => {
+    const previousTask = tasks.find(task => task.id === id)
+    setTasks(current => current.map(task => task.id === id ? { ...task, bucket } : task))
+    try {
+      const response = await fetch(`/api/tasks/${id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') }, body: JSON.stringify({ bucket }) })
+      if (!response.ok) throw new Error(`Task bucket update returned ${response.status}`)
+    } catch (error) {
+      if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
+      console.warn('Task bucket could not be saved.', error.message)
+    }
+  }
   const deleteTask = async id => {
     if (!window.confirm('Delete this task?')) return
     const response = await fetch(`/api/tasks/${id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') } })
@@ -211,7 +225,7 @@ function App() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || `Task creation returned ${response.status}`)
-      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: 'normal', due: data.task.due_date || 'No due date', estimate: 'n/a', recurrence: data.task.recurrence || 'none' }])
+      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: 'normal', due: data.task.due_date || 'No due date', estimate: 'n/a', recurrence: data.task.recurrence || 'none', bucket: data.task.bucket || 'Backlog' }])
       setNewTask('')
       setNewAssigneeId('')
       setNewProjectId('')
@@ -261,7 +275,7 @@ function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <div className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></div>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
       <div className="page-content">
-        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onComplete={completeTask} onStatusChange={changeTaskStatus} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
+        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>{completionPercent}%</strong></div><em><small>{completedTaskCount} of {tasks.length} tasks complete</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>{attentionTaskCount} tasks</strong></div><em className={attentionTaskCount ? 'negative' : 'positive'}>{attentionTaskCount ? 'Blocked, review, or overdue' : 'Nothing urgent'}</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus tasks</span><strong>{myTasks.length}</strong></div><em><small>{myCompletedTaskCount} complete</small></em></div></section>
@@ -277,7 +291,7 @@ function App() {
   </div>
 }
 
-function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canManageMembers, onComplete, onStatusChange, onDelete, onAddTask }) {
+function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canManageMembers, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask }) {
   const today = new Date().toISOString().slice(0, 10)
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
@@ -286,6 +300,8 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
   const [composerType, setComposerType] = useState('chat')
   const [composerError, setComposerError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [newBucketName, setNewBucketName] = useState('')
+  const [bucketError, setBucketError] = useState('')
   const [form, setForm] = useState({ title: '', name: '', description: '', start_at: '', end_at: '', event_type: 'meeting', completed: '', next_steps: '', blockers: '', message: '', note: '', due_date: '', date: today, email: '', role: 'member' })
   useEffect(() => setLocalData(data), [data])
 
@@ -329,6 +345,17 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
     const response = await fetch(`/api/workspaces/${workspaceId}/calendar-events/${eventId}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
     if (!response.ok) return
     setLocalData(current => ({ ...current, events: current.events.filter(event => event.id !== eventId) }))
+  }
+  const createBucket = async event => {
+    event.preventDefault()
+    const name = newBucketName.trim()
+    if (!name) return
+    setBucketError('')
+    const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ name }) })
+    const responseData = await response.json()
+    if (!response.ok) return setBucketError(responseData.error || 'Bucket could not be created.')
+    setLocalData(current => ({ ...current, buckets: [...current.buckets, responseData.bucket] }))
+    setNewBucketName('')
   }
   const calendarDays = getCalendarDays(calendarView, calendarDate)
   const calendarEventsForDay = day => localData.events.filter(event => toDateKey(event.start_at) === toDateKey(day))
@@ -374,14 +401,8 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
   }[active]
 
   if (active === 'Planner') {
-    const buckets = [
-      { key: 'todo', label: 'To do' },
-      { key: 'in progress', label: 'In progress' },
-      { key: 'review', label: 'Review' },
-      { key: 'blocked', label: 'Blocked' },
-      { key: 'done', label: 'Done' },
-    ]
-    return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{tasks.length} tasks in this workspace</span><span>Group: status</span></div><div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.key}><div className="planner-column-heading"><strong>{bucket.label}</strong><span>{tasks.filter(task => task.status === bucket.key).length}</span></div><div className="planner-column-tasks">{tasks.filter(task => task.status === bucket.key).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} />)}{!tasks.some(task => task.status === bucket.key) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
+    const buckets = data.buckets.length ? data.buckets : [{ id: 'backlog', name: 'Backlog' }]
+    return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{tasks.length} tasks in this workspace</span><form className="bucket-create-form" onSubmit={createBucket}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket" aria-label="New bucket name" /><button className="secondary-button">Add bucket</button></form></div>{bucketError && <p className="auth-error">{bucketError}</p>}<div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.id} onDragOver={event => event.preventDefault()} onDrop={event => { const taskId = Number(event.dataTransfer.getData('text/plain')); if (taskId) onBucketChange?.(taskId, bucket.name) }}><div className="planner-column-heading"><strong>{bucket.name}</strong><span>{tasks.filter(task => task.bucket === bucket.name).length}</span></div><div className="planner-column-tasks">{tasks.filter(task => task.bucket === bucket.name).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} onOpenTask={onOpenTask} draggable />)}{!tasks.some(task => task.bucket === bucket.name) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
   }
 
   if (active === 'Calendar') {
@@ -427,7 +448,7 @@ function EmptyState({ text }) {
   return <div className="empty-workspace"><div className="empty-workspace-icon"><Sparkles size={18} /></div><p>{text}</p></div>
 }
 
-function TaskCard({ task, onComplete, onStatusChange = () => undefined, onDelete = () => undefined, onOpenTask }) { return <div className={`task-card ${task.status}`}><button className={`task-check ${task.status === 'done' ? 'checked' : ''}`} onClick={() => onComplete(task.id)} aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} ${task.title}`}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><button className="task-title-button" onClick={() => onOpenTask?.(task)}>{task.title}</button><div><select className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option></select><span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span><button className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.title}`}><MoreHorizontal size={16} /></button></div> }
+function TaskCard({ task, onComplete, onStatusChange = () => undefined, onDelete = () => undefined, onOpenTask, draggable = false }) { return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button className={`task-check ${task.status === 'done' ? 'checked' : ''}`} onClick={() => onComplete(task.id)} aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} ${task.title}`}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><button className="task-title-button" onClick={() => onOpenTask?.(task)}>{task.title}</button><div><select className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option></select><span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span><button className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.title}`}><MoreHorizontal size={16} /></button></div> }
 
 function TaskDetailDrawer({ task, workspaceId, onClose }) {
   const [comments, setComments] = useState([])
