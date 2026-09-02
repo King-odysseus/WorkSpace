@@ -114,6 +114,25 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_completing_recurring_task_creates_next_task(self):
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Daily standup', 'due_date': '2026-09-02', 'recurrence': 'daily'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        task_id = response.json()['task']['id']
+        complete_response = self.client.patch(
+            reverse('task-detail', args=[task_id]),
+            data=json.dumps({'status': 'done'}),
+            content_type='application/json',
+        )
+        self.assertEqual(complete_response.status_code, 200)
+        next_task = Task.objects.exclude(id=task_id).get()
+        self.assertEqual(next_task.title, 'Daily standup')
+        self.assertEqual(next_task.due_date.isoformat(), '2026-09-03')
+        self.assertEqual(next_task.recurrence, 'daily')
+
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
         other_workspace = Workspace.objects.create(name='Other', slug='other')

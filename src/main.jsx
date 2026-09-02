@@ -53,6 +53,7 @@ function App() {
   const [newAssigneeId, setNewAssigneeId] = useState('')
   const [newProjectId, setNewProjectId] = useState('')
   const [newDueDate, setNewDueDate] = useState('')
+  const [newRecurrence, setNewRecurrence] = useState('none')
   const [selectedFilter, setSelectedFilter] = useState('All work')
   const [searchQuery, setSearchQuery] = useState('')
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
@@ -118,6 +119,7 @@ function App() {
           priority: 'normal',
           due: task.due_date || 'No due date',
           estimate: 'n/a',
+          recurrence: task.recurrence || 'none',
         })))
         setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations })
       })
@@ -189,15 +191,16 @@ function App() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
-        body: JSON.stringify({ title: newTask.trim(), assignee_id: newAssigneeId || null, project_id: newProjectId || null, due_date: newDueDate || null }),
+        body: JSON.stringify({ title: newTask.trim(), assignee_id: newAssigneeId || null, project_id: newProjectId || null, due_date: newDueDate || null, recurrence: newRecurrence }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || `Task creation returned ${response.status}`)
-      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: 'normal', due: data.task.due_date || 'No due date', estimate: 'n/a' }])
+      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: 'normal', due: data.task.due_date || 'No due date', estimate: 'n/a', recurrence: data.task.recurrence || 'none' }])
       setNewTask('')
       setNewAssigneeId('')
       setNewProjectId('')
       setNewDueDate('')
+      setNewRecurrence('none')
       setShowModal(false)
     } catch (error) {
       console.error('Task could not be created.', error.message)
@@ -252,7 +255,7 @@ function App() {
         </>}
       </div>
     </main>
-    {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2>Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)}><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => setNewTask(event.target.value)} placeholder="What needs to happen?" /></label><div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
+    {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2>Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)}><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => setNewTask(event.target.value)} placeholder="What needs to happen?" /></label><div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><div className="modal-grid"><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Repeat<select value={newRecurrence} onChange={event => setNewRecurrence(event.target.value)}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
     {selectedTask && <TaskDetailDrawer task={selectedTask} workspaceId={activeWorkspaceId} onClose={() => setSelectedTask(null)} />}
   </div>
 }

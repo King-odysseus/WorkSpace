@@ -217,6 +217,12 @@ class Task(models.Model):
         ('review', 'Review'),
         ('done', 'Done'),
     ]
+    RECURRENCE_CHOICES = [
+        ('none', 'Does not repeat'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
@@ -228,6 +234,7 @@ class Task(models.Model):
     bucket = models.CharField(max_length=80, default='Backlog')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     due_date = models.DateField(null=True, blank=True)
+    recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default='none')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -248,6 +255,7 @@ class Task(models.Model):
             'project_id': self.project_ref_id,
             'status': self.status,
             'due_date': self.due_date.isoformat() if self.due_date else None,
+            'recurrence': self.recurrence,
         }
 
 

@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from django.utils.dateparse import parse_datetime
 from django.db import IntegrityError
@@ -13,6 +13,21 @@ from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, P
 
 def user_workspace_ids(user):
     return user.workspace_memberships.values_list('workspace_id', flat=True)
+
+
+def next_recurrence_date(due_date, recurrence):
+    if due_date is None:
+        return None
+    if recurrence == 'daily':
+        return due_date + timedelta(days=1)
+    if recurrence == 'weekly':
+        return due_date + timedelta(days=7)
+    if recurrence == 'monthly':
+        month = due_date.month % 12 + 1
+        year = due_date.year + (1 if due_date.month == 12 else 0)
+        day = min(due_date.day, [31, 29 if year % 4 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+        return date(year, month, day)
+    return None
 
 
 def requested_workspace(request, user):
@@ -101,6 +116,9 @@ def task_list(request):
             due_date = date.fromisoformat(str(payload['due_date']))
         except ValueError:
             return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
+    recurrence = str(payload.get('recurrence', 'none')).strip()
+    if recurrence not in {choice[0] for choice in Task.RECURRENCE_CHOICES}:
+        return JsonResponse({'error': 'Invalid recurrence rule.'}, status=400)
 
     task = Task.objects.create(
         workspace_id=workspace_id,
@@ -110,6 +128,8 @@ def task_list(request):
         description=str(payload.get('description', '')).strip(),
         assignee_name=str(payload.get('assignee_name', '')).strip(),
         project=str(payload.get('project', '')).strip(),
+        recurrence=recurrence,
+        due_date=due_date,
     )
     return JsonResponse({'task': task.as_dict()}, status=201)
 
@@ -132,7 +152,7 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'assignee_id', 'project_id'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'recurrence', 'assignee_id', 'project_id'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -143,11 +163,17 @@ def task_detail(request, task_id):
             return JsonResponse({'error': 'Task title must be between 1 and 200 characters.'}, status=400)
         task.title = title
 
+    previous_status = task.status
     if 'status' in payload:
         valid_statuses = {choice[0] for choice in Task.STATUS_CHOICES}
         if payload['status'] not in valid_statuses:
             return JsonResponse({'error': 'Invalid task status.'}, status=400)
         task.status = payload['status']
+
+    if 'recurrence' in payload:
+        if payload['recurrence'] not in {choice[0] for choice in Task.RECURRENCE_CHOICES}:
+            return JsonResponse({'error': 'Invalid recurrence rule.'}, status=400)
+        task.recurrence = payload['recurrence']
 
     if 'bucket' in payload:
         bucket = str(payload['bucket']).strip()
@@ -176,6 +202,19 @@ def task_detail(request, task_id):
         setattr(task, field, str(payload[field]).strip() or None)
 
     task.save()
+    if previous_status != 'done' and task.status == 'done' and task.recurrence != 'none':
+        Task.objects.create(
+            workspace=task.workspace,
+            assignee=task.assignee,
+            project_ref=task.project_ref,
+            title=task.title,
+            description=task.description,
+            assignee_name=task.assignee_name,
+            project=task.project,
+            bucket=task.bucket,
+            due_date=next_recurrence_date(task.due_date, task.recurrence),
+            recurrence=task.recurrence,
+        )
     return JsonResponse({'task': task.as_dict()})
 
 
