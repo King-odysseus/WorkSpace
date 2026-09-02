@@ -612,3 +612,33 @@ html[data-theme='dark'] .chat-placeholder p {
     animation-iteration-count: 1 !important;
   }
 }
+
+html[data-theme='dark'] .auth-screen {
+  background-image: linear-gradient(90deg, #071A2EF2 0%, #071A2ED9 42%, #071A2E40 100%), url('/auth-background.png');
+}
+
+html[data-theme='dark'] .auth-panel {
+  border-color: var(--workspace-border);
+  background: #0E2A46EE;
+  box-shadow: 0 24px 70px #020B16A6;
+}
+
+html[data-theme='dark'] .auth-brand,
+html[data-theme='dark'] .auth-panel h1 {
+  color: var(--workspace-text);
+}
+
+html[data-theme='dark'] .auth-subtitle,
+html[data-theme='dark'] .auth-panel label {
+  color: var(--workspace-text-soft);
+}
+
+html[data-theme='dark'] .auth-panel input {
+  border-color: var(--workspace-border);
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text);
+}
+
+html[data-theme='dark'] .auth-switch {
+  color: #7DD3C7;
+}
