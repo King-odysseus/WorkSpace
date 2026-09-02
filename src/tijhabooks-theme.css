@@ -293,6 +293,11 @@ html[data-theme='light'] .theme-toggle {
 .project-status.active { background: #E8F8F5; color: #078C7D; }
 .project-card h3 { margin: 18px 0 7px; color: #071A2E; font: 700 14px 'Plus Jakarta Sans'; }
 .project-card p { margin: 0; color: #6B7280; font-size: 11px; }
+.project-progress { display: grid; gap: 7px; margin-top: 16px; }
+.project-progress-label { display: flex; justify-content: space-between; gap: 10px; color: #6B7280; font-size: 10px; }
+.project-progress-label strong { color: #071A2E; font-size: 10px; }
+.project-progress-track { height: 6px; overflow: hidden; border-radius: 999px; background: #E9EAF1; }
+.project-progress-track span { display: block; height: 100%; border-radius: inherit; background: #1D4ED8; }
 .project-footer { margin-top: 18px; justify-content: space-between; color: #8B97A7; font-size: 10px; }
 .task-list-view { display: flex; flex-direction: column; gap: 8px; }
 .task-list-view .task-card { min-height: 66px; }
@@ -621,6 +626,10 @@ html[data-theme='dark'] .calendar-day > strong,
 html[data-theme='dark'] .chat-placeholder p {
   color: var(--workspace-text-soft);
 }
+
+html[data-theme='dark'] .project-progress-label { color: #B9CCDD; }
+html[data-theme='dark'] .project-progress-label strong { color: #FFFFFF; }
+html[data-theme='dark'] .project-progress-track { background: #123A5B; }
 
 :focus-visible {
   outline: 3px solid var(--brand-accent);
