@@ -621,7 +621,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   }[active]
 
   if (active === 'Planner') {
-    const buckets = data.buckets.length ? data.buckets : [{ id: 'backlog', name: 'Backlog' }]
+    const buckets = localData.buckets.length ? localData.buckets : [{ id: 'backlog', name: 'Backlog' }]
     const availableLabels = [...new Set(tasks.flatMap(task => task.labels || []))]
     const filteredTasks = tasks.filter(task => {
       const matchesSearch = !searchQuery || taskSearchText(task).includes(searchQuery.toLowerCase())
