@@ -2,6 +2,7 @@ import json
 
 from django.test import TestCase
 from django.urls import reverse
+from django.contrib.auth.models import User
 
 from .models import Task
 
@@ -44,3 +45,29 @@ class TaskApiTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+class AuthenticationApiTests(TestCase):
+    def test_signup_creates_user_workspace_and_session(self):
+        response = self.client.post(
+            reverse('auth-me'),
+            data=json.dumps({'email': 'owner@example.com', 'password': 'secure-pass-123', 'workspace_name': 'Northstar'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()['authenticated'])
+        self.assertEqual(response.json()['user']['workspaces'][0]['role'], 'owner')
+
+    def test_login_rejects_invalid_credentials(self):
+        User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        response = self.client.post(
+            reverse('auth-login'),
+            data=json.dumps({'email': 'member@example.com', 'password': 'wrong-password'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_me_reports_anonymous_state(self):
+        response = self.client.get(reverse('auth-me'))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['authenticated'])

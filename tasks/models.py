@@ -1,4 +1,31 @@
 from django.db import models
+from django.contrib.auth.models import User
+
+
+class Workspace(models.Model):
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=140, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    members = models.ManyToManyField(User, through='Membership', related_name='workspaces')
+
+    class Meta:
+        ordering = ['name']
+
+
+class Membership(models.Model):
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('manager', 'Manager'),
+        ('member', 'Member'),
+    ]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='memberships')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_memberships')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='member')
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'user'], name='unique_workspace_member')]
 
 
 class Task(models.Model):
@@ -10,6 +37,7 @@ class Task(models.Model):
         ('done', 'Done'),
     ]
 
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     assignee_name = models.CharField(max_length=120, blank=True)
