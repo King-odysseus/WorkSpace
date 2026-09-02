@@ -460,3 +460,20 @@ html[data-theme='dark'] .planner-filter-controls > select { border-color: #30307
 .sidebar-collapsed .profile { justify-content: center; padding-inline: 0; }
 .mobile-pill-nav { display: none; }
 @media (max-width: 750px) { .sidebar, .sidebar-collapsed .sidebar { display: none; } .mobile-pill-nav { position: fixed; left: 50%; bottom: 16px; z-index: 25; display: flex; transform: translateX(-50%); gap: 4px; padding: 5px; border: 1px solid #303078; border-radius: 18px; background: #10104BEE; box-shadow: 0 12px 28px #02051f40; } .mobile-pill-nav button { display: grid; place-items: center; width: 40px; height: 36px; border: 0; border-radius: 13px; background: transparent; color: #B9BDD8; cursor: pointer; } .mobile-pill-nav button.active { background: #C49A6C; color: #0B0B45; } .page-content { padding-bottom: 92px; } }
+
+/* Keep shared surfaces and controls aligned with the selected theme. */
+:root { --workspace-surface: #FFFFFF; --workspace-surface-soft: #F7F9FC; --workspace-text: #0B0B45; --workspace-text-soft: #4B5563; --workspace-border: #E2E2E6; }
+html[data-theme='dark'] { --workspace-surface: #15155C; --workspace-surface-soft: #10104B; --workspace-text: #FFFFFF; --workspace-text-soft: #B9BDD8; --workspace-border: #303078; }
+body, .topbar, .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal, .task-drawer, .notification-panel, .settings-panel, .report-panel, .report-stat { color: var(--workspace-text); }
+.workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal { background: var(--workspace-surface); border-color: var(--workspace-border); }
+.section-header h2, .section-header h3, .page-heading h1, .workspace-view-heading h1, .workspace-view-heading h2, .metric-card strong, .focus-card strong, .checkin-card h3, .activity-card h2, .modal h2 { color: var(--workspace-text); }
+.section-header p, .page-heading .subtitle, .workspace-view-heading p, .metric-card span, .focus-card span, .checkin-card p, .activity-card p, .empty-workspace, .empty-task { color: var(--workspace-text-soft); }
+.top-search input, .modal input, .modal select, .modal textarea, .composer-modal textarea, .inline-form input, .inline-form textarea { border-color: var(--workspace-border); background: var(--workspace-surface-soft); color: var(--workspace-text); }
+.top-search input::placeholder, .modal input::placeholder, .modal textarea::placeholder, .composer-modal textarea::placeholder { color: var(--workspace-text-soft); }
+html[data-theme='dark'] .workspace-card, html[data-theme='dark'] .board-section, html[data-theme='dark'] .focus-card, html[data-theme='dark'] .checkin-card, html[data-theme='dark'] .activity-card, html[data-theme='dark'] .calendar-week, html[data-theme='dark'] .modal { box-shadow: 0 10px 28px #02051f40; }
+html[data-theme='dark'] .task-card, html[data-theme='dark'] .member-row, html[data-theme='dark'] .activity-item, html[data-theme='dark'] .follow-up-row, html[data-theme='dark'] .chat-message { border-color: var(--workspace-border); background: var(--workspace-surface); }
+html[data-theme='dark'] .task-copy, html[data-theme='dark'] .task-copy strong, html[data-theme='dark'] .member-cell strong, html[data-theme='dark'] .activity-item strong, html[data-theme='dark'] .follow-up-row strong, html[data-theme='dark'] .chat-message-meta strong { color: var(--workspace-text); }
+html[data-theme='dark'] .task-copy span, html[data-theme='dark'] .task-tag, html[data-theme='dark'] .member-cell span, html[data-theme='dark'] .activity-item span, html[data-theme='dark'] .follow-up-row span, html[data-theme='dark'] .chat-message p { color: var(--workspace-text-soft); }
+html[data-theme='dark'] .filter-button, html[data-theme='dark'] .more-button, html[data-theme='dark'] .tab, html[data-theme='dark'] .calendar-nav-button { color: var(--workspace-text-soft); border-color: var(--workspace-border); }
+html[data-theme='dark'] .tab.active { color: var(--workspace-text); background: #242460; }
+html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
