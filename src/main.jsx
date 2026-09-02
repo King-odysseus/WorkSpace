@@ -40,6 +40,35 @@ function App() {
     localStorage.setItem('workspace-theme', theme)
   }, [theme])
 
+  useEffect(() => {
+    let isCurrent = true
+
+    fetch('/api/tasks/')
+      .then(response => {
+        if (!response.ok) throw new Error(`Task API returned ${response.status}`)
+        return response.json()
+      })
+      .then(data => {
+        if (isCurrent && data.tasks.length > 0) {
+          setTasks(data.tasks.map(task => ({
+            id: task.id,
+            title: task.title,
+            member: task.assignee_name || 'Unassigned',
+            tag: task.project || 'General',
+            status: task.status === 'in_progress' ? 'in progress' : task.status,
+            priority: 'normal',
+            due: task.due_date || 'No due date',
+            estimate: 'n/a',
+          })))
+        }
+      })
+      .catch(error => console.warn('Task API unavailable; using demo tasks.', error.message))
+
+    return () => {
+      isCurrent = false
+    }
+  }, [])
+
   const visibleTasks = useMemo(() => selectedFilter === 'All work' ? tasks : tasks.filter(task => task.status === selectedFilter), [tasks, selectedFilter])
   const completeTask = (id) => setTasks(current => current.map(task => task.id === id ? { ...task, status: 'done' } : task))
   const addTask = (event) => {

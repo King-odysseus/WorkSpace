@@ -3,4 +3,5 @@ dist/
 .env
 .env.*
 !.env.example
+db.sqlite3
 .DS_Store
