@@ -18,6 +18,11 @@ function toDateKey(value) {
   return new Date(value).toISOString().slice(0, 10)
 }
 
+function taskDueLabel(dueDate, today) {
+  if (!dueDate) return 'No due date'
+  return dueDate < today ? 'Overdue' : dueDate
+}
+
 function formatCalendarDate(value, options) {
   return new Intl.DateTimeFormat(undefined, options).format(value)
 }
@@ -150,7 +155,7 @@ function App() {
           tag: task.project || 'General',
           status: task.status === 'in_progress' ? 'in progress' : task.status,
           priority: task.priority || 'normal',
-          due: task.due_date || 'No due date',
+          due: taskDueLabel(task.due_date, today),
           due_date: task.due_date || '',
           estimate: 'n/a',
           can_edit: ['owner', 'manager'].includes(workspaceRole) || task.assignee_id === session.user.id,
@@ -281,7 +286,7 @@ function App() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || `Task creation returned ${response.status}`)
-      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: data.task.priority || 'normal', due: data.task.due_date || 'No due date', due_date: data.task.due_date || '', estimate: 'n/a', can_edit: ['owner', 'manager'].includes(currentWorkspace?.role) || data.task.assignee_id === session.user.id, recurrence: data.task.recurrence || 'none', bucket: data.task.bucket || 'Backlog', labels: data.task.labels || [] }])
+      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: data.task.priority || 'normal', due: taskDueLabel(data.task.due_date, today), due_date: data.task.due_date || '', estimate: 'n/a', can_edit: ['owner', 'manager'].includes(currentWorkspace?.role) || data.task.assignee_id === session.user.id, recurrence: data.task.recurrence || 'none', bucket: data.task.bucket || 'Backlog', labels: data.task.labels || [] }])
       setNewTask('')
       setNewAssigneeId('')
       setNewProjectId('')
@@ -349,7 +354,7 @@ function App() {
       </div>
     </main>
     {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2>Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)}><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => { setNewTask(event.target.value); setTaskError('') }} placeholder="What needs to happen?" /></label>{taskError && <p className="auth-error" role="alert">{taskError}</p>}<div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><div className="modal-grid"><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Priority<select value={newPriority} onChange={event => setNewPriority(event.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label></div><label>Repeat<select value={newRecurrence} onChange={event => setNewRecurrence(event.target.value)}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
-    {selectedTask && <TaskDetailDrawer task={selectedTask} workspaceId={activeWorkspaceId} onClose={() => setSelectedTask(null)} onTaskUpdated={updatedTask => setTasks(current => current.map(item => item.id === updatedTask.id ? { ...item, title: updatedTask.title, status: updatedTask.status === 'in_progress' ? 'in progress' : updatedTask.status, priority: updatedTask.priority || 'normal', due: updatedTask.due_date || 'No due date', due_date: updatedTask.due_date || '', recurrence: updatedTask.recurrence || 'none' } : item))} />}
+    {selectedTask && <TaskDetailDrawer task={selectedTask} workspaceId={activeWorkspaceId} onClose={() => setSelectedTask(null)} onTaskUpdated={updatedTask => setTasks(current => current.map(item => item.id === updatedTask.id ? { ...item, title: updatedTask.title, status: updatedTask.status === 'in_progress' ? 'in progress' : updatedTask.status, priority: updatedTask.priority || 'normal', due: taskDueLabel(updatedTask.due_date, today), due_date: updatedTask.due_date || '', recurrence: updatedTask.recurrence || 'none' } : item))} />}
   </div>
 }
 
