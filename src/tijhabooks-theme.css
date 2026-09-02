@@ -361,6 +361,7 @@ html[data-theme='light'] .theme-toggle {
 .composer-modal textarea { min-height: 82px; resize: vertical; border: 1px solid #DCE2E9; border-radius: 7px; padding: 11px; color: #263248; background: #FFFFFF; font: 500 12px 'DM Sans'; outline: none; }
 .composer-modal textarea:focus { border-color: #C49A6C; box-shadow: 0 0 0 3px #C49A6C2B; }
 .empty-workspace { grid-column: 1 / -1; min-height: 160px; display: grid; place-items: center; align-content: center; gap: 10px; color: #8B97A7; text-align: center; }
+.activity-history { padding: 22px; }
 .empty-workspace p { margin: 0; }
 .empty-workspace-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: #F1E4D0; color: #071A2E; }
 
