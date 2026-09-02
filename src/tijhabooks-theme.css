@@ -52,10 +52,6 @@ body,
   color: #FFFFFF;
 }
 
-.avatar.violet {
-  background: var(--blue);
-}
-
 .task-status.in.progress,
 .task-status.review {
   color: var(--blue);
