@@ -170,6 +170,7 @@ class TaskApiTests(TestCase):
             HTTP_X_WORKSPACE_ID=str(self.workspace.id),
         )
         task_id = response.json()['task']['id']
+        self.assertEqual(response.json()['task']['assignee_name'], 'member@example.com')
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='task_assigned').count(), 1)
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_created').count(), 1)
 
