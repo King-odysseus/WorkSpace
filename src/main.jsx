@@ -647,4 +647,20 @@ function AuthScreen({ onAuthenticated, connectionError }) {
 
 export default App
 
-createRoot(document.getElementById('root')).render(<App />)
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children
+    return <main className="error-boundary"><div><p className="eyebrow">WorkSpace</p><h1>Something went wrong</h1><p>The workspace could not render this view. Reload to try again.</p><button className="primary-button" onClick={() => window.location.reload()}>Reload workspace</button></div></main>
+  }
+}
+
+createRoot(document.getElementById('root')).render(<AppErrorBoundary><App /></AppErrorBoundary>)

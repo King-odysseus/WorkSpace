@@ -490,6 +490,10 @@ html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .audit-action { color: #C49A6C !important; font-weight: 700; text-transform: capitalize; }
 .calendar-google-link { display: inline-block; margin-top: 4px; color: #1D4ED8; font-size: 10px; font-weight: 700; text-decoration: none; }
 .calendar-google-link:hover { text-decoration: underline; }
+.error-boundary { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #0B0B45; color: #FFFFFF; text-align: center; }
+.error-boundary > div { max-width: 440px; padding: 32px; border: 1px solid #303078; border-radius: 18px; background: #15155C; box-shadow: 0 18px 40px #02051f66; }
+.error-boundary h1 { margin: 8px 0; color: #FFFFFF; font: 700 26px 'Plus Jakarta Sans'; }
+.error-boundary p:not(.eyebrow) { margin: 0 0 20px; color: #B9BDD8; line-height: 1.6; }
 .drawer-task-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .drawer-task-form label { display: grid; gap: 6px; color: var(--workspace-text-soft); font-size: 11px; font-weight: 700; }
 .drawer-task-form input, .drawer-task-form select { width: 100%; padding: 9px 10px; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface-soft); color: var(--workspace-text); font: 500 12px 'DM Sans'; }
