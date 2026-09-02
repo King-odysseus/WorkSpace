@@ -25,7 +25,7 @@ class TaskApiTests(TestCase):
     def test_create_list_update_and_delete_task(self):
         create_response = self.client.post(
             reverse('task-list'),
-            data=json.dumps({'title': 'Prepare launch brief', 'project': 'Launch'}),
+            data=json.dumps({'title': 'Prepare launch brief', 'project': 'Launch', 'bucket': 'This week'}),
             content_type='application/json',
             HTTP_X_WORKSPACE_ID=str(self.workspace.id),
         )
@@ -36,6 +36,7 @@ class TaskApiTests(TestCase):
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(len(list_response.json()['tasks']), 1)
         self.assertEqual(list_response.json()['tasks'][0]['workspace_id'], self.workspace.id)
+        self.assertEqual(list_response.json()['tasks'][0]['bucket'], 'This week')
 
         update_response = self.client.patch(
             reverse('task-detail', args=[task_id]),

@@ -245,6 +245,9 @@ def task_list(request):
     priority = str(payload.get('priority', 'normal')).strip()
     if priority not in {choice[0] for choice in Task.PRIORITY_CHOICES}:
         return JsonResponse({'error': 'Invalid task priority.'}, status=400)
+    bucket = str(payload.get('bucket', 'Backlog')).strip()
+    if not bucket or len(bucket) > 80:
+        return JsonResponse({'error': 'Bucket must be between 1 and 80 characters.'}, status=400)
     labels, labels_error = parse_task_labels(payload.get('labels'))
     if labels_error:
         return JsonResponse({'error': labels_error}, status=400)
@@ -260,6 +263,7 @@ def task_list(request):
         recurrence=recurrence,
         priority=priority,
         due_date=due_date,
+        bucket=bucket,
         labels=labels or [],
     )
     record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')

@@ -81,6 +81,7 @@ function App() {
   const [newTask, setNewTask] = useState('')
   const [newAssigneeId, setNewAssigneeId] = useState('')
   const [newProjectId, setNewProjectId] = useState('')
+  const [newBucket, setNewBucket] = useState('Backlog')
   const [newDueDate, setNewDueDate] = useState('')
   const [newRecurrence, setNewRecurrence] = useState('none')
   const [newPriority, setNewPriority] = useState('normal')
@@ -320,7 +321,7 @@ function App() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
-        body: JSON.stringify({ title: newTask.trim(), assignee_id: newAssigneeId || null, project_id: newProjectId || null, due_date: newDueDate || null, recurrence: newRecurrence, priority: newPriority }),
+        body: JSON.stringify({ title: newTask.trim(), assignee_id: newAssigneeId || null, project_id: newProjectId || null, bucket: newBucket, due_date: newDueDate || null, recurrence: newRecurrence, priority: newPriority }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || `Task creation returned ${response.status}`)
@@ -328,6 +329,7 @@ function App() {
       setNewTask('')
       setNewAssigneeId('')
       setNewProjectId('')
+      setNewBucket('Backlog')
       setNewDueDate('')
       setNewRecurrence('none')
       setNewPriority('normal')
@@ -392,7 +394,7 @@ function App() {
         </>}
       </div>
     </main>
-    {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2>Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)}><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => { setNewTask(event.target.value); setTaskError('') }} placeholder="What needs to happen?" /></label>{taskError && <p className="auth-error" role="alert">{taskError}</p>}<div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><div className="modal-grid"><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Priority<select value={newPriority} onChange={event => setNewPriority(event.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label></div><label>Repeat<select value={newRecurrence} onChange={event => setNewRecurrence(event.target.value)}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
+    {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2>Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)}><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => { setNewTask(event.target.value); setTaskError('') }} placeholder="What needs to happen?" /></label>{taskError && <p className="auth-error" role="alert">{taskError}</p>}<div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><div className="modal-grid"><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Priority<select value={newPriority} onChange={event => setNewPriority(event.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label></div><label>Planner bucket<select value={newBucket} onChange={event => setNewBucket(event.target.value)}>{(workspaceData.buckets.length ? workspaceData.buckets : [{ id: 'backlog', name: 'Backlog' }]).map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</select></label><label>Repeat<select value={newRecurrence} onChange={event => setNewRecurrence(event.target.value)}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
     {selectedTask && <TaskDetailDrawer task={selectedTask} workspaceId={activeWorkspaceId} members={workspaceData.members} projects={workspaceData.projects} buckets={workspaceData.buckets} onClose={() => setSelectedTask(null)} onTaskUpdated={updatedTask => setTasks(current => current.map(item => item.id === updatedTask.id ? { ...item, title: updatedTask.title, member: updatedTask.assignee_name || 'Unassigned', tag: updatedTask.project || 'General', status: updatedTask.status === 'in_progress' ? 'in progress' : updatedTask.status, priority: updatedTask.priority || 'normal', due: taskDueLabel(updatedTask.due_date, today), due_date: updatedTask.due_date || '', recurrence: updatedTask.recurrence || 'none', bucket: updatedTask.bucket || 'Backlog', labels: updatedTask.labels || [] } : item))} />}
   </div>
 }
