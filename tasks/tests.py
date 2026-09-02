@@ -189,3 +189,11 @@ class AuthenticationApiTests(TestCase):
         response = self.client.get(reverse('auth-me'))
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()['authenticated'])
+
+    def test_logout_clears_authenticated_session(self):
+        user = User.objects.create_user(username='logout@example.com', email='logout@example.com', password='secure-pass-123')
+        self.client.login(username=user.username, password='secure-pass-123')
+        response = self.client.post(reverse('auth-logout'))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['authenticated'])
+        self.assertFalse(self.client.get(reverse('auth-me')).json()['authenticated'])
