@@ -384,6 +384,9 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
   const [calendarDate, setCalendarDate] = useState(new Date())
+  const [checkInDate, setCheckInDate] = useState(today)
+  const [checkInLoading, setCheckInLoading] = useState(false)
+  const [checkInError, setCheckInError] = useState('')
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerType, setComposerType] = useState('chat')
   const [composerError, setComposerError] = useState('')
@@ -403,10 +406,33 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   useEffect(() => setLocalData(data), [data])
   useEffect(() => setSavedViews(data.savedViews?.length ? data.savedViews : JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]')), [data.savedViews, workspaceId])
 
+  useEffect(() => {
+    if (active !== 'Check-ins') return undefined
+    let isCurrent = true
+    setCheckInLoading(true)
+    setCheckInError('')
+    fetch(`/api/workspaces/${workspaceId}/check-ins/?date=${checkInDate}`, { credentials: 'include' })
+      .then(response => response.json().then(responseData => ({ ok: response.ok, responseData })))
+      .then(({ ok, responseData }) => {
+        if (!isCurrent) return
+        if (!ok) throw new Error(responseData.error || 'Check-ins could not be loaded.')
+        setLocalData(current => ({ ...current, checkIns: responseData.check_ins }))
+      })
+      .catch(error => {
+        if (isCurrent) setCheckInError(error.message)
+      })
+      .finally(() => {
+        if (isCurrent) setCheckInLoading(false)
+      })
+    return () => {
+      isCurrent = false
+    }
+  }, [active, checkInDate, workspaceId])
+
   const openComposer = type => {
     setComposerType(type)
     setComposerError('')
-    setForm(current => ({ ...current, title: '', name: '', description: '', start_at: '', end_at: '', reminder_minutes: 15, completed: '', next_steps: '', blockers: '', message: '', channel: chatChannel, note: '', due_date: '', assigned_to: '', task_id: '', date: today, email: '', role: 'member' }))
+    setForm(current => ({ ...current, title: '', name: '', description: '', start_at: '', end_at: '', reminder_minutes: 15, completed: '', next_steps: '', blockers: '', message: '', channel: chatChannel, note: '', due_date: '', assigned_to: '', task_id: '', date: type === 'checkin' ? checkInDate : today, email: '', role: 'member' }))
     if (type !== 'chat') setReplyTo(null)
     setComposerOpen(true)
   }
@@ -570,7 +596,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   }
 
   if (active === 'Check-ins') {
-    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Start check-in" onAction={() => openComposer('checkin')} /><div className="checkin-grid">{localData.checkIns.length ? localData.checkIns.map(checkIn => <article className="workspace-card" key={checkIn.id}><div className="card-person"><span className="avatar blue small">{checkIn.user_initials}</span><div><strong>{checkIn.user_name}</strong><span>{checkIn.date}</span></div></div><p><b>Completed</b> {checkIn.completed || 'No update yet'}</p><p><b>Next</b> {checkIn.next_steps || 'No next step recorded'}</p><p><b>Blockers</b> {checkIn.blockers || 'None reported'}</p></article>) : <EmptyState text="No check-ins for today. Start the first update." />}</div>{composerOpen && <WorkspaceComposer type="checkin" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Start check-in" onAction={() => openComposer('checkin')} /><div className="checkin-toolbar"><label>View date<input type="date" value={checkInDate} onChange={event => setCheckInDate(event.target.value)} aria-label="Check-in history date" /></label><span>{checkInDate === today ? 'Today' : 'Updates for ' + checkInDate}</span></div>{checkInLoading && <p className="workspace-inline-status" role="status">Loading check-ins...</p>}{checkInError && <p className="auth-error" role="alert">{checkInError}</p>}<div className="checkin-grid">{localData.checkIns.length ? localData.checkIns.map(checkIn => <article className="workspace-card" key={checkIn.id}><div className="card-person"><span className="avatar blue small">{checkIn.user_initials}</span><div><strong>{checkIn.user_name}</strong><span>{checkIn.date}</span></div></div><p><b>Completed</b> {checkIn.completed || 'No update yet'}</p><p><b>Next</b> {checkIn.next_steps || 'No next step recorded'}</p><p><b>Blockers</b> {checkIn.blockers || 'None reported'}</p></article>) : <EmptyState text="No check-ins for today. Start the first update." />}</div>{composerOpen && <WorkspaceComposer type="checkin" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
   }
 
   if (active === 'Projects') {
