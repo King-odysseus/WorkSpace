@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone as datetime_timezone
 
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.contrib.auth.models import User
 from django.http import HttpResponse, JsonResponse
@@ -68,6 +68,35 @@ def parse_reminder_minutes(value):
     if minutes < 0 or minutes > 10080:
         return None, 'Reminder must be between 0 and 10080 minutes.'
     return minutes, None
+
+
+def deliver_due_calendar_reminders(workspace_id):
+    now = timezone.now()
+    horizon = now + timedelta(days=7)
+    due_events = CalendarEvent.objects.filter(
+        workspace_id=workspace_id,
+        created_by__isnull=False,
+        reminder_sent_at__isnull=True,
+        start_at__gte=now,
+        start_at__lte=horizon,
+    )
+    for event in due_events:
+        reminder_at = event.start_at - timedelta(minutes=event.reminder_minutes)
+        if reminder_at > now:
+            continue
+        with transaction.atomic():
+            locked_event = CalendarEvent.objects.select_for_update().filter(id=event.id, reminder_sent_at__isnull=True).first()
+            if locked_event is None:
+                continue
+            create_notification(
+                workspace_id,
+                locked_event.created_by,
+                'calendar_reminder',
+                f'Upcoming event: {locked_event.title}',
+                f'Starts at {locked_event.start_at.isoformat()}.',
+            )
+            locked_event.reminder_sent_at = now
+            locked_event.save(update_fields=['reminder_sent_at'])
 
 
 def requested_workspace(request, user):
@@ -727,6 +756,7 @@ def calendar_event_list(request, workspace_id):
     if error:
         return error
     if request.method == 'GET':
+        deliver_due_calendar_reminders(workspace_id)
         events = CalendarEvent.objects.filter(workspace_id=workspace_id).select_related('created_by')
         return JsonResponse({'events': [event.as_dict() for event in events]})
 
@@ -815,6 +845,8 @@ def calendar_event_detail(request, workspace_id, event_id):
         if reminder_error:
             return JsonResponse({'error': reminder_error}, status=400)
         event.reminder_minutes = reminder_minutes
+    if {'start_at', 'end_at', 'reminder_minutes'} & set(payload):
+        event.reminder_sent_at = None
     event.start_at = start_at
     event.end_at = end_at
     event.save()

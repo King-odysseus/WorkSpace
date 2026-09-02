@@ -140,6 +140,7 @@ class CalendarEvent(models.Model):
     end_at = models.DateTimeField()
     event_type = models.CharField(max_length=20, choices=EVENT_TYPES, default='meeting')
     reminder_minutes = models.PositiveIntegerField(default=15)
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_calendar_events')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

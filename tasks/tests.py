@@ -1,9 +1,11 @@
 import json
+from datetime import timedelta
 
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, Workspace, WorkspaceInvitation, WorkspaceNotification
 
@@ -292,6 +294,24 @@ class TaskApiTests(TestCase):
         self.assertEqual(ics_response.status_code, 200)
         self.assertEqual(ics_response['Content-Type'], 'text/calendar; charset=utf-8')
         self.assertIn('SUMMARY:Planning', ics_response.content.decode())
+
+    def test_calendar_reminder_is_delivered_once_when_due(self):
+        start_at = timezone.now() + timedelta(minutes=10)
+        event = CalendarEvent.objects.create(
+            workspace=self.workspace,
+            title='Reminder review',
+            start_at=start_at,
+            end_at=start_at + timedelta(minutes=30),
+            reminder_minutes=15,
+            created_by=self.user,
+        )
+        first_response = self.client.get(reverse('calendar-event-list', args=[self.workspace.id]))
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(WorkspaceNotification.objects.filter(kind='calendar_reminder', recipient=self.user).count(), 1)
+        event.refresh_from_db()
+        self.assertIsNotNone(event.reminder_sent_at)
+        self.client.get(reverse('calendar-event-list', args=[self.workspace.id]))
+        self.assertEqual(WorkspaceNotification.objects.filter(kind='calendar_reminder', recipient=self.user).count(), 1)
 
     def test_report_summary_returns_workspace_metrics(self):
         Task.objects.create(workspace=self.workspace, title='Blocked work', status='blocked', assignee=self.user)
