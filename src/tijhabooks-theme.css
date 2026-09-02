@@ -336,6 +336,9 @@ html[data-theme='light'] .theme-toggle {
 .channel-row.active { background: #EAF0FF; color: #1D4ED8; font-weight: 700; }
 .channel-row span { margin-left: auto; color: #8B97A7; font-size: 10px; }
 .follow-up-list { display: flex; flex-direction: column; gap: 2px; }
+.follow-up-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--workspace-text-soft); font-size: 11px; }
+.follow-up-toolbar label { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.follow-up-toolbar select { padding: 8px 10px; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface-soft); color: var(--workspace-text); font: 600 11px 'DM Sans'; }
 .follow-up-row { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #EEF0F3; }
 .follow-up-row:last-child { border-bottom: 0; }
 .follow-up-row > div { display: flex; flex-direction: column; gap: 5px; flex: 1; }
