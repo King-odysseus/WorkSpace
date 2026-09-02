@@ -27,6 +27,12 @@ function Avatar({ member, small = false }) {
   return <span className={`avatar ${member.color} ${small ? 'small' : ''}`}>{member.initials}</span>
 }
 
+async function getCsrfToken() {
+  await fetch('/api/auth/csrf/', { credentials: 'include' })
+  const cookie = document.cookie.split('; ').find(value => value.startsWith('csrftoken='))
+  return cookie?.split('=')[1] || ''
+}
+
 function App() {
   const [active, setActive] = useState('Today')
   const [tasks, setTasks] = useState(initialTasks)
@@ -81,13 +87,38 @@ function App() {
   const visibleTasks = useMemo(() => selectedFilter === 'All work' ? tasks : tasks.filter(task => task.status === selectedFilter), [tasks, selectedFilter])
   if (session.loading) return <div className="auth-loading">Loading WorkSpace...</div>
   if (!session.user) return <AuthScreen onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
-  const completeTask = (id) => setTasks(current => current.map(task => task.id === id ? { ...task, status: 'done' } : task))
-  const addTask = (event) => {
+  const completeTask = async id => {
+    setTasks(current => current.map(task => task.id === id ? { ...task, status: 'done' } : task))
+    try {
+      const response = await fetch(`/api/tasks/${id}/`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(session.user.workspaces[0]?.id || '') },
+        body: JSON.stringify({ status: 'done' }),
+      })
+      if (!response.ok && response.status !== 404) throw new Error(`Task update returned ${response.status}`)
+    } catch (error) {
+      console.warn('Task status could not be saved.', error.message)
+    }
+  }
+  const addTask = async event => {
     event.preventDefault()
     if (!newTask.trim()) return
-    setTasks(current => [...current, { id: Date.now(), title: newTask, member: 'Sarah Chen', tag: 'New task', status: 'todo', priority: 'normal', due: 'Today', estimate: 'n/a' }])
-    setNewTask('')
-    setShowModal(false)
+    try {
+      const response = await fetch('/api/tasks/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(session.user.workspaces[0]?.id || '') },
+        body: JSON.stringify({ title: newTask.trim(), assignee_name: 'Sarah Chen', project: 'New task' }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || `Task creation returned ${response.status}`)
+      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: 'normal', due: 'Today', estimate: 'n/a' }])
+      setNewTask('')
+      setShowModal(false)
+    } catch (error) {
+      console.error('Task could not be created.', error.message)
+    }
   }
 
   const navItems = [
