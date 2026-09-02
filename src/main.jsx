@@ -15,7 +15,11 @@ function Avatar({ member, small = false }) {
 }
 
 function toDateKey(value) {
-  return new Date(value).toISOString().slice(0, 10)
+  const date = new Date(value)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function taskDueLabel(dueDate, today) {
@@ -55,7 +59,7 @@ async function getCsrfToken() {
 }
 
 function App() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toDateKey(new Date())
   const todayLabel = new Intl.DateTimeFormat('en-GB', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${today}T12:00:00`))
   const [active, setActive] = useState('Today')
   const [tasks, setTasks] = useState([])
@@ -359,7 +363,7 @@ function App() {
 }
 
 function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme, sidebarCollapsed, workspaceId, currentUserName, currentUserId, canManageMembers, canManageTasks, onToggleTheme, onToggleSidebar, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask, onActionError }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toDateKey(new Date())
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
   const [calendarDate, setCalendarDate] = useState(new Date())
