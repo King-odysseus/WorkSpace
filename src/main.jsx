@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   AlertCircle, ArrowUpRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
-  CircleHelp, Clock3, Filter, Hash, LayoutDashboard, MessageSquare, MoreHorizontal,
+  CircleHelp, Clock3, Filter, Hash, LayoutDashboard, LayoutGrid, MessageSquare, MoreHorizontal,
   ChevronLeft, ChevronRight,
   Plus, Search, Settings, Sparkles, Target, Users, X, Sun, Moon
 } from 'lucide-react'
@@ -222,7 +222,7 @@ function App() {
 
   const navItems = [
     { label: 'Today', icon: LayoutDashboard }, { label: 'My tasks', icon: CheckCircle2 },
-    { label: 'Team board', icon: Users }, { label: 'Calendar', icon: CalendarDays },
+    { label: 'Team board', icon: Users }, { label: 'Planner', icon: LayoutGrid }, { label: 'Calendar', icon: CalendarDays },
     { label: 'Projects', icon: Target }, { label: 'Chat', icon: MessageSquare },
   ]
   const workspaceId = activeWorkspaceId
@@ -251,7 +251,7 @@ function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><button className="icon-button notification"><Bell size={18} /><i /></button><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
       <div className="page-content">
-        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} />}
+        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onComplete={completeTask} onStatusChange={changeTaskStatus} onDelete={deleteTask} onAddTask={() => setShowModal(true)} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>68%</strong></div><em className="positive">+12% <small>vs last week</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>6 tasks</strong></div><em className="negative">2 overdue</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus time</span><strong>24h 30m</strong></div><em>this week</em></div></section>
@@ -266,7 +266,7 @@ function App() {
   </div>
 }
 
-function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canManageMembers }) {
+function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canManageMembers, onComplete, onStatusChange, onDelete, onAddTask }) {
   const today = new Date().toISOString().slice(0, 10)
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
@@ -354,12 +354,24 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
   const subtitle = {
     'My tasks': 'Your personal work, deadlines, and follow-ups.',
     'Team board': 'See ownership and progress across the workspace.',
+    Planner: 'Plan work visually across buckets, owners, and priorities.',
     Calendar: 'Meetings, focus time, and deadlines in one view.',
     Projects: 'Keep initiatives, milestones, and ownership visible.',
     Chat: 'Keep decisions and team conversations close to the work.',
     'Follow-up': 'A clear queue for work that needs a response.',
     'Check-ins': 'Daily updates that keep the team aligned.',
   }[active]
+
+  if (active === 'Planner') {
+    const buckets = [
+      { key: 'todo', label: 'To do' },
+      { key: 'in progress', label: 'In progress' },
+      { key: 'review', label: 'Review' },
+      { key: 'blocked', label: 'Blocked' },
+      { key: 'done', label: 'Done' },
+    ]
+    return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{tasks.length} tasks in this workspace</span><span>Group: status</span></div><div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.key}><div className="planner-column-heading"><strong>{bucket.label}</strong><span>{tasks.filter(task => task.status === bucket.key).length}</span></div><div className="planner-column-tasks">{tasks.filter(task => task.status === bucket.key).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} />)}{!tasks.some(task => task.status === bucket.key) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
+  }
 
   if (active === 'Calendar') {
     return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add event" onAction={() => openComposer('calendar')} /><div className="calendar-layout"><div className={`calendar-week calendar-${calendarView}`}><div className="calendar-toolbar"><div className="calendar-toolbar-title"><button className="calendar-nav-button" onClick={() => shiftCalendar(-1)} aria-label="Previous period"><ChevronLeft size={16} /></button><strong>{calendarHeading}</strong><button className="calendar-nav-button" onClick={() => shiftCalendar(1)} aria-label="Next period"><ChevronRight size={16} /></button></div><div className="calendar-toolbar-actions"><button className="secondary-button" onClick={() => setCalendarDate(new Date())}>Today</button><div className="calendar-view-switcher" role="group" aria-label="Calendar view">{['day', 'week', 'month', 'year'].map(view => <button key={view} className={calendarView === view ? 'active' : ''} onClick={() => setCalendarView(view)}>{view[0].toUpperCase() + view.slice(1)}</button>)}</div></div></div><div className="calendar-grid">{calendarDays.map(day => <div className="calendar-day" key={day.toISOString()}><strong>{calendarView === 'year' ? formatCalendarDate(day, { month: 'short' }) : formatCalendarDate(day, { weekday: 'short', day: 'numeric' })}</strong><div className="calendar-slot">{calendarEventsForDay(day).map(event => <div className="event-pill" key={event.id}><span>{formatCalendarDate(new Date(event.start_at), { hour: 'numeric', minute: '2-digit' })}</span>{event.title}</div>)}</div></div>)}</div></div><aside className="workspace-side-card"><h3>Upcoming</h3>{localData.events.length ? localData.events.map(event => <div className="compact-row" key={event.id}><CalendarDays size={15} /><div><strong>{event.title}</strong><span>{formatCalendarDate(new Date(event.start_at), { dateStyle: 'medium', timeStyle: 'short' })}</span></div><button className="inline-delete" onClick={() => deleteCalendarEvent(event.id)} aria-label={`Delete ${event.title}`}><X size={14} /></button></div>) : <EmptyState text="No events scheduled yet." />}</aside></div>{composerOpen && <WorkspaceComposer type="calendar" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
