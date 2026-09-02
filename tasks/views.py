@@ -380,21 +380,22 @@ def task_detail(request, task_id):
     if membership.role == 'member' and {'assignee_id', 'assignee_name', 'project_id', 'project'} & set(payload):
         return JsonResponse({'error': 'Only owners and managers can change task ownership or project assignment.'}, status=403)
 
-    if 'title' in payload:
-        title = str(payload['title']).strip()
-        if not title or len(title) > 200:
-            return JsonResponse({'error': 'Task title must be between 1 and 200 characters.'}, status=400)
-        task.title = title
-
+    previous_title = task.title
     previous_status = task.status
     previous_assignee = task.assignee
-    previous_title = task.title
     previous_priority = task.priority
     previous_due_date = task.due_date
     previous_recurrence = task.recurrence
     previous_bucket = task.bucket
     previous_labels = list(task.labels or [])
     previous_project = task.project_ref
+
+    if 'title' in payload:
+        title = str(payload['title']).strip()
+        if not title or len(title) > 200:
+            return JsonResponse({'error': 'Task title must be between 1 and 200 characters.'}, status=400)
+        task.title = title
+
     if 'status' in payload:
         valid_statuses = {choice[0] for choice in Task.STATUS_CHOICES}
         if payload['status'] not in valid_statuses:
@@ -450,7 +451,7 @@ def task_detail(request, task_id):
         if task.assignee and task.assignee != request.user:
             create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display())
     if previous_title != task.title:
-        record_activity(task.workspace_id, request.user, 'task_title', f'{actor_name} renamed a task to {task.title}.')
+        record_activity(task.workspace_id, request.user, 'task_title', f'{actor_name} renamed task {previous_title} to {task.title}.')
     if previous_priority != task.priority:
         record_activity(task.workspace_id, request.user, 'task_priority', f'{actor_name} changed the priority of {task.title} to {task.get_priority_display()}.')
     if previous_due_date != task.due_date:
@@ -463,8 +464,10 @@ def task_detail(request, task_id):
     if previous_labels != list(task.labels or []):
         record_activity(task.workspace_id, request.user, 'task_labels', f'{actor_name} updated labels for {task.title}.')
     if previous_project != task.project_ref:
-        project_label = task.project_ref.name if task.project_ref else 'General'
-        record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} moved {task.title} to {project_label}.')
+        if task.project_ref:
+            record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} assigned {task.title} to project {task.project_ref.name}.')
+        else:
+            record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} removed {task.title} from its project.')
     if previous_assignee != task.assignee and task.assignee and task.assignee != request.user:
         record_activity(task.workspace_id, request.user, 'task_assigned', f'{request.user.get_full_name() or request.user.email} assigned {task.title} to {task.assignee.get_full_name() or task.assignee.email}.')
         create_notification(task.workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title)
