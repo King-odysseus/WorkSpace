@@ -73,3 +73,10 @@ jobs:
 
       - name: Build production containers
         run: docker compose build --pull
+
+      - name: Smoke test production stack
+        run: |
+          docker compose up -d
+          trap 'docker compose down -v' EXIT
+          curl --fail --retry 20 --retry-delay 3 http://127.0.0.1:8080/
+          curl --fail --retry 20 --retry-delay 3 http://127.0.0.1:8080/api/health/
