@@ -152,6 +152,7 @@ function App() {
           due: task.due_date || 'No due date',
           due_date: task.due_date || '',
           estimate: 'n/a',
+          can_edit: ['owner', 'manager'].includes(workspaceRole) || task.assignee_id === session.user.id,
           recurrence: task.recurrence || 'none',
           bucket: task.bucket || 'Backlog',
           labels: task.labels || [],
@@ -257,7 +258,7 @@ function App() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || `Task creation returned ${response.status}`)
-      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: data.task.priority || 'normal', due: data.task.due_date || 'No due date', due_date: data.task.due_date || '', estimate: 'n/a', recurrence: data.task.recurrence || 'none', bucket: data.task.bucket || 'Backlog', labels: data.task.labels || [] }])
+      setTasks(current => [...current, { id: data.task.id, title: data.task.title, member: data.task.assignee_name || 'Unassigned', tag: data.task.project || 'General', status: 'todo', priority: data.task.priority || 'normal', due: data.task.due_date || 'No due date', due_date: data.task.due_date || '', estimate: 'n/a', can_edit: ['owner', 'manager'].includes(currentWorkspace?.role) || data.task.assignee_id === session.user.id, recurrence: data.task.recurrence || 'none', bucket: data.task.bucket || 'Backlog', labels: data.task.labels || [] }])
       setNewTask('')
       setNewAssigneeId('')
       setNewProjectId('')
@@ -528,7 +529,7 @@ function EmptyState({ text }) {
   return <div className="empty-workspace"><div className="empty-workspace-icon"><Sparkles size={18} /></div><p>{text}</p></div>
 }
 
-function TaskCard({ task, onComplete, onStatusChange, onDelete, onOpenTask, canDelete = true, draggable = false }) { return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button className={`task-check ${task.status === 'done' ? 'checked' : ''}`} onClick={() => onComplete(task.id)} aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} ${task.title}`}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><button className="task-title-button" onClick={() => onOpenTask(task)}>{task.title}</button><div><select className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option></select><span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span>{canDelete && <button className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.title}`}><MoreHorizontal size={16} /></button>}</div> }
+function TaskCard({ task, onComplete, onStatusChange, onDelete, onOpenTask, canDelete = true, canEdit = task.can_edit ?? true, draggable = false }) { return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button className={`task-check ${task.status === 'done' ? 'checked' : ''}`} disabled={!canEdit} onClick={() => onComplete(task.id)} aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} ${task.title}`} aria-disabled={!canEdit}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><button className="task-title-button" onClick={() => onOpenTask(task)}>{task.title}</button><div><select disabled={!canEdit} className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option></select><span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span>{canDelete && <button className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.title}`}><MoreHorizontal size={16} /></button>}</div> }
 
 function TaskDetailDrawer({ task, workspaceId, onClose, onTaskUpdated }) {
   const [comments, setComments] = useState([])
