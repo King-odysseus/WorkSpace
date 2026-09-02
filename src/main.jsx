@@ -311,7 +311,7 @@ function App() {
       <div className="page-content">
         {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}
         {workspaceError && <div className="workspace-status error" role="alert"><span>Workspace data could not be loaded: {workspaceError}</span><button className="secondary-button" onClick={() => setWorkspaceReload(current => current + 1)}>Retry</button></div>}
-        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} theme={theme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
+        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} theme={theme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>{completionPercent}%</strong></div><em><small>{completedTaskCount} of {tasks.length} tasks complete</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>{attentionTaskCount} tasks</strong></div><em className={attentionTaskCount ? 'negative' : 'positive'}>{attentionTaskCount ? 'Blocked, review, or overdue' : 'Nothing urgent'}</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus tasks</span><strong>{myTasks.length}</strong></div><em><small>{myCompletedTaskCount} complete</small></em></div></section>
@@ -327,7 +327,7 @@ function App() {
   </div>
 }
 
-function WorkspaceView({ active, data, tasks, searchQuery, theme, sidebarCollapsed, workspaceId, currentUserName, canManageMembers, onToggleTheme, onToggleSidebar, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask }) {
+function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme, sidebarCollapsed, workspaceId, currentUserName, canManageMembers, onToggleTheme, onToggleSidebar, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask }) {
   const today = new Date().toISOString().slice(0, 10)
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
@@ -458,14 +458,17 @@ function WorkspaceView({ active, data, tasks, searchQuery, theme, sidebarCollaps
       event.preventDefault()
       const name = savedViewName.trim()
       if (!name) return
-      const nextViews = [...savedViews.filter(view => view.name !== name), { name, filter: plannerFilter }]
+      const nextViews = [...savedViews.filter(view => view.name !== name), { name, filter: plannerFilter, search: searchQuery }]
       setSavedViews(nextViews)
       localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
       setSavedViewName('')
     }
     const applyView = event => {
       const view = savedViews.find(item => item.name === event.target.value)
-      if (view) setPlannerFilter(view.filter)
+      if (view) {
+        setPlannerFilter(view.filter)
+        onSearchChange(view.search || '')
+      }
     }
     return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{filteredTasks.length} of {tasks.length} tasks shown</span><div className="planner-filter-controls"><select value={plannerFilter} onChange={event => setPlannerFilter(event.target.value)} aria-label="Filter Planner tasks"><option value="all">All tasks</option><option value="mine">My tasks</option><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option>{buckets.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}{availableLabels.map(label => <option key={label} value={label}>Label: {label}</option>)}</select><select defaultValue="" onChange={applyView} aria-label="Load saved Planner view"><option value="">Saved views</option>{savedViews.map(view => <option key={view.name} value={view.name}>{view.name}</option>)}</select><form className="bucket-create-form" onSubmit={saveView}><input value={savedViewName} onChange={event => setSavedViewName(event.target.value)} placeholder="Save view as" aria-label="Saved view name" /><button className="secondary-button">Save</button></form><form className="bucket-create-form" onSubmit={createBucket}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket" aria-label="New bucket name" /><button className="secondary-button">Add bucket</button></form></div></div>{bucketError && <p className="auth-error">{bucketError}</p>}<div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.id} onDragOver={event => event.preventDefault()} onDrop={event => { const taskId = Number(event.dataTransfer.getData('text/plain')); if (taskId) onBucketChange?.(taskId, bucket.name) }}><div className="planner-column-heading"><strong>{bucket.name}</strong><span>{filteredTasks.filter(task => task.bucket === bucket.name).length}</span></div><div className="planner-column-tasks">{filteredTasks.filter(task => task.bucket === bucket.name).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} onOpenTask={onOpenTask} draggable />)}{!filteredTasks.some(task => task.bucket === bucket.name) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
   }
