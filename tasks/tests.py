@@ -181,6 +181,32 @@ class TaskApiTests(TestCase):
         response = self.client.post(reverse('invitation-accept', args=[invitation.id]))
         self.assertEqual(response.status_code, 403)
 
+    def test_owner_can_change_member_role_and_remove_member(self):
+        member = User.objects.create_user(username='managed@example.com', email='managed@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        role_response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, member.id]),
+            data=json.dumps({'role': 'manager'}),
+            content_type='application/json',
+        )
+        self.assertEqual(role_response.status_code, 200)
+        remove_response = self.client.delete(reverse('member-detail', args=[self.workspace.id, member.id]))
+        self.assertEqual(remove_response.status_code, 200)
+        self.assertFalse(Membership.objects.filter(workspace=self.workspace, user=member).exists())
+
+    def test_manager_cannot_change_another_manager_or_owner(self):
+        manager = User.objects.create_user(username='manager@example.com', email='manager@example.com', password='secure-pass-123')
+        other_manager = User.objects.create_user(username='other-manager@example.com', email='other-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=other_manager, role='manager')
+        self.client.login(username=manager.username, password='secure-pass-123')
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, other_manager.id]),
+            data=json.dumps({'role': 'member'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_owner_can_update_and_delete_a_project(self):
         project = Project.objects.create(workspace=self.workspace, name='Launch')
         update = self.client.patch(

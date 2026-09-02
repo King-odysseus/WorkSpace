@@ -182,6 +182,32 @@ def member_list(request, workspace_id):
     return JsonResponse({'members': [member.as_dict() for member in members]})
 
 
+@require_http_methods(['PATCH', 'DELETE'])
+def member_detail(request, workspace_id, user_id):
+    actor, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    membership = Membership.objects.filter(workspace_id=workspace_id, user_id=user_id).select_related('user').first()
+    if membership is None:
+        return JsonResponse({'error': 'Workspace member was not found.'}, status=404)
+    if membership.role == 'owner':
+        return JsonResponse({'error': 'The workspace owner cannot be changed here.'}, status=403)
+    if actor.role == 'manager' and membership.role != 'member':
+        return JsonResponse({'error': 'Managers can only manage regular members.'}, status=403)
+    if request.method == 'DELETE':
+        membership.delete()
+        return JsonResponse({'removed': user_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) != {'role'} or payload['role'] not in {'manager', 'member'}:
+        return JsonResponse({'error': 'Role must be manager or member.'}, status=400)
+    membership.role = payload['role']
+    membership.save(update_fields=['role'])
+    return JsonResponse({'member': membership.as_dict()})
+
+
 @require_http_methods(['GET', 'POST'])
 def invitation_list(request, workspace_id):
     membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
