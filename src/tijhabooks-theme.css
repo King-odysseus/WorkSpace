@@ -354,6 +354,7 @@ html[data-theme='light'] .theme-toggle {
 .follow-up-row span:not(.follow-up-status) { color: #8B97A7; font-size: 10px; }
 .follow-up-status { width: 9px; height: 9px; border-radius: 50%; background: #EF7049; }
 .follow-up-status.completed { background: #0A9E87; }
+.follow-up-status.overdue { box-shadow: 0 0 0 3px #EF704933; }
 .follow-up-row .secondary-button { width: auto; padding: 7px 10px; }
 .follow-up-actions { display: flex; align-items: center; gap: 7px; }
 .composer-modal { max-height: min(720px, calc(100vh - 30px)); overflow-y: auto; }
