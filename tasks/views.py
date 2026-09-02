@@ -1048,13 +1048,22 @@ def follow_up_list(request, workspace_id):
     return JsonResponse({'follow_up': follow_up.as_dict()}, status=201)
 
 
-@require_http_methods(['PATCH'])
+@require_http_methods(['PATCH', 'DELETE'])
 def follow_up_detail(request, follow_up_id):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
     follow_up = FollowUp.objects.filter(id=follow_up_id, workspace_id__in=user_workspace_ids(request.user)).first()
     if follow_up is None:
         return JsonResponse({'error': 'Follow-up was not found.'}, status=404)
+    membership, error = require_workspace_member(request, follow_up.workspace_id)
+    if error:
+        return error
+    if request.method == 'DELETE':
+        if membership.role not in {'owner', 'manager'} and follow_up.created_by_id != request.user.id:
+            return JsonResponse({'error': 'Only the follow-up creator or a workspace leader can delete it.'}, status=403)
+        record_activity(follow_up.workspace_id, request.user, 'follow_up_deleted', f'{request.user.get_full_name() or request.user.email} deleted a follow-up.')
+        follow_up.delete()
+        return JsonResponse({'deleted': follow_up_id})
     previous_status = follow_up.status
     previous_assignee = follow_up.assigned_to
     previous_task = follow_up.task

@@ -356,6 +356,13 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(reassignment_response.status_code, 403)
 
+        delete_response = self.client.delete(reverse('follow-up-detail', args=[creator_follow_up['id']]))
+        self.assertEqual(delete_response.status_code, 403)
+        self.client.force_login(self.user)
+        owner_delete_response = self.client.delete(reverse('follow-up-detail', args=[creator_follow_up['id']]))
+        self.assertEqual(owner_delete_response.status_code, 200)
+        self.assertTrue(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_deleted').exists())
+
     def test_task_attachment_upload_is_scoped_and_validated(self):
         task = Task.objects.create(workspace=self.workspace, title='Attach brief')
         upload = SimpleUploadedFile('brief.txt', b'project notes', content_type='text/plain')
