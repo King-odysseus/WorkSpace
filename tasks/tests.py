@@ -69,6 +69,32 @@ class TaskApiTests(TestCase):
         self.assertEqual(task.project_ref, project)
         self.assertEqual(response.json()['task']['project_id'], project.id)
 
+    def test_task_priority_is_persisted_and_validated(self):
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Resolve launch blocker', 'priority': 'urgent'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(response.status_code, 201)
+        task_id = response.json()['task']['id']
+        self.assertEqual(response.json()['task']['priority'], 'urgent')
+
+        update_response = self.client.patch(
+            reverse('task-detail', args=[task_id]),
+            data=json.dumps({'priority': 'high'}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(update_response.json()['task']['priority'], 'high')
+
+        invalid_response = self.client.patch(
+            reverse('task-detail', args=[task_id]),
+            data=json.dumps({'priority': 'critical'}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid_response.status_code, 400)
+
     def test_anonymous_users_cannot_read_tasks(self):
         self.client.logout()
         response = self.client.get(reverse('task-list'))

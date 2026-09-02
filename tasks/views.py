@@ -191,6 +191,9 @@ def task_list(request):
     recurrence = str(payload.get('recurrence', 'none')).strip()
     if recurrence not in {choice[0] for choice in Task.RECURRENCE_CHOICES}:
         return JsonResponse({'error': 'Invalid recurrence rule.'}, status=400)
+    priority = str(payload.get('priority', 'normal')).strip()
+    if priority not in {choice[0] for choice in Task.PRIORITY_CHOICES}:
+        return JsonResponse({'error': 'Invalid task priority.'}, status=400)
     labels, labels_error = parse_task_labels(payload.get('labels'))
     if labels_error:
         return JsonResponse({'error': labels_error}, status=400)
@@ -204,6 +207,7 @@ def task_list(request):
         assignee_name=str(payload.get('assignee_name', '')).strip(),
         project=str(payload.get('project', '')).strip(),
         recurrence=recurrence,
+        priority=priority,
         due_date=due_date,
         labels=labels or [],
     )
@@ -264,7 +268,7 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'recurrence', 'labels', 'assignee_id', 'project_id'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'recurrence', 'priority', 'labels', 'assignee_id', 'project_id'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -286,6 +290,11 @@ def task_detail(request, task_id):
         if payload['recurrence'] not in {choice[0] for choice in Task.RECURRENCE_CHOICES}:
             return JsonResponse({'error': 'Invalid recurrence rule.'}, status=400)
         task.recurrence = payload['recurrence']
+
+    if 'priority' in payload:
+        if payload['priority'] not in {choice[0] for choice in Task.PRIORITY_CHOICES}:
+            return JsonResponse({'error': 'Invalid task priority.'}, status=400)
+        task.priority = payload['priority']
 
     if 'labels' in payload:
         labels, labels_error = parse_task_labels(payload['labels'])
@@ -337,6 +346,7 @@ def task_detail(request, task_id):
             labels=task.labels,
             due_date=next_recurrence_date(task.due_date, task.recurrence),
             recurrence=task.recurrence,
+            priority=task.priority,
         )
         record_activity(task.workspace_id, request.user, 'task_recurred', f'Created the next {task.recurrence} occurrence of {task.title}.')
     return JsonResponse({'task': task.as_dict()})
