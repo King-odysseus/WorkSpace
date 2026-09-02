@@ -321,7 +321,7 @@ function App() {
       <div className="page-content">
         {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}
         {workspaceError && <div className="workspace-status error" role="alert"><span>Workspace data could not be loaded: {workspaceError}</span><button className="secondary-button" onClick={() => setWorkspaceReload(current => current + 1)}>Retry</button></div>}
-        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} theme={theme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} currentUserId={session.user.id} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
+        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} theme={theme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} currentUserId={session.user.id} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} onActionError={message => setWorkspaceError(message)} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>{completionPercent}%</strong></div><em><small>{completedTaskCount} of {tasks.length} tasks complete</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>{attentionTaskCount} tasks</strong></div><em className={attentionTaskCount ? 'negative' : 'positive'}>{attentionTaskCount ? 'Blocked, review, or overdue' : 'Nothing urgent'}</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus tasks</span><strong>{myTasks.length}</strong></div><em><small>{myCompletedTaskCount} complete</small></em></div></section>
@@ -337,7 +337,7 @@ function App() {
   </div>
 }
 
-function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme, sidebarCollapsed, workspaceId, currentUserName, currentUserId, canManageMembers, canManageTasks, onToggleTheme, onToggleSidebar, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask }) {
+function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme, sidebarCollapsed, workspaceId, currentUserName, currentUserId, canManageMembers, canManageTasks, onToggleTheme, onToggleSidebar, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask, onActionError }) {
   const today = new Date().toISOString().slice(0, 10)
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
@@ -392,13 +392,13 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   const completeFollowUp = async followUp => {
     const nextStatus = followUp.status === 'completed' ? 'open' : 'completed'
     const response = await fetch(`/api/follow-ups/${followUp.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status: nextStatus }) })
-    if (!response.ok) return
+    if (!response.ok) return onActionError('Follow-up could not be updated.')
     const responseData = await response.json()
     setLocalData(current => ({ ...current, followUps: current.followUps.map(item => item.id === followUp.id ? responseData.follow_up : item) }))
   }
   const deleteCalendarEvent = async eventId => {
     const response = await fetch(`/api/workspaces/${workspaceId}/calendar-events/${eventId}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-    if (!response.ok) return
+    if (!response.ok) return onActionError('Calendar event could not be deleted.')
     setLocalData(current => ({ ...current, events: current.events.filter(event => event.id !== eventId) }))
   }
   const createBucket = async event => {
@@ -427,26 +427,26 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   }
   const updateProjectStatus = async (project, status) => {
     const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status }) })
-    if (!response.ok) return
+    if (!response.ok) return onActionError('Project status could not be saved.')
     const responseData = await response.json()
     setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === project.id ? responseData.project : item) }))
   }
   const deleteProject = async project => {
     if (!canManageMembers || !window.confirm(`Delete ${project.name}?`)) return
     const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-    if (!response.ok) return
+    if (!response.ok) return onActionError('Project could not be deleted.')
     setLocalData(current => ({ ...current, projects: current.projects.filter(item => item.id !== project.id) }))
   }
   const updateMemberRole = async (member, role) => {
     const response = await fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ role }) })
-    if (!response.ok) return
+    if (!response.ok) return onActionError('Member role could not be updated.')
     const responseData = await response.json()
     setLocalData(current => ({ ...current, members: current.members.map(item => item.id === member.id ? responseData.member : item) }))
   }
   const removeMember = async member => {
     if (member.role === 'owner' || !window.confirm(`Remove ${member.email} from this workspace?`)) return
     const response = await fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-    if (!response.ok) return
+    if (!response.ok) return onActionError('Member could not be removed.')
     setLocalData(current => ({ ...current, members: current.members.filter(item => item.id !== member.id) }))
   }
   const title = active === 'My tasks' ? 'My tasks' : active
