@@ -224,6 +224,10 @@ function App() {
   }, [tasks, selectedFilter, searchQuery, today])
   if (session.loading) return <div className="auth-loading">Loading WorkSpace...</div>
   if (!session.user) return <AuthScreen onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
+  const mapApiTask = apiTask => {
+    const workspaceRole = session.user.workspaces.find(workspace => workspace.id === activeWorkspaceId)?.role
+    return { id: apiTask.id, title: apiTask.title, member: apiTask.assignee_name || 'Unassigned', tag: apiTask.project || 'General', status: apiTask.status === 'in_progress' ? 'in progress' : apiTask.status, priority: apiTask.priority || 'normal', due: taskDueLabel(apiTask.due_date, today), due_date: apiTask.due_date || '', estimate: 'n/a', assignee_id: apiTask.assignee_id || '', project_id: apiTask.project_id || '', can_edit: ['owner', 'manager'].includes(workspaceRole) || apiTask.assignee_id === session.user.id, recurrence: apiTask.recurrence || 'none', bucket: apiTask.bucket || 'Backlog', labels: apiTask.labels || [] }
+  }
   const completeTask = async id => {
     const previousTask = tasks.find(task => task.id === id)
     const nextStatus = previousTask?.status === 'done' ? 'todo' : 'done'
@@ -235,7 +239,9 @@ function App() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
         body: JSON.stringify({ status: nextStatus }),
       })
-      if (!response.ok) throw new Error(`Task update returned ${response.status}`)
+      const responseData = await response.json()
+      if (!response.ok) throw new Error(responseData.error || `Task update returned ${response.status}`)
+      if (responseData.next_task) setTasks(current => current.some(task => task.id === responseData.next_task.id) ? current : [...current, mapApiTask(responseData.next_task)])
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
       setWorkspaceError(error.message || 'Task status could not be saved.')
@@ -248,7 +254,9 @@ function App() {
     try {
       const apiStatus = status === 'in progress' ? 'in_progress' : status
       const response = await fetch(`/api/tasks/${id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') }, body: JSON.stringify({ status: apiStatus }) })
-      if (!response.ok) throw new Error(`Task update returned ${response.status}`)
+      const responseData = await response.json()
+      if (!response.ok) throw new Error(responseData.error || `Task update returned ${response.status}`)
+      if (responseData.next_task) setTasks(current => current.some(task => task.id === responseData.next_task.id) ? current : [...current, mapApiTask(responseData.next_task)])
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
       setWorkspaceError(error.message || 'Task status could not be saved.')

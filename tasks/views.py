@@ -425,8 +425,9 @@ def task_detail(request, task_id):
         record_activity(task.workspace_id, request.user, 'task_status', f'{request.user.get_full_name() or request.user.email} moved {task.title} to {task.get_status_display()}.')
         if task.assignee and task.assignee != request.user:
             create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display())
+    next_task = None
     if previous_status != 'done' and task.status == 'done' and task.recurrence != 'none':
-        Task.objects.create(
+        next_task = Task.objects.create(
             workspace=task.workspace,
             assignee=task.assignee,
             project_ref=task.project_ref,
@@ -441,7 +442,7 @@ def task_detail(request, task_id):
             priority=task.priority,
         )
         record_activity(task.workspace_id, request.user, 'task_recurred', f'Created the next {task.recurrence} occurrence of {task.title}.')
-    return JsonResponse({'task': task.as_dict()})
+    return JsonResponse({'task': task.as_dict(), 'next_task': next_task.as_dict() if next_task else None})
 
 
 @require_http_methods(['GET', 'POST'])
