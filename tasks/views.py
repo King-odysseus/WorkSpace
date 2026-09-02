@@ -40,9 +40,9 @@ def record_activity(workspace_id, actor, kind, message):
     return ActivityEvent.objects.create(workspace_id=workspace_id, actor=actor, kind=kind, message=message)
 
 
-def create_notification(workspace_id, recipient, kind, title, body=''):
+def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id=''):
     from .models import WorkspaceNotification
-    return WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body)
+    return WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '')
 
 
 def parse_task_labels(value):
@@ -102,6 +102,8 @@ def deliver_due_calendar_reminders(workspace_id):
                 'calendar_reminder',
                 f'Upcoming event: {locked_event.title}',
                 f'Starts at {locked_event.start_at.isoformat()}.',
+                target_type='calendar_event',
+                target_id=locked_event.id,
             )
             locked_event.reminder_sent_at = now
             locked_event.save(update_fields=['reminder_sent_at'])
@@ -281,7 +283,7 @@ def task_list(request):
     )
     record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')
     if assignee and assignee != request.user:
-        create_notification(workspace_id, assignee, 'task_assigned', 'You were assigned a task.', task.title)
+        create_notification(workspace_id, assignee, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
     return JsonResponse({'task': task.as_dict()}, status=201)
 
 
@@ -449,7 +451,7 @@ def task_detail(request, task_id):
     if previous_status != task.status:
         record_activity(task.workspace_id, request.user, 'task_status', f'{actor_name} moved {task.title} to {task.get_status_display()}.')
         if task.assignee and task.assignee != request.user:
-            create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display())
+            create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display(), target_type='task', target_id=task.id)
     if previous_title != task.title:
         record_activity(task.workspace_id, request.user, 'task_title', f'{actor_name} renamed task {previous_title} to {task.title}.')
     if previous_priority != task.priority:
@@ -470,7 +472,7 @@ def task_detail(request, task_id):
             record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} removed {task.title} from its project.')
     if previous_assignee != task.assignee and task.assignee and task.assignee != request.user:
         record_activity(task.workspace_id, request.user, 'task_assigned', f'{request.user.get_full_name() or request.user.email} assigned {task.title} to {task.assignee.get_full_name() or task.assignee.email}.')
-        create_notification(task.workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title)
+        create_notification(task.workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
     next_task = None
     if previous_status != 'done' and task.status == 'done' and task.recurrence != 'none':
         next_task = Task.objects.create(
@@ -512,7 +514,7 @@ def task_comment_list(request, task_id):
     comment = TaskComment.objects.create(task=task, author=request.user, body=body)
     record_activity(task.workspace_id, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.')
     if task.assignee and task.assignee != request.user:
-        create_notification(task.workspace_id, task.assignee, 'task_comment', f'New comment on {task.title}', body[:120])
+        create_notification(task.workspace_id, task.assignee, 'task_comment', f'New comment on {task.title}', body[:120], target_type='task', target_id=task.id)
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
@@ -1045,7 +1047,7 @@ def check_in_list(request, workspace_id):
         leaders = Membership.objects.filter(workspace_id=workspace_id, role__in=['owner', 'manager']).select_related('user')
         for leader in leaders:
             if leader.user != request.user:
-                create_notification(workspace_id, leader.user, 'check_in_blocker', f'{actor_name} reported a blocker', check_in.blockers[:120])
+                create_notification(workspace_id, leader.user, 'check_in_blocker', f'{actor_name} reported a blocker', check_in.blockers[:120], target_type='check_in', target_id=check_in.id)
     return JsonResponse({'check_in': check_in.as_dict()}, status=201 if created else 200)
 
 
@@ -1083,7 +1085,7 @@ def chat_message_list(request, workspace_id):
         for member in members:
             aliases = {member.user.email.split('@')[0].lower(), member.user.first_name.lower(), member.user.last_name.lower()}
             if mentioned_tokens.intersection(aliases) and member.user != request.user:
-                create_notification(workspace_id, member.user, 'mention', f'{request.user.get_full_name() or request.user.email} mentioned you', message_text[:120])
+                create_notification(workspace_id, member.user, 'mention', f'{request.user.get_full_name() or request.user.email} mentioned you', message_text[:120], target_type='chat_channel', target_id=channel)
     return JsonResponse({'message': message.as_dict()}, status=201)
 
 
@@ -1123,7 +1125,7 @@ def follow_up_list(request, workspace_id):
     follow_up = FollowUp.objects.create(workspace_id=workspace_id, task=task, created_by=request.user, assigned_to=assigned_to, note=note, due_date=due_date)
     record_activity(workspace_id, request.user, 'follow_up_created', f'{request.user.get_full_name() or request.user.email} created a follow-up.')
     if assigned_to and assigned_to != request.user:
-        create_notification(workspace_id, assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', note)
+        create_notification(workspace_id, assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', note, target_type='follow_up', target_id=follow_up.id)
     return JsonResponse({'follow_up': follow_up.as_dict()}, status=201)
 
 
@@ -1183,14 +1185,14 @@ def follow_up_detail(request, follow_up_id):
     if previous_status != follow_up.status:
         record_activity(follow_up.workspace_id, request.user, 'follow_up_status', f'{actor_name} marked a follow-up {follow_up.status}.')
         if follow_up.status == 'completed' and follow_up.created_by != request.user:
-            create_notification(follow_up.workspace_id, follow_up.created_by, 'follow_up_completed', 'Follow-up completed.', follow_up.note)
+            create_notification(follow_up.workspace_id, follow_up.created_by, 'follow_up_completed', 'Follow-up completed.', follow_up.note, target_type='follow_up', target_id=follow_up.id)
     if previous_assignee != follow_up.assigned_to:
         if follow_up.assigned_to:
             record_activity(follow_up.workspace_id, request.user, 'follow_up_assigned', f'{actor_name} assigned a follow-up to {follow_up.assigned_to.get_full_name() or follow_up.assigned_to.email}.')
         else:
             record_activity(follow_up.workspace_id, request.user, 'follow_up_assigned', f'{actor_name} unassigned a follow-up.')
         if follow_up.assigned_to and follow_up.assigned_to != request.user:
-            create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note)
+            create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note, target_type='follow_up', target_id=follow_up.id)
     if previous_due_date != follow_up.due_date:
         if follow_up.due_date:
             record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} set the follow-up due date to {follow_up.due_date.isoformat()}.')

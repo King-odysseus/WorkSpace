@@ -368,6 +368,18 @@ function App() {
       setWorkspaceError(error.message || 'Notification could not be marked as read.')
     }
   }
+  const notificationDestinations = { follow_up: 'Follow-up', chat_channel: 'Chat', calendar_event: 'Calendar', check_in: 'Check-ins' }
+  const openNotification = notification => {
+    setNotificationOpen(false)
+    markNotificationRead(notification.id)
+    if (notification.target_type === 'task') {
+      const targetTask = tasks.find(task => String(task.id) === String(notification.target_id))
+      if (targetTask) setSelectedTask(targetTask)
+      return
+    }
+    const destination = notificationDestinations[notification.target_type]
+    if (destination) setActive(destination)
+  }
   const addTask = async event => {
     event.preventDefault()
     setTaskError('')
@@ -444,7 +456,7 @@ function App() {
     <nav className="mobile-pill-nav" aria-label="Mobile workspace navigation">{mobileNavItems.map(({ label, icon: Icon }) => <button type="button" key={label} className={active === label ? 'active' : ''} onClick={() => setActive(label)} aria-label={label} title={label} aria-current={active === label ? 'page' : undefined}><Icon size={18} /></button>)}</nav>
 
     <main id="main-content" className="main-content" tabIndex="-1">
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <button type="button" className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id} onClick={() => markNotificationRead(notification.id)} aria-label={`Mark ${notification.title} as read`}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></button>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button" onClick={() => setActive('Settings')}><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out" aria-label={`Sign out ${currentUserName}`}>{currentUserInitials}</button></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <button type="button" className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id} onClick={() => openNotification(notification)} aria-label={`Open ${notification.title}`}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></button>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button" onClick={() => setActive('Settings')}><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out" aria-label={`Sign out ${currentUserName}`}>{currentUserInitials}</button></div></header>
       <div className="page-content">
         {session.user.pending_invitations?.map(invitation => <div className="workspace-status" key={invitation.id}><span>You are invited to join {invitation.workspace_name} as a {invitation.role}.</span><button className="secondary-button" onClick={() => acceptInvitation(invitation)}>Accept invitation</button></div>)}
         {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}

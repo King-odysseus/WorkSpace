@@ -234,9 +234,35 @@ class TaskApiTests(TestCase):
         self.client.force_login(teammate)
         notification_response = self.client.get(reverse('notification-list', args=[self.workspace.id]))
         self.assertEqual(notification_response.json()['unread_count'], 1)
-        notification_id = notification_response.json()['notifications'][0]['id']
-        read_response = self.client.patch(reverse('notification-list', args=[self.workspace.id]), data=json.dumps({'notification_id': notification_id}), content_type='application/json')
+        notification = notification_response.json()['notifications'][0]
+        self.assertEqual(notification['target_type'], 'task')
+        self.assertEqual(notification['target_id'], str(task_id))
+        read_response = self.client.patch(reverse('notification-list', args=[self.workspace.id]), data=json.dumps({'notification_id': notification['id']}), content_type='application/json')
         self.assertEqual(read_response.status_code, 200)
+
+    def test_notifications_carry_a_navigable_target_for_each_source(self):
+        teammate = User.objects.create_user(username='teammate@example.com', email='teammate@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+
+        follow_up_response = self.client.post(
+            reverse('follow-up-list', args=[self.workspace.id]),
+            data=json.dumps({'note': 'Confirm launch readiness', 'assigned_to': teammate.id}),
+            content_type='application/json',
+        )
+        follow_up_id = follow_up_response.json()['follow_up']['id']
+        follow_up_notification = WorkspaceNotification.objects.get(recipient=teammate, kind='follow_up_assigned')
+        self.assertEqual(follow_up_notification.target_type, 'follow_up')
+        self.assertEqual(follow_up_notification.target_id, str(follow_up_id))
+
+        chat_response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'launch', 'message': f'@{teammate.username.split("@")[0]} please review'}),
+            content_type='application/json',
+        )
+        self.assertEqual(chat_response.status_code, 201)
+        mention_notification = WorkspaceNotification.objects.get(recipient=teammate, kind='mention')
+        self.assertEqual(mention_notification.target_type, 'chat_channel')
+        self.assertEqual(mention_notification.target_id, 'launch')
 
     def test_reassigning_task_notifies_new_assignee(self):
         original_assignee = User.objects.create_user(username='first@example.com', email='first@example.com', password='secure-pass-123')

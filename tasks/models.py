@@ -374,6 +374,8 @@ class WorkspaceNotification(models.Model):
     kind = models.CharField(max_length=40)
     title = models.CharField(max_length=200)
     body = models.CharField(max_length=500, blank=True)
+    target_type = models.CharField(max_length=40, blank=True)
+    target_id = models.CharField(max_length=80, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -387,6 +389,8 @@ class WorkspaceNotification(models.Model):
             'kind': self.kind,
             'title': self.title,
             'body': self.body,
+            'target_type': self.target_type,
+            'target_id': self.target_id,
             'read': self.read_at is not None,
             'created_at': self.created_at.isoformat(),
         }
