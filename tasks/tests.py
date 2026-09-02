@@ -153,6 +153,17 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_regular_member_cannot_create_a_project(self):
+        member = User.objects.create_user(username='project-member@example.com', email='project-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        self.client.login(username='project-member@example.com', password='secure-pass-123')
+        response = self.client.post(
+            reverse('project-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Restricted project'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+
 
 class AuthenticationApiTests(TestCase):
     def test_signup_creates_user_workspace_and_session(self):

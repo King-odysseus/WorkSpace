@@ -218,7 +218,8 @@ def invitation_list(request, workspace_id):
 
 @require_http_methods(['GET', 'POST'])
 def project_list(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
+    membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
+    _, error = membership_check(request, workspace_id)
     if error:
         return error
     if request.method == 'GET':

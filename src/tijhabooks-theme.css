@@ -281,6 +281,8 @@ html[data-theme='light'] .theme-toggle {
 .directory-row em { color: #6B7280; font-size: 10px; font-style: normal; text-transform: capitalize; }
 .invite-dot { width: 8px; height: 8px; margin: 0 12px; border-radius: 50%; background: #C49A6C; }
 .pending-heading { margin-top: 28px !important; }
+.task-status-select { border: 0; cursor: pointer; appearance: auto; }
+.task-status-select:focus { outline: 2px solid #C49A6C; outline-offset: 1px; }
 .chat-placeholder { min-height: 310px; display: grid; place-items: center; align-content: center; text-align: center; }
 .chat-placeholder-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; color: #1D4ED8; background: #EAF0FF; }
 .chat-placeholder h2 { margin: 17px 0 7px; color: #0B0B45; font: 700 17px 'Plus Jakarta Sans'; }
