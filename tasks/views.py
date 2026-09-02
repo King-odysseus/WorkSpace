@@ -42,6 +42,21 @@ def create_notification(workspace_id, recipient, kind, title, body=''):
     return WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body)
 
 
+def parse_task_labels(value):
+    if value is None:
+        return [], None
+    if not isinstance(value, list) or len(value) > 8:
+        return None, 'Labels must be a list containing at most 8 items.'
+    labels = []
+    for item in value:
+        label = str(item).strip()
+        if not label or len(label) > 40:
+            return None, 'Each label must be between 1 and 40 characters.'
+        if label.lower() not in {existing.lower() for existing in labels}:
+            labels.append(label)
+    return labels, None
+
+
 def requested_workspace(request, user):
     workspace_id = request.headers.get('X-Workspace-Id')
     memberships = user_workspace_ids(user)
@@ -131,6 +146,9 @@ def task_list(request):
     recurrence = str(payload.get('recurrence', 'none')).strip()
     if recurrence not in {choice[0] for choice in Task.RECURRENCE_CHOICES}:
         return JsonResponse({'error': 'Invalid recurrence rule.'}, status=400)
+    labels, labels_error = parse_task_labels(payload.get('labels'))
+    if labels_error:
+        return JsonResponse({'error': labels_error}, status=400)
 
     task = Task.objects.create(
         workspace_id=workspace_id,
@@ -142,6 +160,7 @@ def task_list(request):
         project=str(payload.get('project', '')).strip(),
         recurrence=recurrence,
         due_date=due_date,
+        labels=labels or [],
     )
     record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')
     if assignee and assignee != request.user:
@@ -191,7 +210,7 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'recurrence', 'assignee_id', 'project_id'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'recurrence', 'labels', 'assignee_id', 'project_id'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -213,6 +232,12 @@ def task_detail(request, task_id):
         if payload['recurrence'] not in {choice[0] for choice in Task.RECURRENCE_CHOICES}:
             return JsonResponse({'error': 'Invalid recurrence rule.'}, status=400)
         task.recurrence = payload['recurrence']
+
+    if 'labels' in payload:
+        labels, labels_error = parse_task_labels(payload['labels'])
+        if labels_error:
+            return JsonResponse({'error': labels_error}, status=400)
+        task.labels = labels
 
     if 'bucket' in payload:
         bucket = str(payload['bucket']).strip()
@@ -255,6 +280,7 @@ def task_detail(request, task_id):
             assignee_name=task.assignee_name,
             project=task.project,
             bucket=task.bucket,
+            labels=task.labels,
             due_date=next_recurrence_date(task.due_date, task.recurrence),
             recurrence=task.recurrence,
         )

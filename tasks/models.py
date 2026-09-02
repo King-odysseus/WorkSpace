@@ -249,6 +249,7 @@ class Task(models.Model):
     assignee_name = models.CharField(max_length=120, blank=True)
     project = models.CharField(max_length=120, blank=True)
     bucket = models.CharField(max_length=80, default='Backlog')
+    labels = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     due_date = models.DateField(null=True, blank=True)
     recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default='none')
@@ -269,6 +270,7 @@ class Task(models.Model):
             'assignee_name': self.assignee_name,
             'project': self.project,
             'bucket': self.bucket,
+            'labels': self.labels,
             'project_id': self.project_ref_id,
             'status': self.status,
             'due_date': self.due_date.isoformat() if self.due_date else None,
