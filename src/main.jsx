@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight,
   Plus, Search, Settings, Sparkles, Target, Users, X, Sun, Moon
 } from 'lucide-react'
+import 'flowbite/dist/flowbite.css'
 import './styles.css'
 import './tijhabooks-theme.css'
 

@@ -723,3 +723,78 @@ html[data-theme='dark'] .auth-switch {
   .content-grid { display: block; }
   .right-column { margin-top: 18px; }
 }
+
+/* Keep the visual language consistent across Flowbite and app-owned controls. */
+:where(button, input, select, textarea) {
+  font: inherit;
+}
+
+:where(.primary-button, .secondary-button, .filter-button, .icon-button, .theme-toggle, .calendar-nav-button, .calendar-view-switcher button, .text-button, .row-add, .task-more-button) {
+  transition: color .2s ease, background-color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+:where(.primary-button, .secondary-button, .filter-button, .calendar-view-switcher button, .text-button) {
+  min-height: 38px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+:where(.primary-button, .secondary-button):hover,
+:where(.filter-button, .calendar-view-switcher button, .text-button):hover {
+  transform: translateY(-1px);
+}
+
+.primary-button {
+  box-shadow: 0 8px 18px rgb(7 26 46 / 16%);
+}
+
+.primary-button:hover {
+  box-shadow: 0 10px 22px rgb(7 26 46 / 22%);
+}
+
+:where(.icon-button, .theme-toggle, .calendar-nav-button, .task-more-button) {
+  border-radius: 999px;
+}
+
+:where(.workspace-card, .workspace-side-card, .project-card, .planner-column, .calendar-panel, .chat-panel, .follow-up-panel, .settings-panel, .report-card, .task-drawer) {
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgb(7 26 46 / 7%);
+}
+
+:where(.task-card, .directory-row, .channel-row, .activity-row, .notification-item, .chat-message) {
+  border-radius: 12px;
+  transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+:where(.task-card, .directory-row, .channel-row, .activity-row, .notification-item):hover {
+  box-shadow: 0 6px 18px rgb(7 26 46 / 8%);
+}
+
+:where(input, select, textarea, .member-role-select, .inline-edit) {
+  border-radius: 10px;
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+:where(input, select, textarea, .member-role-select, .inline-edit):focus {
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 3px rgb(196 154 108 / 20%);
+  outline: 0;
+}
+
+:where(.status-pill, .priority-pill, .project-status, .event-pill, .task-label, .badge) {
+  border-radius: 999px;
+}
+
+html[data-theme='dark'] :where(.workspace-card, .workspace-side-card, .project-card, .planner-column, .calendar-panel, .chat-panel, .follow-up-panel, .settings-panel, .report-card, .task-drawer) {
+  box-shadow: 0 16px 36px rgb(0 0 0 / 18%);
+}
+
+html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activity-row, .notification-item, .chat-message):hover {
+  background: #123A5B;
+}
+
+@media (max-width: 750px) {
+  :where(.primary-button, .secondary-button, .filter-button, .calendar-view-switcher button) {
+    min-height: 42px;
+  }
+}
