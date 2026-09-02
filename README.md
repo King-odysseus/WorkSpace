@@ -29,7 +29,7 @@ Open `http://localhost:5175` to use the application. The Django administration s
 
 ## Production configuration
 
-Copy `.env.example` to a protected environment configuration and set a unique random `WORKSPACE_SECRET_KEY`. Set `WORKSPACE_DEBUG=false`, configure `WORKSPACE_ALLOWED_HOSTS` and `WORKSPACE_CSRF_TRUSTED_ORIGINS`, and use a production database and HTTPS reverse proxy before deployment.
+Copy `.env.example` to a protected environment configuration and set a unique random `WORKSPACE_SECRET_KEY` of at least 50 characters. Set `WORKSPACE_DEBUG=false`, configure `WORKSPACE_ALLOWED_HOSTS` and `WORKSPACE_CSRF_TRUSTED_ORIGINS`, and use a production database and HTTPS reverse proxy before deployment. When HTTPS is active end to end, set `WORKSPACE_SECURE_SSL_REDIRECT=true`, `WORKSPACE_HSTS_SECONDS=31536000`, and enable the HSTS subdomain and preload flags only when those policies are appropriate for the domain.
 
 The default local database is SQLite. PostgreSQL is supported for production by setting `WORKSPACE_DB_NAME`, `WORKSPACE_DB_USER`, `WORKSPACE_DB_PASSWORD`, `WORKSPACE_DB_HOST`, and `WORKSPACE_DB_PORT` in the environment.
 

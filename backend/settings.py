@@ -8,8 +8,8 @@ SECRET_KEY = os.environ.get('WORKSPACE_SECRET_KEY', development_secret)
 DEBUG = os.environ.get('WORKSPACE_DEBUG', 'true').lower() == 'true'
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('WORKSPACE_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get('WORKSPACE_CSRF_TRUSTED_ORIGINS', 'http://127.0.0.1:5175,http://localhost:5175,http://192.168.68.55:5175').split(',') if origin.strip()]
-if not DEBUG and (not SECRET_KEY or SECRET_KEY == development_secret):
-    raise ImproperlyConfigured('WORKSPACE_SECRET_KEY must be set when WORKSPACE_DEBUG is false.')
+if not DEBUG and (not SECRET_KEY or SECRET_KEY == development_secret or len(SECRET_KEY) < 50):
+    raise ImproperlyConfigured('WORKSPACE_SECRET_KEY must be a unique value of at least 50 characters when WORKSPACE_DEBUG is false.')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -81,6 +81,10 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get('WORKSPACE_SECURE_SSL_REDIRECT', 'false').lower() == 'true'
+    SECURE_HSTS_SECONDS = int(os.environ.get('WORKSPACE_HSTS_SECONDS', '0'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('WORKSPACE_HSTS_INCLUDE_SUBDOMAINS', 'false').lower() == 'true'
+    SECURE_HSTS_PRELOAD = os.environ.get('WORKSPACE_HSTS_PRELOAD', 'false').lower() == 'true'
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
