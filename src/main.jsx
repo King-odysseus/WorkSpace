@@ -161,13 +161,15 @@ function App() {
       read(`/api/workspaces/${workspaceId}/chat-messages/`),
       read(`/api/workspaces/${workspaceId}/follow-ups/`),
       read(`/api/workspaces/${workspaceId}/calendar-events/`),
+      read(`/api/workspaces/${workspaceId}/check-ins/?date=${today}`),
       read(`/api/workspaces/${workspaceId}/notifications/`),
       read(`/api/workspaces/${workspaceId}/activity/`),
       read(`/api/workspaces/${workspaceId}/plan-buckets/`),
       read(`/api/workspaces/${workspaceId}/invitations/`),
       read(`/api/workspaces/${workspaceId}/saved-views/`),
       read(`/api/workspaces/${workspaceId}/reports/summary/`),
-    ]).then(([taskData, memberData, projectData, messageData, followUpData, eventData, notificationData, activityData, bucketData, invitationData, savedViewData, reportData]) => {
+      auditRequest,
+    ]).then(([taskData, memberData, projectData, messageData, followUpData, eventData, checkInData, notificationData, activityData, bucketData, invitationData, savedViewData, reportData, auditData]) => {
       if (!isCurrent) return
       setTasks(taskData.tasks.map(task => ({
         id: task.id,
@@ -186,57 +188,16 @@ function App() {
         bucket: task.bucket || 'Backlog',
         labels: task.labels || [],
       })))
-      setWorkspaceData(current => ({ ...current, members: memberData.members, projects: projectData.projects, messages: messageData.messages, followUps: followUpData.follow_ups, events: eventData.events, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, invitations: invitationData.invitations, savedViews: savedViewData.saved_views, reports: reportData.summary }))
+      setWorkspaceData(current => ({ ...current, members: memberData.members, projects: projectData.projects, messages: messageData.messages, followUps: followUpData.follow_ups, events: eventData.events, checkIns: checkInData.check_ins, notifications: notificationData.notifications, activity: activityData.activity, auditLogs: auditData.audit_logs, buckets: bucketData.buckets, invitations: invitationData.invitations, savedViews: savedViewData.saved_views, reports: reportData.summary }))
+      setWorkspaceLoading(false)
     }).catch(error => {
       if (!isCurrent) return
+      setWorkspaceLoading(false)
       setWorkspaceError(error.message || 'Collaboration data could not be refreshed.')
       console.warn('Collaboration data could not be refreshed.', error.message)
     })
 
-    Promise.all([
-      read('/api/tasks/'),
-      read(`/api/workspaces/${workspaceId}/members/`),
-      read(`/api/workspaces/${workspaceId}/projects/`),
-      read(`/api/workspaces/${workspaceId}/calendar-events/`),
-      read(`/api/workspaces/${workspaceId}/check-ins/?date=${today}`),
-      read(`/api/workspaces/${workspaceId}/chat-messages/`),
-      read(`/api/workspaces/${workspaceId}/follow-ups/`),
-      read(`/api/workspaces/${workspaceId}/invitations/`),
-      read(`/api/workspaces/${workspaceId}/notifications/`),
-      read(`/api/workspaces/${workspaceId}/activity/`),
-      read(`/api/workspaces/${workspaceId}/plan-buckets/`),
-      read(`/api/workspaces/${workspaceId}/saved-views/`),
-      read(`/api/workspaces/${workspaceId}/reports/summary/`),
-      auditRequest,
-    ])
-      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData, savedViewData, reportData, auditData]) => {
-        if (!isCurrent) return
-        setTasks(taskData.tasks.map(task => ({
-          id: task.id,
-          title: task.title,
-          member: task.assignee_name || 'Unassigned',
-          tag: task.project || 'General',
-          status: task.status === 'in_progress' ? 'in progress' : task.status,
-          priority: task.priority || 'normal',
-          due: taskDueLabel(task.due_date, today),
-          due_date: task.due_date || '',
-          estimate: 'n/a',
-          can_edit: ['owner', 'manager'].includes(workspaceRole) || task.assignee_id === session.user.id,
-          recurrence: task.recurrence || 'none',
-          assignee_id: task.assignee_id || '',
-          project_id: task.project_id || '',
-          bucket: task.bucket || 'Backlog',
-          labels: task.labels || [],
-        })))
-        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, auditLogs: auditData.audit_logs, buckets: bucketData.buckets, savedViews: savedViewData.saved_views, reports: reportData.summary })
-        setWorkspaceLoading(false)
-      })
-      .catch(error => {
-        if (!isCurrent) return
-        setWorkspaceLoading(false)
-        setWorkspaceError(error.message || 'Workspace data could not be loaded.')
-        console.warn('Workspace data could not be loaded.', error.message)
-      })
+    refreshCollaboration()
     const refreshTimer = window.setInterval(refreshCollaboration, 15000)
 
     return () => {
