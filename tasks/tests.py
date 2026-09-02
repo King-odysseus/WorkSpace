@@ -104,6 +104,27 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(invalid_response.status_code, 400)
 
+    def test_task_field_changes_record_activity_only_when_values_change(self):
+        task = Task.objects.create(workspace=self.workspace, title='Prepare brief', priority='normal')
+
+        first_update = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'priority': 'high', 'due_date': '2026-09-10'}),
+            content_type='application/json',
+        )
+        self.assertEqual(first_update.status_code, 200)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_priority').count(), 1)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_due_date').count(), 1)
+
+        second_update = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'priority': 'high', 'due_date': '2026-09-10'}),
+            content_type='application/json',
+        )
+        self.assertEqual(second_update.status_code, 200)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_priority').count(), 1)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_due_date').count(), 1)
+
     def test_anonymous_users_cannot_read_tasks(self):
         self.client.logout()
         response = self.client.get(reverse('task-list'))

@@ -388,6 +388,13 @@ def task_detail(request, task_id):
 
     previous_status = task.status
     previous_assignee = task.assignee
+    previous_title = task.title
+    previous_priority = task.priority
+    previous_due_date = task.due_date
+    previous_recurrence = task.recurrence
+    previous_bucket = task.bucket
+    previous_labels = list(task.labels or [])
+    previous_project = task.project_ref
     if 'status' in payload:
         valid_statuses = {choice[0] for choice in Task.STATUS_CHOICES}
         if payload['status'] not in valid_statuses:
@@ -437,10 +444,27 @@ def task_detail(request, task_id):
         setattr(task, field, str(payload[field]).strip() or None)
 
     task.save()
+    actor_name = request.user.get_full_name() or request.user.email
     if previous_status != task.status:
-        record_activity(task.workspace_id, request.user, 'task_status', f'{request.user.get_full_name() or request.user.email} moved {task.title} to {task.get_status_display()}.')
+        record_activity(task.workspace_id, request.user, 'task_status', f'{actor_name} moved {task.title} to {task.get_status_display()}.')
         if task.assignee and task.assignee != request.user:
             create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display())
+    if previous_title != task.title:
+        record_activity(task.workspace_id, request.user, 'task_title', f'{actor_name} renamed a task to {task.title}.')
+    if previous_priority != task.priority:
+        record_activity(task.workspace_id, request.user, 'task_priority', f'{actor_name} changed the priority of {task.title} to {task.get_priority_display()}.')
+    if previous_due_date != task.due_date:
+        due_label = task.due_date.isoformat() if task.due_date else 'no due date'
+        record_activity(task.workspace_id, request.user, 'task_due_date', f'{actor_name} changed the due date of {task.title} to {due_label}.')
+    if previous_recurrence != task.recurrence:
+        record_activity(task.workspace_id, request.user, 'task_recurrence', f'{actor_name} changed recurrence for {task.title} to {task.get_recurrence_display()}.')
+    if previous_bucket != task.bucket:
+        record_activity(task.workspace_id, request.user, 'task_bucket', f'{actor_name} moved {task.title} to the {task.bucket} bucket.')
+    if previous_labels != list(task.labels or []):
+        record_activity(task.workspace_id, request.user, 'task_labels', f'{actor_name} updated labels for {task.title}.')
+    if previous_project != task.project_ref:
+        project_label = task.project_ref.name if task.project_ref else 'General'
+        record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} moved {task.title} to {project_label}.')
     if previous_assignee != task.assignee and task.assignee and task.assignee != request.user:
         record_activity(task.workspace_id, request.user, 'task_assigned', f'{request.user.get_full_name() or request.user.email} assigned {task.title} to {task.assignee.get_full_name() or task.assignee.email}.')
         create_notification(task.workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title)
