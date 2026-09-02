@@ -386,3 +386,28 @@ class ActivityEvent(models.Model):
             'message': self.message,
             'created_at': self.created_at.isoformat(),
         }
+
+
+class AuditLog(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='audit_logs')
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_audit_logs')
+    action = models.CharField(max_length=60)
+    target_type = models.CharField(max_length=60)
+    target_id = models.CharField(max_length=80, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'actor_name': self.actor.get_full_name() if self.actor else 'System',
+            'action': self.action,
+            'target_type': self.target_type,
+            'target_id': self.target_id,
+            'details': self.details,
+            'created_at': self.created_at.isoformat(),
+        }

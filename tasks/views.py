@@ -12,7 +12,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
+from .models import AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
 
 
 def user_workspace_ids(user):
@@ -36,6 +36,7 @@ def next_recurrence_date(due_date, recurrence):
 
 def record_activity(workspace_id, actor, kind, message):
     from .models import ActivityEvent
+    AuditLog.objects.create(workspace_id=workspace_id, actor=actor, action=kind, target_type='workspace', details={'message': message})
     return ActivityEvent.objects.create(workspace_id=workspace_id, actor=actor, kind=kind, message=message)
 
 
@@ -495,6 +496,15 @@ def activity_list(request, workspace_id):
     from .models import ActivityEvent
     events = ActivityEvent.objects.filter(workspace_id=workspace_id).select_related('actor')[:50]
     return JsonResponse({'activity': [event.as_dict() for event in events]})
+
+
+@require_http_methods(['GET'])
+def audit_log_list(request, workspace_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    logs = AuditLog.objects.filter(workspace_id=workspace_id).select_related('actor')[:100]
+    return JsonResponse({'audit_logs': [log.as_dict() for log in logs]})
 
 
 @require_http_methods(['GET'])

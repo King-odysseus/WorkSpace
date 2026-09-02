@@ -5,7 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 class TaskApiTests(TestCase):
@@ -238,6 +238,23 @@ class TaskApiTests(TestCase):
         self.assertEqual(update_response.status_code, 403)
         delete_response = self.client.delete(reverse('task-detail', args=[task.id]))
         self.assertEqual(delete_response.status_code, 403)
+
+    def test_audit_logs_are_visible_to_workspace_leaders_only(self):
+        self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Audited task'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        response = self.client.get(reverse('audit-log-list', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.json()['audit_logs']), 1)
+        teammate = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+        denied = self.client.get(reverse('audit-log-list', args=[self.workspace.id]))
+        self.assertEqual(denied.status_code, 403)
+        self.assertTrue(AuditLog.objects.filter(workspace=self.workspace).exists())
 
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')

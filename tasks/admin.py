@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 @admin.register(Workspace)
@@ -74,6 +74,14 @@ class PlanBucketAdmin(admin.ModelAdmin):
 class TaskAttachmentAdmin(admin.ModelAdmin):
     list_display = ('original_name', 'task', 'uploaded_by', 'created_at')
     search_fields = ('original_name', 'task__title', 'uploaded_by__email')
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'actor', 'action', 'target_type', 'target_id', 'created_at')
+    list_filter = ('action', 'target_type')
+    search_fields = ('actor__email', 'target_type', 'target_id')
+    readonly_fields = ('workspace', 'actor', 'action', 'target_type', 'target_id', 'details', 'created_at')
 
 
 @admin.register(CalendarEvent)
