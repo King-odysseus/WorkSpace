@@ -488,6 +488,31 @@ html[data-theme='dark'] .task-copy, html[data-theme='dark'] .task-copy strong, h
 html[data-theme='dark'] .task-copy span, html[data-theme='dark'] .task-tag, html[data-theme='dark'] .member-cell span, html[data-theme='dark'] .activity-item span, html[data-theme='dark'] .follow-up-row span, html[data-theme='dark'] .chat-message p { color: var(--workspace-text-soft); }
 html[data-theme='dark'] .filter-button, html[data-theme='dark'] .more-button, html[data-theme='dark'] .tab, html[data-theme='dark'] .calendar-nav-button { color: var(--workspace-text-soft); border-color: var(--workspace-border); }
 html[data-theme='dark'] .tab.active { color: var(--workspace-text); background: #242460; }
+
+html[data-theme='dark'] .calendar-nav-button,
+html[data-theme='dark'] .calendar-day,
+html[data-theme='dark'] .sidebar-toggle,
+html[data-theme='dark'] .notification-panel,
+html[data-theme='dark'] .settings-row,
+html[data-theme='dark'] .attachment-row,
+html[data-theme='dark'] .chat-reply,
+html[data-theme='dark'] .planner-filter-controls > select,
+html[data-theme='dark'] .bucket-create-form input { border-color: #294461; }
+html[data-theme='dark'] .calendar-view-switcher,
+html[data-theme='dark'] .reply-context,
+html[data-theme='dark'] .bucket-create-form input,
+html[data-theme='dark'] .planner-filter-controls > select { background: #102A46; }
+html[data-theme='dark'] .planner-column,
+html[data-theme='dark'] .task-drawer,
+html[data-theme='dark'] .notification-panel,
+html[data-theme='dark'] .mobile-pill-nav,
+html[data-theme='dark'] .error-boundary > div { background: #0D2945; }
+html[data-theme='dark'] .planner-column-heading span,
+html[data-theme='dark'] .report-bar-row > div,
+html[data-theme='dark'] .report-member-row,
+html[data-theme='dark'] .tab.active { background-color: #173150; }
+html[data-theme='dark'] .calendar-view-switcher button.active,
+html[data-theme='dark'] .mobile-pill-nav button.active { background: var(--brand-accent); color: #071A2E; }
 html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .workspace-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 11px 14px; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 12px; }
 .workspace-status.error { border-color: #E36B43; color: var(--workspace-text); }
