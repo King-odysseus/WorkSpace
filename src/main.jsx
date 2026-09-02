@@ -439,7 +439,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   const [selectedProject, setSelectedProject] = useState(null)
   const [selectedFollowUp, setSelectedFollowUp] = useState(null)
   const [selectedEvent, setSelectedEvent] = useState(null)
-  const [savedViews, setSavedViews] = useState(data.savedViews?.length ? data.savedViews : () => JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]'))
+  const [savedViews, setSavedViews] = useState(data.savedViews || [])
   const [form, setForm] = useState({ title: '', name: '', description: '', start_at: '', end_at: '', event_type: 'meeting', reminder_minutes: 15, completed: '', next_steps: '', blockers: '', message: '', channel: 'general', note: '', due_date: '', assigned_to: '', task_id: '', date: today, email: '', role: 'member' })
   useEffect(() => {
     const closeOverlays = event => {
@@ -454,7 +454,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
     return () => window.removeEventListener('keydown', closeOverlays)
   }, [])
   useEffect(() => setLocalData(current => ({ ...data, checkIns: current.checkIns })), [data])
-  useEffect(() => setSavedViews(data.savedViews?.length ? data.savedViews : JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]')), [data.savedViews, workspaceId])
+  useEffect(() => setSavedViews(data.savedViews || []), [data.savedViews])
 
   useEffect(() => {
     if (active !== 'Check-ins') return undefined
@@ -627,7 +627,6 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
         if (!response.ok) return setBucketError(responseData.error || 'Saved view could not be created.')
         const nextViews = [...savedViews.filter(view => view.name !== name), responseData.saved_view]
         setSavedViews(nextViews)
-        localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
         setSavedViewName('')
       } catch (error) {
         setBucketError(error.message || 'Saved view could not be created.')
@@ -651,7 +650,6 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
         const nextViews = savedViews.filter(item => item.id !== view.id)
         setSavedViews(nextViews)
         setSelectedSavedView('')
-        localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
       } catch (error) {
         setBucketError(error.message || 'Saved view could not be deleted.')
       }
