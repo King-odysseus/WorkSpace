@@ -153,7 +153,11 @@ function App() {
     ]).then(([messageData, followUpData, notificationData, activityData, bucketData, reportData]) => {
       if (!isCurrent) return
       setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, reports: reportData.summary }))
-    }).catch(error => console.warn('Collaboration data could not be refreshed.', error.message))
+    }).catch(error => {
+      if (!isCurrent) return
+      setWorkspaceError(error.message || 'Collaboration data could not be refreshed.')
+      console.warn('Collaboration data could not be refreshed.', error.message)
+    })
 
     Promise.all([
       read('/api/tasks/'),
@@ -257,6 +261,7 @@ function App() {
       if (!response.ok) throw new Error(`Task bucket update returned ${response.status}`)
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
+      setWorkspaceError(error.message || 'Task bucket could not be saved.')
       console.warn('Task bucket could not be saved.', error.message)
     }
   }
