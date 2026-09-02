@@ -734,6 +734,28 @@ class AuthenticationApiTests(TestCase):
         self.assertTrue(response.json()['authenticated'])
         self.assertEqual(response.json()['user']['workspaces'][0]['role'], 'owner')
 
+    def test_signup_rejects_invalid_email_and_weak_password(self):
+        invalid_email = self.client.post(
+            reverse('auth-me'),
+            data=json.dumps({'email': 'not-an-email', 'password': 'secure-pass-123'}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid_email.status_code, 400)
+        weak_password = self.client.post(
+            reverse('auth-me'),
+            data=json.dumps({'email': 'new-owner@example.com', 'password': 'password'}),
+            content_type='application/json',
+        )
+        self.assertEqual(weak_password.status_code, 400)
+
+    def test_signup_rejects_oversized_profile_fields(self):
+        response = self.client.post(
+            reverse('auth-me'),
+            data=json.dumps({'email': 'new-owner@example.com', 'password': 'secure-pass-123', 'workspace_name': 'x' * 121}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_login_rejects_invalid_credentials(self):
         User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
         response = self.client.post(

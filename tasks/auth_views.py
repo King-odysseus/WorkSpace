@@ -2,6 +2,9 @@ import json
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.http import JsonResponse
 from django.utils.text import slugify
@@ -56,14 +59,25 @@ def auth_me(request):
     password = str(payload.get('password', ''))
     if not email or not password:
         return JsonResponse({'error': 'Email and password are required.'}, status=400)
-    if len(password) < 8:
-        return JsonResponse({'error': 'Password must be at least 8 characters.'}, status=400)
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({'error': 'Enter a valid email address.'}, status=400)
+    try:
+        validate_password(password)
+    except ValidationError as validation_error:
+        return JsonResponse({'error': validation_error.messages[0]}, status=400)
     if User.objects.filter(email__iexact=email).exists():
         return JsonResponse({'error': 'An account with this email already exists.'}, status=409)
     username = email
     workspace_name = str(payload.get('workspace_name', '')).strip() or 'My Workspace'
+    if len(workspace_name) > 120:
+        return JsonResponse({'error': 'Workspace name must be 120 characters or fewer.'}, status=400)
+    first_name = str(payload.get('first_name', '')).strip()
+    if len(first_name) > 150:
+        return JsonResponse({'error': 'First name must be 150 characters or fewer.'}, status=400)
     with transaction.atomic():
-        user = User.objects.create_user(username=username, email=email, password=password, first_name=str(payload.get('first_name', '')).strip())
+        user = User.objects.create_user(username=username, email=email, password=password, first_name=first_name)
         workspace = Workspace.objects.create(name=workspace_name, slug=f'{slugify(workspace_name)}-{user.id}')
         Membership.objects.create(workspace=workspace, user=user, role='owner')
     login(request, user)
