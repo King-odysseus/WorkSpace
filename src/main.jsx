@@ -71,6 +71,14 @@ function App() {
       return response.json()
     })
 
+    const refreshCollaboration = () => Promise.all([
+      read(`/api/workspaces/${workspaceId}/chat-messages/`),
+      read(`/api/workspaces/${workspaceId}/follow-ups/`),
+    ]).then(([messageData, followUpData]) => {
+      if (!isCurrent) return
+      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups }))
+    }).catch(error => console.warn('Collaboration data could not be refreshed.', error.message))
+
     Promise.all([
       read('/api/tasks/'),
       read(`/api/workspaces/${workspaceId}/members/`),
@@ -98,9 +106,11 @@ function App() {
         setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations })
       })
       .catch(error => console.warn('Workspace data could not be loaded.', error.message))
+    const refreshTimer = window.setInterval(refreshCollaboration, 15000)
 
     return () => {
       isCurrent = false
+      window.clearInterval(refreshTimer)
     }
   }, [session.user, today])
 
