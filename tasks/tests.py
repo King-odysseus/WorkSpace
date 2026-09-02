@@ -408,6 +408,19 @@ class TaskApiTests(TestCase):
         self.assertEqual(CheckIn.objects.count(), 1)
         self.assertEqual(second.json()['check_in']['blockers'], 'Waiting on approval')
 
+    def test_check_in_records_activity_and_notifies_leaders_of_blockers(self):
+        teammate = User.objects.create_user(username='checkin-member@example.com', email='checkin-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+        response = self.client.post(
+            reverse('check-in-list', args=[self.workspace.id]),
+            data=json.dumps({'date': '2026-09-02', 'completed': 'Reviewed the brief.', 'blockers': 'Waiting on approval.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='check_in_submitted').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_blocker').count(), 1)
+
     def test_chat_message_is_created_for_the_current_member(self):
         response = self.client.post(
             reverse('chat-message-list', args=[self.workspace.id]),

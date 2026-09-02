@@ -911,6 +911,14 @@ def check_in_list(request, workspace_id):
             'blockers': str(payload.get('blockers', '')).strip(),
         },
     )
+    actor_name = request.user.get_full_name() or request.user.email
+    action = 'submitted' if created else 'updated'
+    record_activity(workspace_id, request.user, 'check_in_submitted', f'{actor_name} {action} a daily check-in for {check_in.date.isoformat()}.')
+    if check_in.blockers:
+        leaders = Membership.objects.filter(workspace_id=workspace_id, role__in=['owner', 'manager']).select_related('user')
+        for leader in leaders:
+            if leader.user != request.user:
+                create_notification(workspace_id, leader.user, 'check_in_blocker', f'{actor_name} reported a blocker', check_in.blockers[:120])
     return JsonResponse({'check_in': check_in.as_dict()}, status=201 if created else 200)
 
 
