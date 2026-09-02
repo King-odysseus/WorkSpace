@@ -257,12 +257,12 @@ function App() {
   }
   const markNotificationsRead = async () => {
     const response = await fetch(`/api/workspaces/${activeWorkspaceId}/notifications/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ read_all: true }) })
-    if (!response.ok) return
+    if (!response.ok) return setWorkspaceError('Notifications could not be marked as read.')
     setWorkspaceData(current => ({ ...current, notifications: current.notifications.map(notification => ({ ...notification, read: true })) }))
   }
   const markNotificationRead = async notificationId => {
     const response = await fetch(`/api/workspaces/${activeWorkspaceId}/notifications/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ notification_id: notificationId }) })
-    if (!response.ok) return
+    if (!response.ok) return setWorkspaceError('Notification could not be marked as read.')
     setWorkspaceData(current => ({ ...current, notifications: current.notifications.map(notification => notification.id === notificationId ? { ...notification, read: true } : notification) }))
   }
   const addTask = async event => {
