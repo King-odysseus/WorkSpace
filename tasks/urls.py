@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .auth_views import auth_csrf, auth_login, auth_logout, auth_me
-from .views import calendar_event_list, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, invitation_list, member_list, project_list, task_detail, task_list
+from .views import calendar_event_detail, calendar_event_list, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, invitation_list, member_list, project_detail, project_list, task_detail, task_list
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -12,7 +12,9 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/members/', member_list, name='member-list'),
     path('workspaces/<int:workspace_id>/invitations/', invitation_list, name='invitation-list'),
     path('workspaces/<int:workspace_id>/projects/', project_list, name='project-list'),
+    path('workspaces/<int:workspace_id>/projects/<int:project_id>/', project_detail, name='project-detail'),
     path('workspaces/<int:workspace_id>/calendar-events/', calendar_event_list, name='calendar-event-list'),
+    path('workspaces/<int:workspace_id>/calendar-events/<int:event_id>/', calendar_event_detail, name='calendar-event-detail'),
     path('workspaces/<int:workspace_id>/check-ins/', check_in_list, name='check-in-list'),
     path('workspaces/<int:workspace_id>/chat-messages/', chat_message_list, name='chat-message-list'),
     path('workspaces/<int:workspace_id>/follow-ups/', follow_up_list, name='follow-up-list'),

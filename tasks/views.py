@@ -244,6 +244,47 @@ def project_list(request, workspace_id):
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
+@require_http_methods(['PATCH', 'DELETE'])
+def project_detail(request, workspace_id, project_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
+    if project is None:
+        return JsonResponse({'error': 'Project was not found.'}, status=404)
+    if request.method == 'DELETE':
+        project.delete()
+        return JsonResponse({'deleted': project_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    allowed_fields = {'name', 'description', 'status', 'due_date'}
+    unknown_fields = set(payload) - allowed_fields
+    if unknown_fields:
+        return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
+    if 'name' in payload:
+        name = str(payload['name']).strip()
+        if not name or len(name) > 160:
+            return JsonResponse({'error': 'Project name must be between 1 and 160 characters.'}, status=400)
+        if Project.objects.filter(workspace_id=workspace_id, name=name).exclude(id=project.id).exists():
+            return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
+        project.name = name
+    if 'description' in payload:
+        project.description = str(payload['description']).strip()
+    if 'status' in payload:
+        if payload['status'] not in {choice[0] for choice in Project.STATUS_CHOICES}:
+            return JsonResponse({'error': 'Invalid project status.'}, status=400)
+        project.status = payload['status']
+    if 'due_date' in payload:
+        try:
+            project.due_date = date.fromisoformat(str(payload['due_date'])) if payload['due_date'] else None
+        except ValueError:
+            return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
+    project.save()
+    return JsonResponse({'project': project.as_dict()})
+
+
 def parse_event_datetime(value, field_name):
     parsed = parse_datetime(str(value or ''))
     if parsed is None:
@@ -291,6 +332,53 @@ def calendar_event_list(request, workspace_id):
         created_by=request.user,
     )
     return JsonResponse({'event': event.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def calendar_event_detail(request, workspace_id, event_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    event = CalendarEvent.objects.filter(id=event_id, workspace_id=workspace_id).first()
+    if event is None:
+        return JsonResponse({'error': 'Calendar event was not found.'}, status=404)
+    if request.method == 'DELETE':
+        event.delete()
+        return JsonResponse({'deleted': event_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    allowed_fields = {'title', 'description', 'start_at', 'end_at', 'event_type'}
+    if set(payload) - allowed_fields:
+        return JsonResponse({'error': 'Unsupported calendar event fields.'}, status=400)
+    start_at = event.start_at
+    end_at = event.end_at
+    if 'start_at' in payload:
+        start_at, error = parse_event_datetime(payload['start_at'], 'Start time')
+        if error:
+            return error
+    if 'end_at' in payload:
+        end_at, error = parse_event_datetime(payload['end_at'], 'End time')
+        if error:
+            return error
+    if end_at <= start_at:
+        return JsonResponse({'error': 'End time must be after start time.'}, status=400)
+    if 'title' in payload:
+        title = str(payload['title']).strip()
+        if not title or len(title) > 200:
+            return JsonResponse({'error': 'Event title must be between 1 and 200 characters.'}, status=400)
+        event.title = title
+    if 'description' in payload:
+        event.description = str(payload['description']).strip()
+    if 'event_type' in payload:
+        if payload['event_type'] not in {choice[0] for choice in CalendarEvent.EVENT_TYPES}:
+            return JsonResponse({'error': 'Invalid event type.'}, status=400)
+        event.event_type = payload['event_type']
+    event.start_at = start_at
+    event.end_at = end_at
+    event.save()
+    return JsonResponse({'event': event.as_dict()})
 
 
 @require_http_methods(['GET', 'POST'])

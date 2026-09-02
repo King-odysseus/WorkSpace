@@ -164,6 +164,34 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_owner_can_update_and_delete_a_project(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        update = self.client.patch(
+            reverse('project-detail', args=[self.workspace.id, project.id]),
+            data=json.dumps({'status': 'active', 'due_date': '2026-09-10'}),
+            content_type='application/json',
+        )
+        self.assertEqual(update.status_code, 200)
+        self.assertEqual(update.json()['project']['status'], 'active')
+        delete = self.client.delete(reverse('project-detail', args=[self.workspace.id, project.id]))
+        self.assertEqual(delete.status_code, 200)
+
+    def test_calendar_event_can_be_updated_and_deleted(self):
+        create = self.client.post(
+            reverse('calendar-event-list', args=[self.workspace.id]),
+            data=json.dumps({'title': 'Sync', 'start_at': '2026-09-02T10:00:00Z', 'end_at': '2026-09-02T10:30:00Z'}),
+            content_type='application/json',
+        )
+        event_id = create.json()['event']['id']
+        update = self.client.patch(
+            reverse('calendar-event-detail', args=[self.workspace.id, event_id]),
+            data=json.dumps({'title': 'Updated sync'}),
+            content_type='application/json',
+        )
+        self.assertEqual(update.status_code, 200)
+        self.assertEqual(update.json()['event']['title'], 'Updated sync')
+        self.assertEqual(self.client.delete(reverse('calendar-event-detail', args=[self.workspace.id, event_id])).status_code, 200)
+
 
 class AuthenticationApiTests(TestCase):
     def test_signup_creates_user_workspace_and_session(self):
