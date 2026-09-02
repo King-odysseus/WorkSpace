@@ -298,6 +298,8 @@ html[data-theme='light'] .theme-toggle {
 .invite-dot { width: 8px; height: 8px; margin: 0 12px; border-radius: 50%; background: #C49A6C; }
 .pending-heading { margin-top: 28px !important; }
 .task-status-select { border: 0; cursor: pointer; appearance: auto; }
+.task-bucket-select { max-width: 120px; border: 1px solid var(--workspace-border); border-radius: 6px; padding: 3px 5px; background: var(--workspace-surface); color: var(--workspace-muted); font-size: 9px; cursor: pointer; }
+.task-bucket-select:focus { outline: 2px solid var(--brand-accent); outline-offset: 1px; }
 .task-status-select:focus { outline: 2px solid #C49A6C; outline-offset: 1px; }
 .task-more-button { display: grid; place-items: center; padding: 3px; border: 0; background: transparent; color: #9DA8B5; cursor: pointer; }
 .task-more-button:hover { color: #DD6C3C; }
