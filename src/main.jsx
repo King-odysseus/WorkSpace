@@ -469,6 +469,18 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [savedViews, setSavedViews] = useState(data.savedViews?.length ? data.savedViews : () => JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]'))
   const [form, setForm] = useState({ title: '', name: '', description: '', start_at: '', end_at: '', event_type: 'meeting', reminder_minutes: 15, completed: '', next_steps: '', blockers: '', message: '', channel: 'general', note: '', due_date: '', assigned_to: '', task_id: '', date: today, email: '', role: 'member' })
+  useEffect(() => {
+    const closeOverlays = event => {
+      if (event.key !== 'Escape') return
+      setComposerOpen(false)
+      setReplyTo(null)
+      setSelectedProject(null)
+      setSelectedFollowUp(null)
+      setSelectedEvent(null)
+    }
+    window.addEventListener('keydown', closeOverlays)
+    return () => window.removeEventListener('keydown', closeOverlays)
+  }, [])
   useEffect(() => setLocalData(current => ({ ...data, checkIns: current.checkIns })), [data])
   useEffect(() => setSavedViews(data.savedViews?.length ? data.savedViews : JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]')), [data.savedViews, workspaceId])
 
