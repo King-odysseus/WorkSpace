@@ -275,6 +275,17 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName }) {
     const responseData = await response.json()
     setLocalData(current => ({ ...current, followUps: current.followUps.map(item => item.id === followUp.id ? responseData.follow_up : item) }))
   }
+  const deleteCalendarEvent = async eventId => {
+    const response = await fetch(`/api/workspaces/${workspaceId}/calendar-events/${eventId}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+    if (!response.ok) return
+    setLocalData(current => ({ ...current, events: current.events.filter(event => event.id !== eventId) }))
+  }
+  const updateProjectStatus = async (project, status) => {
+    const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status }) })
+    if (!response.ok) return
+    const responseData = await response.json()
+    setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === project.id ? responseData.project : item) }))
+  }
   const title = active === 'My tasks' ? 'My tasks' : active
   const subtitle = {
     'My tasks': 'Your personal work, deadlines, and follow-ups.',
@@ -287,7 +298,7 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName }) {
   }[active]
 
   if (active === 'Calendar') {
-    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add event" onAction={() => openComposer('calendar')} /><div className="calendar-layout"><div className="calendar-week"><div className="calendar-toolbar"><strong>September 2026</strong><span>Today</span></div>{['Monday 31', 'Tuesday 1', 'Wednesday 2', 'Thursday 3', 'Friday 4'].map(day => <div className="calendar-day" key={day}><strong>{day}</strong><div className="calendar-slot">{localData.events.filter(event => event.start_at.startsWith(today) && day.startsWith('Wednesday')).map(event => <div className="event-pill" key={event.id}><span>{event.start_at.slice(11, 16)}</span>{event.title}</div>)}</div></div>)}</div><aside className="workspace-side-card"><h3>Upcoming</h3>{localData.events.length ? localData.events.map(event => <div className="compact-row" key={event.id}><CalendarDays size={15} /><div><strong>{event.title}</strong><span>{event.start_at.replace('T', ' ').slice(0, 16)}</span></div></div>) : <EmptyState text="No events scheduled yet." />}</aside></div>{composerOpen && <WorkspaceComposer type="calendar" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add event" onAction={() => openComposer('calendar')} /><div className="calendar-layout"><div className="calendar-week"><div className="calendar-toolbar"><strong>September 2026</strong><span>Today</span></div>{['Monday 31', 'Tuesday 1', 'Wednesday 2', 'Thursday 3', 'Friday 4'].map(day => <div className="calendar-day" key={day}><strong>{day}</strong><div className="calendar-slot">{localData.events.filter(event => event.start_at.startsWith(today) && day.startsWith('Wednesday')).map(event => <div className="event-pill" key={event.id}><span>{event.start_at.slice(11, 16)}</span>{event.title}</div>)}</div></div>)}</div><aside className="workspace-side-card"><h3>Upcoming</h3>{localData.events.length ? localData.events.map(event => <div className="compact-row" key={event.id}><CalendarDays size={15} /><div><strong>{event.title}</strong><span>{event.start_at.replace('T', ' ').slice(0, 16)}</span></div><button className="inline-delete" onClick={() => deleteCalendarEvent(event.id)} aria-label={`Delete ${event.title}`}><X size={14} /></button></div>) : <EmptyState text="No events scheduled yet." />}</aside></div>{composerOpen && <WorkspaceComposer type="calendar" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
   }
 
   if (active === 'Check-ins') {
@@ -295,7 +306,7 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName }) {
   }
 
   if (active === 'Projects') {
-    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="New project" onAction={() => openComposer('project')} /><div className="project-grid">{localData.projects.length ? localData.projects.map(project => <article className="workspace-card project-card" key={project.id}><div className="project-card-top"><span className="project-icon"><Target size={17} /></span><span className={`project-status ${project.status}`}>{project.status}</span></div><h3>{project.name}</h3><p>{project.description || 'No project description yet.'}</p><div className="project-footer"><span>Workspace project</span><ArrowUpRight size={15} /></div></article>) : <EmptyState text="No projects have been created yet." />}</div>{composerOpen && <WorkspaceComposer type="project" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="New project" onAction={() => openComposer('project')} /><div className="project-grid">{localData.projects.length ? localData.projects.map(project => <article className="workspace-card project-card" key={project.id}><div className="project-card-top"><span className="project-icon"><Target size={17} /></span><select className={`project-status ${project.status}`} value={project.status} onChange={event => updateProjectStatus(project, event.target.value)} aria-label={`Change status for ${project.name}`}><option value="planning">Planning</option><option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option></select></div><h3>{project.name}</h3><p>{project.description || 'No project description yet.'}</p><div className="project-footer"><span>Workspace project</span><ArrowUpRight size={15} /></div></article>) : <EmptyState text="No projects have been created yet." />}</div>{composerOpen && <WorkspaceComposer type="project" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
   }
 
   if (active === 'Chat') {
