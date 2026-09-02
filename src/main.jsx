@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  AlertCircle, ArrowUpRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
+  AlertCircle, ArrowUpRight, BarChart3, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Filter, Hash, LayoutDashboard, LayoutGrid, MessageSquare, MoreHorizontal,
   PanelLeftClose, PanelLeftOpen,
   ChevronLeft, ChevronRight,
@@ -62,7 +62,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
   const [session, setSession] = useState({ loading: true, user: null, error: '' })
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
-  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], buckets: [] })
+  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], buckets: [], reports: null })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -103,9 +103,10 @@ function App() {
       read(`/api/workspaces/${workspaceId}/notifications/`),
       read(`/api/workspaces/${workspaceId}/activity/`),
       read(`/api/workspaces/${workspaceId}/plan-buckets/`),
-    ]).then(([messageData, followUpData, notificationData, activityData, bucketData]) => {
+      read(`/api/workspaces/${workspaceId}/reports/summary/`),
+    ]).then(([messageData, followUpData, notificationData, activityData, bucketData, reportData]) => {
       if (!isCurrent) return
-      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets }))
+      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, reports: reportData.summary }))
     }).catch(error => console.warn('Collaboration data could not be refreshed.', error.message))
 
     Promise.all([
@@ -120,8 +121,9 @@ function App() {
       read(`/api/workspaces/${workspaceId}/notifications/`),
       read(`/api/workspaces/${workspaceId}/activity/`),
       read(`/api/workspaces/${workspaceId}/plan-buckets/`),
+      read(`/api/workspaces/${workspaceId}/reports/summary/`),
     ])
-      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData]) => {
+      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData, reportData]) => {
         if (!isCurrent) return
         setTasks(taskData.tasks.map(task => ({
           id: task.id,
@@ -136,7 +138,7 @@ function App() {
           bucket: task.bucket || 'Backlog',
           labels: task.labels || [],
         })))
-        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets })
+        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, reports: reportData.summary })
       })
       .catch(error => console.warn('Workspace data could not be loaded.', error.message))
     const refreshTimer = window.setInterval(refreshCollaboration, 15000)
@@ -240,7 +242,7 @@ function App() {
 
   const navItems = [
     { label: 'Today', icon: LayoutDashboard }, { label: 'My tasks', icon: CheckCircle2 },
-    { label: 'Team board', icon: Users }, { label: 'Planner', icon: LayoutGrid }, { label: 'Calendar', icon: CalendarDays },
+    { label: 'Team board', icon: Users }, { label: 'Planner', icon: LayoutGrid }, { label: 'Calendar', icon: CalendarDays }, { label: 'Reports', icon: BarChart3 },
     { label: 'Projects', icon: Target }, { label: 'Chat', icon: MessageSquare },
   ]
   const workspaceId = activeWorkspaceId
@@ -402,6 +404,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, workspaceId, currentU
     'Team board': 'See ownership and progress across the workspace.',
     Planner: 'Plan work visually across buckets, owners, and priorities.',
     Calendar: 'Meetings, focus time, and deadlines in one view.',
+    Reports: 'Understand progress, workload, and team health.',
     Projects: 'Keep initiatives, milestones, and ownership visible.',
     Chat: 'Keep decisions and team conversations close to the work.',
     'Follow-up': 'A clear queue for work that needs a response.',
@@ -430,6 +433,12 @@ function WorkspaceView({ active, data, tasks, searchQuery, workspaceId, currentU
       if (view) setPlannerFilter(view.filter)
     }
     return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{filteredTasks.length} of {tasks.length} tasks shown</span><div className="planner-filter-controls"><select value={plannerFilter} onChange={event => setPlannerFilter(event.target.value)} aria-label="Filter Planner tasks"><option value="all">All tasks</option><option value="mine">My tasks</option><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option>{buckets.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}{availableLabels.map(label => <option key={label} value={label}>Label: {label}</option>)}</select><select defaultValue="" onChange={applyView} aria-label="Load saved Planner view"><option value="">Saved views</option>{savedViews.map(view => <option key={view.name} value={view.name}>{view.name}</option>)}</select><form className="bucket-create-form" onSubmit={saveView}><input value={savedViewName} onChange={event => setSavedViewName(event.target.value)} placeholder="Save view as" aria-label="Saved view name" /><button className="secondary-button">Save</button></form><form className="bucket-create-form" onSubmit={createBucket}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket" aria-label="New bucket name" /><button className="secondary-button">Add bucket</button></form></div></div>{bucketError && <p className="auth-error">{bucketError}</p>}<div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.id} onDragOver={event => event.preventDefault()} onDrop={event => { const taskId = Number(event.dataTransfer.getData('text/plain')); if (taskId) onBucketChange?.(taskId, bucket.name) }}><div className="planner-column-heading"><strong>{bucket.name}</strong><span>{filteredTasks.filter(task => task.bucket === bucket.name).length}</span></div><div className="planner-column-tasks">{filteredTasks.filter(task => task.bucket === bucket.name).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} onOpenTask={onOpenTask} draggable />)}{!filteredTasks.some(task => task.bucket === bucket.name) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
+  }
+
+  if (active === 'Reports') {
+    const report = data.reports || { total_tasks: 0, overdue_tasks: 0, blocked_tasks: 0, check_ins_today: 0, members: 0, status_counts: {}, workload: [] }
+    const statusLabels = { todo: 'To do', in_progress: 'In progress', review: 'Review', blocked: 'Blocked', done: 'Done' }
+    return <section className="workspace-view"><WorkspaceViewHeading title="Reports" subtitle={subtitle} /><div className="report-metrics"><article className="workspace-card report-stat"><span>Total tasks</span><strong>{report.total_tasks}</strong></article><article className="workspace-card report-stat"><span>Overdue</span><strong>{report.overdue_tasks}</strong></article><article className="workspace-card report-stat"><span>Blocked</span><strong>{report.blocked_tasks}</strong></article><article className="workspace-card report-stat"><span>Check-ins today</span><strong>{report.check_ins_today} of {report.members}</strong></article></div><div className="report-grid"><section className="workspace-card report-panel"><div className="drawer-section-heading"><h3>Task status</h3><span>{report.total_tasks} total</span></div>{Object.entries(statusLabels).map(([key, label]) => <div className="report-bar-row" key={key}><span>{label}</span><div><i style={{ width: `${report.total_tasks ? Math.round(((report.status_counts[key] || 0) / report.total_tasks) * 100) : 0}%` }} /></div><strong>{report.status_counts[key] || 0}</strong></div>)}</section><section className="workspace-card report-panel"><div className="drawer-section-heading"><h3>Member workload</h3><span>{report.members} members</span></div>{report.workload.length ? report.workload.map(member => <div className="report-member-row" key={member.user_id}><span>{member.user_name}</span><strong>{member.open} open</strong><em>{member.blocked} blocked</em></div>) : <EmptyState text="No team workload yet." />}</section></div></section>
   }
 
   if (active === 'Calendar') {

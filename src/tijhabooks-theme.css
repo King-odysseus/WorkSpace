@@ -397,6 +397,24 @@ html[data-theme='dark'] .notification-panel { border-color: #303078; background:
 html[data-theme='dark'] .notification-panel-heading, html[data-theme='dark'] .notification-row strong { color: #FFFFFF; }
 html[data-theme='dark'] .notification-panel-heading { border-color: #303078; }
 html[data-theme='dark'] .notification-row { border-color: #303078; color: #B9BDD8; }
+.report-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.report-stat { display: grid; gap: 7px; padding: 18px; }
+.report-stat span, .report-member-row em { color: #6B7280; font-size: 11px; font-style: normal; }
+.report-stat strong { color: #0B0B45; font-size: 22px; }
+.report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.report-panel { padding: 20px; }
+.report-bar-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 24px; align-items: center; gap: 10px; margin-top: 15px; color: #4B5563; font-size: 11px; }
+.report-bar-row > div { height: 8px; overflow: hidden; border-radius: 8px; background: #EEF0F3; }
+.report-bar-row i { display: block; height: 100%; border-radius: inherit; background: #0A9E87; }
+.report-member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 12px 0; border-bottom: 1px solid #EEF0F3; color: #374151; font-size: 12px; }
+.report-member-row strong { color: #0B0B45; font-size: 12px; }
+.report-member-row em { color: #E36B43; }
+html[data-theme='dark'] .report-stat strong, html[data-theme='dark'] .report-member-row strong { color: #FFFFFF; }
+html[data-theme='dark'] .report-stat span, html[data-theme='dark'] .report-member-row, html[data-theme='dark'] .report-member-row em { color: #B9BDD8; }
+html[data-theme='dark'] .report-bar-row { color: #D8DBEA; }
+html[data-theme='dark'] .report-bar-row > div, html[data-theme='dark'] .report-member-row { border-color: #303078; background-color: #242460; }
+@media (max-width: 800px) { .report-metrics, .report-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .report-metrics, .report-grid { grid-template-columns: 1fr; } }
 .calendar-side-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .calendar-side-heading h3 { margin: 0; }
 .calendar-export { color: #1D4ED8; font-size: 11px; font-weight: 700; text-decoration: none; }

@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone as datetime_timezone
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.db import IntegrityError
+from django.db.models import Count
 from django.contrib.auth.models import User
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -111,6 +112,38 @@ def require_workspace_leader(request, workspace_id):
 
 def health(request):
     return JsonResponse({'status': 'ok', 'service': 'workspace-api'})
+
+
+@require_http_methods(['GET'])
+def report_summary(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    tasks = Task.objects.filter(workspace_id=workspace_id)
+    status_counts = {item['status']: item['count'] for item in tasks.values('status').annotate(count=Count('id'))}
+    today = timezone.localdate()
+    overdue_count = tasks.filter(due_date__lt=today).exclude(status='done').count()
+    workload = []
+    for membership in Membership.objects.filter(workspace_id=workspace_id).select_related('user'):
+        assigned = tasks.filter(assignee=membership.user)
+        workload.append({
+            'user_id': membership.user_id,
+            'user_name': membership.user.get_full_name() or membership.user.email,
+            'total': assigned.count(),
+            'open': assigned.exclude(status='done').count(),
+            'blocked': assigned.filter(status='blocked').count(),
+        })
+    check_in_total = CheckIn.objects.filter(workspace_id=workspace_id, date=today).count()
+    member_total = Membership.objects.filter(workspace_id=workspace_id).count()
+    return JsonResponse({'summary': {
+        'total_tasks': tasks.count(),
+        'status_counts': status_counts,
+        'overdue_tasks': overdue_count,
+        'blocked_tasks': status_counts.get('blocked', 0),
+        'check_ins_today': check_in_total,
+        'members': member_total,
+        'workload': workload,
+    }})
 
 
 @require_http_methods(['GET', 'POST'])

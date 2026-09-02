@@ -218,6 +218,17 @@ class TaskApiTests(TestCase):
         self.assertEqual(ics_response['Content-Type'], 'text/calendar; charset=utf-8')
         self.assertIn('SUMMARY:Planning', ics_response.content.decode())
 
+    def test_report_summary_returns_workspace_metrics(self):
+        Task.objects.create(workspace=self.workspace, title='Blocked work', status='blocked', assignee=self.user)
+        Task.objects.create(workspace=self.workspace, title='Finished work', status='done', assignee=self.user)
+        response = self.client.get(reverse('report-summary', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        summary = response.json()['summary']
+        self.assertEqual(summary['total_tasks'], 2)
+        self.assertEqual(summary['blocked_tasks'], 1)
+        self.assertEqual(summary['status_counts']['done'], 1)
+        self.assertEqual(summary['workload'][0]['open'], 1)
+
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
         other_workspace = Workspace.objects.create(name='Other', slug='other')
