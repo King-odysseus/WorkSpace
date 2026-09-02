@@ -27,6 +27,10 @@ function taskDueLabel(dueDate, today) {
   return dueDate < today ? 'Overdue' : dueDate
 }
 
+function taskSearchText(task) {
+  return [task.title, task.description, task.member, task.tag, task.bucket, ...(task.labels || [])].filter(Boolean).join(' ').toLowerCase()
+}
+
 function formatCalendarDate(value, options) {
   return new Intl.DateTimeFormat(undefined, options).format(value)
 }
@@ -206,7 +210,7 @@ function App() {
     return tasks.filter(task => {
       const isDailyBoardTask = !task.due_date || task.due_date <= today
       const matchesStatus = selectedFilter === 'All work' || task.status === selectedFilter
-      const matchesSearch = !normalizedQuery || [task.title, task.member, task.tag].some(value => value.toLowerCase().includes(normalizedQuery))
+      const matchesSearch = !normalizedQuery || taskSearchText(task).includes(normalizedQuery)
       return isDailyBoardTask && matchesStatus && matchesSearch
     })
   }, [tasks, selectedFilter, searchQuery, today])
@@ -551,7 +555,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
     const buckets = data.buckets.length ? data.buckets : [{ id: 'backlog', name: 'Backlog' }]
     const availableLabels = [...new Set(tasks.flatMap(task => task.labels || []))]
     const filteredTasks = tasks.filter(task => {
-      const matchesSearch = !searchQuery || `${task.title} ${task.member} ${task.tag}`.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesSearch = !searchQuery || taskSearchText(task).includes(searchQuery.toLowerCase())
       const matchesFilter = plannerFilter === 'all' || task.status === plannerFilter || task.bucket === plannerFilter || (plannerFilter === 'mine' && task.member === currentUserName) || (task.labels || []).includes(plannerFilter)
       return matchesSearch && matchesFilter
     })
