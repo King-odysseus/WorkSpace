@@ -275,7 +275,7 @@ function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <div className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></div>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
       <div className="page-content">
-        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
+        {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>{completionPercent}%</strong></div><em><small>{completedTaskCount} of {tasks.length} tasks complete</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>{attentionTaskCount} tasks</strong></div><em className={attentionTaskCount ? 'negative' : 'positive'}>{attentionTaskCount ? 'Blocked, review, or overdue' : 'Nothing urgent'}</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus tasks</span><strong>{myTasks.length}</strong></div><em><small>{myCompletedTaskCount} complete</small></em></div></section>
@@ -291,7 +291,7 @@ function App() {
   </div>
 }
 
-function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canManageMembers, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask }) {
+function WorkspaceView({ active, data, tasks, searchQuery, workspaceId, currentUserName, canManageMembers, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask }) {
   const today = new Date().toISOString().slice(0, 10)
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
@@ -302,8 +302,12 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
   const [submitting, setSubmitting] = useState(false)
   const [newBucketName, setNewBucketName] = useState('')
   const [bucketError, setBucketError] = useState('')
+  const [plannerFilter, setPlannerFilter] = useState('all')
+  const [savedViewName, setSavedViewName] = useState('')
+  const [savedViews, setSavedViews] = useState(() => JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]'))
   const [form, setForm] = useState({ title: '', name: '', description: '', start_at: '', end_at: '', event_type: 'meeting', completed: '', next_steps: '', blockers: '', message: '', note: '', due_date: '', date: today, email: '', role: 'member' })
   useEffect(() => setLocalData(data), [data])
+  useEffect(() => setSavedViews(JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]')), [workspaceId])
 
   const openComposer = type => {
     setComposerType(type)
@@ -402,7 +406,25 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
 
   if (active === 'Planner') {
     const buckets = data.buckets.length ? data.buckets : [{ id: 'backlog', name: 'Backlog' }]
-    return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{tasks.length} tasks in this workspace</span><form className="bucket-create-form" onSubmit={createBucket}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket" aria-label="New bucket name" /><button className="secondary-button">Add bucket</button></form></div>{bucketError && <p className="auth-error">{bucketError}</p>}<div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.id} onDragOver={event => event.preventDefault()} onDrop={event => { const taskId = Number(event.dataTransfer.getData('text/plain')); if (taskId) onBucketChange?.(taskId, bucket.name) }}><div className="planner-column-heading"><strong>{bucket.name}</strong><span>{tasks.filter(task => task.bucket === bucket.name).length}</span></div><div className="planner-column-tasks">{tasks.filter(task => task.bucket === bucket.name).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} onOpenTask={onOpenTask} draggable />)}{!tasks.some(task => task.bucket === bucket.name) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
+    const filteredTasks = tasks.filter(task => {
+      const matchesSearch = !searchQuery || `${task.title} ${task.member} ${task.tag}`.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesFilter = plannerFilter === 'all' || task.status === plannerFilter || task.bucket === plannerFilter || (plannerFilter === 'mine' && task.member === currentUserName)
+      return matchesSearch && matchesFilter
+    })
+    const saveView = event => {
+      event.preventDefault()
+      const name = savedViewName.trim()
+      if (!name) return
+      const nextViews = [...savedViews.filter(view => view.name !== name), { name, filter: plannerFilter }]
+      setSavedViews(nextViews)
+      localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
+      setSavedViewName('')
+    }
+    const applyView = event => {
+      const view = savedViews.find(item => item.name === event.target.value)
+      if (view) setPlannerFilter(view.filter)
+    }
+    return <section className="workspace-view"><WorkspaceViewHeading title="Planner" subtitle={subtitle} action="Add task" onAction={onAddTask} /><div className="planner-toolbar"><span>{filteredTasks.length} of {tasks.length} tasks shown</span><div className="planner-filter-controls"><select value={plannerFilter} onChange={event => setPlannerFilter(event.target.value)} aria-label="Filter Planner tasks"><option value="all">All tasks</option><option value="mine">My tasks</option><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option>{buckets.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</select><select defaultValue="" onChange={applyView} aria-label="Load saved Planner view"><option value="">Saved views</option>{savedViews.map(view => <option key={view.name} value={view.name}>{view.name}</option>)}</select><form className="bucket-create-form" onSubmit={saveView}><input value={savedViewName} onChange={event => setSavedViewName(event.target.value)} placeholder="Save view as" aria-label="Saved view name" /><button className="secondary-button">Save</button></form><form className="bucket-create-form" onSubmit={createBucket}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket" aria-label="New bucket name" /><button className="secondary-button">Add bucket</button></form></div></div>{bucketError && <p className="auth-error">{bucketError}</p>}<div className="planner-board">{buckets.map(bucket => <div className="planner-column" key={bucket.id} onDragOver={event => event.preventDefault()} onDrop={event => { const taskId = Number(event.dataTransfer.getData('text/plain')); if (taskId) onBucketChange?.(taskId, bucket.name) }}><div className="planner-column-heading"><strong>{bucket.name}</strong><span>{filteredTasks.filter(task => task.bucket === bucket.name).length}</span></div><div className="planner-column-tasks">{filteredTasks.filter(task => task.bucket === bucket.name).map(task => <TaskCard key={task.id} task={task} onComplete={onComplete} onStatusChange={onStatusChange} onDelete={onDelete} onOpenTask={onOpenTask} draggable />)}{!filteredTasks.some(task => task.bucket === bucket.name) && <EmptyState text="No tasks here yet." />}</div></div>)}</div></section>
   }
 
   if (active === 'Calendar') {

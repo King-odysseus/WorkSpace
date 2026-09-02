@@ -400,9 +400,12 @@ html[data-theme='dark'] .notification-row { border-color: #303078; color: #B9BDD
 .bucket-create-form { display: flex; gap: 8px; align-items: center; }
 .bucket-create-form input { width: 150px; padding: 8px 10px; border: 1px solid #E2E2E6; border-radius: 9px; background: #FFFFFF; color: #374151; font: 500 11px 'DM Sans'; }
 .bucket-create-form .secondary-button { width: auto; padding: 8px 11px; }
+.planner-filter-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.planner-filter-controls > select { min-width: 110px; padding: 8px 10px; border: 1px solid #E2E2E6; border-radius: 9px; background: #FFFFFF; color: #374151; font: 600 11px 'DM Sans'; }
 .planner-column .task-card[draggable='true'] { cursor: grab; }
 .planner-column .task-card[draggable='true']:active { cursor: grabbing; }
 html[data-theme='dark'] .bucket-create-form input { border-color: #303078; background: #15155C; color: #FFFFFF; }
+html[data-theme='dark'] .planner-filter-controls > select { border-color: #303078; background: #15155C; color: #FFFFFF; }
 @media (max-width: 600px) { .bucket-create-form { width: 100%; } .bucket-create-form input { flex: 1; } }
 .sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; width: 28px; height: 28px; border: 1px solid #303078; border-radius: 9px; background: transparent; color: #B9BDD8; cursor: pointer; }
 .sidebar-collapsed .sidebar { width: 78px; padding-inline: 10px; }
