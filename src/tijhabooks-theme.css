@@ -361,3 +361,28 @@ html[data-theme='dark'] .planner-column { border-color: #303078; background: #10
 html[data-theme='dark'] .planner-column-heading { color: #FFFFFF; }
 html[data-theme='dark'] .planner-column-heading span { background: #242460; color: #B9BDD8; }
 @media (max-width: 900px) { .planner-board { grid-template-columns: repeat(5, 260px); } .planner-toolbar { align-items: flex-start; flex-direction: column; gap: 8px; } }
+.task-title-button { padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; font-weight: 700; text-align: left; }
+.task-title-button:hover { color: #1D4ED8; }
+.drawer-backdrop { position: fixed; inset: 0; z-index: 30; display: flex; justify-content: flex-end; background: #02051f88; }
+.task-drawer { width: min(460px, 100%); height: 100%; overflow-y: auto; padding: 28px; background: #FFFFFF; box-shadow: -10px 0 30px #0B0B4526; }
+.drawer-heading, .drawer-section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.drawer-heading h2 { margin: 0 0 8px; color: #0B0B45; font-size: 22px; }
+.drawer-heading span, .drawer-muted { color: #6B7280; font-size: 12px; }
+.drawer-section { margin-top: 28px; }
+.drawer-section-heading { align-items: center; margin-bottom: 12px; }
+.drawer-section-heading h3 { margin: 0; color: #0B0B45; font-size: 15px; }
+.drawer-section-heading span { color: #6B7280; font-size: 12px; }
+.subtask-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; color: #374151; font-size: 13px; }
+.subtask-row .completed { color: #9CA3AF; text-decoration: line-through; }
+.inline-form { display: flex; gap: 8px; margin-top: 12px; }
+.inline-form input { min-width: 0; flex: 1; }
+.drawer-comment { padding: 12px 0; border-bottom: 1px solid #EEF0F3; }
+.drawer-comment strong { color: #0B0B45; font-size: 12px; }
+.drawer-comment p { margin: 5px 0 0; color: #4B5563; font-size: 13px; line-height: 1.5; }
+.drawer-comment-form { display: grid; gap: 10px; margin-top: 14px; }
+.drawer-comment-form textarea { min-height: 90px; resize: vertical; }
+html[data-theme='dark'] .task-drawer { background: #10104B; }
+html[data-theme='dark'] .drawer-heading h2, html[data-theme='dark'] .drawer-section-heading h3, html[data-theme='dark'] .drawer-comment strong { color: #FFFFFF; }
+html[data-theme='dark'] .drawer-heading span, html[data-theme='dark'] .drawer-muted, html[data-theme='dark'] .drawer-section-heading span { color: #B9BDD8; }
+html[data-theme='dark'] .subtask-row, html[data-theme='dark'] .drawer-comment p { color: #D8DBEA; }
+html[data-theme='dark'] .drawer-comment { border-color: #303078; }

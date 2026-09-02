@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace, WorkspaceInvitation
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
 
 
 def user_workspace_ids(user):
@@ -132,7 +132,7 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'status', 'due_date', 'assignee_id', 'project_id'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'assignee_id', 'project_id'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -148,6 +148,12 @@ def task_detail(request, task_id):
         if payload['status'] not in valid_statuses:
             return JsonResponse({'error': 'Invalid task status.'}, status=400)
         task.status = payload['status']
+
+    if 'bucket' in payload:
+        bucket = str(payload['bucket']).strip()
+        if not bucket or len(bucket) > 80:
+            return JsonResponse({'error': 'Bucket must be between 1 and 80 characters.'}, status=400)
+        task.bucket = bucket
 
     if 'due_date' in payload and payload['due_date']:
         try:
@@ -171,6 +177,85 @@ def task_detail(request, task_id):
 
     task.save()
     return JsonResponse({'task': task.as_dict()})
+
+
+@require_http_methods(['GET', 'POST'])
+def task_comment_list(request, task_id):
+    auth_error = require_authenticated(request)
+    if auth_error:
+        return auth_error
+    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    if task is None:
+        return JsonResponse({'error': 'Task was not found.'}, status=404)
+    if request.method == 'GET':
+        comments = TaskComment.objects.filter(task=task).select_related('author')
+        return JsonResponse({'comments': [comment.as_dict() for comment in comments]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    body = str(payload.get('body', '')).strip()
+    if not body or len(body) > 4000:
+        return JsonResponse({'error': 'Comment must be between 1 and 4000 characters.'}, status=400)
+    comment = TaskComment.objects.create(task=task, author=request.user, body=body)
+    return JsonResponse({'comment': comment.as_dict()}, status=201)
+
+
+@require_http_methods(['GET', 'POST'])
+def task_subtask_list(request, task_id):
+    auth_error = require_authenticated(request)
+    if auth_error:
+        return auth_error
+    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    if task is None:
+        return JsonResponse({'error': 'Task was not found.'}, status=404)
+    if request.method == 'GET':
+        subtasks = TaskSubtask.objects.filter(task=task).select_related('assignee')
+        return JsonResponse({'subtasks': [subtask.as_dict() for subtask in subtasks]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    title = str(payload.get('title', '')).strip()
+    if not title or len(title) > 200:
+        return JsonResponse({'error': 'Subtask title must be between 1 and 200 characters.'}, status=400)
+    assignee = None
+    if payload.get('assignee_id'):
+        assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=task.workspace_id).first()
+        if assignee is None:
+            return JsonResponse({'error': 'Subtask assignee was not found in this workspace.'}, status=404)
+    subtask = TaskSubtask.objects.create(task=task, title=title, assignee=assignee)
+    return JsonResponse({'subtask': subtask.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def task_subtask_detail(request, subtask_id):
+    auth_error = require_authenticated(request)
+    if auth_error:
+        return auth_error
+    subtask = TaskSubtask.objects.filter(id=subtask_id, task__workspace_id__in=user_workspace_ids(request.user)).first()
+    if subtask is None:
+        return JsonResponse({'error': 'Subtask was not found.'}, status=404)
+    if request.method == 'DELETE':
+        subtask.delete()
+        return JsonResponse({'deleted': subtask_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) - {'title', 'completed'}:
+        return JsonResponse({'error': 'Only title and completed can be updated.'}, status=400)
+    if 'title' in payload:
+        title = str(payload['title']).strip()
+        if not title or len(title) > 200:
+            return JsonResponse({'error': 'Subtask title must be between 1 and 200 characters.'}, status=400)
+        subtask.title = title
+    if 'completed' in payload:
+        if not isinstance(payload['completed'], bool):
+            return JsonResponse({'error': 'Completed must be true or false.'}, status=400)
+        subtask.completed = payload['completed']
+    subtask.save()
+    return JsonResponse({'subtask': subtask.as_dict()})
 
 
 @require_http_methods(['GET'])

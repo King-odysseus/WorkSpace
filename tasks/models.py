@@ -225,6 +225,7 @@ class Task(models.Model):
     description = models.TextField(blank=True)
     assignee_name = models.CharField(max_length=120, blank=True)
     project = models.CharField(max_length=120, blank=True)
+    bucket = models.CharField(max_length=80, default='Backlog')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -243,7 +244,50 @@ class Task(models.Model):
             'description': self.description,
             'assignee_name': self.assignee_name,
             'project': self.project,
+            'bucket': self.bucket,
             'project_id': self.project_ref_id,
             'status': self.status,
             'due_date': self.due_date.isoformat() if self.due_date else None,
+        }
+
+
+class TaskComment(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task_comments')
+    body = models.TextField(max_length=4000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'task_id': self.task_id,
+            'author_id': self.author_id,
+            'author_name': self.author.get_full_name() or self.author.email,
+            'body': self.body,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class TaskSubtask(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='subtasks')
+    title = models.CharField(max_length=200)
+    completed = models.BooleanField(default=False)
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_subtasks')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['completed', 'created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'task_id': self.task_id,
+            'title': self.title,
+            'completed': self.completed,
+            'assignee_id': self.assignee_id,
+            'assignee_name': self.assignee.get_full_name() if self.assignee else None,
         }

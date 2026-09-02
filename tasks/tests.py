@@ -73,6 +73,47 @@ class TaskApiTests(TestCase):
         response = self.client.get(reverse('task-list'))
         self.assertEqual(response.status_code, 401)
 
+    def test_task_comments_and_subtasks_are_scoped_and_editable(self):
+        task_response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Prepare launch brief', 'bucket': 'Planning'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        task_id = task_response.json()['task']['id']
+
+        comment_response = self.client.post(
+            reverse('task-comment-list', args=[task_id]),
+            data=json.dumps({'body': 'Please include the latest customer notes.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(comment_response.status_code, 201)
+        self.assertEqual(self.client.get(reverse('task-comment-list', args=[task_id])).json()['comments'][0]['body'], 'Please include the latest customer notes.')
+
+        subtask_response = self.client.post(
+            reverse('task-subtask-list', args=[task_id]),
+            data=json.dumps({'title': 'Add customer notes'}),
+            content_type='application/json',
+        )
+        self.assertEqual(subtask_response.status_code, 201)
+        subtask_id = subtask_response.json()['subtask']['id']
+        update_response = self.client.patch(
+            reverse('task-subtask-detail', args=[subtask_id]),
+            data=json.dumps({'completed': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertTrue(update_response.json()['subtask']['completed'])
+
+    def test_task_detail_rejects_invalid_bucket(self):
+        task = Task.objects.create(workspace=self.workspace, title='Task')
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'bucket': ''}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
         other_workspace = Workspace.objects.create(name='Other', slug='other')
