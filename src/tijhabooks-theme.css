@@ -1,8 +1,8 @@
 /* Shared TijhaBooks brand tokens keep WorkSpace visually consistent with the wider Tijha product family. */
 :root {
-  --navy: #0B0B45;
-  --navy2: #15155C;
-  --brand-navy-soft: #1C1C6E;
+  --navy: #071A2E;
+  --navy2: #0D2945;
+  --brand-navy-soft: #123A5B;
   --brand-accent: #C49A6C;
   --brand-accent-hover: #B0895A;
   --line: #E2E2E6;
@@ -464,8 +464,8 @@ html[data-theme='dark'] .planner-filter-controls > select { border-color: #30307
 @media (max-width: 750px) { .sidebar, .sidebar-collapsed .sidebar { display: none; } .mobile-pill-nav { position: fixed; left: 50%; bottom: 16px; z-index: 25; display: flex; max-width: calc(100vw - 24px); overflow-x: auto; transform: translateX(-50%); gap: 4px; padding: 5px; border: 1px solid #303078; border-radius: 18px; background: #10104BEE; box-shadow: 0 12px 28px #02051f40; scrollbar-width: none; } .mobile-pill-nav::-webkit-scrollbar { display: none; } .mobile-pill-nav button { flex: 0 0 40px; display: grid; place-items: center; width: 40px; height: 36px; border: 0; border-radius: 13px; background: transparent; color: #B9BDD8; cursor: pointer; } .mobile-pill-nav button.active { background: #C49A6C; color: #0B0B45; } .page-content { padding-bottom: 92px; } }
 
 /* Keep shared surfaces and controls aligned with the selected theme. */
-:root { --workspace-surface: #FFFFFF; --workspace-surface-soft: #F7F9FC; --workspace-text: #0B0B45; --workspace-text-soft: #4B5563; --workspace-border: #E2E2E6; }
-html[data-theme='dark'] { --workspace-surface: #15155C; --workspace-surface-soft: #10104B; --workspace-text: #FFFFFF; --workspace-text-soft: #B9BDD8; --workspace-border: #303078; }
+:root { --workspace-surface: #FFFFFF; --workspace-surface-soft: #F7F9FC; --workspace-text: #071A2E; --workspace-text-soft: #4B5563; --workspace-border: #E2E2E6; }
+html[data-theme='dark'] { --navy: #071A2E; --navy2: #0D2945; --brand-navy-soft: #123A5B; --workspace-surface: #0E2A46; --workspace-surface-soft: #092038; --workspace-text: #FFFFFF; --workspace-text-soft: #B9CCDD; --workspace-border: #28516F; }
 body, .topbar, .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal, .task-drawer, .notification-panel, .settings-panel, .report-panel, .report-stat { color: var(--workspace-text); }
 .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal { background: var(--workspace-surface); border-color: var(--workspace-border); }
 .section-header h2, .section-header h3, .page-heading h1, .workspace-view-heading h1, .workspace-view-heading h2, .metric-card strong, .focus-card strong, .checkin-card h3, .activity-card h2, .modal h2 { color: var(--workspace-text); }
@@ -502,3 +502,78 @@ html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .drawer-task-form .secondary-button { grid-column: 1 / -1; width: auto; justify-self: start; }
 @media (max-width: 520px) { .workspace-status { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 520px) { .drawer-task-form { grid-template-columns: 1fr; } .drawer-task-form .secondary-button { grid-column: auto; } }
+
+/* Keep secondary surfaces in the same navy family as the selected theme. */
+.workspace-side-card,
+.calendar-toolbar,
+.calendar-view-switcher,
+.planner-column,
+.project-status,
+.channel-row,
+.report-bar-row > div {
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text);
+  border-color: var(--workspace-border);
+}
+
+.calendar-nav-button,
+.calendar-view-switcher button,
+.channel-row,
+.project-status,
+.member-role-select,
+.planner-filter-controls > select,
+.bucket-create-form input {
+  color: var(--workspace-text-soft);
+  border-color: var(--workspace-border);
+}
+
+html[data-theme='dark'] .workspace-side-card h3,
+html[data-theme='dark'] .calendar-toolbar,
+html[data-theme='dark'] .calendar-toolbar span,
+html[data-theme='dark'] .event-pill,
+html[data-theme='dark'] .workspace-card p b,
+html[data-theme='dark'] .project-card h3,
+html[data-theme='dark'] .member-summary strong,
+html[data-theme='dark'] .team-directory h3,
+html[data-theme='dark'] .chat-placeholder h2,
+html[data-theme='dark'] .chat-message-meta strong,
+html[data-theme='dark'] .settings-row strong,
+html[data-theme='dark'] .report-stat strong,
+html[data-theme='dark'] .report-member-row strong {
+  color: var(--workspace-text);
+}
+
+html[data-theme='dark'] .event-pill,
+html[data-theme='dark'] .project-status,
+html[data-theme='dark'] .member-role-select,
+html[data-theme='dark'] .calendar-view-switcher,
+html[data-theme='dark'] .planner-column,
+html[data-theme='dark'] .channel-row.active,
+html[data-theme='dark'] .report-bar-row > div {
+  background: var(--workspace-surface-soft);
+}
+
+html[data-theme='dark'] .event-pill span,
+html[data-theme='dark'] .workspace-side-card .compact-row span,
+html[data-theme='dark'] .workspace-side-card .compact-row strong,
+html[data-theme='dark'] .directory-row strong,
+html[data-theme='dark'] .directory-row em,
+html[data-theme='dark'] .project-card p,
+html[data-theme='dark'] .calendar-day > strong,
+html[data-theme='dark'] .chat-placeholder p {
+  color: var(--workspace-text-soft);
+}
+
+:focus-visible {
+  outline: 3px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

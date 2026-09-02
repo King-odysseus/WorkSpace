@@ -95,6 +95,17 @@ function App() {
   }, [sidebarCollapsed])
 
   useEffect(() => {
+    const closeOverlays = event => {
+      if (event.key !== 'Escape') return
+      setNotificationOpen(false)
+      setShowModal(false)
+      setSelectedTask(null)
+    }
+    window.addEventListener('keydown', closeOverlays)
+    return () => window.removeEventListener('keydown', closeOverlays)
+  }, [])
+
+  useEffect(() => {
     if (session.user && !session.user.workspaces.some(workspace => workspace.id === activeWorkspaceId)) {
       setActiveWorkspaceId(session.user.workspaces[0]?.id || null)
     }
