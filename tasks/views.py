@@ -800,12 +800,14 @@ def calendar_event_list(request, workspace_id):
 
 @require_http_methods(['PATCH', 'DELETE'])
 def calendar_event_detail(request, workspace_id, event_id):
-    _, error = require_workspace_member(request, workspace_id)
+    membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     event = CalendarEvent.objects.filter(id=event_id, workspace_id=workspace_id).first()
     if event is None:
         return JsonResponse({'error': 'Calendar event was not found.'}, status=404)
+    if membership.role == 'member' and event.created_by_id != request.user.id:
+        return JsonResponse({'error': 'Members can only manage their own calendar events.'}, status=403)
     if request.method == 'DELETE':
         record_activity(workspace_id, request.user, 'calendar_deleted', f'{request.user.get_full_name() or request.user.email} deleted calendar event {event.title}.')
         event.delete()

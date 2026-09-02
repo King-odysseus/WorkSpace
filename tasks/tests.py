@@ -530,6 +530,26 @@ class TaskApiTests(TestCase):
         self.assertEqual(update.json()['event']['title'], 'Updated sync')
         self.assertEqual(self.client.delete(reverse('calendar-event-detail', args=[self.workspace.id, event_id])).status_code, 200)
 
+    def test_members_can_only_manage_their_own_calendar_events(self):
+        teammate = User.objects.create_user(username='calendar-member@example.com', email='calendar-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        event = CalendarEvent.objects.create(
+            workspace=self.workspace,
+            title='Owner event',
+            start_at=timezone.now() + timedelta(hours=1),
+            end_at=timezone.now() + timedelta(hours=2),
+            created_by=self.user,
+        )
+        self.client.force_login(teammate)
+        denied_update = self.client.patch(
+            reverse('calendar-event-detail', args=[self.workspace.id, event.id]),
+            data=json.dumps({'title': 'Changed by member'}),
+            content_type='application/json',
+        )
+        self.assertEqual(denied_update.status_code, 403)
+        denied_delete = self.client.delete(reverse('calendar-event-detail', args=[self.workspace.id, event.id]))
+        self.assertEqual(denied_delete.status_code, 403)
+
 
 class AuthenticationApiTests(TestCase):
     def test_signup_creates_user_workspace_and_session(self):
