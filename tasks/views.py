@@ -362,6 +362,8 @@ def task_detail(request, task_id):
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
+    if membership.role == 'member' and {'assignee_id', 'assignee_name', 'project_id', 'project'} & set(payload):
+        return JsonResponse({'error': 'Only owners and managers can change task ownership or project assignment.'}, status=403)
 
     if 'title' in payload:
         title = str(payload['title']).strip()

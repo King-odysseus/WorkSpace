@@ -437,9 +437,12 @@ class TaskApiTests(TestCase):
         teammate = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
         task = Task.objects.create(workspace=self.workspace, title='Owner task', assignee=self.user)
+        assigned_task = Task.objects.create(workspace=self.workspace, title='Member task', assignee=teammate)
         self.client.force_login(teammate)
         update_response = self.client.patch(reverse('task-detail', args=[task.id]), data=json.dumps({'status': 'done'}), content_type='application/json')
         self.assertEqual(update_response.status_code, 403)
+        reassign_response = self.client.patch(reverse('task-detail', args=[assigned_task.id]), data=json.dumps({'assignee_id': self.user.id}), content_type='application/json')
+        self.assertEqual(reassign_response.status_code, 403)
         delete_response = self.client.delete(reverse('task-detail', args=[task.id]))
         self.assertEqual(delete_response.status_code, 403)
 
