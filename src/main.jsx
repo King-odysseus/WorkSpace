@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import {
   AlertCircle, ArrowUpRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Filter, Hash, LayoutDashboard, MessageSquare, MoreHorizontal,
+  ChevronLeft, ChevronRight,
   Plus, Search, Settings, Sparkles, Target, Users, X, Sun, Moon
 } from 'lucide-react'
 import './styles.css'
@@ -25,6 +26,29 @@ const initialTasks = [
 
 function Avatar({ member, small = false }) {
   return <span className={`avatar ${member.color} ${small ? 'small' : ''}`}>{member.initials}</span>
+}
+
+function toDateKey(value) {
+  return new Date(value).toISOString().slice(0, 10)
+}
+
+function formatCalendarDate(value, options) {
+  return new Intl.DateTimeFormat(undefined, options).format(value)
+}
+
+function getCalendarDays(view, referenceDate) {
+  const year = referenceDate.getFullYear()
+  const month = referenceDate.getMonth()
+  if (view === 'day') return [new Date(year, month, referenceDate.getDate())]
+  if (view === 'year') return Array.from({ length: 12 }, (_, index) => new Date(year, index, 1))
+  if (view === 'month') {
+    const first = new Date(year, month, 1)
+    const start = new Date(year, month, 1 - ((first.getDay() + 6) % 7))
+    return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index))
+  }
+  const mondayOffset = (referenceDate.getDay() + 6) % 7
+  const monday = new Date(year, month, referenceDate.getDate() - mondayOffset)
+  return Array.from({ length: 7 }, (_, index) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index))
 }
 
 async function getCsrfToken() {
@@ -245,6 +269,8 @@ function App() {
 function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canManageMembers }) {
   const today = new Date().toISOString().slice(0, 10)
   const [localData, setLocalData] = useState(data)
+  const [calendarView, setCalendarView] = useState('week')
+  const [calendarDate, setCalendarDate] = useState(new Date())
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerType, setComposerType] = useState('chat')
   const [composerError, setComposerError] = useState('')
@@ -293,6 +319,19 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
     if (!response.ok) return
     setLocalData(current => ({ ...current, events: current.events.filter(event => event.id !== eventId) }))
   }
+  const calendarDays = getCalendarDays(calendarView, calendarDate)
+  const calendarEventsForDay = day => localData.events.filter(event => toDateKey(event.start_at) === toDateKey(day))
+  const calendarHeading = calendarView === 'year'
+    ? formatCalendarDate(calendarDate, { year: 'numeric' })
+    : formatCalendarDate(calendarDate, { month: 'long', year: 'numeric' })
+  const shiftCalendar = amount => {
+    const next = new Date(calendarDate)
+    if (calendarView === 'day') next.setDate(next.getDate() + amount)
+    if (calendarView === 'week') next.setDate(next.getDate() + amount * 7)
+    if (calendarView === 'month') next.setMonth(next.getMonth() + amount)
+    if (calendarView === 'year') next.setFullYear(next.getFullYear() + amount)
+    setCalendarDate(next)
+  }
   const updateProjectStatus = async (project, status) => {
     const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status }) })
     if (!response.ok) return
@@ -323,7 +362,7 @@ function WorkspaceView({ active, data, tasks, workspaceId, currentUserName, canM
   }[active]
 
   if (active === 'Calendar') {
-    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add event" onAction={() => openComposer('calendar')} /><div className="calendar-layout"><div className="calendar-week"><div className="calendar-toolbar"><strong>September 2026</strong><span>Today</span></div>{['Monday 31', 'Tuesday 1', 'Wednesday 2', 'Thursday 3', 'Friday 4'].map(day => <div className="calendar-day" key={day}><strong>{day}</strong><div className="calendar-slot">{localData.events.filter(event => event.start_at.startsWith(today) && day.startsWith('Wednesday')).map(event => <div className="event-pill" key={event.id}><span>{event.start_at.slice(11, 16)}</span>{event.title}</div>)}</div></div>)}</div><aside className="workspace-side-card"><h3>Upcoming</h3>{localData.events.length ? localData.events.map(event => <div className="compact-row" key={event.id}><CalendarDays size={15} /><div><strong>{event.title}</strong><span>{event.start_at.replace('T', ' ').slice(0, 16)}</span></div><button className="inline-delete" onClick={() => deleteCalendarEvent(event.id)} aria-label={`Delete ${event.title}`}><X size={14} /></button></div>) : <EmptyState text="No events scheduled yet." />}</aside></div>{composerOpen && <WorkspaceComposer type="calendar" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add event" onAction={() => openComposer('calendar')} /><div className="calendar-layout"><div className={`calendar-week calendar-${calendarView}`}><div className="calendar-toolbar"><div className="calendar-toolbar-title"><button className="calendar-nav-button" onClick={() => shiftCalendar(-1)} aria-label="Previous period"><ChevronLeft size={16} /></button><strong>{calendarHeading}</strong><button className="calendar-nav-button" onClick={() => shiftCalendar(1)} aria-label="Next period"><ChevronRight size={16} /></button></div><div className="calendar-toolbar-actions"><button className="secondary-button" onClick={() => setCalendarDate(new Date())}>Today</button><div className="calendar-view-switcher" role="group" aria-label="Calendar view">{['day', 'week', 'month', 'year'].map(view => <button key={view} className={calendarView === view ? 'active' : ''} onClick={() => setCalendarView(view)}>{view[0].toUpperCase() + view.slice(1)}</button>)}</div></div></div><div className="calendar-grid">{calendarDays.map(day => <div className="calendar-day" key={day.toISOString()}><strong>{calendarView === 'year' ? formatCalendarDate(day, { month: 'short' }) : formatCalendarDate(day, { weekday: 'short', day: 'numeric' })}</strong><div className="calendar-slot">{calendarEventsForDay(day).map(event => <div className="event-pill" key={event.id}><span>{formatCalendarDate(new Date(event.start_at), { hour: 'numeric', minute: '2-digit' })}</span>{event.title}</div>)}</div></div>)}</div></div><aside className="workspace-side-card"><h3>Upcoming</h3>{localData.events.length ? localData.events.map(event => <div className="compact-row" key={event.id}><CalendarDays size={15} /><div><strong>{event.title}</strong><span>{formatCalendarDate(new Date(event.start_at), { dateStyle: 'medium', timeStyle: 'short' })}</span></div><button className="inline-delete" onClick={() => deleteCalendarEvent(event.id)} aria-label={`Delete ${event.title}`}><X size={14} /></button></div>) : <EmptyState text="No events scheduled yet." />}</aside></div>{composerOpen && <WorkspaceComposer type="calendar" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}</section>
   }
 
   if (active === 'Check-ins') {

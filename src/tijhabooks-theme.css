@@ -329,3 +329,24 @@ html[data-theme='light'] .workspace-view-heading h1 { color: #0B0B45; }
 html[data-theme='light'] .calendar-week, html[data-theme='light'] .workspace-side-card, html[data-theme='light'] .workspace-card { box-shadow: 0 8px 24px #0B0B4510; }
 
 @media (max-width: 850px) { .calendar-layout, .chat-layout { grid-template-columns: 1fr; } .workspace-view-heading { align-items: flex-start; flex-direction: column; } }
+
+.calendar-toolbar-title, .calendar-toolbar-actions, .calendar-view-switcher { display: flex; align-items: center; gap: 8px; }
+.calendar-nav-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid #E2E2E6; border-radius: 9px; background: transparent; color: #0B0B45; cursor: pointer; }
+.calendar-view-switcher { padding: 3px; border: 1px solid #E2E2E6; border-radius: 10px; background: #F7F9FC; }
+.calendar-view-switcher button { border: 0; border-radius: 7px; padding: 7px 10px; background: transparent; color: #6B7280; cursor: pointer; font-size: 11px; font-weight: 700; }
+.calendar-view-switcher button.active { background: #0B0B45; color: #FFFFFF; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-day { min-height: 110px; border-right: 1px solid #EEF0F3; border-bottom: 1px solid #EEF0F3; }
+.calendar-day > strong { display: block; padding: 12px; color: #4B5563; font-size: 11px; }
+.calendar-slot { display: grid; gap: 6px; padding: 0 8px 10px; }
+.calendar-month .calendar-day { min-height: 92px; }
+.calendar-year .calendar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.calendar-year .calendar-day { min-height: 120px; }
+.calendar-year .calendar-slot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+html[data-theme='dark'] .calendar-nav-button { border-color: #303078; color: #FFFFFF; }
+html[data-theme='dark'] .calendar-view-switcher { border-color: #303078; background: #15155C; }
+html[data-theme='dark'] .calendar-view-switcher button { color: #B9BDD8; }
+html[data-theme='dark'] .calendar-view-switcher button.active { background: #C49A6C; color: #0B0B45; }
+html[data-theme='dark'] .calendar-day { border-color: #303078; }
+html[data-theme='dark'] .calendar-day > strong { color: #B9BDD8; }
+@media (max-width: 600px) { .calendar-toolbar { align-items: flex-start; flex-direction: column; gap: 12px; } .calendar-toolbar-actions { flex-wrap: wrap; } .calendar-view-switcher button { padding-inline: 7px; } .calendar-year .calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
