@@ -27,6 +27,8 @@ services:
       WORKSPACE_DB_PASSWORD: ${WORKSPACE_DB_PASSWORD:?Set WORKSPACE_DB_PASSWORD before starting compose}
       WORKSPACE_DB_HOST: database
       WORKSPACE_DB_PORT: 5432
+    volumes:
+      - workspace-media:/app/media
     depends_on:
       database:
         condition: service_healthy
@@ -37,8 +39,11 @@ services:
       dockerfile: Dockerfile.web
     ports:
       - "${WORKSPACE_WEB_PORT:-8080}:80"
+    volumes:
+      - workspace-media:/var/www/media:ro
     depends_on:
       - api
 
 volumes:
   workspace-postgres:
+  workspace-media:
