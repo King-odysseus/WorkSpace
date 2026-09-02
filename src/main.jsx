@@ -67,7 +67,7 @@ function App() {
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const [workspaceError, setWorkspaceError] = useState('')
   const [workspaceReload, setWorkspaceReload] = useState(0)
-  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], buckets: [], reports: null })
+  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], reports: null })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -103,6 +103,8 @@ function App() {
       if (!response.ok) throw new Error(`${path} returned ${response.status}`)
       return response.json()
     })
+    const workspaceRole = session.user.workspaces.find(workspace => workspace.id === workspaceId)?.role
+    const auditRequest = ['owner', 'manager'].includes(workspaceRole) ? read(`/api/workspaces/${workspaceId}/audit-logs/`) : Promise.resolve({ audit_logs: [] })
 
     const refreshCollaboration = () => Promise.all([
       read(`/api/workspaces/${workspaceId}/chat-messages/`),
@@ -129,8 +131,9 @@ function App() {
       read(`/api/workspaces/${workspaceId}/activity/`),
       read(`/api/workspaces/${workspaceId}/plan-buckets/`),
       read(`/api/workspaces/${workspaceId}/reports/summary/`),
+      auditRequest,
     ])
-      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData, reportData]) => {
+      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData, reportData, auditData]) => {
         if (!isCurrent) return
         setTasks(taskData.tasks.map(task => ({
           id: task.id,
@@ -145,7 +148,7 @@ function App() {
           bucket: task.bucket || 'Backlog',
           labels: task.labels || [],
         })))
-        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, reports: reportData.summary })
+        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, auditLogs: auditData.audit_logs, buckets: bucketData.buckets, reports: reportData.summary })
         setWorkspaceLoading(false)
       })
       .catch(error => {
@@ -461,7 +464,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, theme, sidebarCollaps
   if (active === 'Reports') {
     const report = data.reports || { total_tasks: 0, overdue_tasks: 0, blocked_tasks: 0, check_ins_today: 0, members: 0, status_counts: {}, workload: [] }
     const statusLabels = { todo: 'To do', in_progress: 'In progress', review: 'Review', blocked: 'Blocked', done: 'Done' }
-    return <section className="workspace-view"><WorkspaceViewHeading title="Reports" subtitle={subtitle} /><div className="report-metrics"><article className="workspace-card report-stat"><span>Total tasks</span><strong>{report.total_tasks}</strong></article><article className="workspace-card report-stat"><span>Overdue</span><strong>{report.overdue_tasks}</strong></article><article className="workspace-card report-stat"><span>Blocked</span><strong>{report.blocked_tasks}</strong></article><article className="workspace-card report-stat"><span>Check-ins today</span><strong>{report.check_ins_today} of {report.members}</strong></article></div><div className="report-grid"><section className="workspace-card report-panel"><div className="drawer-section-heading"><h3>Task status</h3><span>{report.total_tasks} total</span></div>{Object.entries(statusLabels).map(([key, label]) => <div className="report-bar-row" key={key}><span>{label}</span><div><i style={{ width: `${report.total_tasks ? Math.round(((report.status_counts[key] || 0) / report.total_tasks) * 100) : 0}%` }} /></div><strong>{report.status_counts[key] || 0}</strong></div>)}</section><section className="workspace-card report-panel"><div className="drawer-section-heading"><h3>Member workload</h3><span>{report.members} members</span></div>{report.workload.length ? report.workload.map(member => <div className="report-member-row" key={member.user_id}><span>{member.user_name}</span><strong>{member.open} open</strong><em>{member.blocked} blocked</em></div>) : <EmptyState text="No team workload yet." />}</section></div></section>
+    return <section className="workspace-view"><WorkspaceViewHeading title="Reports" subtitle={subtitle} /><div className="report-metrics"><article className="workspace-card report-stat"><span>Total tasks</span><strong>{report.total_tasks}</strong></article><article className="workspace-card report-stat"><span>Overdue</span><strong>{report.overdue_tasks}</strong></article><article className="workspace-card report-stat"><span>Blocked</span><strong>{report.blocked_tasks}</strong></article><article className="workspace-card report-stat"><span>Check-ins today</span><strong>{report.check_ins_today} of {report.members}</strong></article></div><div className="report-grid"><section className="workspace-card report-panel"><div className="drawer-section-heading"><h3>Task status</h3><span>{report.total_tasks} total</span></div>{Object.entries(statusLabels).map(([key, label]) => <div className="report-bar-row" key={key}><span>{label}</span><div><i style={{ width: `${report.total_tasks ? Math.round(((report.status_counts[key] || 0) / report.total_tasks) * 100) : 0}%` }} /></div><strong>{report.status_counts[key] || 0}</strong></div>)}</section><section className="workspace-card report-panel"><div className="drawer-section-heading"><h3>Member workload</h3><span>{report.members} members</span></div>{report.workload.length ? report.workload.map(member => <div className="report-member-row" key={member.user_id}><span>{member.user_name}</span><strong>{member.open} open</strong><em>{member.blocked} blocked</em></div>) : <EmptyState text="No team workload yet." />}</section></div><section className="workspace-card report-panel audit-panel"><div className="drawer-section-heading"><h3>Audit trail</h3><span>Leader access</span></div>{data.auditLogs?.length ? data.auditLogs.slice(0, 12).map(log => <div className="audit-row" key={log.id}><span className="audit-action">{log.action.replaceAll('_', ' ')}</span><div><strong>{log.actor_name}</strong><span>{log.target_type}{log.target_id ? ` #${log.target_id}` : ''}</span></div><time dateTime={log.created_at}>{formatCalendarDate(new Date(log.created_at), { dateStyle: 'medium', timeStyle: 'short' })}</time></div>) : <EmptyState text="No audit events recorded yet." />}</section></section>
   }
 
   if (active === 'Settings') {

@@ -480,4 +480,12 @@ html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .workspace-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 11px 14px; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 12px; }
 .workspace-status.error { border-color: #E36B43; color: var(--workspace-text); }
 .workspace-status .secondary-button { width: auto; padding: 7px 12px; }
+.audit-panel { grid-column: 1 / -1; }
+.audit-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--workspace-border); color: var(--workspace-text-soft); font-size: 11px; }
+.audit-row:last-child { border-bottom: 0; }
+.audit-row > div { display: grid; gap: 3px; }
+.audit-row strong { color: var(--workspace-text); font-size: 12px; }
+.audit-row span { color: var(--workspace-text-soft); }
+.audit-row time { color: var(--workspace-text-soft); font-size: 10px; white-space: nowrap; }
+.audit-action { color: #C49A6C !important; font-weight: 700; text-transform: capitalize; }
 @media (max-width: 520px) { .workspace-status { align-items: flex-start; flex-direction: column; } }
