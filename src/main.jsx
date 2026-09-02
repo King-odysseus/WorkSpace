@@ -373,6 +373,7 @@ function App() {
   const workspaceId = activeWorkspaceId
   const currentWorkspace = session.user.workspaces.find(workspace => workspace.id === activeWorkspaceId) || session.user.workspaces[0]
   const canManageMembers = ['owner', 'manager'].includes(currentWorkspace?.role)
+  const canManageTasks = ['owner', 'manager'].includes(currentWorkspace?.role)
   const teamMembers = workspaceData.members.map(member => ({
     id: member.id,
     name: [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email,
