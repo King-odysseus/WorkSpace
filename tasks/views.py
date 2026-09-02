@@ -622,8 +622,14 @@ def project_list(request, workspace_id):
         return JsonResponse({'error': 'Project name must be 160 characters or fewer.'}, status=400)
     if Project.objects.filter(workspace_id=workspace_id, name=name).exists():
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
+    due_date = None
+    if payload.get('due_date'):
+        try:
+            due_date = date.fromisoformat(str(payload['due_date']))
+        except ValueError:
+            return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
     try:
-        project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip())
+        project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip(), due_date=due_date)
     except IntegrityError:
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
     return JsonResponse({'project': project.as_dict()}, status=201)

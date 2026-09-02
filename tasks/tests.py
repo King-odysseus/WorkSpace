@@ -428,6 +428,22 @@ class TaskApiTests(TestCase):
         delete = self.client.delete(reverse('project-detail', args=[self.workspace.id, project.id]))
         self.assertEqual(delete.status_code, 200)
 
+    def test_owner_can_create_project_with_due_date(self):
+        response = self.client.post(
+            reverse('project-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Website refresh', 'description': 'Refresh the public site.', 'due_date': '2026-10-15'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['project']['due_date'], '2026-10-15')
+
+        invalid_response = self.client.post(
+            reverse('project-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Invalid date project', 'due_date': '15-10-2026'}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid_response.status_code, 400)
+
     def test_calendar_event_can_be_updated_and_deleted(self):
         create = self.client.post(
             reverse('calendar-event-list', args=[self.workspace.id]),
