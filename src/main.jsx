@@ -196,9 +196,10 @@ function App() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
         body: JSON.stringify({ status: nextStatus }),
       })
-      if (!response.ok && response.status !== 404) throw new Error(`Task update returned ${response.status}`)
+      if (!response.ok) throw new Error(`Task update returned ${response.status}`)
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
+      setWorkspaceError(error.message || 'Task status could not be saved.')
       console.warn('Task status could not be saved.', error.message)
     }
   }
@@ -208,9 +209,10 @@ function App() {
     try {
       const apiStatus = status === 'in progress' ? 'in_progress' : status
       const response = await fetch(`/api/tasks/${id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') }, body: JSON.stringify({ status: apiStatus }) })
-      if (!response.ok && response.status !== 404) throw new Error(`Task update returned ${response.status}`)
+      if (!response.ok) throw new Error(`Task update returned ${response.status}`)
     } catch (error) {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
+      setWorkspaceError(error.message || 'Task status could not be saved.')
       console.warn('Task status could not be saved.', error.message)
     }
   }
