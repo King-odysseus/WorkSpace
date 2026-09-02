@@ -140,6 +140,15 @@ def require_workspace_leader(request, workspace_id):
     return membership, None
 
 
+def require_task_editor(request, task):
+    membership, error = require_workspace_member(request, task.workspace_id)
+    if error:
+        return error
+    if membership.role == 'member' and task.assignee_id != request.user.id:
+        return JsonResponse({'error': 'Members can only edit subtasks on tasks assigned to them.'}, status=403)
+    return None
+
+
 def health(request):
     return JsonResponse({'status': 'ok', 'service': 'workspace-api'})
 
@@ -449,6 +458,10 @@ def task_subtask_list(request, task_id):
     task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first()
     if task is None:
         return JsonResponse({'error': 'Task was not found.'}, status=404)
+    if request.method == 'POST':
+        permission_error = require_task_editor(request, task)
+        if permission_error:
+            return permission_error
     if request.method == 'GET':
         subtasks = TaskSubtask.objects.filter(task=task).select_related('assignee')
         return JsonResponse({'subtasks': [subtask.as_dict() for subtask in subtasks]})
@@ -477,6 +490,9 @@ def task_subtask_detail(request, subtask_id):
     subtask = TaskSubtask.objects.filter(id=subtask_id, task__workspace_id__in=user_workspace_ids(request.user)).first()
     if subtask is None:
         return JsonResponse({'error': 'Subtask was not found.'}, status=404)
+    permission_error = require_task_editor(request, subtask.task)
+    if permission_error:
+        return permission_error
     if request.method == 'DELETE':
         subtask.delete()
         return JsonResponse({'deleted': subtask_id})

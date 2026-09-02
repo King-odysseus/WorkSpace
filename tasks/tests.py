@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 class TaskApiTests(TestCase):
@@ -135,6 +135,27 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(update_response.status_code, 200)
         self.assertTrue(update_response.json()['subtask']['completed'])
+
+    def test_members_cannot_mutate_subtasks_on_unassigned_tasks(self):
+        task = Task.objects.create(workspace=self.workspace, title='Owner task', assignee=self.user)
+        subtask = TaskSubtask.objects.create(task=task, title='Owner subtask')
+        teammate = User.objects.create_user(username='subtask-member@example.com', email='subtask-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+        create_response = self.client.post(
+            reverse('task-subtask-list', args=[task.id]),
+            data=json.dumps({'title': 'Unauthorized subtask'}),
+            content_type='application/json',
+        )
+        self.assertEqual(create_response.status_code, 403)
+        update_response = self.client.patch(
+            reverse('task-subtask-detail', args=[subtask.id]),
+            data=json.dumps({'completed': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_response.status_code, 403)
+        delete_response = self.client.delete(reverse('task-subtask-detail', args=[subtask.id]))
+        self.assertEqual(delete_response.status_code, 403)
 
     def test_task_detail_rejects_invalid_bucket(self):
         task = Task.objects.create(workspace=self.workspace, title='Task')
