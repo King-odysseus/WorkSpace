@@ -494,6 +494,7 @@ def task_subtask_detail(request, subtask_id):
     if permission_error:
         return permission_error
     if request.method == 'DELETE':
+        record_activity(subtask.task.workspace_id, request.user, 'subtask_deleted', f'{request.user.get_full_name() or request.user.email} deleted a subtask from {subtask.task.title}.')
         subtask.delete()
         return JsonResponse({'deleted': subtask_id})
     try:
@@ -551,6 +552,7 @@ def task_attachment_detail(request, attachment_id):
     permission_error = require_task_editor(request, attachment.task)
     if permission_error:
         return permission_error
+    record_activity(attachment.task.workspace_id, request.user, 'task_attachment_deleted', f'{request.user.get_full_name() or request.user.email} deleted {attachment.original_name} from {attachment.task.title}.')
     attachment.file.delete(save=False)
     attachment.delete()
     return JsonResponse({'deleted': attachment_id})

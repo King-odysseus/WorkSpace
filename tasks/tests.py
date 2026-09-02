@@ -328,6 +328,7 @@ class TaskApiTests(TestCase):
         delete_response = self.client.delete(reverse('task-attachment-detail', args=[attachment.id]))
         self.assertEqual(delete_response.status_code, 200)
         self.assertFalse(TaskAttachment.objects.exists())
+        self.assertTrue(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_attachment_deleted').exists())
 
     def test_members_cannot_delete_attachments_on_unassigned_tasks(self):
         task = Task.objects.create(workspace=self.workspace, title='Owner task', assignee=self.user)
