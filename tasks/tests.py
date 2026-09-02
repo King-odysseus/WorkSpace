@@ -271,13 +271,15 @@ class TaskApiTests(TestCase):
     def test_follow_up_can_be_assigned_and_notifies_teammate(self):
         teammate = User.objects.create_user(username='follow-up-member@example.com', email='follow-up-member@example.com', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        task = Task.objects.create(workspace=self.workspace, title='Prepare launch handoff')
         response = self.client.post(
             reverse('follow-up-list', args=[self.workspace.id]),
-            data=json.dumps({'note': 'Confirm launch approval', 'assigned_to': teammate.id, 'due_date': '2026-09-04'}),
+            data=json.dumps({'note': 'Confirm launch approval', 'assigned_to': teammate.id, 'due_date': '2026-09-04', 'task_id': task.id}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['follow_up']['assigned_to'], teammate.id)
+        self.assertEqual(response.json()['follow_up']['task_id'], task.id)
         self.assertEqual(response.json()['follow_up']['assigned_to_name'], 'follow-up-member@example.com')
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='follow_up_assigned').count(), 1)
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_created').count(), 1)

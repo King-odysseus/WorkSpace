@@ -318,6 +318,7 @@ html[data-theme='light'] .theme-toggle {
 .follow-up-status { width: 9px; height: 9px; border-radius: 50%; background: #EF7049; }
 .follow-up-status.completed { background: #0A9E87; }
 .follow-up-row .secondary-button { width: auto; padding: 7px 10px; }
+.follow-up-actions { display: flex; align-items: center; gap: 7px; }
 .composer-modal { max-height: min(720px, calc(100vh - 30px)); overflow-y: auto; }
 .composer-modal textarea { min-height: 82px; resize: vertical; border: 1px solid #DCE2E9; border-radius: 7px; padding: 11px; color: #263248; background: #FFFFFF; font: 500 12px 'DM Sans'; outline: none; }
 .composer-modal textarea:focus { border-color: #C49A6C; box-shadow: 0 0 0 3px #C49A6C2B; }

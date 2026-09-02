@@ -1057,12 +1057,13 @@ def follow_up_detail(request, follow_up_id):
         return JsonResponse({'error': 'Follow-up was not found.'}, status=404)
     previous_status = follow_up.status
     previous_assignee = follow_up.assigned_to
+    previous_task = follow_up.task
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    if set(payload) - {'status', 'note', 'due_date', 'assigned_to'}:
-        return JsonResponse({'error': 'Only status, note, due_date, and assigned_to can be updated.'}, status=400)
+    if set(payload) - {'status', 'note', 'due_date', 'assigned_to', 'task_id'}:
+        return JsonResponse({'error': 'Only status, note, due date, assignee, and task can be updated.'}, status=400)
     permission_error = require_follow_up_editor(request, follow_up, set(payload))
     if permission_error:
         return permission_error
@@ -1084,6 +1085,10 @@ def follow_up_detail(request, follow_up_id):
         follow_up.assigned_to = User.objects.filter(id=payload['assigned_to'], workspace_memberships__workspace_id=follow_up.workspace_id).first() if payload['assigned_to'] else None
         if payload['assigned_to'] and follow_up.assigned_to is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
+    if 'task_id' in payload:
+        follow_up.task = Task.objects.filter(id=payload['task_id'], workspace_id=follow_up.workspace_id).first() if payload['task_id'] else None
+        if payload['task_id'] and follow_up.task is None:
+            return JsonResponse({'error': 'Task was not found in this workspace.'}, status=404)
     follow_up.save()
     actor_name = request.user.get_full_name() or request.user.email
     if previous_status != follow_up.status:
@@ -1092,4 +1097,6 @@ def follow_up_detail(request, follow_up_id):
             create_notification(follow_up.workspace_id, follow_up.created_by, 'follow_up_completed', 'Follow-up completed.', follow_up.note)
     if previous_assignee != follow_up.assigned_to and follow_up.assigned_to and follow_up.assigned_to != request.user:
         create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note)
+    if previous_task != follow_up.task:
+        record_activity(follow_up.workspace_id, request.user, 'follow_up_task', f'{actor_name} linked a task to a follow-up.' if follow_up.task else f'{actor_name} removed a task link from a follow-up.')
     return JsonResponse({'follow_up': follow_up.as_dict()})
