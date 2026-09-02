@@ -503,18 +503,18 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
 
   const completeFollowUp = async followUp => {
     const nextStatus = followUp.status === 'completed' ? 'open' : 'completed'
-    const responseData = await runAction(() => fetch(`/api/follow-ups/${followUp.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status: nextStatus }) }), 'Follow-up could not be updated.')
+    const responseData = await runAction(async () => fetch(`/api/follow-ups/${followUp.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status: nextStatus }) }), 'Follow-up could not be updated.')
     if (!responseData) return
     setLocalData(current => ({ ...current, followUps: current.followUps.map(item => item.id === followUp.id ? responseData.follow_up : item) }))
   }
   const deleteFollowUp = async followUp => {
     if (!window.confirm('Delete this follow-up?')) return
-    const responseData = await runAction(() => fetch(`/api/follow-ups/${followUp.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Follow-up could not be deleted.')
+    const responseData = await runAction(async () => fetch(`/api/follow-ups/${followUp.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Follow-up could not be deleted.')
     if (!responseData) return
     setLocalData(current => ({ ...current, followUps: current.followUps.filter(item => item.id !== followUp.id) }))
   }
   const deleteCalendarEvent = async eventId => {
-    const responseData = await runAction(() => fetch(`/api/workspaces/${workspaceId}/calendar-events/${eventId}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Calendar event could not be deleted.')
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/calendar-events/${eventId}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Calendar event could not be deleted.')
     if (!responseData) return
     setLocalData(current => ({ ...current, events: current.events.filter(event => event.id !== eventId) }))
   }
@@ -523,7 +523,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
     const name = newBucketName.trim()
     if (!name) return
     setBucketError('')
-    const responseData = await runAction(() => fetch(`/api/workspaces/${workspaceId}/plan-buckets/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ name }) }), 'Bucket could not be created.')
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/plan-buckets/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ name }) }), 'Bucket could not be created.')
     if (!responseData) return
     setLocalData(current => ({ ...current, buckets: [...current.buckets, responseData.bucket] }))
     setNewBucketName('')
@@ -542,30 +542,30 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
     setCalendarDate(next)
   }
   const updateProjectStatus = async (project, status) => {
-    const responseData = await runAction(() => fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status }) }), 'Project status could not be saved.')
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status }) }), 'Project status could not be saved.')
     if (!responseData) return
     setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === project.id ? responseData.project : item) }))
   }
   const deleteProject = async project => {
     if (!canManageMembers || !window.confirm(`Delete ${project.name}?`)) return
-    const responseData = await runAction(() => fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Project could not be deleted.')
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Project could not be deleted.')
     if (!responseData) return
     setLocalData(current => ({ ...current, projects: current.projects.filter(item => item.id !== project.id) }))
   }
   const updateMemberRole = async (member, role) => {
-    const responseData = await runAction(() => fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ role }) }), 'Member role could not be updated.')
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ role }) }), 'Member role could not be updated.')
     if (!responseData) return
     setLocalData(current => ({ ...current, members: current.members.map(item => item.id === member.id ? responseData.member : item) }))
   }
   const removeMember = async member => {
     if (member.role === 'owner' || !window.confirm(`Remove ${member.email} from this workspace?`)) return
-    const responseData = await runAction(() => fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Member could not be removed.')
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/members/${member.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Member could not be removed.')
     if (!responseData) return
     setLocalData(current => ({ ...current, members: current.members.filter(item => item.id !== member.id) }))
   }
   const cancelInvitation = async invitation => {
     if (!window.confirm(`Cancel invitation for ${invitation.email}?`)) return
-    const responseData = await runAction(() => fetch(`/api/workspaces/${workspaceId}/invitations/${invitation.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Invitation could not be cancelled.')
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/invitations/${invitation.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Invitation could not be cancelled.')
     if (!responseData) return
     setLocalData(current => ({ ...current, invitations: current.invitations.map(item => item.id === invitation.id ? { ...item, status: 'cancelled' } : item) }))
   }
