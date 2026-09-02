@@ -127,12 +127,28 @@ html[data-theme='light'] .theme-toggle {
 
 .auth-screen {
   min-height: 100vh;
+  position: relative;
   display: grid;
   place-items: center;
   padding: 24px;
   background-image: linear-gradient(90deg, #FFFFFFF2 0%, #FFFFFFD9 42%, #FFFFFF40 100%), url('/auth-background-light.png');
   background-size: cover;
   background-position: center;
+}
+
+.auth-theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--workspace-border);
+  border-radius: 999px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text);
+  cursor: pointer;
 }
 
 .auth-panel {
