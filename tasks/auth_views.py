@@ -64,7 +64,7 @@ def auth_me(request):
     except ValidationError:
         return JsonResponse({'error': 'Enter a valid email address.'}, status=400)
     try:
-        validate_password(password)
+        validate_password(password, user=User(username=email, email=email))
     except ValidationError as validation_error:
         return JsonResponse({'error': validation_error.messages[0]}, status=400)
     if User.objects.filter(email__iexact=email).exists():

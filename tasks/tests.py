@@ -750,6 +750,12 @@ class AuthenticationApiTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(weak_password.status_code, 400)
+        similar_password = self.client.post(
+            reverse('auth-me'),
+            data=json.dumps({'email': 'similar-owner@example.com', 'password': 'similar-owner@example.com-123'}),
+            content_type='application/json',
+        )
+        self.assertEqual(similar_password.status_code, 400)
 
     def test_signup_rejects_oversized_profile_fields(self):
         response = self.client.post(
