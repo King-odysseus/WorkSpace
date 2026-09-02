@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle, ArrowUpRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Filter, Hash, LayoutDashboard, MessageSquare, MoreHorizontal,
-  Plus, Search, Settings, Sparkles, Target, Users, X
+  Plus, Search, Settings, Sparkles, Target, Users, X, Sun, Moon
 } from 'lucide-react'
 import './styles.css'
+import './tijhabooks-theme.css'
 
 const members = [
-  { name: 'Sarah Chen', initials: 'SC', color: 'violet', role: 'Design lead' },
+  { name: 'Sarah Chen', initials: 'SC', color: 'blue', role: 'Design lead' },
   { name: 'James Wilson', initials: 'JW', color: 'blue', role: 'Product' },
   { name: 'Priya Shah', initials: 'PS', color: 'green', role: 'Engineering' },
   { name: 'Marcus Lee', initials: 'ML', color: 'orange', role: 'Marketing' },
@@ -31,13 +32,19 @@ function App() {
   const [showModal, setShowModal] = useState(false)
   const [newTask, setNewTask] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('All work')
+  const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('workspace-theme', theme)
+  }, [theme])
 
   const visibleTasks = useMemo(() => selectedFilter === 'All work' ? tasks : tasks.filter(task => task.status === selectedFilter), [tasks, selectedFilter])
   const completeTask = (id) => setTasks(current => current.map(task => task.id === id ? { ...task, status: 'done' } : task))
   const addTask = (event) => {
     event.preventDefault()
     if (!newTask.trim()) return
-    setTasks(current => [...current, { id: Date.now(), title: newTask, member: 'Sarah Chen', tag: 'New task', status: 'todo', priority: 'normal', due: 'Today', estimate: '—' }])
+    setTasks(current => [...current, { id: Date.now(), title: newTask, member: 'Sarah Chen', tag: 'New task', status: 'todo', priority: 'normal', due: 'Today', estimate: 'n/a' }])
     setNewTask('')
     setShowModal(false)
   }
@@ -63,9 +70,9 @@ function App() {
     </aside>
 
     <main className="main-content">
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><button className="icon-button"><Search size={18} /></button><button className="icon-button notification"><Bell size={18} /><i /></button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar">KO</button></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><button className="icon-button"><Search size={18} /></button><button className="icon-button notification"><Bell size={18} /><i /></button><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar">KO</button></div></header>
       <div className="page-content">
-        <section className="page-heading"><div><p className="eyebrow">Tuesday, September 2, 2026</p><h1>Good morning, King <span>✦</span></h1><p className="subtitle">Here’s what’s moving across Northstar today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
+        <section className="page-heading"><div><p className="eyebrow">Tuesday, September 2, 2026</p><h1>Good morning, King</h1><p className="subtitle">Here is what is moving across Northstar today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
         <section className="metrics"><div className="metric-card"><div className="metric-icon navy-bg"><CheckCircle2 size={18} /></div><div><span>Team completion</span><strong>68%</strong></div><em className="positive">+12% <small>vs last week</small></em></div><div className="metric-card"><div className="metric-icon orange-bg"><AlertCircle size={18} /></div><div><span>Needs attention</span><strong>6 tasks</strong></div><em className="negative">2 overdue</em></div><div className="metric-card"><div className="metric-icon teal-bg"><Clock3 size={18} /></div><div><span>Focus time</span><strong>24h 30m</strong></div><em>this week</em></div></section>
         <div className="content-grid">
           <section className="board-section"><div className="section-header"><div><h2>Team pulse</h2><p>Today’s commitments across your team</p></div><div className="header-actions"><button className="filter-button"><Filter size={15} /> Filters <ChevronDown size={14} /></button><button className="more-button"><MoreHorizontal size={19} /></button></div></div><div className="board-tabs"><button className="tab active">People</button><button className="tab">Status</button><button className="tab">Priority</button><div className="filter-select"><span className="status-dot all" />{selectedFilter}<ChevronDown size={14} /></div></div><div className="team-board">{members.map(member => { const memberTasks = visibleTasks.filter(task => task.member === member.name); return <div className="member-row" key={member.name}><div className="member-cell"><Avatar member={member} /><div><strong>{member.name}</strong><span>{member.role}</span></div></div><div className="task-stack">{memberTasks.length ? memberTasks.map(task => <TaskCard key={task.id} task={task} onComplete={completeTask} />) : <div className="empty-task">No tasks in this view</div>}</div><button className="row-add"><Plus size={16} /></button></div> })}</div><button className="add-person"><Plus size={16} /> Add team member</button></section>

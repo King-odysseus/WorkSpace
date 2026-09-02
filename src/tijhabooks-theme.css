@@ -1,0 +1,111 @@
+/* Shared TijhaBooks brand tokens keep WorkSpace visually consistent with the wider Tijha product family. */
+:root {
+  --navy: #0B0B45;
+  --navy2: #15155C;
+  --brand-navy-soft: #1C1C6E;
+  --brand-accent: #C49A6C;
+  --brand-accent-hover: #B0895A;
+  --line: #E2E2E6;
+  --muted: #6B7280;
+  --blue: #1D4ED8;
+}
+
+body,
+.main-content {
+  background: var(--navy);
+}
+
+.sidebar,
+.topbar {
+  background: var(--navy);
+}
+
+.workspace-switcher,
+.nav-item:hover,
+.sidebar .upgrade-card {
+  background: var(--brand-navy-soft);
+}
+
+.nav-item.active {
+  background: var(--brand-navy-soft);
+  box-shadow: inset 3px 0 var(--brand-accent);
+}
+
+.brand-mark,
+.workspace-dot,
+.checkin-questions i {
+  background: var(--brand-accent);
+}
+
+.primary-button,
+.user-avatar {
+  background: var(--navy);
+  border: 1px solid var(--brand-accent);
+}
+
+.primary-button:hover {
+  background: var(--navy2);
+}
+
+.page-heading h1 {
+  color: #FFFFFF;
+}
+
+.avatar.violet {
+  background: var(--blue);
+}
+
+.task-status.in.progress,
+.task-status.review {
+  color: var(--blue);
+}
+
+.text-button {
+  color: var(--blue);
+}
+
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #C49A6C;
+  border-radius: 8px;
+  background: #15155C;
+  color: #F1E4D0;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: #1C1C6E;
+}
+
+html[data-theme='light'] body,
+html[data-theme='light'] .main-content {
+  background: #F8F9FA;
+  color: #1F2937;
+}
+
+html[data-theme='light'] .topbar {
+  background: #FFFFFF;
+  border-bottom-color: #E2E2E6;
+}
+
+html[data-theme='light'] .breadcrumbs {
+  color: #6B7280;
+}
+
+html[data-theme='light'] .breadcrumbs strong,
+html[data-theme='light'] .page-heading h1 {
+  color: #0B0B45;
+}
+
+html[data-theme='light'] .subtitle,
+html[data-theme='light'] .eyebrow {
+  color: #6B7280;
+}
+
+html[data-theme='light'] .theme-toggle {
+  background: #F1E4D0;
+  color: #0B0B45;
+}
