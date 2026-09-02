@@ -3,6 +3,7 @@ from datetime import date
 
 from django.utils.dateparse import parse_datetime
 from django.db import IntegrityError
+from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
@@ -75,8 +76,27 @@ def task_list(request):
     if error:
         return error
 
+    assignee = None
+    if payload.get('assignee_id'):
+        assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=workspace_id).first()
+        if assignee is None:
+            return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
+    project_ref = None
+    if payload.get('project_id'):
+        project_ref = Project.objects.filter(id=payload['project_id'], workspace_id=workspace_id).first()
+        if project_ref is None:
+            return JsonResponse({'error': 'Project was not found in this workspace.'}, status=404)
+    due_date = None
+    if payload.get('due_date'):
+        try:
+            due_date = date.fromisoformat(str(payload['due_date']))
+        except ValueError:
+            return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
+
     task = Task.objects.create(
         workspace_id=workspace_id,
+        assignee=assignee,
+        project_ref=project_ref,
         title=title,
         description=str(payload.get('description', '')).strip(),
         assignee_name=str(payload.get('assignee_name', '')).strip(),
@@ -103,7 +123,7 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'status', 'due_date'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'status', 'due_date', 'assignee_id', 'project_id'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -125,6 +145,17 @@ def task_detail(request, task_id):
             task.due_date = date.fromisoformat(str(payload['due_date']))
         except ValueError:
             return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
+    if 'due_date' in payload and not payload['due_date']:
+        task.due_date = None
+
+    if 'assignee_id' in payload:
+        task.assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=task.workspace_id).first() if payload['assignee_id'] else None
+        if payload['assignee_id'] and task.assignee is None:
+            return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
+    if 'project_id' in payload:
+        task.project_ref = Project.objects.filter(id=payload['project_id'], workspace_id=task.workspace_id).first() if payload['project_id'] else None
+        if payload['project_id'] and task.project_ref is None:
+            return JsonResponse({'error': 'Project was not found in this workspace.'}, status=404)
 
     for field in {'description', 'assignee_name', 'project'} & set(payload):
         setattr(task, field, str(payload[field]).strip() or None)

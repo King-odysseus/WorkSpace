@@ -193,6 +193,8 @@ class Task(models.Model):
     ]
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
+    project_ref = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     assignee_name = models.CharField(max_length=120, blank=True)
@@ -209,10 +211,13 @@ class Task(models.Model):
         return {
             'id': self.id,
             'workspace_id': self.workspace_id,
+            'assignee_id': self.assignee_id,
+            'assignee_name': self.assignee.get_full_name() if self.assignee else self.assignee_name,
             'title': self.title,
             'description': self.description,
             'assignee_name': self.assignee_name,
             'project': self.project,
+            'project_id': self.project_ref_id,
             'status': self.status,
             'due_date': self.due_date.isoformat() if self.due_date else None,
         }

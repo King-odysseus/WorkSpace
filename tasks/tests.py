@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Task, Workspace
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace
 
 
 class TaskApiTests(TestCase):
@@ -53,6 +53,20 @@ class TaskApiTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_create_task_validates_workspace_assignee_and_project(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Prepare brief', 'assignee_id': self.user.id, 'project_id': project.id, 'due_date': '2026-09-05'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(response.status_code, 201)
+        task = Task.objects.get()
+        self.assertEqual(task.assignee, self.user)
+        self.assertEqual(task.project_ref, project)
+        self.assertEqual(response.json()['task']['project_id'], project.id)
 
     def test_anonymous_users_cannot_read_tasks(self):
         self.client.logout()
