@@ -49,6 +49,7 @@ function App() {
   const [active, setActive] = useState('Today')
   const [tasks, setTasks] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [taskError, setTaskError] = useState('')
   const [selectedTask, setSelectedTask] = useState(null)
   const [notificationOpen, setNotificationOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('workspace-sidebar-collapsed') === 'true')
@@ -173,13 +174,14 @@ function App() {
   if (!session.user) return <AuthScreen onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
   const completeTask = async id => {
     const previousTask = tasks.find(task => task.id === id)
-    setTasks(current => current.map(task => task.id === id ? { ...task, status: 'done' } : task))
+    const nextStatus = previousTask?.status === 'done' ? 'todo' : 'done'
+    setTasks(current => current.map(task => task.id === id ? { ...task, status: nextStatus } : task))
     try {
       const response = await fetch(`/api/tasks/${id}/`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
-        body: JSON.stringify({ status: 'done' }),
+        body: JSON.stringify({ status: nextStatus }),
       })
       if (!response.ok && response.status !== 404) throw new Error(`Task update returned ${response.status}`)
     } catch (error) {
@@ -230,7 +232,11 @@ function App() {
   }
   const addTask = async event => {
     event.preventDefault()
-    if (!newTask.trim()) return
+    setTaskError('')
+    if (!newTask.trim()) {
+      setTaskError('Task name is required.')
+      return
+    }
     try {
       const response = await fetch('/api/tasks/', {
         method: 'POST',
@@ -248,6 +254,7 @@ function App() {
       setNewRecurrence('none')
       setShowModal(false)
     } catch (error) {
+      setTaskError(error.message || 'Task could not be created.')
       console.error('Task could not be created.', error.message)
     }
   }
@@ -303,7 +310,7 @@ function App() {
         </>}
       </div>
     </main>
-    {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2>Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)}><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => setNewTask(event.target.value)} placeholder="What needs to happen?" /></label><div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><div className="modal-grid"><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Repeat<select value={newRecurrence} onChange={event => setNewRecurrence(event.target.value)}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
+    {showModal && <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}><form className="modal" onSubmit={addTask} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Quick capture</p><h2>Add a task</h2></div><button type="button" className="close-button" onClick={() => setShowModal(false)}><X size={18} /></button></div><label>Task name<input autoFocus value={newTask} onChange={event => { setNewTask(event.target.value); setTaskError('') }} placeholder="What needs to happen?" /></label>{taskError && <p className="auth-error" role="alert">{taskError}</p>}<div className="modal-grid"><label>Assign to<select value={newAssigneeId} onChange={event => setNewAssigneeId(event.target.value)}><option value="">Unassigned</option>{workspaceData.members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Due date<input type="date" value={newDueDate} onChange={event => setNewDueDate(event.target.value)} /></label></div><div className="modal-grid"><label>Project<select value={newProjectId} onChange={event => setNewProjectId(event.target.value)}><option value="">General</option>{workspaceData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>Repeat<select value={newRecurrence} onChange={event => setNewRecurrence(event.target.value)}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div><button className="primary-button modal-submit">Create task <ArrowUpRight size={16} /></button></form></div>}
     {selectedTask && <TaskDetailDrawer task={selectedTask} workspaceId={activeWorkspaceId} onClose={() => setSelectedTask(null)} />}
   </div>
 }
