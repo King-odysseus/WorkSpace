@@ -299,3 +299,48 @@ class TaskSubtask(models.Model):
             'assignee_id': self.assignee_id,
             'assignee_name': self.assignee.get_full_name() if self.assignee else None,
         }
+
+
+class WorkspaceNotification(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='notifications')
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_notifications')
+    kind = models.CharField(max_length=40)
+    title = models.CharField(max_length=200)
+    body = models.CharField(max_length=500, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['read_at', '-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'kind': self.kind,
+            'title': self.title,
+            'body': self.body,
+            'read': self.read_at is not None,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class ActivityEvent(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='activity_events')
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_activity_events')
+    kind = models.CharField(max_length=40)
+    message = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'actor_name': self.actor.get_full_name() if self.actor else 'System',
+            'kind': self.kind,
+            'message': self.message,
+            'created_at': self.created_at.isoformat(),
+        }

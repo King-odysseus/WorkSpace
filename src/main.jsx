@@ -49,6 +49,7 @@ function App() {
   const [tasks, setTasks] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [notificationOpen, setNotificationOpen] = useState(false)
   const [newTask, setNewTask] = useState('')
   const [newAssigneeId, setNewAssigneeId] = useState('')
   const [newProjectId, setNewProjectId] = useState('')
@@ -59,7 +60,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
   const [session, setSession] = useState({ loading: true, user: null, error: '' })
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
-  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [] })
+  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [] })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -93,9 +94,11 @@ function App() {
     const refreshCollaboration = () => Promise.all([
       read(`/api/workspaces/${workspaceId}/chat-messages/`),
       read(`/api/workspaces/${workspaceId}/follow-ups/`),
-    ]).then(([messageData, followUpData]) => {
+      read(`/api/workspaces/${workspaceId}/notifications/`),
+      read(`/api/workspaces/${workspaceId}/activity/`),
+    ]).then(([messageData, followUpData, notificationData, activityData]) => {
       if (!isCurrent) return
-      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups }))
+      setWorkspaceData(current => ({ ...current, messages: messageData.messages, followUps: followUpData.follow_ups, notifications: notificationData.notifications, activity: activityData.activity }))
     }).catch(error => console.warn('Collaboration data could not be refreshed.', error.message))
 
     Promise.all([
@@ -107,8 +110,10 @@ function App() {
       read(`/api/workspaces/${workspaceId}/chat-messages/`),
       read(`/api/workspaces/${workspaceId}/follow-ups/`),
       read(`/api/workspaces/${workspaceId}/invitations/`),
+      read(`/api/workspaces/${workspaceId}/notifications/`),
+      read(`/api/workspaces/${workspaceId}/activity/`),
     ])
-      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData]) => {
+      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData]) => {
         if (!isCurrent) return
         setTasks(taskData.tasks.map(task => ({
           id: task.id,
@@ -121,7 +126,7 @@ function App() {
           estimate: 'n/a',
           recurrence: task.recurrence || 'none',
         })))
-        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations })
+        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity })
       })
       .catch(error => console.warn('Workspace data could not be loaded.', error.message))
     const refreshTimer = window.setInterval(refreshCollaboration, 15000)
@@ -183,6 +188,11 @@ function App() {
       setSession({ loading: false, user: null, error: '' })
     }
   }
+  const markNotificationsRead = async () => {
+    const response = await fetch(`/api/workspaces/${activeWorkspaceId}/notifications/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ read_all: true }) })
+    if (!response.ok) return
+    setWorkspaceData(current => ({ ...current, notifications: current.notifications.map(notification => ({ ...notification, read: true })) }))
+  }
   const addTask = async event => {
     event.preventDefault()
     if (!newTask.trim()) return
@@ -242,7 +252,7 @@ function App() {
     </aside>
 
     <main className="main-content">
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><button className="icon-button notification"><Bell size={18} /><i /></button><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <div className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></div>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button"><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
       <div className="page-content">
         {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onComplete={completeTask} onStatusChange={changeTaskStatus} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
         {active === 'Today' && <>

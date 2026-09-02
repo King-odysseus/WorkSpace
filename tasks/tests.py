@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace, WorkspaceInvitation
+from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 class TaskApiTests(TestCase):
@@ -132,6 +132,29 @@ class TaskApiTests(TestCase):
         self.assertEqual(next_task.title, 'Daily standup')
         self.assertEqual(next_task.due_date.isoformat(), '2026-09-03')
         self.assertEqual(next_task.recurrence, 'daily')
+
+    def test_task_events_create_notifications_and_activity(self):
+        teammate = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Review brief', 'assignee_id': teammate.id}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        task_id = response.json()['task']['id']
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='task_assigned').count(), 1)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_created').count(), 1)
+
+        notification_response = self.client.get(reverse('notification-list', args=[self.workspace.id]))
+        self.assertEqual(notification_response.status_code, 200)
+        self.assertEqual(notification_response.json()['unread_count'], 0)
+        self.client.force_login(teammate)
+        notification_response = self.client.get(reverse('notification-list', args=[self.workspace.id]))
+        self.assertEqual(notification_response.json()['unread_count'], 1)
+        notification_id = notification_response.json()['notifications'][0]['id']
+        read_response = self.client.patch(reverse('notification-list', args=[self.workspace.id]), data=json.dumps({'notification_id': notification_id}), content_type='application/json')
+        self.assertEqual(read_response.status_code, 200)
 
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')

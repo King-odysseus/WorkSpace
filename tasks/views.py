@@ -2,6 +2,7 @@ import json
 from datetime import date, timedelta
 
 from django.utils.dateparse import parse_datetime
+from django.utils import timezone
 from django.db import IntegrityError
 from django.contrib.auth.models import User
 from django.http import JsonResponse
@@ -28,6 +29,16 @@ def next_recurrence_date(due_date, recurrence):
         day = min(due_date.day, [31, 29 if year % 4 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
         return date(year, month, day)
     return None
+
+
+def record_activity(workspace_id, actor, kind, message):
+    from .models import ActivityEvent
+    return ActivityEvent.objects.create(workspace_id=workspace_id, actor=actor, kind=kind, message=message)
+
+
+def create_notification(workspace_id, recipient, kind, title, body=''):
+    from .models import WorkspaceNotification
+    return WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body)
 
 
 def requested_workspace(request, user):
@@ -131,6 +142,9 @@ def task_list(request):
         recurrence=recurrence,
         due_date=due_date,
     )
+    record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')
+    if assignee and assignee != request.user:
+        create_notification(workspace_id, assignee, 'task_assigned', 'You were assigned a task.', task.title)
     return JsonResponse({'task': task.as_dict()}, status=201)
 
 
@@ -202,6 +216,10 @@ def task_detail(request, task_id):
         setattr(task, field, str(payload[field]).strip() or None)
 
     task.save()
+    if previous_status != task.status:
+        record_activity(task.workspace_id, request.user, 'task_status', f'{request.user.get_full_name() or request.user.email} moved {task.title} to {task.get_status_display()}.')
+        if task.assignee and task.assignee != request.user:
+            create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display())
     if previous_status != 'done' and task.status == 'done' and task.recurrence != 'none':
         Task.objects.create(
             workspace=task.workspace,
@@ -215,6 +233,7 @@ def task_detail(request, task_id):
             due_date=next_recurrence_date(task.due_date, task.recurrence),
             recurrence=task.recurrence,
         )
+        record_activity(task.workspace_id, request.user, 'task_recurred', f'Created the next {task.recurrence} occurrence of {task.title}.')
     return JsonResponse({'task': task.as_dict()})
 
 
@@ -237,6 +256,9 @@ def task_comment_list(request, task_id):
     if not body or len(body) > 4000:
         return JsonResponse({'error': 'Comment must be between 1 and 4000 characters.'}, status=400)
     comment = TaskComment.objects.create(task=task, author=request.user, body=body)
+    record_activity(task.workspace_id, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.')
+    if task.assignee and task.assignee != request.user:
+        create_notification(task.workspace_id, task.assignee, 'task_comment', f'New comment on {task.title}', body[:120])
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
@@ -264,6 +286,7 @@ def task_subtask_list(request, task_id):
         if assignee is None:
             return JsonResponse({'error': 'Subtask assignee was not found in this workspace.'}, status=404)
     subtask = TaskSubtask.objects.create(task=task, title=title, assignee=assignee)
+    record_activity(task.workspace_id, request.user, 'subtask_created', f'{request.user.get_full_name() or request.user.email} added a subtask to {task.title}.')
     return JsonResponse({'subtask': subtask.as_dict()}, status=201)
 
 
@@ -294,7 +317,43 @@ def task_subtask_detail(request, subtask_id):
             return JsonResponse({'error': 'Completed must be true or false.'}, status=400)
         subtask.completed = payload['completed']
     subtask.save()
+    record_activity(subtask.task.workspace_id, request.user, 'subtask_updated', f'{request.user.get_full_name() or request.user.email} updated a subtask on {subtask.task.title}.')
     return JsonResponse({'subtask': subtask.as_dict()})
+
+
+@require_http_methods(['GET', 'PATCH'])
+def notification_list(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    from .models import WorkspaceNotification
+    if request.method == 'GET':
+        notifications = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)[:50]
+        return JsonResponse({'notifications': [notification.as_dict() for notification in notifications], 'unread_count': WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True).count()})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if payload.get('read_all') is True:
+        WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True).update(read_at=timezone.now())
+        return JsonResponse({'updated': 'all'})
+    notification_id = payload.get('notification_id')
+    notification = WorkspaceNotification.objects.filter(id=notification_id, workspace_id=workspace_id, recipient=request.user).first()
+    if notification is None:
+        return JsonResponse({'error': 'Notification was not found.'}, status=404)
+    notification.read_at = timezone.now()
+    notification.save(update_fields=['read_at'])
+    return JsonResponse({'notification': notification.as_dict()})
+
+
+@require_http_methods(['GET'])
+def activity_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    from .models import ActivityEvent
+    events = ActivityEvent.objects.filter(workspace_id=workspace_id).select_related('actor')[:50]
+    return JsonResponse({'activity': [event.as_dict() for event in events]})
 
 
 @require_http_methods(['GET'])

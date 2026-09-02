@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
+from .models import ActivityEvent, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 @admin.register(Workspace)
@@ -48,6 +48,20 @@ class TaskSubtaskAdmin(admin.ModelAdmin):
     list_display = ('title', 'task', 'completed', 'assignee')
     list_filter = ('completed',)
     search_fields = ('title', 'task__title')
+
+
+@admin.register(WorkspaceNotification)
+class WorkspaceNotificationAdmin(admin.ModelAdmin):
+    list_display = ('recipient', 'kind', 'title', 'read_at', 'created_at')
+    list_filter = ('kind', 'read_at')
+    search_fields = ('title', 'body', 'recipient__email')
+
+
+@admin.register(ActivityEvent)
+class ActivityEventAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'actor', 'kind', 'message', 'created_at')
+    list_filter = ('kind',)
+    search_fields = ('message', 'actor__email')
 
 
 @admin.register(CalendarEvent)
