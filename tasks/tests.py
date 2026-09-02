@@ -1,7 +1,9 @@
 import json
+from io import StringIO
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -459,6 +461,21 @@ class TaskApiTests(TestCase):
         self.assertIsNotNone(event.reminder_sent_at)
         self.client.get(reverse('calendar-event-list', args=[self.workspace.id]))
         self.assertEqual(WorkspaceNotification.objects.filter(kind='calendar_reminder', recipient=self.user).count(), 1)
+
+    def test_reminder_command_delivers_due_workspace_reminders(self):
+        start_at = timezone.now() + timedelta(minutes=10)
+        CalendarEvent.objects.create(
+            workspace=self.workspace,
+            title='Worker reminder',
+            start_at=start_at,
+            end_at=start_at + timedelta(minutes=30),
+            reminder_minutes=15,
+            created_by=self.user,
+        )
+        output = StringIO()
+        call_command('deliver_calendar_reminders', stdout=output)
+        self.assertEqual(WorkspaceNotification.objects.filter(kind='calendar_reminder', recipient=self.user).count(), 1)
+        self.assertIn('Delivered 1 calendar reminder(s).', output.getvalue())
 
     def test_report_summary_returns_workspace_metrics(self):
         Task.objects.create(workspace=self.workspace, title='Blocked work', status='blocked', assignee=self.user)
