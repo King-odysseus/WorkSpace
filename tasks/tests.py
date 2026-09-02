@@ -586,6 +586,16 @@ class TaskApiTests(TestCase):
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='check_in_submitted').count(), 1)
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_blocker').count(), 1)
 
+    def test_check_in_rejects_oversized_text(self):
+        response = self.client.post(
+            reverse('check-in-list', args=[self.workspace.id]),
+            data=json.dumps({'date': '2026-09-02', 'completed': 'x' * 4001}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('4000 characters', response.json()['error'])
+        self.assertEqual(CheckIn.objects.count(), 0)
+
     def test_chat_message_is_created_for_the_current_member(self):
         response = self.client.post(
             reverse('chat-message-list', args=[self.workspace.id]),

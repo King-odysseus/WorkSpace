@@ -70,6 +70,13 @@ def parse_reminder_minutes(value):
     return minutes, None
 
 
+def parse_bounded_text(value, field_name, max_length=4000):
+    text = str(value or '').strip()
+    if len(text) > max_length:
+        return None, f'{field_name} must be {max_length} characters or fewer.'
+    return text, None
+
+
 def deliver_due_calendar_reminders(workspace_id):
     now = timezone.now()
     horizon = now + timedelta(days=7)
@@ -981,14 +988,20 @@ def check_in_list(request, workspace_id):
     except ValueError:
         return JsonResponse({'error': 'Date must use YYYY-MM-DD format.'}, status=400)
 
+    completed, completed_error = parse_bounded_text(payload.get('completed'), 'Completed update')
+    next_steps, next_steps_error = parse_bounded_text(payload.get('next_steps'), 'Next steps')
+    blockers, blockers_error = parse_bounded_text(payload.get('blockers'), 'Blockers')
+    if completed_error or next_steps_error or blockers_error:
+        return JsonResponse({'error': completed_error or next_steps_error or blockers_error}, status=400)
+
     check_in, created = CheckIn.objects.update_or_create(
         workspace_id=workspace_id,
         user=request.user,
         date=check_in_date,
         defaults={
-            'completed': str(payload.get('completed', '')).strip(),
-            'next_steps': str(payload.get('next_steps', '')).strip(),
-            'blockers': str(payload.get('blockers', '')).strip(),
+            'completed': completed,
+            'next_steps': next_steps,
+            'blockers': blockers,
         },
     )
     actor_name = request.user.get_full_name() or request.user.email
