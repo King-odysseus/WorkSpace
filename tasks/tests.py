@@ -39,11 +39,13 @@ class TaskApiTests(TestCase):
 
         update_response = self.client.patch(
             reverse('task-detail', args=[task_id]),
-            data=json.dumps({'status': 'in_progress'}),
+            data=json.dumps({'title': 'Prepare updated launch brief', 'description': 'Include the approved rollout notes.', 'status': 'in_progress'}),
             content_type='application/json',
         )
         self.assertEqual(update_response.status_code, 200)
         self.assertEqual(update_response.json()['task']['status'], 'in_progress')
+        self.assertEqual(update_response.json()['task']['title'], 'Prepare updated launch brief')
+        self.assertEqual(update_response.json()['task']['description'], 'Include the approved rollout notes.')
 
         delete_response = self.client.delete(reverse('task-detail', args=[task_id]))
         self.assertEqual(delete_response.status_code, 200)
