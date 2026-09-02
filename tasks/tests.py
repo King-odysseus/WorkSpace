@@ -72,6 +72,7 @@ class TaskApiTests(TestCase):
         self.assertEqual(task.assignee, self.user)
         self.assertEqual(task.project_ref, project)
         self.assertEqual(response.json()['task']['project_id'], project.id)
+        self.assertEqual(response.json()['task']['project'], 'Launch')
 
     def test_task_priority_is_persisted_and_validated(self):
         response = self.client.post(

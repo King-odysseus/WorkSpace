@@ -294,7 +294,7 @@ class Task(models.Model):
             'assignee_name': (self.assignee.get_full_name() or self.assignee.email) if self.assignee else self.assignee_name,
             'title': self.title,
             'description': self.description,
-            'project': self.project,
+            'project': self.project_ref.name if self.project_ref else self.project,
             'bucket': self.bucket,
             'labels': self.labels,
             'project_id': self.project_ref_id,
