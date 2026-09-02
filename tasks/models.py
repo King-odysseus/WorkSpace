@@ -123,6 +123,7 @@ class CalendarEvent(models.Model):
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
     event_type = models.CharField(max_length=20, choices=EVENT_TYPES, default='meeting')
+    reminder_minutes = models.PositiveIntegerField(default=15)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_calendar_events')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -139,6 +140,7 @@ class CalendarEvent(models.Model):
             'start_at': self.start_at.isoformat(),
             'end_at': self.end_at.isoformat(),
             'event_type': self.event_type,
+            'reminder_minutes': self.reminder_minutes,
             'created_by': self.created_by_id,
         }
 

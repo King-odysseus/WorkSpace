@@ -202,6 +202,22 @@ class TaskApiTests(TestCase):
         self.assertEqual(delete_response.status_code, 200)
         self.assertFalse(TaskAttachment.objects.exists())
 
+    def test_calendar_reminders_and_ics_export(self):
+        create_response = self.client.post(
+            reverse('calendar-event-list', args=[self.workspace.id]),
+            data=json.dumps({'title': 'Planning', 'start_at': '2026-09-02T10:00:00Z', 'end_at': '2026-09-02T10:30:00Z', 'reminder_minutes': 30}),
+            content_type='application/json',
+        )
+        self.assertEqual(create_response.status_code, 201)
+        event_id = create_response.json()['event']['id']
+        self.assertEqual(create_response.json()['event']['reminder_minutes'], 30)
+        invalid_response = self.client.patch(reverse('calendar-event-detail', args=[self.workspace.id, event_id]), data=json.dumps({'reminder_minutes': -1}), content_type='application/json')
+        self.assertEqual(invalid_response.status_code, 400)
+        ics_response = self.client.get(reverse('calendar-ics', args=[self.workspace.id]))
+        self.assertEqual(ics_response.status_code, 200)
+        self.assertEqual(ics_response['Content-Type'], 'text/calendar; charset=utf-8')
+        self.assertIn('SUMMARY:Planning', ics_response.content.decode())
+
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
         other_workspace = Workspace.objects.create(name='Other', slug='other')

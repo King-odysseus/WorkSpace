@@ -1,13 +1,13 @@
 import json
 import re
 from pathlib import Path
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone as datetime_timezone
 
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.db import IntegrityError
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
@@ -56,6 +56,16 @@ def parse_task_labels(value):
         if label.lower() not in {existing.lower() for existing in labels}:
             labels.append(label)
     return labels, None
+
+
+def parse_reminder_minutes(value):
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        return None, 'Reminder must be a whole number of minutes.'
+    if minutes < 0 or minutes > 10080:
+        return None, 'Reminder must be between 0 and 10080 minutes.'
+    return minutes, None
 
 
 def requested_workspace(request, user):
@@ -635,6 +645,9 @@ def calendar_event_list(request, workspace_id):
     event_type = payload.get('event_type', 'meeting')
     if event_type not in {choice[0] for choice in CalendarEvent.EVENT_TYPES}:
         return JsonResponse({'error': 'Invalid event type.'}, status=400)
+    reminder_minutes, reminder_error = parse_reminder_minutes(payload.get('reminder_minutes', 15))
+    if reminder_error:
+        return JsonResponse({'error': reminder_error}, status=400)
     event = CalendarEvent.objects.create(
         workspace_id=workspace_id,
         title=title,
@@ -642,6 +655,7 @@ def calendar_event_list(request, workspace_id):
         start_at=start_at,
         end_at=end_at,
         event_type=event_type,
+        reminder_minutes=reminder_minutes,
         created_by=request.user,
     )
     return JsonResponse({'event': event.as_dict()}, status=201)
@@ -662,7 +676,7 @@ def calendar_event_detail(request, workspace_id, event_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    allowed_fields = {'title', 'description', 'start_at', 'end_at', 'event_type'}
+    allowed_fields = {'title', 'description', 'start_at', 'end_at', 'event_type', 'reminder_minutes'}
     if set(payload) - allowed_fields:
         return JsonResponse({'error': 'Unsupported calendar event fields.'}, status=400)
     start_at = event.start_at
@@ -688,10 +702,36 @@ def calendar_event_detail(request, workspace_id, event_id):
         if payload['event_type'] not in {choice[0] for choice in CalendarEvent.EVENT_TYPES}:
             return JsonResponse({'error': 'Invalid event type.'}, status=400)
         event.event_type = payload['event_type']
+    if 'reminder_minutes' in payload:
+        reminder_minutes, reminder_error = parse_reminder_minutes(payload['reminder_minutes'])
+        if reminder_error:
+            return JsonResponse({'error': reminder_error}, status=400)
+        event.reminder_minutes = reminder_minutes
     event.start_at = start_at
     event.end_at = end_at
     event.save()
     return JsonResponse({'event': event.as_dict()})
+
+
+def ics_escape(value):
+    return str(value).replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
+
+
+@require_http_methods(['GET'])
+def calendar_ics(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    events = CalendarEvent.objects.filter(workspace_id=workspace_id)
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WorkSpace//Team Calendar//EN']
+    for event in events:
+        start = event.start_at.astimezone(datetime_timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        end = event.end_at.astimezone(datetime_timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        lines.extend(['BEGIN:VEVENT', f'UID:workspace-event-{event.id}@workspace', f'DTSTAMP:{start}', f'DTSTART:{start}', f'DTEND:{end}', f'SUMMARY:{ics_escape(event.title)}', f'DESCRIPTION:{ics_escape(event.description)}', 'END:VEVENT'])
+    lines.append('END:VCALENDAR')
+    response = HttpResponse('\r\n'.join(lines) + '\r\n', content_type='text/calendar; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="workspace-{workspace_id}.ics"'
+    return response
 
 
 @require_http_methods(['GET', 'POST'])
