@@ -63,6 +63,9 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
   const [session, setSession] = useState({ loading: true, user: null, error: '' })
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
+  const [workspaceLoading, setWorkspaceLoading] = useState(false)
+  const [workspaceError, setWorkspaceError] = useState('')
+  const [workspaceReload, setWorkspaceReload] = useState(0)
   const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], buckets: [], reports: null })
 
   useEffect(() => {
@@ -92,6 +95,8 @@ function App() {
     let isCurrent = true
     const workspaceId = activeWorkspaceId
     if (!workspaceId) return undefined
+    setWorkspaceLoading(true)
+    setWorkspaceError('')
 
     const read = path => fetch(path, { credentials: 'include', headers: { 'X-Workspace-Id': String(workspaceId) } }).then(response => {
       if (!response.ok) throw new Error(`${path} returned ${response.status}`)
@@ -140,15 +145,21 @@ function App() {
           labels: task.labels || [],
         })))
         setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, buckets: bucketData.buckets, reports: reportData.summary })
+        setWorkspaceLoading(false)
       })
-      .catch(error => console.warn('Workspace data could not be loaded.', error.message))
+      .catch(error => {
+        if (!isCurrent) return
+        setWorkspaceLoading(false)
+        setWorkspaceError(error.message || 'Workspace data could not be loaded.')
+        console.warn('Workspace data could not be loaded.', error.message)
+      })
     const refreshTimer = window.setInterval(refreshCollaboration, 15000)
 
     return () => {
       isCurrent = false
       window.clearInterval(refreshTimer)
     }
-  }, [session.user, activeWorkspaceId, today])
+  }, [session.user, activeWorkspaceId, today, workspaceReload])
 
   const visibleTasks = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -279,6 +290,8 @@ function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div><div className="top-actions"><label className="top-search"><Search size={16} /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search work" aria-label="Search work" /></label><div className="notification-wrap"><button className="icon-button notification" onClick={() => setNotificationOpen(current => !current)} aria-label="Open notifications"><Bell size={18} />{workspaceData.notifications.some(notification => !notification.read) && <i />}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-heading"><strong>Notifications</strong><button onClick={markNotificationsRead}>Mark all read</button></div>{workspaceData.notifications.length ? workspaceData.notifications.slice(0, 8).map(notification => <div className={`notification-row ${notification.read ? '' : 'unread'}`} key={notification.id}><strong>{notification.title}</strong><span>{notification.body || 'Workspace update'}</span></div>) : <EmptyState text="No notifications yet." />}</div>}</div><button className="theme-toggle" onClick={() => setTheme(currentTheme => currentTheme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button><button className="help-button" onClick={() => setActive('Settings')}><CircleHelp size={17} /> Help</button><button className="user-avatar" onClick={logout} title="Sign out">KO</button></div></header>
       <div className="page-content">
+        {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}
+        {workspaceError && <div className="workspace-status error" role="alert"><span>Workspace data could not be loaded: {workspaceError}</span><button className="secondary-button" onClick={() => setWorkspaceReload(current => current + 1)}>Retry</button></div>}
         {active !== 'Today' && <WorkspaceView active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} theme={theme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => setShowModal(true)} onOpenTask={setSelectedTask} />}
         {active === 'Today' && <>
         <section className="page-heading"><div><p className="eyebrow">{todayLabel}</p><h1>Good morning, {session.user.first_name || session.user.email.split('@')[0]}</h1><p className="subtitle">Here is what is moving across {currentWorkspace?.name || 'your workspace'} today.</p></div><button className="primary-button" onClick={() => setShowModal(true)}><Plus size={18} /> Add task</button></section>
@@ -492,7 +505,7 @@ function EmptyState({ text }) {
   return <div className="empty-workspace"><div className="empty-workspace-icon"><Sparkles size={18} /></div><p>{text}</p></div>
 }
 
-function TaskCard({ task, onComplete, onStatusChange = () => undefined, onDelete = () => undefined, onOpenTask, draggable = false }) { return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button className={`task-check ${task.status === 'done' ? 'checked' : ''}`} onClick={() => onComplete(task.id)} aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} ${task.title}`}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><button className="task-title-button" onClick={() => onOpenTask?.(task)}>{task.title}</button><div><select className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option></select><span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span><button className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.title}`}><MoreHorizontal size={16} /></button></div> }
+function TaskCard({ task, onComplete, onStatusChange, onDelete, onOpenTask, draggable = false }) { return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button className={`task-check ${task.status === 'done' ? 'checked' : ''}`} onClick={() => onComplete(task.id)} aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} ${task.title}`}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><button className="task-title-button" onClick={() => onOpenTask(task)}>{task.title}</button><div><select className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="done">Done</option></select><span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span><button className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.title}`}><MoreHorizontal size={16} /></button></div> }
 
 function TaskDetailDrawer({ task, workspaceId, onClose }) {
   const [comments, setComments] = useState([])
