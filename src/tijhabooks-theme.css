@@ -512,6 +512,12 @@ body, .topbar, .workspace-card, .board-section, .focus-card, .checkin-card, .act
 .top-search input, .modal input, .modal select, .modal textarea, .composer-modal textarea, .inline-form input, .inline-form textarea { border-color: var(--workspace-border); background: var(--workspace-surface-soft); color: var(--workspace-text); }
 .top-search input::placeholder, .modal input::placeholder, .modal textarea::placeholder, .composer-modal textarea::placeholder { color: var(--workspace-text-soft); }
 html[data-theme='dark'] .workspace-card, html[data-theme='dark'] .board-section, html[data-theme='dark'] .focus-card, html[data-theme='dark'] .checkin-card, html[data-theme='dark'] .activity-card, html[data-theme='dark'] .calendar-week, html[data-theme='dark'] .modal { box-shadow: 0 10px 28px #02051f40; }
+html[data-theme='dark'] .metric-card { background: var(--workspace-surface); border-color: var(--workspace-border); box-shadow: 0 10px 28px #02051f40; }
+html[data-theme='dark'] .navy-bg { background: #173150; color: #FFFFFF; }
+html[data-theme='dark'] .orange-bg { background: #4A2B24; color: #FFB08F; }
+html[data-theme='dark'] .teal-bg { background: #123F43; color: #7DD3C7; }
+html[data-theme='dark'] .focus-progress { background: var(--workspace-surface-soft); }
+html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--workspace-surface) 57%, transparent 59%), conic-gradient(var(--teal) 67%, #123A5B 0); }
 html[data-theme='dark'] .task-card, html[data-theme='dark'] .member-row, html[data-theme='dark'] .activity-item, html[data-theme='dark'] .follow-up-row, html[data-theme='dark'] .chat-message { border-color: var(--workspace-border); background: var(--workspace-surface); }
 html[data-theme='dark'] .task-copy, html[data-theme='dark'] .task-copy strong, html[data-theme='dark'] .member-cell strong, html[data-theme='dark'] .activity-item strong, html[data-theme='dark'] .follow-up-row strong, html[data-theme='dark'] .chat-message-meta strong { color: var(--workspace-text); }
 html[data-theme='dark'] .task-copy span, html[data-theme='dark'] .task-tag, html[data-theme='dark'] .member-cell span, html[data-theme='dark'] .activity-item span, html[data-theme='dark'] .follow-up-row span, html[data-theme='dark'] .chat-message p { color: var(--workspace-text-soft); }
