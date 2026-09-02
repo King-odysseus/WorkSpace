@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import CalendarEvent, CheckIn, Membership, Project, Task, Workspace
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace
 
 
 def user_workspace_ids(user):
@@ -249,3 +249,90 @@ def check_in_list(request, workspace_id):
         },
     )
     return JsonResponse({'check_in': check_in.as_dict()}, status=201 if created else 200)
+
+
+@require_http_methods(['GET', 'POST'])
+def chat_message_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        messages = ChatMessage.objects.filter(workspace_id=workspace_id).select_related('author')[:100]
+        return JsonResponse({'messages': [message.as_dict() for message in messages]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    message_text = str(payload.get('message', '')).strip()
+    channel = str(payload.get('channel', 'general')).strip()
+    if not message_text:
+        return JsonResponse({'error': 'Message is required.'}, status=400)
+    if len(message_text) > 4000:
+        return JsonResponse({'error': 'Message must be 4000 characters or fewer.'}, status=400)
+    if not channel or len(channel) > 80:
+        return JsonResponse({'error': 'Channel must be between 1 and 80 characters.'}, status=400)
+    message = ChatMessage.objects.create(workspace_id=workspace_id, author=request.user, channel=channel, message=message_text)
+    return JsonResponse({'message': message.as_dict()}, status=201)
+
+
+@require_http_methods(['GET', 'POST'])
+def follow_up_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        follow_ups = FollowUp.objects.filter(workspace_id=workspace_id)
+        return JsonResponse({'follow_ups': [follow_up.as_dict() for follow_up in follow_ups]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    note = str(payload.get('note', '')).strip()
+    if not note:
+        return JsonResponse({'error': 'Follow-up note is required.'}, status=400)
+    if len(note) > 500:
+        return JsonResponse({'error': 'Follow-up note must be 500 characters or fewer.'}, status=400)
+    due_date = None
+    if payload.get('due_date'):
+        try:
+            due_date = date.fromisoformat(str(payload['due_date']))
+        except ValueError:
+            return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
+    task = None
+    if payload.get('task_id'):
+        task = Task.objects.filter(id=payload['task_id'], workspace_id=workspace_id).first()
+        if task is None:
+            return JsonResponse({'error': 'Task was not found in this workspace.'}, status=404)
+    follow_up = FollowUp.objects.create(workspace_id=workspace_id, task=task, created_by=request.user, note=note, due_date=due_date)
+    return JsonResponse({'follow_up': follow_up.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH'])
+def follow_up_detail(request, follow_up_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    follow_up = FollowUp.objects.filter(id=follow_up_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    if follow_up is None:
+        return JsonResponse({'error': 'Follow-up was not found.'}, status=404)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) - {'status', 'note', 'due_date'}:
+        return JsonResponse({'error': 'Only status, note, and due_date can be updated.'}, status=400)
+    if 'status' in payload:
+        if payload['status'] not in {choice[0] for choice in FollowUp.STATUS_CHOICES}:
+            return JsonResponse({'error': 'Invalid follow-up status.'}, status=400)
+        follow_up.status = payload['status']
+    if 'note' in payload:
+        note = str(payload['note']).strip()
+        if not note or len(note) > 500:
+            return JsonResponse({'error': 'Follow-up note must be between 1 and 500 characters.'}, status=400)
+        follow_up.note = note
+    if 'due_date' in payload:
+        try:
+            follow_up.due_date = date.fromisoformat(str(payload['due_date'])) if payload['due_date'] else None
+        except ValueError:
+            return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
+    follow_up.save()
+    return JsonResponse({'follow_up': follow_up.as_dict()})

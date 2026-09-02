@@ -130,6 +130,57 @@ class CheckIn(models.Model):
         }
 
 
+class ChatMessage(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='chat_messages')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_messages')
+    channel = models.CharField(max_length=80, default='general')
+    message = models.TextField(max_length=4000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'author_id': self.author_id,
+            'author_name': self.author.get_full_name() or self.author.email,
+            'channel': self.channel,
+            'message': self.message,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class FollowUp(models.Model):
+    STATUS_CHOICES = [('open', 'Open'), ('completed', 'Completed')]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='follow_ups')
+    task = models.ForeignKey('Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='follow_ups')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_follow_ups')
+    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_follow_ups')
+    note = models.CharField(max_length=500)
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['status', 'due_date', '-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'task_id': self.task_id,
+            'created_by': self.created_by_id,
+            'assigned_to': self.assigned_to_id,
+            'note': self.note,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'status': self.status,
+        }
+
+
 class Task(models.Model):
     STATUS_CHOICES = [
         ('todo', 'To do'),

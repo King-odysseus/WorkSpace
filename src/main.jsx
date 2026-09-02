@@ -41,7 +41,7 @@ function App() {
   const [selectedFilter, setSelectedFilter] = useState('All work')
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
   const [session, setSession] = useState({ loading: true, user: null, error: '' })
-  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [] })
+  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [] })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -72,8 +72,10 @@ function App() {
       read(`/api/workspaces/${workspaceId}/projects/`),
       read(`/api/workspaces/${workspaceId}/calendar-events/`),
       read(`/api/workspaces/${workspaceId}/check-ins/?date=2026-09-02`),
+      read(`/api/workspaces/${workspaceId}/chat-messages/`),
+      read(`/api/workspaces/${workspaceId}/follow-ups/`),
     ])
-      .then(([taskData, memberData, projectData, eventData, checkInData]) => {
+      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData]) => {
         if (!isCurrent) return
         if (taskData.tasks.length > 0) {
           setTasks(taskData.tasks.map(task => ({
@@ -87,7 +89,7 @@ function App() {
             estimate: 'n/a',
           })))
         }
-        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins })
+        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups })
       })
       .catch(error => console.warn('Workspace data could not be loaded.', error.message))
 
@@ -197,11 +199,15 @@ function WorkspaceView({ active, data, tasks }) {
   }
 
   if (active === 'Chat') {
-    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="New message" /><div className="chat-placeholder workspace-card"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>Team conversations are ready for the next slice</h2><p>Channels, direct messages, threaded decisions, and task-linked conversations will live here.</p></div></section>
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="New message" /><div className="chat-layout"><div className="workspace-card chat-feed">{data.messages.length ? data.messages.map(message => <div className="chat-message" key={message.id}><span className="avatar blue small">{message.author_name.slice(0, 2).toUpperCase()}</span><div><div className="chat-message-meta"><strong>{message.author_name}</strong><span>#{message.channel}</span></div><p>{message.message}</p></div></div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>No messages yet</h2><p>Start a conversation to keep decisions close to the work.</p></div>}</div><aside className="workspace-side-card"><h3>Channels</h3><div className="channel-row active"><Hash size={15} /> general <span>{data.messages.length}</span></div><div className="channel-row"><Hash size={15} /> announcements</div><div className="channel-row"><Hash size={15} /> project-launch</div></aside></div></section>
   }
 
-  const filteredTasks = active === 'My tasks' ? tasks.filter(task => task.member === 'King Odysseus' || task.member === 'Unassigned') : active === 'Follow-up' ? tasks.filter(task => ['blocked', 'review'].includes(task.status)) : tasks
-  return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add task" /><div className="workspace-card task-list-view">{active === 'Team board' && <div className="member-summary"><Users size={18} /><strong>{data.members.length || 0} members</strong><span>across this workspace</span></div>}{filteredTasks.length ? filteredTasks.map(task => <TaskCard key={task.id} task={task} onComplete={() => undefined} />) : <EmptyState text={active === 'Follow-up' ? 'Nothing needs follow-up right now.' : 'No tasks match this view yet.'} />}</div></section>
+  if (active === 'Follow-up') {
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add follow-up" /><div className="workspace-card follow-up-list">{data.followUps.length ? data.followUps.map(followUp => <div className="follow-up-row" key={followUp.id}><span className={`follow-up-status ${followUp.status}`} /> <div><strong>{followUp.note}</strong><span>{followUp.due_date ? `Due ${followUp.due_date}` : 'No due date'}{followUp.task_id ? ` | Task ${followUp.task_id}` : ''}</span></div><button className="secondary-button">{followUp.status === 'completed' ? 'Completed' : 'Mark done'}</button></div>) : <EmptyState text="Nothing needs follow-up right now." />}</div></section>
+  }
+
+  const filteredTasks = active === 'My tasks' ? tasks.filter(task => task.member === 'King Odysseus' || task.member === 'Unassigned') : tasks
+  return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add task" /><div className="workspace-card task-list-view">{active === 'Team board' && <div className="member-summary"><Users size={18} /><strong>{data.members.length || 0} members</strong><span>across this workspace</span></div>}{filteredTasks.length ? filteredTasks.map(task => <TaskCard key={task.id} task={task} onComplete={() => undefined} />) : <EmptyState text="No tasks match this view yet." />}</div></section>
 }
 
 function WorkspaceViewHeading({ title, subtitle, action }) {

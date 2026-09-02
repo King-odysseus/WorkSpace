@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .auth_views import auth_csrf, auth_login, auth_logout, auth_me
-from .views import calendar_event_list, check_in_list, health, member_list, project_list, task_detail, task_list
+from .views import calendar_event_list, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, member_list, project_list, task_detail, task_list
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -13,6 +13,9 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/projects/', project_list, name='project-list'),
     path('workspaces/<int:workspace_id>/calendar-events/', calendar_event_list, name='calendar-event-list'),
     path('workspaces/<int:workspace_id>/check-ins/', check_in_list, name='check-in-list'),
+    path('workspaces/<int:workspace_id>/chat-messages/', chat_message_list, name='chat-message-list'),
+    path('workspaces/<int:workspace_id>/follow-ups/', follow_up_list, name='follow-up-list'),
+    path('follow-ups/<int:follow_up_id>/', follow_up_detail, name='follow-up-detail'),
     path('tasks/', task_list, name='task-list'),
     path('tasks/<int:task_id>/', task_detail, name='task-detail'),
 ]

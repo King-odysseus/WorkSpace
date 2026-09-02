@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import CalendarEvent, CheckIn, Membership, Task, Workspace
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Task, Workspace
 
 
 class TaskApiTests(TestCase):
@@ -97,6 +97,26 @@ class TaskApiTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(CheckIn.objects.count(), 1)
         self.assertEqual(second.json()['check_in']['blockers'], 'Waiting on approval')
+
+    def test_chat_message_is_created_for_the_current_member(self):
+        response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': 'Launch sync is ready.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(ChatMessage.objects.get().author, self.user)
+
+    def test_follow_up_cannot_reference_another_workspace_task(self):
+        other_workspace = Workspace.objects.create(name='Other', slug='other-follow-up')
+        other_task = Task.objects.create(workspace=other_workspace, title='Private task')
+        response = self.client.post(
+            reverse('follow-up-list', args=[self.workspace.id]),
+            data=json.dumps({'note': 'Request review', 'task_id': other_task.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(FollowUp.objects.count(), 0)
 
 
 class AuthenticationApiTests(TestCase):
