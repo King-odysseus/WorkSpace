@@ -9,6 +9,7 @@
   --muted: #6B7280;
   --blue: #1D4ED8;
   --teal: #0A9E87;
+  color-scheme: light;
 }
 
 body,
@@ -84,7 +85,7 @@ body,
 
 html[data-theme='light'] body,
 html[data-theme='light'] .main-content {
-  background: #F8F9FA;
+  background: #F7F9FC;
   color: #1F2937;
 }
 
