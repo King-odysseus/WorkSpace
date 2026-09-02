@@ -317,6 +317,61 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(update_response.status_code, 200)
         self.assertIsNone(update_response.json()['follow_up']['assigned_to'])
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_assigned').count(), 1)
+
+    def test_follow_up_reassignment_records_activity_history(self):
+        first_teammate = User.objects.create_user(username='reassign-first@example.com', email='reassign-first@example.com', password='secure-pass-123')
+        second_teammate = User.objects.create_user(username='reassign-second@example.com', email='reassign-second@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=first_teammate, role='member')
+        Membership.objects.create(workspace=self.workspace, user=second_teammate, role='member')
+        follow_up_id = self.client.post(
+            reverse('follow-up-list', args=[self.workspace.id]),
+            data=json.dumps({'note': 'Confirm rollout', 'assigned_to': first_teammate.id}),
+            content_type='application/json',
+        ).json()['follow_up']['id']
+
+        reassign_response = self.client.patch(
+            reverse('follow-up-detail', args=[follow_up_id]),
+            data=json.dumps({'assigned_to': second_teammate.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(reassign_response.status_code, 200)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_assigned').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=second_teammate, kind='follow_up_assigned').count(), 1)
+
+        unassign_response = self.client.patch(
+            reverse('follow-up-detail', args=[follow_up_id]),
+            data=json.dumps({'assigned_to': None}),
+            content_type='application/json',
+        )
+        self.assertEqual(unassign_response.status_code, 200)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_assigned').count(), 2)
+        self.assertEqual(WorkspaceNotification.objects.filter(kind='follow_up_assigned').count(), 2)
+
+    def test_follow_up_due_date_change_records_activity(self):
+        follow_up_id = self.client.post(
+            reverse('follow-up-list', args=[self.workspace.id]),
+            data=json.dumps({'note': 'Confirm budget sign-off'}),
+            content_type='application/json',
+        ).json()['follow_up']['id']
+
+        set_response = self.client.patch(
+            reverse('follow-up-detail', args=[follow_up_id]),
+            data=json.dumps({'due_date': '2026-09-10'}),
+            content_type='application/json',
+        )
+        self.assertEqual(set_response.status_code, 200)
+        self.assertEqual(set_response.json()['follow_up']['due_date'], '2026-09-10')
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_due_date').count(), 1)
+
+        clear_response = self.client.patch(
+            reverse('follow-up-detail', args=[follow_up_id]),
+            data=json.dumps({'due_date': None}),
+            content_type='application/json',
+        )
+        self.assertEqual(clear_response.status_code, 200)
+        self.assertIsNone(clear_response.json()['follow_up']['due_date'])
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_due_date').count(), 2)
 
     def test_follow_up_completion_notifies_creator_and_records_activity(self):
         teammate = User.objects.create_user(username='completion-member@example.com', email='completion-member@example.com', password='secure-pass-123')

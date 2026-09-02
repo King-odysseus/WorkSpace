@@ -1119,6 +1119,7 @@ def follow_up_detail(request, follow_up_id):
     previous_status = follow_up.status
     previous_assignee = follow_up.assigned_to
     previous_task = follow_up.task
+    previous_due_date = follow_up.due_date
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -1156,8 +1157,18 @@ def follow_up_detail(request, follow_up_id):
         record_activity(follow_up.workspace_id, request.user, 'follow_up_status', f'{actor_name} marked a follow-up {follow_up.status}.')
         if follow_up.status == 'completed' and follow_up.created_by != request.user:
             create_notification(follow_up.workspace_id, follow_up.created_by, 'follow_up_completed', 'Follow-up completed.', follow_up.note)
-    if previous_assignee != follow_up.assigned_to and follow_up.assigned_to and follow_up.assigned_to != request.user:
-        create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note)
+    if previous_assignee != follow_up.assigned_to:
+        if follow_up.assigned_to:
+            record_activity(follow_up.workspace_id, request.user, 'follow_up_assigned', f'{actor_name} assigned a follow-up to {follow_up.assigned_to.get_full_name() or follow_up.assigned_to.email}.')
+        else:
+            record_activity(follow_up.workspace_id, request.user, 'follow_up_assigned', f'{actor_name} unassigned a follow-up.')
+        if follow_up.assigned_to and follow_up.assigned_to != request.user:
+            create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note)
+    if previous_due_date != follow_up.due_date:
+        if follow_up.due_date:
+            record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} set the follow-up due date to {follow_up.due_date.isoformat()}.')
+        else:
+            record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} cleared the follow-up due date.')
     if previous_task != follow_up.task:
         record_activity(follow_up.workspace_id, request.user, 'follow_up_task', f'{actor_name} linked a task to a follow-up.' if follow_up.task else f'{actor_name} removed a task link from a follow-up.')
     return JsonResponse({'follow_up': follow_up.as_dict()})
