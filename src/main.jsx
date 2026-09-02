@@ -855,6 +855,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const updateTaskField = event => setTaskFields(current => ({ ...current, [event.target.name]: event.target.value }))
   const saveTaskFields = async event => {
     event.preventDefault()
+    setError('')
     const leaderFields = ['assignee_id', 'project_id']
     const payload = canManageTasks ? taskFields : Object.fromEntries(Object.entries(taskFields).filter(([field]) => !leaderFields.includes(field)))
     const response = await request(`/api/tasks/${task.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify(payload) })
@@ -865,6 +866,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const addComment = async event => {
     event.preventDefault()
     if (!comment.trim()) return
+    setError('')
     const response = await request(`/api/tasks/${task.id}/comments/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ body: comment.trim() }) })
     const data = await response.json()
     if (!response.ok) return setError(data.error || 'Comment could not be added.')
@@ -874,6 +876,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const addSubtask = async event => {
     event.preventDefault()
     if (!subtask.trim()) return
+    setError('')
     const response = await request(`/api/tasks/${task.id}/subtasks/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ title: subtask.trim() }) })
     const data = await response.json()
     if (!response.ok) return setError(data.error || 'Subtask could not be added.')
@@ -881,12 +884,14 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
     setSubtask('')
   }
   const toggleSubtask = async item => {
+    setError('')
     const response = await request(`/api/subtasks/${item.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ completed: !item.completed }) })
     const data = await response.json()
     if (!response.ok) return setError(data.error || 'Subtask could not be updated.')
     setSubtasks(current => current.map(existing => existing.id === item.id ? data.subtask : existing))
   }
   const deleteSubtask = async item => {
+    setError('')
     const response = await request(`/api/subtasks/${item.id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': await getCsrfToken() } })
     const data = await response.json()
     if (!response.ok) return setError(data.error || 'Subtask could not be deleted.')
@@ -894,6 +899,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   }
   const saveLabels = async event => {
     event.preventDefault()
+    setError('')
     const labels = [...new Set(labelInput.split(',').map(label => label.trim()).filter(Boolean))]
     const response = await request(`/api/tasks/${task.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ labels }) })
     const data = await response.json()
@@ -903,6 +909,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const uploadAttachment = async event => {
     const file = event.target.files?.[0]
     if (!file) return
+    setError('')
     const formData = new FormData()
     formData.append('file', file)
     const response = await request(`/api/tasks/${task.id}/attachments/`, { method: 'POST', headers: { 'X-CSRFToken': await getCsrfToken() }, body: formData })
@@ -912,6 +919,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
     event.target.value = ''
   }
   const deleteAttachment = async attachment => {
+    setError('')
     const response = await request(`/api/attachments/${attachment.id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': await getCsrfToken() } })
     if (!response.ok) return setError('Attachment could not be deleted.')
     setAttachments(current => current.filter(item => item.id !== attachment.id))
