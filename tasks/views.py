@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace, WorkspaceInvitation
 
 
 def user_workspace_ids(user):
@@ -44,6 +44,15 @@ def require_workspace_member(request, workspace_id):
     membership = Membership.objects.select_related('workspace', 'user').filter(workspace_id=workspace_id, user=request.user).first()
     if membership is None:
         return None, JsonResponse({'error': 'You do not belong to this workspace.'}, status=403)
+    return membership, None
+
+
+def require_workspace_leader(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return None, error
+    if membership.role not in {'owner', 'manager'}:
+        return None, JsonResponse({'error': 'Owner or manager access is required.'}, status=403)
     return membership, None
 
 
@@ -171,6 +180,40 @@ def member_list(request, workspace_id):
         return error
     members = Membership.objects.filter(workspace_id=workspace_id).select_related('user')
     return JsonResponse({'members': [member.as_dict() for member in members]})
+
+
+@require_http_methods(['GET', 'POST'])
+def invitation_list(request, workspace_id):
+    membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
+    _, error = membership_check(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        invitations = WorkspaceInvitation.objects.filter(workspace_id=workspace_id)
+        return JsonResponse({'invitations': [invitation.as_dict() for invitation in invitations]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    email = str(payload.get('email', '')).strip().lower()
+    role = payload.get('role', 'member')
+    if '@' not in email or len(email) > 254:
+        return JsonResponse({'error': 'A valid email address is required.'}, status=400)
+    if role not in {'manager', 'member'}:
+        return JsonResponse({'error': 'Invitation role must be manager or member.'}, status=400)
+    if Membership.objects.filter(workspace_id=workspace_id, user__email__iexact=email).exists():
+        return JsonResponse({'error': 'This user is already a workspace member.'}, status=409)
+    invitation, created = WorkspaceInvitation.objects.get_or_create(
+        workspace_id=workspace_id,
+        email=email,
+        status='pending',
+        defaults={'role': role, 'invited_by': request.user},
+    )
+    if not created:
+        invitation.role = role
+        invitation.invited_by = request.user
+        invitation.save(update_fields=['role', 'invited_by'])
+    return JsonResponse({'invitation': invitation.as_dict()}, status=201 if created else 200)
 
 
 @require_http_methods(['GET', 'POST'])

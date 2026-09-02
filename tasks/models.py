@@ -38,6 +38,32 @@ class Membership(models.Model):
         }
 
 
+class WorkspaceInvitation(models.Model):
+    STATUS_CHOICES = [('pending', 'Pending'), ('accepted', 'Accepted'), ('cancelled', 'Cancelled')]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='invitations')
+    email = models.EmailField()
+    role = models.CharField(max_length=20, choices=Membership.ROLE_CHOICES, default='member')
+    invited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_invitations')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['status', '-created_at']
+        constraints = [models.UniqueConstraint(fields=['workspace', 'email', 'status'], name='unique_workspace_invitation_status')]
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'email': self.email,
+            'role': self.role,
+            'status': self.status,
+            'invited_by': self.invited_by_id,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
 class Project(models.Model):
     STATUS_CHOICES = [
         ('planning', 'Planning'),

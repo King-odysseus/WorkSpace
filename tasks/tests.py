@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
 
-from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace
+from .models import CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, Project, Task, Workspace, WorkspaceInvitation
 
 
 class TaskApiTests(TestCase):
@@ -131,6 +131,27 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(FollowUp.objects.count(), 0)
+
+    def test_owner_can_create_a_workspace_invitation(self):
+        response = self.client.post(
+            reverse('invitation-list', args=[self.workspace.id]),
+            data=json.dumps({'email': 'new-member@example.com', 'role': 'member'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        invitation = WorkspaceInvitation.objects.get()
+        self.assertEqual(invitation.email, 'new-member@example.com')
+
+    def test_regular_member_cannot_create_a_workspace_invitation(self):
+        member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        self.client.login(username='member@example.com', password='secure-pass-123')
+        response = self.client.post(
+            reverse('invitation-list', args=[self.workspace.id]),
+            data=json.dumps({'email': 'new-member@example.com'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
 
 
 class AuthenticationApiTests(TestCase):
