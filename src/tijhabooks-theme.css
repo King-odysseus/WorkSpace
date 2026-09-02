@@ -289,6 +289,8 @@ html[data-theme='light'] .theme-toggle {
 .pending-heading { margin-top: 28px !important; }
 .task-status-select { border: 0; cursor: pointer; appearance: auto; }
 .task-status-select:focus { outline: 2px solid #C49A6C; outline-offset: 1px; }
+.task-more-button { display: grid; place-items: center; padding: 3px; border: 0; background: transparent; color: #9DA8B5; cursor: pointer; }
+.task-more-button:hover { color: #DD6C3C; }
 .chat-placeholder { min-height: 310px; display: grid; place-items: center; align-content: center; text-align: center; }
 .chat-placeholder-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; color: #1D4ED8; background: #EAF0FF; }
 .chat-placeholder h2 { margin: 17px 0 7px; color: #0B0B45; font: 700 17px 'Plus Jakarta Sans'; }
