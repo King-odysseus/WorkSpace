@@ -328,6 +328,17 @@ class TaskApiTests(TestCase):
         self.assertEqual(delete_response.status_code, 200)
         self.assertFalse(TaskAttachment.objects.exists())
 
+    def test_members_cannot_delete_attachments_on_unassigned_tasks(self):
+        task = Task.objects.create(workspace=self.workspace, title='Owner task', assignee=self.user)
+        upload = SimpleUploadedFile('owner-notes.txt', b'private notes', content_type='text/plain')
+        attachment = TaskAttachment.objects.create(task=task, uploaded_by=self.user, file=upload, original_name='owner-notes.txt')
+        teammate = User.objects.create_user(username='attachment-member@example.com', email='attachment-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+        response = self.client.delete(reverse('task-attachment-detail', args=[attachment.id]))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(TaskAttachment.objects.filter(id=attachment.id).exists())
+
     def test_calendar_reminders_and_ics_export(self):
         create_response = self.client.post(
             reverse('calendar-event-list', args=[self.workspace.id]),

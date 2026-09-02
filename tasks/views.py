@@ -548,6 +548,9 @@ def task_attachment_detail(request, attachment_id):
     attachment = TaskAttachment.objects.filter(id=attachment_id, task__workspace_id__in=user_workspace_ids(request.user)).first()
     if attachment is None:
         return JsonResponse({'error': 'Attachment was not found.'}, status=404)
+    permission_error = require_task_editor(request, attachment.task)
+    if permission_error:
+        return permission_error
     attachment.file.delete(save=False)
     attachment.delete()
     return JsonResponse({'deleted': attachment_id})
