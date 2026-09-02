@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .auth_views import auth_csrf, auth_login, auth_logout, auth_me
-from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, member_detail, member_list, notification_list, plan_bucket_list, project_detail, project_list, report_summary, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_list, task_comment_list, task_detail, task_list, task_subtask_detail, task_subtask_list
+from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, member_detail, member_list, notification_list, plan_bucket_list, project_detail, project_list, report_summary, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_list, task_subtask_detail, task_subtask_list
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -37,4 +37,5 @@ urlpatterns = [
     path('tasks/<int:task_id>/attachments/', task_attachment_list, name='task-attachment-list'),
     path('subtasks/<int:subtask_id>/', task_subtask_detail, name='task-subtask-detail'),
     path('attachments/<int:attachment_id>/', task_attachment_detail, name='task-attachment-detail'),
+    path('attachments/<int:attachment_id>/download/', task_attachment_download, name='task-attachment-download'),
 ]

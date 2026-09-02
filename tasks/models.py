@@ -362,7 +362,7 @@ class TaskAttachment(models.Model):
             'id': self.id,
             'task_id': self.task_id,
             'original_name': self.original_name,
-            'file_url': self.file.url,
+            'file_url': f'/api/attachments/{self.id}/download/',
             'uploaded_by': self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown user',
             'created_at': self.created_at.isoformat(),
         }

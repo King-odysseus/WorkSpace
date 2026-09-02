@@ -49,8 +49,6 @@ services:
       dockerfile: Dockerfile.web
     ports:
       - "${WORKSPACE_WEB_PORT:-8080}:80"
-    volumes:
-      - workspace-media:/var/www/media:ro
     depends_on:
       api:
         condition: service_healthy

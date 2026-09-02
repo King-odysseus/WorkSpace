@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.contrib.auth.models import User
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
@@ -579,6 +579,19 @@ def task_attachment_detail(request, attachment_id):
     attachment.file.delete(save=False)
     attachment.delete()
     return JsonResponse({'deleted': attachment_id})
+
+
+@require_http_methods(['GET'])
+def task_attachment_download(request, attachment_id):
+    auth_error = require_authenticated(request)
+    if auth_error:
+        return auth_error
+    attachment = TaskAttachment.objects.filter(id=attachment_id, task__workspace_id__in=user_workspace_ids(request.user)).first()
+    if attachment is None:
+        return JsonResponse({'error': 'Attachment was not found.'}, status=404)
+    if not attachment.file:
+        return JsonResponse({'error': 'Attachment file is unavailable.'}, status=404)
+    return FileResponse(attachment.file.open('rb'), as_attachment=True, filename=attachment.original_name)
 
 
 @require_http_methods(['GET', 'PATCH'])
