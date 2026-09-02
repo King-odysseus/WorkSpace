@@ -124,8 +124,11 @@ function App() {
 
   useEffect(() => {
     fetch('/api/auth/me/', { credentials: 'include' })
-      .then(response => response.json())
-      .then(data => setSession({ loading: false, user: data.user || null, error: '' }))
+      .then(response => response.json().then(data => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error || 'The authentication service is unavailable.')
+        setSession({ loading: false, user: data.user || null, error: '' })
+      })
       .catch(error => setSession({ loading: false, user: null, error: error.message }))
   }, [])
 
