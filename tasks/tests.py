@@ -284,6 +284,14 @@ class TaskApiTests(TestCase):
         self.assertEqual(update_response.status_code, 200)
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='follow_up_completed').count(), 1)
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_status').count(), 1)
+        reopen_response = self.client.patch(
+            reverse('follow-up-detail', args=[response.json()['follow_up']['id']]),
+            data=json.dumps({'status': 'open'}),
+            content_type='application/json',
+        )
+        self.assertEqual(reopen_response.status_code, 200)
+        self.assertEqual(reopen_response.json()['follow_up']['status'], 'open')
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='follow_up_status').count(), 2)
 
     def test_task_attachment_upload_is_scoped_and_validated(self):
         task = Task.objects.create(workspace=self.workspace, title='Attach brief')

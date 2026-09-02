@@ -390,8 +390,8 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   }
 
   const completeFollowUp = async followUp => {
-    if (followUp.status === 'completed') return
-    const response = await fetch(`/api/follow-ups/${followUp.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status: 'completed' }) })
+    const nextStatus = followUp.status === 'completed' ? 'open' : 'completed'
+    const response = await fetch(`/api/follow-ups/${followUp.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status: nextStatus }) })
     if (!response.ok) return
     const responseData = await response.json()
     setLocalData(current => ({ ...current, followUps: current.followUps.map(item => item.id === followUp.id ? responseData.follow_up : item) }))
@@ -532,7 +532,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   }
 
   if (active === 'Follow-up') {
-    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add follow-up" onAction={() => openComposer('followup')} /><div className="workspace-card follow-up-list">{localData.followUps.length ? localData.followUps.map(followUp => <div className="follow-up-row" key={followUp.id}><span className={`follow-up-status ${followUp.status}`} /> <div><strong>{followUp.note}</strong><span>{followUp.due_date ? `Due ${followUp.due_date}` : 'No due date'}{followUp.task_id ? ` | Task ${followUp.task_id}` : ''}{followUp.assigned_to_name ? ` | ${followUp.assigned_to_name}` : ''}</span></div><button className="secondary-button" onClick={() => completeFollowUp(followUp)}>{followUp.status === 'completed' ? 'Completed' : 'Mark done'}</button></div>) : <EmptyState text="Nothing needs follow-up right now." />}</div>{composerOpen && <WorkspaceComposer type="followup" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} members={localData.members} />}</section>
+    return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="Add follow-up" onAction={() => openComposer('followup')} /><div className="workspace-card follow-up-list">{localData.followUps.length ? localData.followUps.map(followUp => <div className="follow-up-row" key={followUp.id}><span className={`follow-up-status ${followUp.status}`} /> <div><strong>{followUp.note}</strong><span>{followUp.due_date ? `Due ${followUp.due_date}` : 'No due date'}{followUp.task_id ? ` | Task ${followUp.task_id}` : ''}{followUp.assigned_to_name ? ` | ${followUp.assigned_to_name}` : ''}</span></div><button className="secondary-button" onClick={() => completeFollowUp(followUp)}>{followUp.status === 'completed' ? 'Reopen' : 'Mark done'}</button></div>) : <EmptyState text="Nothing needs follow-up right now." />}</div>{composerOpen && <WorkspaceComposer type="followup" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} members={localData.members} />}</section>
   }
 
   if (active === 'Team board') {
