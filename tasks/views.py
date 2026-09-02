@@ -999,6 +999,8 @@ def follow_up_detail(request, follow_up_id):
     follow_up = FollowUp.objects.filter(id=follow_up_id, workspace_id__in=user_workspace_ids(request.user)).first()
     if follow_up is None:
         return JsonResponse({'error': 'Follow-up was not found.'}, status=404)
+    previous_status = follow_up.status
+    previous_assignee = follow_up.assigned_to
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -1024,4 +1026,11 @@ def follow_up_detail(request, follow_up_id):
         if payload['assigned_to'] and follow_up.assigned_to is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     follow_up.save()
+    actor_name = request.user.get_full_name() or request.user.email
+    if previous_status != follow_up.status:
+        record_activity(follow_up.workspace_id, request.user, 'follow_up_status', f'{actor_name} marked a follow-up {follow_up.status}.')
+        if follow_up.status == 'completed' and follow_up.created_by != request.user:
+            create_notification(follow_up.workspace_id, follow_up.created_by, 'follow_up_completed', 'Follow-up completed.', follow_up.note)
+    if previous_assignee != follow_up.assigned_to and follow_up.assigned_to and follow_up.assigned_to != request.user:
+        create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note)
     return JsonResponse({'follow_up': follow_up.as_dict()})
