@@ -7,7 +7,7 @@ development_secret = 'local-development-only-key-change-before-deploy'
 SECRET_KEY = os.environ.get('WORKSPACE_SECRET_KEY', development_secret)
 DEBUG = os.environ.get('WORKSPACE_DEBUG', 'true').lower() == 'true'
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('WORKSPACE_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
-CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:5175', 'http://localhost:5175', 'http://192.168.68.55:5175']
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get('WORKSPACE_CSRF_TRUSTED_ORIGINS', 'http://127.0.0.1:5175,http://localhost:5175,http://192.168.68.55:5175').split(',') if origin.strip()]
 if not DEBUG and (not SECRET_KEY or SECRET_KEY == development_secret):
     raise ImproperlyConfigured('WORKSPACE_SECRET_KEY must be set when WORKSPACE_DEBUG is false.')
 
@@ -79,6 +79,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
