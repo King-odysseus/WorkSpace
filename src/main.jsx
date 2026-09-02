@@ -774,7 +774,9 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const updateTaskField = event => setTaskFields(current => ({ ...current, [event.target.name]: event.target.value }))
   const saveTaskFields = async event => {
     event.preventDefault()
-    const response = await request(`/api/tasks/${task.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify(taskFields) })
+    const leaderFields = ['assignee_id', 'project_id']
+    const payload = canManageTasks ? taskFields : Object.fromEntries(Object.entries(taskFields).filter(([field]) => !leaderFields.includes(field)))
+    const response = await request(`/api/tasks/${task.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify(payload) })
     const data = await response.json()
     if (!response.ok) return setError(data.error || 'Task details could not be saved.')
     onTaskUpdated(data.task)

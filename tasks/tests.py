@@ -443,6 +443,9 @@ class TaskApiTests(TestCase):
         self.assertEqual(update_response.status_code, 403)
         reassign_response = self.client.patch(reverse('task-detail', args=[assigned_task.id]), data=json.dumps({'assignee_id': self.user.id}), content_type='application/json')
         self.assertEqual(reassign_response.status_code, 403)
+        member_update = self.client.patch(reverse('task-detail', args=[assigned_task.id]), data=json.dumps({'title': 'Member task updated', 'status': 'in_progress'}), content_type='application/json')
+        self.assertEqual(member_update.status_code, 200)
+        self.assertEqual(member_update.json()['task']['title'], 'Member task updated')
         delete_response = self.client.delete(reverse('task-detail', args=[task.id]))
         self.assertEqual(delete_response.status_code, 403)
 
