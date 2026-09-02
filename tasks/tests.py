@@ -413,6 +413,19 @@ class TaskApiTests(TestCase):
         self.assertEqual(denied.status_code, 403)
         self.assertTrue(AuditLog.objects.filter(workspace=self.workspace).exists())
 
+    def test_owner_can_cancel_pending_invitation(self):
+        invitation = WorkspaceInvitation.objects.create(
+            workspace=self.workspace,
+            email='cancel@example.com',
+            invited_by=self.user,
+            role='member',
+        )
+        response = self.client.delete(reverse('invitation-detail', args=[self.workspace.id, invitation.id]))
+        self.assertEqual(response.status_code, 200)
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, 'cancelled')
+        self.assertTrue(ActivityEvent.objects.filter(workspace=self.workspace, kind='invitation_cancelled').exists())
+
     def test_user_cannot_read_another_workspace_tasks(self):
         other_user = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
         other_workspace = Workspace.objects.create(name='Other', slug='other')

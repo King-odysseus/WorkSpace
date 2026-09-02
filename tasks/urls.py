@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .auth_views import auth_csrf, auth_login, auth_logout, auth_me
-from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_list, member_detail, member_list, notification_list, plan_bucket_list, project_detail, project_list, report_summary, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_list, task_comment_list, task_detail, task_list, task_subtask_detail, task_subtask_list
+from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, member_detail, member_list, notification_list, plan_bucket_list, project_detail, project_list, report_summary, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_list, task_comment_list, task_detail, task_list, task_subtask_detail, task_subtask_list
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -12,6 +12,7 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/members/', member_list, name='member-list'),
     path('workspaces/<int:workspace_id>/members/<int:user_id>/', member_detail, name='member-detail'),
     path('workspaces/<int:workspace_id>/invitations/', invitation_list, name='invitation-list'),
+    path('workspaces/<int:workspace_id>/invitations/<int:invitation_id>/', invitation_detail, name='invitation-detail'),
     path('invitations/<int:invitation_id>/accept/', invitation_accept, name='invitation-accept'),
     path('workspaces/<int:workspace_id>/projects/', project_list, name='project-list'),
     path('workspaces/<int:workspace_id>/projects/<int:project_id>/', project_detail, name='project-detail'),

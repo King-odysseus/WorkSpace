@@ -686,6 +686,20 @@ def invitation_accept(request, invitation_id):
     return JsonResponse({'workspace': {'id': invitation.workspace_id, 'name': invitation.workspace.name, 'slug': invitation.workspace.slug}, 'membership': membership.as_dict()})
 
 
+@require_http_methods(['DELETE'])
+def invitation_detail(request, workspace_id, invitation_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    invitation = WorkspaceInvitation.objects.filter(id=invitation_id, workspace_id=workspace_id, status='pending').first()
+    if invitation is None:
+        return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
+    invitation.status = 'cancelled'
+    invitation.save(update_fields=['status'])
+    record_activity(workspace_id, request.user, 'invitation_cancelled', f'{request.user.get_full_name() or request.user.email} cancelled an invitation for {invitation.email}.')
+    return JsonResponse({'invitation': invitation.as_dict()})
+
+
 @require_http_methods(['GET', 'POST'])
 def project_list(request, workspace_id):
     membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
