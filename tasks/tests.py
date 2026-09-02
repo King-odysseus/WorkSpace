@@ -217,6 +217,24 @@ class TaskApiTests(TestCase):
         read_response = self.client.patch(reverse('notification-list', args=[self.workspace.id]), data=json.dumps({'notification_id': notification_id}), content_type='application/json')
         self.assertEqual(read_response.status_code, 200)
 
+    def test_reassigning_task_notifies_new_assignee(self):
+        original_assignee = User.objects.create_user(username='first@example.com', email='first@example.com', password='secure-pass-123')
+        new_assignee = User.objects.create_user(username='second@example.com', email='second@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=original_assignee, role='member')
+        Membership.objects.create(workspace=self.workspace, user=new_assignee, role='member')
+        task = Task.objects.create(workspace=self.workspace, title='Draft report', assignee=original_assignee)
+
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'assignee_id': new_assignee.id}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=new_assignee, kind='task_assigned').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=original_assignee, kind='task_assigned').count(), 0)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_assigned').count(), 1)
+
     def test_owner_can_create_and_read_plan_buckets(self):
         create_response = self.client.post(
             reverse('plan-bucket-list', args=[self.workspace.id]),

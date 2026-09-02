@@ -384,6 +384,7 @@ def task_detail(request, task_id):
         task.title = title
 
     previous_status = task.status
+    previous_assignee = task.assignee
     if 'status' in payload:
         valid_statuses = {choice[0] for choice in Task.STATUS_CHOICES}
         if payload['status'] not in valid_statuses:
@@ -437,6 +438,9 @@ def task_detail(request, task_id):
         record_activity(task.workspace_id, request.user, 'task_status', f'{request.user.get_full_name() or request.user.email} moved {task.title} to {task.get_status_display()}.')
         if task.assignee and task.assignee != request.user:
             create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display())
+    if previous_assignee != task.assignee and task.assignee and task.assignee != request.user:
+        record_activity(task.workspace_id, request.user, 'task_assigned', f'{request.user.get_full_name() or request.user.email} assigned {task.title} to {task.assignee.get_full_name() or task.assignee.email}.')
+        create_notification(task.workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title)
     next_task = None
     if previous_status != 'done' and task.status == 'done' and task.recurrence != 'none':
         next_task = Task.objects.create(
