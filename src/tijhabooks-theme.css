@@ -124,7 +124,9 @@ html[data-theme='light'] .theme-toggle {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: radial-gradient(circle at top right, #1C1C6E 0, #0B0B45 48%, #07072E 100%);
+  background-image: linear-gradient(90deg, #0B0B45E8 0%, #0B0B45B8 44%, #0B0B4533 100%), url('/auth-background.png');
+  background-size: cover;
+  background-position: center;
 }
 
 .auth-panel {
