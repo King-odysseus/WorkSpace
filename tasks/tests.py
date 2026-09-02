@@ -384,6 +384,11 @@ class TaskApiTests(TestCase):
         teammate = User.objects.create_user(username='attachment-member@example.com', email='attachment-member@example.com', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
         self.client.force_login(teammate)
+        upload_response = self.client.post(
+            reverse('task-attachment-list', args=[Task.objects.create(workspace=self.workspace, title='Unassigned task').id]),
+            data={'file': SimpleUploadedFile('member-notes.txt', b'private notes', content_type='text/plain')},
+        )
+        self.assertEqual(upload_response.status_code, 403)
         response = self.client.delete(reverse('task-attachment-detail', args=[attachment.id]))
         self.assertEqual(response.status_code, 403)
         self.assertTrue(TaskAttachment.objects.filter(id=attachment.id).exists())

@@ -548,6 +548,9 @@ def task_attachment_list(request, task_id):
     if request.method == 'GET':
         attachments = TaskAttachment.objects.filter(task=task).select_related('uploaded_by')
         return JsonResponse({'attachments': [attachment.as_dict() for attachment in attachments]})
+    permission_error = require_task_editor(request, task)
+    if permission_error:
+        return permission_error
     uploaded_file = request.FILES.get('file')
     if uploaded_file is None:
         return JsonResponse({'error': 'A file is required.'}, status=400)
