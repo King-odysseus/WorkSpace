@@ -53,6 +53,7 @@ class Task(models.Model):
     def as_dict(self):
         return {
             'id': self.id,
+            'workspace_id': self.workspace_id,
             'title': self.title,
             'description': self.description,
             'assignee_name': self.assignee_name,

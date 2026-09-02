@@ -8,14 +8,46 @@ from django.views.decorators.http import require_http_methods
 from .models import Task
 
 
+def user_workspace_ids(user):
+    return user.workspace_memberships.values_list('workspace_id', flat=True)
+
+
+def requested_workspace(request, user):
+    workspace_id = request.headers.get('X-Workspace-Id')
+    memberships = user_workspace_ids(user)
+    if workspace_id:
+        try:
+            workspace_id = int(workspace_id)
+        except ValueError:
+            return None, JsonResponse({'error': 'Workspace ID must be an integer.'}, status=400)
+        if workspace_id not in memberships:
+            return None, JsonResponse({'error': 'You do not belong to this workspace.'}, status=403)
+        return workspace_id, None
+    first_workspace_id = memberships.first()
+    if first_workspace_id is None:
+        return None, JsonResponse({'error': 'Join a workspace before creating tasks.'}, status=400)
+    return first_workspace_id, None
+
+
+def require_authenticated(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    return None
+
+
 def health(request):
     return JsonResponse({'status': 'ok', 'service': 'workspace-api'})
 
 
 @require_http_methods(['GET', 'POST'])
 def task_list(request):
+    auth_error = require_authenticated(request)
+    if auth_error:
+        return auth_error
+
     if request.method == 'GET':
-        return JsonResponse({'tasks': [task.as_dict() for task in Task.objects.all()]})
+        tasks = Task.objects.filter(workspace_id__in=user_workspace_ids(request.user))
+        return JsonResponse({'tasks': [task.as_dict() for task in tasks]})
 
     try:
         payload = json.loads(request.body or '{}')
@@ -28,7 +60,12 @@ def task_list(request):
     if len(title) > 200:
         return JsonResponse({'error': 'Task title must be 200 characters or fewer.'}, status=400)
 
+    workspace_id, error = requested_workspace(request, request.user)
+    if error:
+        return error
+
     task = Task.objects.create(
+        workspace_id=workspace_id,
         title=title,
         description=str(payload.get('description', '')).strip(),
         assignee_name=str(payload.get('assignee_name', '')).strip(),
@@ -39,7 +76,9 @@ def task_list(request):
 
 @require_http_methods(['GET', 'PATCH', 'DELETE'])
 def task_detail(request, task_id):
-    task = get_object_or_404(Task, id=task_id)
+    task = get_object_or_404(Task, id=task_id, workspace_id__in=user_workspace_ids(request.user)) if request.user.is_authenticated else None
+    if task is None:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
 
     if request.method == 'GET':
         return JsonResponse({'task': task.as_dict()})
