@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, SavedView, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 @admin.register(Workspace)
@@ -68,6 +68,13 @@ class ActivityEventAdmin(admin.ModelAdmin):
 class PlanBucketAdmin(admin.ModelAdmin):
     list_display = ('name', 'workspace', 'position')
     search_fields = ('name', 'workspace__name')
+
+
+@admin.register(SavedView)
+class SavedViewAdmin(admin.ModelAdmin):
+    list_display = ('name', 'workspace', 'user', 'filter_value', 'created_at')
+    list_filter = ('workspace',)
+    search_fields = ('name', 'user__email', 'workspace__name')
 
 
 @admin.register(TaskAttachment)

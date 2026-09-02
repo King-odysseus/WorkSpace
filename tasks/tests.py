@@ -196,6 +196,31 @@ class TaskApiTests(TestCase):
         self.assertEqual(list_response.json()['buckets'][0]['name'], 'Review queue')
         self.assertEqual(PlanBucket.objects.count(), 1)
 
+    def test_saved_views_are_persisted_and_scoped_to_the_user(self):
+        create_response = self.client.post(
+            reverse('saved-view-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Urgent launch work', 'filter': 'urgent', 'search': 'launch'}),
+            content_type='application/json',
+        )
+        self.assertEqual(create_response.status_code, 201)
+        view_id = create_response.json()['saved_view']['id']
+        self.assertEqual(create_response.json()['saved_view']['search'], 'launch')
+
+        update_response = self.client.post(
+            reverse('saved-view-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Urgent launch work', 'filter': 'blocked', 'search': 'release'}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_response.status_code, 201)
+        self.assertEqual(update_response.json()['saved_view']['id'], view_id)
+        self.assertEqual(self.client.get(reverse('saved-view-list', args=[self.workspace.id])).json()['saved_views'][0]['filter'], 'blocked')
+
+        teammate = User.objects.create_user(username='saved-view-member@example.com', email='saved-view-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+        self.assertEqual(self.client.get(reverse('saved-view-list', args=[self.workspace.id])).json()['saved_views'], [])
+        self.assertEqual(self.client.delete(reverse('saved-view-detail', args=[self.workspace.id, view_id])).status_code, 404)
+
     def test_chat_replies_and_mentions_are_supported(self):
         teammate = User.objects.create_user(username='member@example.com', email='member@example.com', first_name='Team', last_name='Member', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')

@@ -12,7 +12,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from .models import AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
+from .models import AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, SavedView, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation
 
 
 def user_workspace_ids(user):
@@ -239,6 +239,41 @@ def plan_bucket_list(request, workspace_id):
         return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
     record_activity(workspace_id, request.user, 'bucket_created', f'{request.user.get_full_name() or request.user.email} created the {name} bucket.')
     return JsonResponse({'bucket': bucket.as_dict()}, status=201)
+
+
+@require_http_methods(['GET', 'POST'])
+def saved_view_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        views = SavedView.objects.filter(workspace_id=workspace_id, user=request.user)
+        return JsonResponse({'saved_views': [view.as_dict() for view in views]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    filter_value = str(payload.get('filter', 'all')).strip()
+    search = str(payload.get('search', '')).strip()
+    if not name or len(name) > 100:
+        return JsonResponse({'error': 'Saved view name must be between 1 and 100 characters.'}, status=400)
+    if len(filter_value) > 80 or len(search) > 200:
+        return JsonResponse({'error': 'Saved view filters and searches are too long.'}, status=400)
+    view, _ = SavedView.objects.update_or_create(workspace_id=workspace_id, user=request.user, name=name, defaults={'filter_value': filter_value, 'search': search})
+    return JsonResponse({'saved_view': view.as_dict()}, status=201)
+
+
+@require_http_methods(['DELETE'])
+def saved_view_detail(request, workspace_id, view_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    view = SavedView.objects.filter(id=view_id, workspace_id=workspace_id, user=request.user).first()
+    if view is None:
+        return JsonResponse({'error': 'Saved view was not found.'}, status=404)
+    view.delete()
+    return JsonResponse({'deleted': view_id})
 
 
 @require_http_methods(['GET', 'PATCH', 'DELETE'])

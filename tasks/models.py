@@ -26,6 +26,22 @@ class PlanBucket(models.Model):
         return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'position': self.position}
 
 
+class SavedView(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='saved_views')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_saved_views')
+    name = models.CharField(max_length=100)
+    filter_value = models.CharField(max_length=80, default='all')
+    search = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [models.UniqueConstraint(fields=['workspace', 'user', 'name'], name='unique_saved_view_per_user')]
+
+    def as_dict(self):
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'filter': self.filter_value, 'search': self.search, 'created_at': self.created_at.isoformat()}
+
+
 class Membership(models.Model):
     ROLE_CHOICES = [
         ('owner', 'Owner'),

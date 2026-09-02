@@ -74,7 +74,7 @@ function App() {
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const [workspaceError, setWorkspaceError] = useState('')
   const [workspaceReload, setWorkspaceReload] = useState(0)
-  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], reports: null })
+  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], savedViews: [], reports: null })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -137,10 +137,11 @@ function App() {
       read(`/api/workspaces/${workspaceId}/notifications/`),
       read(`/api/workspaces/${workspaceId}/activity/`),
       read(`/api/workspaces/${workspaceId}/plan-buckets/`),
+      read(`/api/workspaces/${workspaceId}/saved-views/`),
       read(`/api/workspaces/${workspaceId}/reports/summary/`),
       auditRequest,
     ])
-      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData, reportData, auditData]) => {
+      .then(([taskData, memberData, projectData, eventData, checkInData, messageData, followUpData, invitationData, notificationData, activityData, bucketData, savedViewData, reportData, auditData]) => {
         if (!isCurrent) return
         setTasks(taskData.tasks.map(task => ({
           id: task.id,
@@ -157,7 +158,7 @@ function App() {
           bucket: task.bucket || 'Backlog',
           labels: task.labels || [],
         })))
-        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, auditLogs: auditData.audit_logs, buckets: bucketData.buckets, reports: reportData.summary })
+        setWorkspaceData({ members: memberData.members, projects: projectData.projects, events: eventData.events, checkIns: checkInData.check_ins, messages: messageData.messages, followUps: followUpData.follow_ups, invitations: invitationData.invitations, notifications: notificationData.notifications, activity: activityData.activity, auditLogs: auditData.audit_logs, buckets: bucketData.buckets, savedViews: savedViewData.saved_views, reports: reportData.summary })
         setWorkspaceLoading(false)
       })
       .catch(error => {
@@ -344,10 +345,10 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   const [chatChannel, setChatChannel] = useState('general')
   const [plannerFilter, setPlannerFilter] = useState('all')
   const [savedViewName, setSavedViewName] = useState('')
-  const [savedViews, setSavedViews] = useState(() => JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]'))
+  const [savedViews, setSavedViews] = useState(data.savedViews?.length ? data.savedViews : () => JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]'))
   const [form, setForm] = useState({ title: '', name: '', description: '', start_at: '', end_at: '', event_type: 'meeting', reminder_minutes: 15, completed: '', next_steps: '', blockers: '', message: '', channel: 'general', note: '', due_date: '', date: today, email: '', role: 'member' })
   useEffect(() => setLocalData(data), [data])
-  useEffect(() => setSavedViews(JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]')), [workspaceId])
+  useEffect(() => setSavedViews(data.savedViews?.length ? data.savedViews : JSON.parse(localStorage.getItem(`workspace-saved-views-${workspaceId}`) || '[]')), [data.savedViews, workspaceId])
 
   const openComposer = type => {
     setComposerType(type)
@@ -462,11 +463,14 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
       const matchesFilter = plannerFilter === 'all' || task.status === plannerFilter || task.bucket === plannerFilter || (plannerFilter === 'mine' && task.member === currentUserName) || (task.labels || []).includes(plannerFilter)
       return matchesSearch && matchesFilter
     })
-    const saveView = event => {
+    const saveView = async event => {
       event.preventDefault()
       const name = savedViewName.trim()
       if (!name) return
-      const nextViews = [...savedViews.filter(view => view.name !== name), { name, filter: plannerFilter, search: searchQuery }]
+      const response = await fetch(`/api/workspaces/${workspaceId}/saved-views/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ name, filter: plannerFilter, search: searchQuery }) })
+      const responseData = await response.json()
+      if (!response.ok) return setBucketError(responseData.error || 'Saved view could not be created.')
+      const nextViews = [...savedViews.filter(view => view.name !== name), responseData.saved_view]
       setSavedViews(nextViews)
       localStorage.setItem(`workspace-saved-views-${workspaceId}`, JSON.stringify(nextViews))
       setSavedViewName('')
