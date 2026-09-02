@@ -714,7 +714,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, theme
   }
 
   if (active === 'Chat') {
-    const chatChannels = [...new Set(['general', 'announcements', 'project-launch', ...localData.messages.map(message => message.channel).filter(Boolean)])]
+    const chatChannels = [...new Set(['general', ...localData.messages.map(message => message.channel).filter(Boolean)])]
     const channelMessages = localData.messages.filter(message => message.channel === chatChannel)
     return <section className="workspace-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action="New message" onAction={() => openComposer('chat')} /><div className="chat-layout"><div className="workspace-card chat-feed">{channelMessages.length ? channelMessages.map(message => <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''}`} key={message.id}><span className="avatar blue small">{message.author_name.slice(0, 2).toUpperCase()}</span><div><div className="chat-message-meta"><strong>{message.author_name}</strong><span>#{message.channel}</span></div><p>{message.message}</p>{!message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); openComposer('chat') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div></div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>No messages in #{chatChannel}</h2><p>Start a conversation to keep decisions close to the work.</p></div>}</div><aside className="workspace-side-card"><h3>Channels</h3>{chatChannels.map(channel => <button type="button" className={`channel-row ${chatChannel === channel ? 'active' : ''}`} key={channel} onClick={() => setChatChannel(channel)}><Hash size={15} /> {channel} <span>{localData.messages.filter(message => message.channel === channel).length}</span></button>)}</aside></div>{composerOpen && <WorkspaceComposer type="chat" channels={chatChannels} form={form} setForm={setForm} replyTo={replyTo} error={composerError} submitting={submitting} onClose={() => { setComposerOpen(false); setReplyTo(null) }} onSubmit={submitComposer} />}</section>
   }
@@ -738,7 +738,7 @@ function WorkspaceViewHeading({ title, subtitle, action, onAction }) {
   return <div className="workspace-view-heading"><div><p className="eyebrow">Workspace operations</p><h1>{title}</h1><p className="subtitle">{subtitle}</p></div>{action && <button className="primary-button" onClick={onAction}><Plus size={17} /> {action}</button>}</div>
 }
 
-function WorkspaceComposer({ type, form, setForm, replyTo, error, submitting, onClose, onSubmit, members = [], tasks = [], channels = ['general', 'announcements', 'project-launch'] }) {
+function WorkspaceComposer({ type, form, setForm, replyTo, error, submitting, onClose, onSubmit, members = [], tasks = [], channels = ['general'] }) {
   const titles = { calendar: 'Add calendar event', project: 'Create project', checkin: 'Daily check-in', chat: 'New team message', followup: 'Add follow-up', invite: 'Invite team member' }
   const update = event => setForm(current => ({ ...current, [event.target.name]: event.target.value }))
   const field = (name, label, placeholder, inputType = 'text') => <label>{label}<input name={name} type={inputType} value={form[name]} onChange={update} placeholder={placeholder} required /></label>
