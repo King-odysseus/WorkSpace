@@ -300,6 +300,8 @@ html[data-theme='light'] .theme-toggle {
 .project-progress-track { height: 6px; overflow: hidden; border-radius: 999px; background: #E9EAF1; }
 .project-progress-track span { display: block; height: 100%; border-radius: inherit; background: #1D4ED8; }
 .project-footer { margin-top: 18px; justify-content: space-between; color: #8B97A7; font-size: 10px; }
+.project-task-link { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: #1D4ED8; cursor: pointer; font: 700 10px 'DM Sans'; }
+.project-task-link:hover { text-decoration: underline; }
 .task-list-view { display: flex; flex-direction: column; gap: 8px; }
 .task-list-view .task-card { min-height: 66px; }
 .member-summary { padding-bottom: 15px; border-bottom: 1px solid #E2E2E6; color: #1D4ED8; }
