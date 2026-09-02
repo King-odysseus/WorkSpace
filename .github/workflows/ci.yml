@@ -46,6 +46,14 @@ jobs:
       - name: Run Django checks
         run: python manage.py check
 
+      - name: Run Django deployment checks
+        env:
+          WORKSPACE_SECURE_SSL_REDIRECT: "true"
+          WORKSPACE_HSTS_SECONDS: "31536000"
+          WORKSPACE_HSTS_INCLUDE_SUBDOMAINS: "true"
+          WORKSPACE_HSTS_PRELOAD: "true"
+        run: python manage.py check --deploy
+
       - name: Check migrations
         run: python manage.py makemigrations --check --dry-run
 
