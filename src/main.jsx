@@ -235,7 +235,7 @@ function App() {
   const deleteTask = async id => {
     if (!window.confirm('Delete this task?')) return
     const response = await fetch(`/api/tasks/${id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') } })
-    if (!response.ok) return
+    if (!response.ok) return setWorkspaceError('Task could not be deleted.')
     setTasks(current => current.filter(task => task.id !== id))
   }
   const logout = async () => {
