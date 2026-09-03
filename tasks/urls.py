@@ -1,7 +1,7 @@
 from django.urls import path
 
-from .auth_views import auth_csrf, auth_login, auth_logout, auth_me
-from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_message_list, check_in_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, member_detail, member_list, notification_list, plan_bucket_list, project_detail, project_list, report_summary, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_list, task_subtask_detail, task_subtask_list
+from .auth_views import auth_csrf, auth_login, auth_logout, auth_me, user_avatar, user_avatar_download, user_presence
+from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -9,6 +9,9 @@ urlpatterns = [
     path('auth/csrf/', auth_csrf, name='auth-csrf'),
     path('auth/login/', auth_login, name='auth-login'),
     path('auth/logout/', auth_logout, name='auth-logout'),
+    path('auth/me/avatar/', user_avatar, name='auth-me-avatar'),
+    path('auth/me/presence/', user_presence, name='auth-me-presence'),
+    path('users/<int:user_id>/avatar/', user_avatar_download, name='user-avatar-download'),
     path('workspaces/<int:workspace_id>/members/', member_list, name='member-list'),
     path('workspaces/<int:workspace_id>/members/<int:user_id>/', member_detail, name='member-detail'),
     path('workspaces/<int:workspace_id>/invitations/', invitation_list, name='invitation-list'),
@@ -16,22 +19,35 @@ urlpatterns = [
     path('invitations/<int:invitation_id>/accept/', invitation_accept, name='invitation-accept'),
     path('workspaces/<int:workspace_id>/projects/', project_list, name='project-list'),
     path('workspaces/<int:workspace_id>/projects/<int:project_id>/', project_detail, name='project-detail'),
+    path('workspaces/<int:workspace_id>/tasks/', task_list, name='workspace-task-list'),
+    path('workspaces/<int:workspace_id>/lookup-values/', lookup_value_list, name='lookup-value-list'),
+    path('workspaces/<int:workspace_id>/lookup-values/<int:value_id>/', lookup_value_detail, name='lookup-value-detail'),
+    path('workspaces/<int:workspace_id>/risks-issues/', risk_issue_list, name='risk-issue-list'),
+    path('workspaces/<int:workspace_id>/risks-issues/<int:record_id>/', risk_issue_detail, name='risk-issue-detail'),
     path('workspaces/<int:workspace_id>/calendar-events/', calendar_event_list, name='calendar-event-list'),
     path('workspaces/<int:workspace_id>/calendar-events/<int:event_id>/', calendar_event_detail, name='calendar-event-detail'),
     path('workspaces/<int:workspace_id>/calendar.ics', calendar_ics, name='calendar-ics'),
     path('workspaces/<int:workspace_id>/check-ins/', check_in_list, name='check-in-list'),
+    path('workspaces/<int:workspace_id>/chat-channels/', chat_channel_list, name='chat-channel-list'),
+    path('chat-channels/<int:channel_id>/', chat_channel_detail, name='chat-channel-detail'),
     path('workspaces/<int:workspace_id>/chat-messages/', chat_message_list, name='chat-message-list'),
+    path('workspaces/<int:workspace_id>/direct-conversations/', direct_conversation_list, name='direct-conversation-list'),
+    path('direct-conversations/<int:conversation_id>/messages/', direct_message_list, name='direct-message-list'),
     path('workspaces/<int:workspace_id>/follow-ups/', follow_up_list, name='follow-up-list'),
     path('workspaces/<int:workspace_id>/notifications/', notification_list, name='notification-list'),
+    path('workspaces/<int:workspace_id>/notification-preferences/', notification_preference_detail, name='notification-preference-detail'),
     path('workspaces/<int:workspace_id>/activity/', activity_list, name='activity-list'),
     path('workspaces/<int:workspace_id>/audit-logs/', audit_log_list, name='audit-log-list'),
     path('workspaces/<int:workspace_id>/reports/summary/', report_summary, name='report-summary'),
     path('workspaces/<int:workspace_id>/plan-buckets/', plan_bucket_list, name='plan-bucket-list'),
+    path('workspaces/<int:workspace_id>/plan-buckets/reorder/', plan_bucket_reorder, name='plan-bucket-reorder'),
+    path('workspaces/<int:workspace_id>/tasks/reorder/', task_reorder, name='task-reorder'),
     path('workspaces/<int:workspace_id>/saved-views/', saved_view_list, name='saved-view-list'),
     path('workspaces/<int:workspace_id>/saved-views/<int:view_id>/', saved_view_detail, name='saved-view-detail'),
     path('follow-ups/<int:follow_up_id>/', follow_up_detail, name='follow-up-detail'),
     path('tasks/', task_list, name='task-list'),
     path('tasks/<int:task_id>/', task_detail, name='task-detail'),
+    path('tasks/<int:task_id>/history/', task_history_list, name='task-history-list'),
     path('tasks/<int:task_id>/comments/', task_comment_list, name='task-comment-list'),
     path('tasks/<int:task_id>/subtasks/', task_subtask_list, name='task-subtask-list'),
     path('tasks/<int:task_id>/attachments/', task_attachment_list, name='task-attachment-list'),

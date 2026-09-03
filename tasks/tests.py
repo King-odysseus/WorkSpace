@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, Task, TaskAttachment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification
 
 
 class TaskApiTests(TestCase):
@@ -53,7 +53,7 @@ class TaskApiTests(TestCase):
 
         delete_response = self.client.delete(reverse('task-detail', args=[task_id]))
         self.assertEqual(delete_response.status_code, 200)
-        self.assertFalse(Task.objects.filter(id=task_id).exists())
+        self.assertEqual(Task.objects.get(id=task_id).state, 'archived')
 
     def test_create_requires_a_title(self):
         response = self.client.post(
@@ -195,6 +195,19 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_task_detail_normalizes_null_optional_text(self):
+        task = Task.objects.create(workspace=self.workspace, title='Task', description='Old description')
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'description': None, 'assignee_name': None, 'project': None}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.description, '')
+        self.assertEqual(task.assignee_name, '')
+        self.assertEqual(task.project, '')
+
     def test_completing_recurring_task_creates_next_task(self):
         response = self.client.post(
             reverse('task-list'),
@@ -295,6 +308,61 @@ class TaskApiTests(TestCase):
         self.assertEqual(list_response.json()['buckets'][0]['name'], 'Review queue')
         self.assertEqual(PlanBucket.objects.count(), 1)
 
+    def test_owner_can_persist_bucket_order(self):
+        first = PlanBucket.objects.create(workspace=self.workspace, name='First', position=0)
+        second = PlanBucket.objects.create(workspace=self.workspace, name='Second', position=1)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [second.id, first.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([bucket['id'] for bucket in response.json()['buckets']], [second.id, first.id])
+
+    def test_task_positions_can_be_reordered_and_moved_between_buckets(self):
+        first = Task.objects.create(workspace=self.workspace, title='First', bucket='Backlog', position=0)
+        second = Task.objects.create(workspace=self.workspace, title='Second', bucket='Backlog', position=1)
+        third = Task.objects.create(workspace=self.workspace, title='Third', bucket='Doing', position=0)
+        response = self.client.patch(
+            reverse('task-reorder', args=[self.workspace.id]),
+            data=json.dumps({'columns': [
+                {'bucket': 'Backlog', 'task_ids': [second.id]},
+                {'bucket': 'Doing', 'task_ids': [first.id, third.id]},
+            ]}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        third.refresh_from_db()
+        self.assertEqual((second.bucket, second.position), ('Backlog', 0))
+        self.assertEqual((first.bucket, first.position), ('Doing', 0))
+        self.assertEqual((third.bucket, third.position), ('Doing', 1))
+
+    def test_members_cannot_reorder_tasks_they_do_not_own(self):
+        member = User.objects.create_user(username='planner-member@example.com', email='planner-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        owner_task = Task.objects.create(workspace=self.workspace, title='Owner task', assignee=self.user)
+        self.client.force_login(member)
+        response = self.client.patch(
+            reverse('task-reorder', args=[self.workspace.id]),
+            data=json.dumps({'columns': [{'bucket': 'Backlog', 'task_ids': [owner_task.id]}]}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_members_cannot_reorder_workspace_buckets(self):
+        member = User.objects.create_user(username='bucket-member@example.com', email='bucket-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        bucket = PlanBucket.objects.create(workspace=self.workspace, name='Restricted', position=0)
+        self.client.force_login(member)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [bucket.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_saved_views_are_persisted_and_scoped_to_the_user(self):
         create_response = self.client.post(
             reverse('saved-view-list', args=[self.workspace.id]),
@@ -320,6 +388,101 @@ class TaskApiTests(TestCase):
         self.assertEqual(self.client.get(reverse('saved-view-list', args=[self.workspace.id])).json()['saved_views'], [])
         self.assertEqual(self.client.delete(reverse('saved-view-detail', args=[self.workspace.id, view_id])).status_code, 404)
 
+    def test_profile_avatar_can_be_uploaded_replaced_and_removed(self):
+        tiny_png = bytes.fromhex(
+            '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753'
+            'de0000000c4944415478da6360606060000000050001a5f645400000000049454e44ae426082'
+        )
+        upload = SimpleUploadedFile('face.png', tiny_png, content_type='image/png')
+        response = self.client.post(reverse('auth-me-avatar'), data={'avatar': upload})
+        self.assertEqual(response.status_code, 200)
+        avatar_url = response.json()['avatar_url']
+        self.assertEqual(avatar_url, f'/api/users/{self.user.id}/avatar/')
+        self.assertEqual(self.client.get(reverse('auth-me')).json()['user']['avatar_url'], avatar_url)
+
+        download_response = self.client.get(avatar_url)
+        self.assertEqual(download_response.status_code, 200)
+
+        replacement = SimpleUploadedFile('face2.png', tiny_png, content_type='image/png')
+        replace_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': replacement})
+        self.assertEqual(replace_response.status_code, 200)
+
+        oversized = SimpleUploadedFile('huge.png', b'0' * (5 * 1024 * 1024 + 1), content_type='image/png')
+        rejected_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': oversized})
+        self.assertEqual(rejected_response.status_code, 400)
+
+        wrong_type = SimpleUploadedFile('notes.txt', b'not an image', content_type='text/plain')
+        rejected_type_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': wrong_type})
+        self.assertEqual(rejected_type_response.status_code, 400)
+
+        delete_response = self.client.delete(reverse('auth-me-avatar'))
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(delete_response.json()['avatar_url'], '')
+        self.assertEqual(self.client.get(avatar_url).status_code, 404)
+
+    def test_presence_can_be_set_and_is_visible_to_teammates(self):
+        teammate = User.objects.create_user(username='presence-teammate@example.com', email='presence-teammate@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+
+        response = self.client.patch(reverse('auth-me-presence'), data=json.dumps({'presence': 'busy'}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['presence'], 'busy')
+
+        rejected_response = self.client.patch(reverse('auth-me-presence'), data=json.dumps({'presence': 'unstoppable'}), content_type='application/json')
+        self.assertEqual(rejected_response.status_code, 400)
+
+        members_response = self.client.get(reverse('member-list', args=[self.workspace.id]))
+        owner_member = next(member for member in members_response.json()['members'] if member['id'] == self.user.id)
+        self.assertEqual(owner_member['presence'], 'busy')
+        teammate_member = next(member for member in members_response.json()['members'] if member['id'] == teammate.id)
+        self.assertEqual(teammate_member['presence'], 'available')
+
+    def test_notification_preferences_default_to_enabled_and_can_be_updated(self):
+        response = self.client.get(reverse('notification-preference-detail', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['preferences'], {'mentions': True, 'direct_messages': True, 'task_updates': True, 'calendar_reminders': True})
+
+        update_response = self.client.patch(
+            reverse('notification-preference-detail', args=[self.workspace.id]),
+            data=json.dumps({'task_updates': False}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertFalse(update_response.json()['preferences']['task_updates'])
+        self.assertTrue(update_response.json()['preferences']['mentions'])
+
+        rejected_response = self.client.patch(
+            reverse('notification-preference-detail', args=[self.workspace.id]),
+            data=json.dumps({'mentions': 'yes'}),
+            content_type='application/json',
+        )
+        self.assertEqual(rejected_response.status_code, 400)
+
+    def test_disabled_task_update_preference_suppresses_notification(self):
+        teammate = User.objects.create_user(username='notif-pref@example.com', email='notif-pref@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        NotificationPreference.objects.create(workspace=self.workspace, user=teammate, task_updates=False)
+
+        create_response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Ship the release notes', 'assignee_id': teammate.id}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='task_assigned').count(), 0)
+
+        other_teammate = User.objects.create_user(username='notif-pref-2@example.com', email='notif-pref-2@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=other_teammate, role='member')
+        second_response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Draft the changelog', 'assignee_id': other_teammate.id}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(second_response.status_code, 201)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=other_teammate, kind='task_assigned').count(), 1)
+
     def test_chat_replies_and_mentions_are_supported(self):
         teammate = User.objects.create_user(username='member@example.com', email='member@example.com', first_name='Team', last_name='Member', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
@@ -339,6 +502,48 @@ class TaskApiTests(TestCase):
         self.assertEqual(reply_response.status_code, 201)
         self.assertEqual(reply_response.json()['message']['parent_id'], message_id)
         self.assertEqual(self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages'][0]['reply_count'], 1)
+
+    def test_channels_are_created_separately_and_private_channels_are_scoped(self):
+        teammate = User.objects.create_user(username='private-member@example.com', email='private-member@example.com', password='secure-pass-123')
+        outsider = User.objects.create_user(username='private-outsider@example.com', email='private-outsider@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        Membership.objects.create(workspace=self.workspace, user=outsider, role='member')
+        response = self.client.post(
+            reverse('chat-channel-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Product Launch', 'description': 'Private launch planning', 'is_private': True, 'member_ids': [teammate.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['channel']['name'], 'product-launch')
+        self.assertTrue(ChatChannel.objects.get(name='product-launch').members.filter(id=teammate.id).exists())
+
+        self.client.force_login(outsider)
+        listed_names = [channel['name'] for channel in self.client.get(reverse('chat-channel-list', args=[self.workspace.id])).json()['channels']]
+        self.assertNotIn('product-launch', listed_names)
+        denied = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'product-launch', 'message': 'I should not see this.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(denied.status_code, 403)
+
+    def test_direct_conversation_is_reused_and_messages_are_private(self):
+        teammate = User.objects.create_user(username='dm-member@example.com', email='dm-member@example.com', password='secure-pass-123')
+        outsider = User.objects.create_user(username='dm-outsider@example.com', email='dm-outsider@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        Membership.objects.create(workspace=self.workspace, user=outsider, role='member')
+        first = self.client.post(reverse('direct-conversation-list', args=[self.workspace.id]), data=json.dumps({'participant_ids': [teammate.id]}), content_type='application/json')
+        second = self.client.post(reverse('direct-conversation-list', args=[self.workspace.id]), data=json.dumps({'recipient_id': teammate.id}), content_type='application/json')
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()['conversation']['id'], second.json()['conversation']['id'])
+        conversation_id = first.json()['conversation']['id']
+        sent = self.client.post(reverse('direct-message-list', args=[conversation_id]), data=json.dumps({'message': 'Private hello'}), content_type='application/json')
+        self.assertEqual(sent.status_code, 201)
+        self.assertEqual(DirectMessage.objects.get().author, self.user)
+
+        self.client.force_login(outsider)
+        self.assertEqual(self.client.get(reverse('direct-message-list', args=[conversation_id])).status_code, 404)
 
     def test_follow_up_can_be_assigned_and_notifies_teammate(self):
         teammate = User.objects.create_user(username='follow-up-member@example.com', email='follow-up-member@example.com', password='secure-pass-123')
@@ -503,7 +708,7 @@ class TaskApiTests(TestCase):
         self.assertFalse(TaskAttachment.objects.exists())
         self.assertTrue(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_attachment_deleted').exists())
 
-    def test_deleting_task_removes_attachment_file(self):
+    def test_archiving_task_retains_attachment_and_permanent_delete_removes_it(self):
         task = Task.objects.create(workspace=self.workspace, title='Delete attachment with task')
         attachment = TaskAttachment.objects.create(
             task=task,
@@ -513,6 +718,10 @@ class TaskApiTests(TestCase):
         )
         file_path = Path(attachment.file.path)
         response = self.client.delete(reverse('task-detail', args=[task.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(file_path.exists())
+        self.assertTrue(TaskAttachment.objects.filter(id=attachment.id).exists())
+        response = self.client.delete(f"{reverse('task-detail', args=[task.id])}?permanent=true")
         self.assertEqual(response.status_code, 200)
         self.assertFalse(file_path.exists())
         self.assertFalse(TaskAttachment.objects.filter(id=attachment.id).exists())
@@ -894,6 +1103,102 @@ class TaskApiTests(TestCase):
         self.assertEqual(denied_update.status_code, 403)
         denied_delete = self.client.delete(reverse('calendar-event-detail', args=[self.workspace.id, event.id]))
         self.assertEqual(denied_delete.status_code, 403)
+
+
+class ExecutionFoundationApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='lead@example.com', email='lead@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='executor@example.com', email='executor@example.com', password='secure-pass-123')
+        self.supporter = User.objects.create_user(username='support@example.com', email='support@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Delivery', slug='delivery')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        Membership.objects.create(workspace=self.workspace, user=self.supporter, role='member')
+        self.client.force_login(self.owner)
+
+    def create_task(self, **overrides):
+        payload = {'title': 'Delivery task', **overrides}
+        return self.client.post(reverse('task-list'), data=json.dumps(payload), content_type='application/json', HTTP_X_WORKSPACE_ID=str(self.workspace.id))
+
+    def test_project_execution_configuration_round_trip(self):
+        response = self.client.post(reverse('project-list', args=[self.workspace.id]), data=json.dumps({
+            'name': 'Q4 launch', 'start_date': '2026-10-01', 'end_date': '2026-12-15',
+            'timezone': 'America/New_York', 'week_anchor_date': '2026-09-28',
+            'due_soon_days': 10, 'configuration': {'reporting_currency': 'GBP'},
+        }), content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['project']['configuration']['reporting_currency'], 'GBP')
+        self.assertEqual(response.json()['project']['timezone'], 'America/New_York')
+
+    def test_task_code_is_generated_unique_and_not_reused_after_hard_delete(self):
+        first = self.create_task().json()['task']
+        self.client.delete(f"{reverse('task-detail', args=[first['id']])}?permanent=true")
+        second = self.create_task(title='Second task').json()['task']
+        self.assertNotEqual(first['task_code'], second['task_code'])
+        self.assertTrue(TaskCodeRegistry.objects.filter(workspace=self.workspace, code=first['task_code']).exists())
+
+    def test_task_validation_rules(self):
+        invalid_range = self.create_task(start_date='2026-09-10', due_date='2026-09-09')
+        self.assertEqual(invalid_range.status_code, 400)
+        blocked = self.create_task(title='Blocked', status='blocked')
+        self.assertEqual(blocked.status_code, 400)
+        progress = self.create_task(title='Bad progress', progress_percent=101)
+        self.assertEqual(progress.status_code, 400)
+        completed = self.create_task(title='Complete', status='done')
+        self.assertEqual(completed.status_code, 201)
+        self.assertEqual(completed.json()['task']['progress_percent'], 100)
+
+    def test_normalized_supporters_and_lookup_values(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        lookup_response = self.client.post(reverse('lookup-value-list', args=[self.workspace.id]), data=json.dumps({'kind': 'workstream', 'name': 'Engineering', 'project_id': project.id}), content_type='application/json')
+        self.assertEqual(lookup_response.status_code, 201)
+        lookup_id = lookup_response.json()['lookup_value']['id']
+        response = self.create_task(project_id=project.id, workstream_id=lookup_id, supporter_ids=[self.supporter.id])
+        self.assertEqual(response.status_code, 201)
+        task = Task.objects.get(id=response.json()['task']['id'])
+        self.assertTrue(TaskSupporter.objects.filter(task=task, user=self.supporter).exists())
+        self.assertEqual(task.workstream_ref_id, lookup_id)
+
+    def test_task_filtering_pagination_sorting_and_operations_scope(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch', due_soon_days=30)
+        operation = self.create_task(title='Operations alpha', assignee_id=self.member.id, supporter_ids=[self.supporter.id], due_date=(timezone.localdate() - timedelta(days=1)).isoformat()).json()['task']
+        self.create_task(title='Project beta', project_id=project.id, priority='high')
+        response = self.client.get(reverse('workspace-task-list', args=[self.workspace.id]), {'scope': 'operations', 'owner': self.member.id, 'supporter': self.supporter.id, 'overdue': 'true', 'search': 'alpha', 'sort': 'title', 'page_size': 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item['id'] for item in response.json()['tasks']], [operation['id']])
+        self.assertEqual(response.json()['pagination']['total_items'], 1)
+
+    def test_owner_changes_are_recorded_with_values_and_actor(self):
+        task_id = self.create_task(assignee_id=self.member.id).json()['task']['id']
+        response = self.client.patch(reverse('task-detail', args=[task_id]), data=json.dumps({'priority': 'high', 'progress_percent': 40}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        changes = TaskChangeHistory.objects.filter(task_id=task_id)
+        self.assertTrue(changes.filter(field='priority', previous_value='normal', new_value='high', actor=self.owner).exists())
+        self.assertTrue(changes.filter(field='progress_percent', previous_value=0, new_value=40).exists())
+
+    def test_task_owner_can_update_execution_but_supporter_cannot(self):
+        task_id = self.create_task(assignee_id=self.member.id, supporter_ids=[self.supporter.id]).json()['task']['id']
+        self.client.force_login(self.member)
+        allowed = self.client.patch(reverse('task-detail', args=[task_id]), data=json.dumps({'progress_percent': 25}), content_type='application/json')
+        self.assertEqual(allowed.status_code, 200)
+        denied_ownership = self.client.patch(reverse('task-detail', args=[task_id]), data=json.dumps({'assignee_id': self.supporter.id}), content_type='application/json')
+        self.assertEqual(denied_ownership.status_code, 403)
+        self.client.force_login(self.supporter)
+        denied_execution = self.client.patch(reverse('task-detail', args=[task_id]), data=json.dumps({'progress_percent': 50}), content_type='application/json')
+        self.assertEqual(denied_execution.status_code, 403)
+
+    def test_authenticated_risk_issue_api_and_permissions(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        response = self.client.post(reverse('risk-issue-list', args=[self.workspace.id]), data=json.dumps({'project_id': project.id, 'kind': 'risk', 'title': 'Supplier delay', 'severity': 'high', 'owner_id': self.member.id, 'due': '2026-10-01'}), content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+        record_id = response.json()['record']['id']
+        self.client.force_login(self.supporter)
+        self.assertEqual(self.client.get(reverse('risk-issue-list', args=[self.workspace.id]), {'project_id': project.id}).status_code, 200)
+        denied = self.client.patch(reverse('risk-issue-detail', args=[self.workspace.id, record_id]), data=json.dumps({'status': 'mitigated'}), content_type='application/json')
+        self.assertEqual(denied.status_code, 403)
+        self.client.force_login(self.member)
+        allowed = self.client.patch(reverse('risk-issue-detail', args=[self.workspace.id, record_id]), data=json.dumps({'status': 'mitigated'}), content_type='application/json')
+        self.assertEqual(allowed.status_code, 200)
 
 
 class AuthenticationApiTests(TestCase):

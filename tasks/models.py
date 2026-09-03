@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.conf import settings
 
 
 class Workspace(models.Model):
@@ -7,6 +9,7 @@ class Workspace(models.Model):
     slug = models.SlugField(max_length=140, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     members = models.ManyToManyField(User, through='Membership', related_name='workspaces')
+    next_task_number = models.PositiveBigIntegerField(default=1)
 
     class Meta:
         ordering = ['name']
@@ -30,8 +33,9 @@ class SavedView(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='saved_views')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_saved_views')
     name = models.CharField(max_length=100)
-    filter_value = models.CharField(max_length=80, default='all')
+    filter_value = models.CharField(max_length=300, default='all')
     search = models.CharField(max_length=200, blank=True)
+    project_scope = models.CharField(max_length=80, default='all')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -39,7 +43,7 @@ class SavedView(models.Model):
         constraints = [models.UniqueConstraint(fields=['workspace', 'user', 'name'], name='unique_saved_view_per_user')]
 
     def as_dict(self):
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'filter': self.filter_value, 'search': self.search, 'created_at': self.created_at.isoformat()}
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'filter': self.filter_value, 'search': self.search, 'project_scope': self.project_scope, 'created_at': self.created_at.isoformat()}
 
 
 class Membership(models.Model):
@@ -58,6 +62,7 @@ class Membership(models.Model):
         constraints = [models.UniqueConstraint(fields=['workspace', 'user'], name='unique_workspace_member')]
 
     def as_dict(self):
+        profile = getattr(self.user, 'profile', None)
         return {
             'id': self.user_id,
             'email': self.user.email,
@@ -65,6 +70,8 @@ class Membership(models.Model):
             'last_name': self.user.last_name,
             'role': self.role,
             'joined_at': self.joined_at.isoformat(),
+            'avatar_url': profile.avatar_url if profile else '',
+            'presence': profile.presence if profile else 'available',
         }
 
 
@@ -107,12 +114,19 @@ class Project(models.Model):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning')
     due_date = models.DateField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    timezone = models.CharField(max_length=64, default=settings.TIME_ZONE)
+    week_anchor_date = models.DateField(null=True, blank=True)
+    due_soon_days = models.PositiveSmallIntegerField(default=7)
+    configuration = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['status', 'due_date', 'name']
         constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='unique_project_per_workspace')]
+        indexes = [models.Index(fields=['workspace', 'status'], name='project_ws_status_idx')]
 
     def as_dict(self):
         return {
@@ -122,7 +136,42 @@ class Project(models.Model):
             'description': self.description,
             'status': self.status,
             'due_date': self.due_date.isoformat() if self.due_date else None,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'timezone': self.timezone,
+            'week_anchor_date': self.week_anchor_date.isoformat() if self.week_anchor_date else None,
+            'due_soon_days': self.due_soon_days,
+            'configuration': self.configuration or {},
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
         }
+
+
+class LookupValue(models.Model):
+    KIND_CHOICES = [('workstream', 'Workstream'), ('phase', 'Phase / quarter')]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='lookup_values')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='lookup_values')
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=140)
+    position = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['kind', 'position', 'name']
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'project', 'kind', 'slug'], name='unique_scoped_lookup_value'),
+        ]
+        indexes = [models.Index(fields=['workspace', 'kind', 'is_active'], name='lookup_ws_kind_active_idx')]
+
+    def clean(self):
+        if self.project_id and self.project.workspace_id != self.workspace_id:
+            raise ValidationError({'project': 'Project must belong to the same workspace.'})
+
+    def as_dict(self):
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'kind': self.kind, 'name': self.name, 'slug': self.slug, 'position': self.position, 'is_active': self.is_active}
 
 
 class CalendarEvent(models.Model):
@@ -158,6 +207,7 @@ class CalendarEvent(models.Model):
             'end_at': self.end_at.isoformat(),
             'event_type': self.event_type,
             'reminder_minutes': self.reminder_minutes,
+            'reminder_sent_at': self.reminder_sent_at.isoformat() if self.reminder_sent_at else None,
             'created_by': self.created_by_id,
         }
 
@@ -216,6 +266,82 @@ class ChatMessage(models.Model):
         }
 
 
+class ChatChannel(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='chat_channels')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_chat_channels')
+    members = models.ManyToManyField(User, blank=True, related_name='private_chat_channels')
+    name = models.SlugField(max_length=80)
+    description = models.CharField(max_length=240, blank=True)
+    is_private = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='unique_workspace_chat_channel')]
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'name': self.name,
+            'description': self.description,
+            'is_private': self.is_private,
+            'created_by': self.created_by_id,
+            'member_ids': list(self.members.values_list('id', flat=True)) if self.is_private else [],
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class DirectConversation(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='direct_conversations')
+    participants = models.ManyToManyField(User, related_name='direct_conversations')
+    conversation_key = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [models.UniqueConstraint(fields=['workspace', 'conversation_key'], name='unique_direct_conversation')]
+
+    def as_dict(self, viewer=None):
+        participants = list(self.participants.all())
+        others = [user for user in participants if viewer is None or user.id != viewer.id]
+        title_users = others or participants
+        last_message = self.messages.select_related('author').order_by('-created_at').first()
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'title': ', '.join(user.get_full_name() or user.email for user in title_users),
+            'is_group': len(participants) > 2,
+            'participants': [
+                {'id': user.id, 'name': user.get_full_name() or user.email, 'email': user.email}
+                for user in participants
+            ],
+            'last_message': last_message.message if last_message else '',
+            'last_message_at': last_message.created_at.isoformat() if last_message else None,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class DirectMessage(models.Model):
+    conversation = models.ForeignKey(DirectConversation, on_delete=models.CASCADE, related_name='messages')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_messages')
+    message = models.TextField(max_length=4000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'conversation_id': self.conversation_id,
+            'author_id': self.author_id,
+            'author_name': self.author.get_full_name() or self.author.email,
+            'message': self.message,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
 class FollowUp(models.Model):
     STATUS_CHOICES = [('open', 'Open'), ('completed', 'Completed')]
 
@@ -252,6 +378,8 @@ class Task(models.Model):
         ('in_progress', 'In progress'),
         ('blocked', 'Blocked'),
         ('review', 'Review'),
+        ('on_hold', 'On hold'),
+        ('cancelled', 'Cancelled'),
         ('done', 'Done'),
     ]
     RECURRENCE_CHOICES = [
@@ -266,25 +394,80 @@ class Task(models.Model):
         ('normal', 'Normal'),
         ('low', 'Low'),
     ]
+    STATE_CHOICES = [('draft', 'Draft'), ('active', 'Active'), ('archived', 'Archived')]
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
+    supporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supported_tasks')
     project_ref = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     title = models.CharField(max_length=200)
+    code = models.CharField(max_length=64, blank=True, default='')
     description = models.TextField(blank=True)
     assignee_name = models.CharField(max_length=120, blank=True)
     project = models.CharField(max_length=120, blank=True)
+    workstream = models.CharField(max_length=120, blank=True, default='')
+    phase = models.CharField(max_length=120, blank=True, default='')
     bucket = models.CharField(max_length=80, default='Backlog')
+    position = models.PositiveIntegerField(default=0)
     labels = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='normal')
     due_date = models.DateField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    actual_completion_date = models.DateField(null=True, blank=True)
+    progress_percent = models.PositiveSmallIntegerField(default=0)
+    blocker_details = models.TextField(blank=True)
+    state = models.CharField(max_length=20, choices=STATE_CHOICES, default='active')
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='archived_tasks')
+    workstream_ref = models.ForeignKey(LookupValue, on_delete=models.SET_NULL, null=True, blank=True, related_name='workstream_tasks')
+    phase_ref = models.ForeignKey(LookupValue, on_delete=models.SET_NULL, null=True, blank=True, related_name='phase_tasks')
+    supporters = models.ManyToManyField(User, through='TaskSupporter', through_fields=('task', 'user'), related_name='task_support_roles')
     recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default='none')
+    completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['status', 'due_date', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['workspace', 'code'],
+                condition=~models.Q(code=''),
+                name='unique_task_code_per_workspace',
+            ),
+            models.CheckConstraint(condition=models.Q(progress_percent__gte=0, progress_percent__lte=100), name='task_progress_between_0_and_100'),
+        ]
+        indexes = [
+            models.Index(fields=['workspace', 'state', 'due_date'], name='task_ws_state_due_idx'),
+            models.Index(fields=['workspace', 'project_ref', 'status'], name='task_ws_project_status_idx'),
+            models.Index(fields=['workspace', 'assignee', 'status'], name='task_ws_owner_status_idx'),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.start_date and self.due_date and self.due_date < self.start_date:
+            errors['due_date'] = 'Target date cannot precede start date.'
+        if not 0 <= self.progress_percent <= 100:
+            errors['progress_percent'] = 'Progress must be between 0 and 100.'
+        if self.status == 'done' and self.progress_percent != 100:
+            errors['progress_percent'] = 'Completed tasks must have 100% progress.'
+        if self.status == 'blocked' and not self.blocker_details.strip():
+            errors['blocker_details'] = 'Blocked tasks require blocker details.'
+        for field_name in ('workstream_ref', 'phase_ref'):
+            value = getattr(self, field_name)
+            expected_kind = 'workstream' if field_name == 'workstream_ref' else 'phase'
+            if value and (value.workspace_id != self.workspace_id or value.kind != expected_kind or (value.project_id and value.project_id != self.project_ref_id)):
+                errors[field_name] = f'Select a valid {expected_kind} for this task scope.'
+        if self.project_ref_id and self.project_ref.workspace_id != self.workspace_id:
+            errors['project_ref'] = 'Project must belong to the same workspace.'
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def task_code(self):
+        """Canonical public name; ``code`` remains the stored legacy field."""
+        return self.code
 
     def as_dict(self):
         return {
@@ -292,17 +475,115 @@ class Task(models.Model):
             'workspace_id': self.workspace_id,
             'assignee_id': self.assignee_id,
             'assignee_name': (self.assignee.get_full_name() or self.assignee.email) if self.assignee else self.assignee_name,
+            'supporter_id': self.supporter_id,
+            'supporter_name': (self.supporter.get_full_name() or self.supporter.email) if self.supporter else None,
             'title': self.title,
+            'code': self.code,
+            'task_code': self.code,
             'description': self.description,
             'project': self.project_ref.name if self.project_ref else self.project,
+            'workstream': self.workstream,
+            'phase': self.phase,
+            'workstream_id': self.workstream_ref_id,
+            'phase_id': self.phase_ref_id,
             'bucket': self.bucket,
+            'position': self.position,
             'labels': self.labels,
             'project_id': self.project_ref_id,
             'status': self.status,
             'priority': self.priority,
             'due_date': self.due_date.isoformat() if self.due_date else None,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'actual_completion_date': self.actual_completion_date.isoformat() if self.actual_completion_date else None,
+            'progress_percent': self.progress_percent,
+            'blocker_details': self.blocker_details,
+            'state': self.state,
+            'archived_at': self.archived_at.isoformat() if self.archived_at else None,
+            'supporter_ids': list(self.supporters.values_list('id', flat=True)),
             'recurrence': self.recurrence,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class TaskSupporter(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='supporter_links')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task_supporter_links')
+    added_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='added_task_supporters')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['task', 'user'], name='unique_task_supporter')]
+
+    def clean(self):
+        if self.task.workspace_id and not Membership.objects.filter(workspace_id=self.task.workspace_id, user_id=self.user_id).exists():
+            raise ValidationError({'user': 'Supporter must belong to the task workspace.'})
+
+
+class TaskCodeRegistry(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='task_code_registry')
+    code = models.CharField(max_length=64)
+    task_id = models.PositiveBigIntegerField(null=True, blank=True)
+    reserved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'code'], name='unique_reserved_task_code')]
+
+
+class TaskChangeHistory(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.SET_NULL, null=True, related_name='change_history')
+    task_code = models.CharField(max_length=64)
+    workspace = models.ForeignKey(Workspace, on_delete=models.PROTECT, related_name='task_change_history')
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='task_changes')
+    field = models.CharField(max_length=64)
+    previous_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('Task change history is immutable.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Task change history is immutable.')
+
+    def as_dict(self):
+        return {'id': self.id, 'task_id': self.task_id, 'task_code': self.task_code, 'actor_id': self.actor_id, 'actor_name': (self.actor.get_full_name() or self.actor.email) if self.actor else 'System', 'field': self.field, 'previous_value': self.previous_value, 'new_value': self.new_value, 'created_at': self.created_at.isoformat()}
+
+
+class RiskIssue(models.Model):
+    KIND_CHOICES = [('risk', 'Risk'), ('issue', 'Issue')]
+    SEVERITY_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High'), ('critical', 'Critical')]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='risks_and_issues')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='risks_and_issues')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    title = models.CharField(max_length=200)
+    detail = models.TextField(blank=True)
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='medium')
+    status = models.CharField(max_length=30, default='open')
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_risks_and_issues')
+    owner_name = models.CharField(max_length=120, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_risks_and_issues')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['kind', '-severity', 'due_date', '-created_at']
+        indexes = [models.Index(fields=['workspace', 'project', 'kind', 'archived_at'], name='risk_scope_kind_archive_idx')]
+
+    def clean(self):
+        if self.project_id and self.project.workspace_id != self.workspace_id:
+            raise ValidationError({'project': 'Project must belong to the same workspace.'})
+
+    def as_dict(self):
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'kind': self.kind, 'title': self.title, 'detail': self.detail, 'severity': self.severity, 'status': self.status, 'owner_id': self.owner_id, 'owner': (self.owner.get_full_name() or self.owner.email) if self.owner else self.owner_name, 'due': self.due_date.isoformat() if self.due_date else None, 'due_date': self.due_date.isoformat() if self.due_date else None, 'archived_at': self.archived_at.isoformat() if self.archived_at else None, 'created_at': self.created_at.isoformat(), 'updated_at': self.updated_at.isoformat()}
 
 
 class TaskComment(models.Model):
@@ -438,5 +719,117 @@ class AuditLog(models.Model):
             'target_type': self.target_type,
             'target_id': self.target_id,
             'details': self.details,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class NotificationPreference(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='notification_preferences')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_notification_preferences')
+    mentions = models.BooleanField(default=True)
+    direct_messages = models.BooleanField(default=True)
+    task_updates = models.BooleanField(default=True)
+    calendar_reminders = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'user'], name='unique_notification_preference_per_user')]
+
+    def as_dict(self):
+        return {
+            'mentions': self.mentions,
+            'direct_messages': self.direct_messages,
+            'task_updates': self.task_updates,
+            'calendar_reminders': self.calendar_reminders,
+        }
+
+
+class UserProfile(models.Model):
+    PRESENCE_CHOICES = [
+        ('available', 'Available'),
+        ('busy', 'Busy'),
+        ('away', 'Away'),
+        ('offline', 'Offline'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    avatar = models.ImageField(upload_to='avatars/%Y/%m/', null=True, blank=True)
+    presence = models.CharField(max_length=20, choices=PRESENCE_CHOICES, default='available')
+    presence_updated_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def avatar_url(self):
+        return f'/api/users/{self.user_id}/avatar/' if self.avatar else ''
+
+
+class WorkspaceSetting(models.Model):
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, related_name='settings')
+    due_soon_days = models.PositiveIntegerField(default=7)
+    stale_days = models.PositiveIntegerField(default=14)
+    kpi_targets = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def as_dict(self):
+        return {
+            'workspace_id': self.workspace_id,
+            'due_soon_days': self.due_soon_days,
+            'stale_days': self.stale_days,
+            'kpi_targets': self.kpi_targets or {},
+            'updated_at': self.updated_at.isoformat(),
+        }
+
+
+class NotificationDelivery(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='notification_deliveries')
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notification_deliveries')
+    kind = models.CharField(max_length=40)
+    target_type = models.CharField(max_length=40, blank=True)
+    target_id = models.CharField(max_length=80, blank=True)
+    dedup_key = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'kind', 'dedup_key'], name='unique_notification_delivery'),
+        ]
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'recipient_id': self.recipient_id,
+            'kind': self.kind,
+            'target_type': self.target_type,
+            'target_id': self.target_id,
+            'dedup_key': self.dedup_key,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class ImportRun(models.Model):
+    MODE_CHOICES = [('preview', 'Preview'), ('commit', 'Commit')]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='import_runs')
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='import_runs')
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default='preview')
+    source = models.CharField(max_length=255, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+    exceptions = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'actor_id': self.actor_id,
+            'mode': self.mode,
+            'source': self.source,
+            'summary': self.summary,
+            'exceptions': self.exceptions,
             'created_at': self.created_at.isoformat(),
         }

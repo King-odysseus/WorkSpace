@@ -41,6 +41,23 @@ docker compose up --build
 
 The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves authorized attachment downloads through the Django API, proxies `/api/` requests through Nginx to Django, accepts task uploads up to 10 MB, runs a reminder worker every 60 seconds, and waits for the API health check before starting the web dependency.
 
+## Deploying to Railway
+
+`railway.json` and `Dockerfile.railway` build the frontend and the Django API into one container - Django serves the built React app itself (via WhiteNoise) alongside `/api/`, so there's a single Railway service and no nginx or private networking to configure. `Dockerfile.api` / `Dockerfile.web` / `docker-compose.yml` are untouched and still work for a split frontend+nginx deployment elsewhere.
+
+1. Create a Railway project from this repository. Railway detects `railway.json` and builds `Dockerfile.railway` automatically.
+2. Add a **PostgreSQL** plugin to the project. Railway injects `DATABASE_URL` into the service automatically - `backend/settings.py` reads it directly, so no `WORKSPACE_DB_*` variables are needed on Railway.
+3. Set these service variables (Project → Variables):
+   - `WORKSPACE_SECRET_KEY` - a unique random value of at least 50 characters (`python -c "import secrets; print(secrets.token_urlsafe(64))"`).
+   - `WORKSPACE_DEBUG=false`
+   - `WORKSPACE_SECURE_SSL_REDIRECT=true`, `WORKSPACE_HSTS_SECONDS=31536000` once the Railway domain is serving HTTPS (it is, by default).
+
+   `WORKSPACE_ALLOWED_HOSTS` and `WORKSPACE_CSRF_TRUSTED_ORIGINS` don't need to be set manually for Railway-generated `*.up.railway.app` domains. `backend/settings.py` reads Railway's domain variables when present and uses a Railway-runtime suffix fallback when they are not. Add the settings explicitly when attaching a custom domain.
+4. Add a **Volume** mounted at `/app/media` if task attachments and profile photos should survive redeploys - the container filesystem is otherwise ephemeral.
+5. For the reminder delivery command (`deliver_calendar_reminders`), add a Railway **Cron Job** on this same service running `python manage.py deliver_calendar_reminders` on a `* * * * *` schedule, instead of replicating the `docker-compose` sleep-loop worker as a second always-on service.
+
+Migrations run automatically on each deploy (`python manage.py migrate --noinput`, in the container's start command).
+
 ## Verification
 
 ```powershell

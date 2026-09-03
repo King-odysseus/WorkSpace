@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, Membership, PlanBucket, Project, SavedView, Task, TaskAttachment, TaskComment, TaskSubtask, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting
 
 
 @admin.register(Workspace)
@@ -32,9 +32,38 @@ class ProjectAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ('title', 'workspace', 'assignee', 'status', 'due_date', 'updated_at')
-    list_filter = ('status', 'workspace')
-    search_fields = ('title', 'description', 'assignee_name', 'project')
+    list_display = ('title', 'code', 'workspace', 'assignee', 'status', 'state', 'progress_percent', 'due_date', 'updated_at')
+    list_filter = ('status', 'state', 'workspace')
+    search_fields = ('title', 'code', 'description', 'assignee_name', 'project', 'workstream', 'phase')
+
+
+admin.site.register(LookupValue)
+admin.site.register(TaskSupporter)
+admin.site.register(RiskIssue)
+
+
+@admin.register(TaskCodeRegistry)
+class TaskCodeRegistryAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'code', 'task_id', 'reserved_at')
+    readonly_fields = ('workspace', 'code', 'task_id', 'reserved_at')
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(TaskChangeHistory)
+class TaskChangeHistoryAdmin(admin.ModelAdmin):
+    list_display = ('task_code', 'field', 'actor', 'created_at')
+    readonly_fields = ('task', 'task_code', 'workspace', 'actor', 'field', 'previous_value', 'new_value', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(TaskComment)
@@ -117,3 +146,24 @@ class FollowUpAdmin(admin.ModelAdmin):
     list_display = ('note', 'workspace', 'status', 'due_date', 'assigned_to')
     list_filter = ('status', 'workspace')
     search_fields = ('note',)
+
+
+@admin.register(WorkspaceSetting)
+class WorkspaceSettingAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'due_soon_days', 'stale_days', 'updated_at')
+    search_fields = ('workspace__name',)
+
+
+@admin.register(NotificationDelivery)
+class NotificationDeliveryAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'recipient', 'kind', 'target_type', 'target_id', 'created_at')
+    list_filter = ('kind',)
+    search_fields = ('recipient__email', 'dedup_key')
+
+
+@admin.register(ImportRun)
+class ImportRunAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'actor', 'mode', 'source', 'created_at')
+    list_filter = ('mode',)
+    search_fields = ('workspace__name', 'actor__email', 'source')
+    readonly_fields = ('workspace', 'actor', 'mode', 'source', 'summary', 'exceptions', 'created_at')
