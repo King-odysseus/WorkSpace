@@ -1497,6 +1497,15 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .today-exception-list button { display: grid; grid-template-columns: 7px minmax(0,1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--workspace-border); border-radius: 7px; background: var(--workspace-surface-soft); color: var(--workspace-text); text-align: left; cursor: pointer; }
 .today-exception-list button span:nth-child(2) { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .today-exception-list small { color: var(--workspace-text-soft); font-size: 9px; }
+.today-clock-panel { display: grid; align-content: start; gap: 7px; }
+.today-clock-panel .today-panel-heading { align-items: flex-start; }
+.today-clock-timer { color: var(--workspace-text); font: 800 27px 'Plus Jakarta Sans'; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.clock-state { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font: 700 9px 'DM Sans'; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.clock-state-active { border-color: rgb(34 197 94 / 0.4); color: #16a34a; }
+.clock-state-break { border-color: rgb(245 158 11 / 0.4); color: #d97706; }
+.today-clock-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+.today-status-select { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: 3px; padding-top: 9px; border-top: 1px solid var(--workspace-border); }
+.today-status-select > span:first-child { color: var(--workspace-text-soft); font: 700 10px 'DM Sans'; }
 .today-checkin-panel { display: grid; align-content: start; gap: 7px; }
 .today-checkin-count { color: var(--workspace-text); font: 800 25px 'Plus Jakarta Sans'; }
 .today-checkin-panel .secondary-button { margin-top: 7px; }
@@ -2535,7 +2544,7 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
   flex: 0 0 auto;
 }
 /* Help center step lists: readable, numbered instructions. */
-.help-topic ol {
+.help-topic ol, .help-topic ul {
   margin: 12px 0 0;
   padding-left: 20px;
   color: var(--workspace-text-soft);
@@ -2702,4 +2711,46 @@ html[data-theme='dark'] :where(
   .follow-up-toolbar
 ) {
   border-color: var(--workspace-surface);
+}
+/* Planner manage chips for active workstreams and buckets. */
+.planner-manage-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.planner-manage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 999px;
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text);
+  font-size: 10px;
+  font-weight: 700;
+}
+.planner-manage-chip button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--workspace-text-soft);
+  cursor: pointer;
+}
+.planner-manage-chip button:hover {
+  background: rgb(220 38 38 / 10%);
+  color: #dc2626;
+}
+/* Legal acceptance actions. */
+.legal-acceptance-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }

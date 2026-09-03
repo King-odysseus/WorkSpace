@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .auth_views import auth_csrf, auth_login, auth_logout, auth_me, user_avatar, user_avatar_download, user_presence
-from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list
+from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, work_shift_list
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -28,6 +28,7 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/calendar-events/<int:event_id>/', calendar_event_detail, name='calendar-event-detail'),
     path('workspaces/<int:workspace_id>/calendar.ics', calendar_ics, name='calendar-ics'),
     path('workspaces/<int:workspace_id>/check-ins/', check_in_list, name='check-in-list'),
+    path('workspaces/<int:workspace_id>/work-shifts/', work_shift_list, name='work-shift-list'),
     path('workspaces/<int:workspace_id>/chat-channels/', chat_channel_list, name='chat-channel-list'),
     path('chat-channels/<int:channel_id>/', chat_channel_detail, name='chat-channel-detail'),
     path('workspaces/<int:workspace_id>/chat-messages/', chat_message_list, name='chat-message-list'),
@@ -40,6 +41,7 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/audit-logs/', audit_log_list, name='audit-log-list'),
     path('workspaces/<int:workspace_id>/reports/summary/', report_summary, name='report-summary'),
     path('workspaces/<int:workspace_id>/plan-buckets/', plan_bucket_list, name='plan-bucket-list'),
+    path('workspaces/<int:workspace_id>/plan-buckets/<int:bucket_id>/', plan_bucket_detail, name='plan-bucket-detail'),
     path('workspaces/<int:workspace_id>/plan-buckets/reorder/', plan_bucket_reorder, name='plan-bucket-reorder'),
     path('workspaces/<int:workspace_id>/tasks/reorder/', task_reorder, name='task-reorder'),
     path('workspaces/<int:workspace_id>/saved-views/', saved_view_list, name='saved-view-list'),

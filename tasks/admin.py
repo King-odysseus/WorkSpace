@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkShift
 
 
 @admin.register(Workspace)
@@ -167,3 +167,10 @@ class ImportRunAdmin(admin.ModelAdmin):
     list_filter = ('mode',)
     search_fields = ('workspace__name', 'actor__email', 'source')
     readonly_fields = ('workspace', 'actor', 'mode', 'source', 'summary', 'exceptions', 'created_at')
+
+
+@admin.register(WorkShift)
+class WorkShiftAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'user', 'date', 'started_at', 'ended_at', 'break_seconds')
+    list_filter = ('date',)
+    search_fields = ('workspace__name', 'user__email')

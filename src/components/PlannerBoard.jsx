@@ -53,7 +53,7 @@ function PlannerTaskCard({ task, buckets, canReorder, onOpen, onDelete, onMove, 
   </article>
 }
 
-export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream }) {
+export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket }) {
   const [status, setStatus] = useState('all')
   const [priority, setPriority] = useState('all')
   const [assignee, setAssignee] = useState('all')
@@ -156,6 +156,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     onAddTask()
   }
   const persistedBuckets = buckets.filter(bucket => typeof bucket.id === 'number')
+  const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)))
   const moveBucket = (sourceId, targetId) => {
     if (!sourceId || !targetId || sourceId === targetId) return
     const next = persistedBuckets.map(bucket => bucket.id)
@@ -222,8 +223,10 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       <span className="planner-result-count">{visibleTasks.length} of {tasks.length} tasks</span>
     </div>
     {isOperations && canManageBuckets && <form className="operations-workstream-create" onSubmit={onCreateWorkstream}><div><strong>Operations workstreams</strong><span>Create reusable lanes such as Finance, Customer Support, or People.</span></div><input value={newWorkstreamName} onChange={event => setNewWorkstreamName(event.target.value)} placeholder="New operations workstream" maxLength="120" required /><button type="submit" className="secondary-button" disabled={workstreamSubmitting}>{workstreamSubmitting ? 'Creating…' : 'Create workstream'}</button></form>}
+    {canManageBuckets && activeWorkstreams.length > 0 && <div className="planner-manage-row">{activeWorkstreams.map(value => <span className="planner-manage-chip" key={value.id}>{value.name}<button type="button" onClick={() => onArchiveWorkstream?.(value)} aria-label={`Archive ${value.name}`}><Archive size={12} /></button></span>)}</div>}
     {workstreamError && <p className="auth-error" role="alert">{workstreamError}</p>}
     {canManageBuckets && <form className="planner-add-bucket" onSubmit={onCreateBucket}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket name" maxLength="80" required /><button type="submit" className="secondary-button" disabled={bucketSubmitting}>{bucketSubmitting ? 'Adding…' : 'Add bucket'}</button></form>}
+    {canManageBuckets && persistedBuckets.filter(bucket => bucket.name !== 'Backlog').length > 0 && <div className="planner-manage-row">{persistedBuckets.filter(bucket => bucket.name !== 'Backlog').map(bucket => <span className="planner-manage-chip" key={bucket.id}>{bucket.name}<button type="button" onClick={() => onArchiveBucket?.(bucket)} aria-label={`Archive ${bucket.name}`}><Archive size={12} /></button></span>)}</div>}
     {bucketError && <p className="auth-error" role="alert">{bucketError}</p>}
     {view === 'gantt' ? ganttContent : view === 'table' ? tableContent : <div className="planner-board" aria-label="Planner board">
       {buckets.map(bucket => {

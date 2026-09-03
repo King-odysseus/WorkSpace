@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.utils import timezone
 
 
 class Workspace(models.Model):
@@ -18,6 +19,7 @@ class Workspace(models.Model):
 class PlanBucket(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='plan_buckets')
     name = models.CharField(max_length=80)
+    is_active = models.BooleanField(default=True)
     position = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -26,7 +28,7 @@ class PlanBucket(models.Model):
         constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='unique_plan_bucket_name')]
 
     def as_dict(self):
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'position': self.position}
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'is_active': self.is_active, 'position': self.position}
 
 
 class SavedView(models.Model):
@@ -832,4 +834,66 @@ class ImportRun(models.Model):
             'summary': self.summary,
             'exceptions': self.exceptions,
             'created_at': self.created_at.isoformat(),
+        }
+
+
+class WorkShift(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='work_shifts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='work_shifts')
+    date = models.DateField()
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True, blank=True)
+    break_started_at = models.DateTimeField(null=True, blank=True)
+    break_seconds = models.PositiveIntegerField(default=0)
+    note = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['workspace', 'date']),
+            models.Index(fields=['user', 'date']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'user'], condition=models.Q(ended_at__isnull=True), name='unique_open_work_shift'),
+        ]
+
+    @property
+    def is_open(self):
+        return self.ended_at is None
+
+    @property
+    def is_on_break(self):
+        return self.is_open and self.break_started_at is not None
+
+    def elapsed_break_seconds(self, now=None):
+        """Accrued break time, including the break currently running."""
+        total = self.break_seconds
+        if self.break_started_at and self.ended_at is None:
+            total += int(((now or timezone.now()) - self.break_started_at).total_seconds())
+        return total
+
+    def worked_seconds(self, now=None):
+        now = now or timezone.now()
+        end = self.ended_at or now
+        return max(0, int((end - self.started_at).total_seconds()) - self.elapsed_break_seconds(now))
+
+    def as_dict(self):
+        now = timezone.now()
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'user_id': self.user_id,
+            'user_name': self.user.get_full_name() or self.user.email,
+            'date': self.date.isoformat(),
+            'started_at': self.started_at.isoformat(),
+            'ended_at': self.ended_at.isoformat() if self.ended_at else '',
+            'break_started_at': self.break_started_at.isoformat() if self.break_started_at else '',
+            'break_seconds': self.break_seconds,
+            'break_seconds_total': self.elapsed_break_seconds(now),
+            'worked_seconds': self.worked_seconds(now),
+            'is_open': self.is_open,
+            'is_on_break': self.is_on_break,
+            'note': self.note,
         }

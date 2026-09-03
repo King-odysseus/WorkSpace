@@ -16,7 +16,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation
+from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkShift
 
 
 def user_workspace_ids(user):
@@ -567,7 +567,7 @@ def plan_bucket_list(request, workspace_id):
     if error:
         return error
     if request.method == 'GET':
-        buckets = PlanBucket.objects.filter(workspace_id=workspace_id)
+        buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)
         return JsonResponse({'buckets': [bucket.as_dict() for bucket in buckets]})
     try:
         payload = json.loads(request.body or '{}')
@@ -596,7 +596,7 @@ def plan_bucket_reorder(request, workspace_id):
     order = payload.get('bucket_ids')
     if not isinstance(order, list) or not order:
         return JsonResponse({'error': 'bucket_ids must be a non-empty list.'}, status=400)
-    buckets = list(PlanBucket.objects.filter(workspace_id=workspace_id))
+    buckets = list(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True))
     by_id = {bucket.id: bucket for bucket in buckets}
     try:
         ids = [int(value) for value in order]
@@ -609,10 +609,50 @@ def plan_bucket_reorder(request, workspace_id):
         if bucket.position != position:
             bucket.position = position
             bucket.save(update_fields=['position'])
-    return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id)]})
+    return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)]})
 
 
 @require_http_methods(['GET', 'POST'])
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def plan_bucket_detail(request, workspace_id, bucket_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    bucket = PlanBucket.objects.filter(id=bucket_id, workspace_id=workspace_id).first()
+    if bucket is None:
+        return JsonResponse({'error': 'Bucket was not found.'}, status=404)
+    if request.method == 'DELETE':
+        bucket.is_active = False
+        bucket.save(update_fields=['is_active'])
+        record_activity(workspace_id, request.user, 'bucket_archived', f'{request.user.get_full_name() or request.user.email} archived the {bucket.name} bucket.')
+        return JsonResponse({'archived': bucket_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) - {'name', 'position', 'is_active'}:
+        return JsonResponse({'error': 'Unsupported bucket fields.'}, status=400)
+    if 'name' in payload:
+        name = str(payload['name']).strip()
+        if not name or len(name) > 80:
+            return JsonResponse({'error': 'Bucket name must be between 1 and 80 characters.'}, status=400)
+        if PlanBucket.objects.filter(workspace_id=workspace_id, name=name, is_active=True).exclude(id=bucket.id).exists():
+            return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
+        bucket.name = name
+    if 'position' in payload:
+        try:
+            bucket.position = max(int(payload['position']), 0)
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'position must be a non-negative integer.'}, status=400)
+    if 'is_active' in payload:
+        if not isinstance(payload['is_active'], bool):
+            return JsonResponse({'error': 'is_active must be a boolean.'}, status=400)
+        bucket.is_active = payload['is_active']
+    bucket.save()
+    return JsonResponse({'bucket': bucket.as_dict()})
+
 def saved_view_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
@@ -1979,3 +2019,92 @@ def follow_up_detail(request, follow_up_id):
     if previous_task != follow_up.task:
         record_activity(follow_up.workspace_id, request.user, 'follow_up_task', f'{actor_name} linked a task to a follow-up.' if follow_up.task else f'{actor_name} removed a task link from a follow-up.')
     return JsonResponse({'follow_up': follow_up.as_dict()})
+
+
+def format_worked_duration(seconds):
+    hours, remainder = divmod(max(0, seconds), 3600)
+    return f'{hours}h {remainder // 60:02d}m'
+
+
+@require_http_methods(['GET', 'POST'])
+def work_shift_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+
+    if request.method == 'GET':
+        requested_date = request.GET.get('date')
+        if requested_date:
+            try:
+                shift_date = date.fromisoformat(requested_date)
+            except ValueError:
+                return JsonResponse({'error': 'Date must use YYYY-MM-DD format.'}, status=400)
+        else:
+            shift_date = timezone.localdate()
+        shifts = WorkShift.objects.filter(workspace_id=workspace_id).select_related('user').filter(
+            Q(date=shift_date) | Q(user=request.user, ended_at__isnull=True)
+        ).distinct()
+        if request.GET.get('mine') == '1':
+            shifts = shifts.filter(user=request.user)
+        return JsonResponse({'work_shifts': [shift.as_dict() for shift in shifts]})
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+
+    action = str(payload.get('action') or '').strip()
+    if action not in {'clock_in', 'clock_out', 'start_break', 'end_break'}:
+        return JsonResponse({'error': 'Action must be clock_in, clock_out, start_break, or end_break.'}, status=400)
+
+    note, note_error = parse_bounded_text(payload.get('note'), 'Note', max_length=255)
+    if note_error:
+        return JsonResponse({'error': note_error}, status=400)
+
+    now = timezone.now()
+    actor_name = request.user.get_full_name() or request.user.email
+
+    with transaction.atomic():
+        open_shift = WorkShift.objects.select_for_update().filter(
+            workspace_id=workspace_id, user=request.user, ended_at__isnull=True
+        ).first()
+
+        if action == 'clock_in':
+            if open_shift is not None:
+                return JsonResponse({'error': 'You are already clocked in.'}, status=409)
+            shift = WorkShift.objects.create(
+                workspace_id=workspace_id,
+                user=request.user,
+                date=timezone.localdate(),
+                started_at=now,
+                note=note,
+            )
+            record_activity(workspace_id, request.user, 'clocked_in', f'{actor_name} clocked in.')
+            status_code = 201
+        else:
+            if open_shift is None:
+                return JsonResponse({'error': 'You are not clocked in.'}, status=409)
+            shift = open_shift
+            if action == 'start_break':
+                if shift.break_started_at is not None:
+                    return JsonResponse({'error': 'You are already on a break.'}, status=409)
+                shift.break_started_at = now
+                shift.save(update_fields=['break_started_at', 'updated_at'])
+            elif action == 'end_break':
+                if shift.break_started_at is None:
+                    return JsonResponse({'error': 'You are not on a break.'}, status=409)
+                shift.break_seconds += int((now - shift.break_started_at).total_seconds())
+                shift.break_started_at = None
+                shift.save(update_fields=['break_seconds', 'break_started_at', 'updated_at'])
+            else:
+                if shift.break_started_at is not None:
+                    shift.break_seconds += int((now - shift.break_started_at).total_seconds())
+                    shift.break_started_at = None
+                shift.ended_at = now
+                if note:
+                    shift.note = note
+                shift.save(update_fields=['break_seconds', 'break_started_at', 'ended_at', 'note', 'updated_at'])
+                record_activity(workspace_id, request.user, 'clocked_out', f'{actor_name} clocked out after {format_worked_duration(shift.worked_seconds(now))}.')
+            status_code = 200
+
+    return JsonResponse({'work_shift': shift.as_dict()}, status=status_code)

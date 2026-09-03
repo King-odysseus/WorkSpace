@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkShift
 
 
 class TaskApiTests(TestCase):
@@ -1272,3 +1272,95 @@ class AuthenticationApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()['authenticated'])
         self.assertFalse(self.client.get(reverse('auth-me')).json()['authenticated'])
+
+
+class WorkShiftApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='clock@example.com', email='clock@example.com', password='secure-pass-123')
+        self.other = User.objects.create_user(username='mate@example.com', email='mate@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar-clock')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
+        self.client.login(username='clock@example.com', password='secure-pass-123')
+        self.url = reverse('work-shift-list', args=[self.workspace.id])
+
+    def post(self, action, **extra):
+        return self.client.post(self.url, data=json.dumps({'action': action, **extra}), content_type='application/json')
+
+    def test_clock_in_then_out_records_worked_time(self):
+        response = self.post('clock_in')
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()['work_shift']['is_open'])
+
+        shift = WorkShift.objects.get(user=self.user)
+        shift.started_at = timezone.now() - timedelta(hours=2)
+        shift.save(update_fields=['started_at'])
+
+        out_response = self.post('clock_out')
+        self.assertEqual(out_response.status_code, 200)
+        payload = out_response.json()['work_shift']
+        self.assertFalse(payload['is_open'])
+        self.assertGreaterEqual(payload['worked_seconds'], 7190)
+        self.assertTrue(ActivityEvent.objects.filter(workspace=self.workspace, kind='clocked_out').exists())
+
+    def test_break_time_is_excluded_from_worked_seconds(self):
+        self.post('clock_in')
+        shift = WorkShift.objects.get(user=self.user)
+        shift.started_at = timezone.now() - timedelta(hours=1)
+        shift.save(update_fields=['started_at'])
+
+        self.assertEqual(self.post('start_break').status_code, 200)
+        shift.refresh_from_db()
+        shift.break_started_at = timezone.now() - timedelta(minutes=15)
+        shift.save(update_fields=['break_started_at'])
+
+        resume = self.post('end_break')
+        self.assertEqual(resume.status_code, 200)
+        self.assertFalse(resume.json()['work_shift']['is_on_break'])
+
+        payload = self.post('clock_out').json()['work_shift']
+        self.assertGreaterEqual(payload['break_seconds'], 890)
+        self.assertLess(payload['worked_seconds'], 2760)
+
+    def test_double_clock_in_is_rejected(self):
+        self.assertEqual(self.post('clock_in').status_code, 201)
+        self.assertEqual(self.post('clock_in').status_code, 409)
+
+    def test_clock_out_without_open_shift_is_rejected(self):
+        self.assertEqual(self.post('clock_out').status_code, 409)
+        self.assertEqual(self.post('end_break').status_code, 409)
+
+    def test_unknown_action_is_rejected(self):
+        self.assertEqual(self.post('nap').status_code, 400)
+
+    def test_list_returns_todays_workspace_shifts(self):
+        self.post('clock_in')
+        self.client.force_login(self.other)
+        self.post('clock_in')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['work_shifts']), 2)
+
+        mine = self.client.get(f'{self.url}?mine=1')
+        self.assertEqual(len(mine.json()['work_shifts']), 1)
+        self.assertEqual(mine.json()['work_shifts'][0]['user_id'], self.other.id)
+
+    def test_non_member_cannot_clock_in(self):
+        outsider = User.objects.create_user(username='out@example.com', email='out@example.com', password='secure-pass-123')
+        self.client.force_login(outsider)
+        self.assertEqual(self.post('clock_in').status_code, 403)
+
+    def test_invalid_date_filter_is_rejected(self):
+        self.assertEqual(self.client.get(f'{self.url}?date=notadate').status_code, 400)
+
+    def test_open_break_is_banked_only_in_total(self):
+        self.post('clock_in')
+        self.post('start_break')
+        shift = WorkShift.objects.get(user=self.user)
+        shift.break_started_at = timezone.now() - timedelta(minutes=10)
+        shift.save(update_fields=['break_started_at'])
+
+        payload = self.client.get(f'{self.url}?mine=1').json()['work_shifts'][0]
+        self.assertTrue(payload['is_on_break'])
+        self.assertEqual(payload['break_seconds'], 0)
+        self.assertGreaterEqual(payload['break_seconds_total'], 590)

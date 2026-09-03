@@ -4,7 +4,7 @@ import {
   AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Brush, Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ClipboardList,
   CircleHelp, Clock3, Filter, FileText, Hash, LayoutDashboard, LayoutGrid, LogOut, MessageSquare, MoreHorizontal,
   ChevronLeft, ChevronRight,
-  Plus, Search, Settings, Sparkles, Target, Users, X, Sun, Moon
+  Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, X, Sun, Moon
 } from 'lucide-react'
 import 'flowbite/dist/flowbite.css'
 import './tijhabooks-theme.css'
@@ -25,6 +25,19 @@ import { cn } from './lib/utils.js'
 import toast, { Toaster } from 'react-hot-toast'
 
 const PRESENCE_LABEL = { available: 'Available', busy: 'Busy', away: 'Away', offline: 'Offline' }
+const PRESENCE_OPTIONS = ['available', 'busy', 'away', 'offline']
+const WORK_SHIFT_TOAST = { clock_in: 'Clocked in.', clock_out: 'Clocked out.', start_break: 'Break started.', end_break: 'Back from break.' }
+
+function formatShiftDuration(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds))
+  const pad = value => String(value).padStart(2, '0')
+  return `${pad(Math.floor(safe / 3600))}:${pad(Math.floor(safe / 60) % 60)}:${pad(safe % 60)}`
+}
+
+function formatShiftClock(value) {
+  return value ? new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''
+}
+
 
 function initialsFor(name) {
   return (name || '').trim().split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || '?'
@@ -148,7 +161,7 @@ function App() {
   const [workspaceReload, setWorkspaceReload] = useState(0)
   const [reportRange, setReportRange] = useState('all')
   const [reportLastUpdated, setReportLastUpdated] = useState(null)
-  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], messages: [], channels: [], directConversations: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], savedViews: [], lookupValues: [], reports: null })
+  const [workspaceData, setWorkspaceData] = useState({ members: [], projects: [], events: [], checkIns: [], workShifts: [], messages: [], channels: [], directConversations: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], savedViews: [], lookupValues: [], reports: null })
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', role: 'member' })
   const [inviteError, setInviteError] = useState('')
@@ -237,7 +250,7 @@ function App() {
     setTasks([])
     setSelectedTask(null)
     setNotificationOpen(false)
-    setWorkspaceData({ members: [], projects: [], events: [], checkIns: [], messages: [], channels: [], directConversations: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], savedViews: [], lookupValues: [], reports: null })
+    setWorkspaceData({ members: [], projects: [], events: [], checkIns: [], workShifts: [], messages: [], channels: [], directConversations: [], followUps: [], invitations: [], notifications: [], activity: [], auditLogs: [], buckets: [], savedViews: [], lookupValues: [], reports: null })
   }, [activeWorkspaceId])
 
   useEffect(() => {
@@ -279,6 +292,7 @@ function App() {
       read(`/api/workspaces/${workspaceId}/follow-ups/`, { follow_ups: [] }),
       read(`/api/workspaces/${workspaceId}/calendar-events/`, { events: [] }),
       read(`/api/workspaces/${workspaceId}/check-ins/?date=${today}`, { check_ins: [] }),
+      read(`/api/workspaces/${workspaceId}/work-shifts/`, { work_shifts: [] }),
       read(`/api/workspaces/${workspaceId}/notifications/`, { notifications: [] }),
       read(`/api/workspaces/${workspaceId}/activity/`, { activity: [] }),
       read(`/api/workspaces/${workspaceId}/plan-buckets/`, { buckets: [] }),
@@ -286,7 +300,7 @@ function App() {
       read(`/api/workspaces/${workspaceId}/saved-views/`, { saved_views: [] }),
       read(`/api/workspaces/${workspaceId}/reports/summary/?range=${reportRange}`, { summary: null }),
       auditRequest,
-      ]).then(([taskData, memberData, projectData, lookupData, messageData, channelData, directData, followUpData, eventData, checkInData, notificationData, activityData, bucketData, invitationData, savedViewData, reportData, auditData]) => {
+      ]).then(([taskData, memberData, projectData, lookupData, messageData, channelData, directData, followUpData, eventData, checkInData, workShiftData, notificationData, activityData, bucketData, invitationData, savedViewData, reportData, auditData]) => {
       if (!isCurrent) return
       setTasks(taskData.tasks.map(task => ({
         id: task.id,
@@ -321,7 +335,7 @@ function App() {
         archived_at: task.archived_at || '',
         supporters: task.supporter_ids || [],
       })))
-      setWorkspaceData(current => ({ ...current, members: memberData.members, projects: projectData.projects, messages: messageData.messages, channels: channelData.channels, directConversations: directData.conversations, followUps: followUpData.follow_ups, events: eventData.events, checkIns: checkInData.check_ins, notifications: notificationData.notifications, activity: activityData.activity, auditLogs: auditData.audit_logs, buckets: bucketData.buckets, invitations: invitationData.invitations, savedViews: savedViewData.saved_views, lookupValues: lookupData.lookup_values, reports: reportData.summary }))
+      setWorkspaceData(current => ({ ...current, members: memberData.members, projects: projectData.projects, messages: messageData.messages, channels: channelData.channels, directConversations: directData.conversations, followUps: followUpData.follow_ups, events: eventData.events, checkIns: checkInData.check_ins, workShifts: workShiftData.work_shifts, notifications: notificationData.notifications, activity: activityData.activity, auditLogs: auditData.audit_logs, buckets: bucketData.buckets, invitations: invitationData.invitations, savedViews: savedViewData.saved_views, lookupValues: lookupData.lookup_values, reports: reportData.summary }))
       setReportLastUpdated(new Date())
       setWorkspaceLoading(false)
       }).catch(error => {
@@ -386,6 +400,45 @@ function App() {
       if (previousTask) setTasks(current => current.map(task => task.id === id ? previousTask : task))
       toast.error(error.message || 'Task status could not be saved.')
       console.warn('Task status could not be saved.', error.message)
+    }
+  }
+  const submitWorkShift = async (action, note = '') => {
+    try {
+      const response = await fetch(`/api/workspaces/${activeWorkspaceId}/work-shifts/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
+        body: JSON.stringify({ action, note }),
+      })
+      const responseData = await response.json()
+      if (!response.ok) throw new Error(responseData.error || `Clock update returned ${response.status}`)
+      setWorkspaceData(current => ({
+        ...current,
+        workShifts: [responseData.work_shift, ...current.workShifts.filter(shift => shift.id !== responseData.work_shift.id)],
+      }))
+      toast.success(WORK_SHIFT_TOAST[action])
+    } catch (error) {
+      toast.error(error.message || 'Your clock entry could not be saved.')
+      console.warn('Work shift could not be saved.', error.message)
+      setWorkspaceReload(current => current + 1)
+    }
+  }
+  const changePresence = async presence => {
+    const previousPresence = session.user.presence || 'available'
+    updateSessionUser({ presence })
+    try {
+      const response = await fetch('/api/auth/me/presence/', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
+        body: JSON.stringify({ presence }),
+      })
+      const responseData = await response.json()
+      if (!response.ok) throw new Error(responseData.error || `Presence update returned ${response.status}`)
+    } catch (error) {
+      updateSessionUser({ presence: previousPresence })
+      toast.error(error.message || 'Your status could not be saved.')
+      console.warn('Presence could not be saved.', error.message)
     }
   }
   const changeTaskStatus = async (id, status) => {
@@ -617,13 +670,13 @@ function App() {
       items: [
         { label: 'Today', icon: LayoutDashboard },
         { label: 'My tasks', icon: CheckCircle2 },
+        { label: 'Daily operations', icon: ClipboardList },
       ],
     },
     {
       heading: 'Work',
       items: [
         { label: 'Planner', icon: LayoutGrid },
-        { label: 'Daily operations', icon: ClipboardList },
         { label: 'Team board', icon: Users },
         { label: 'Projects', icon: Target },
         { label: 'Calendar', icon: CalendarDays },
@@ -989,7 +1042,7 @@ function App() {
         {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}
         {workspaceError && <div className="workspace-status error" role="alert"><span>Workspace data could not be loaded: {workspaceError}</span><button className="secondary-button" onClick={() => setWorkspaceReload(current => current + 1)}>Retry</button></div>}
         {active !== 'Today' && <WorkspaceView key={workspaceId} active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} onNavigate={setActive} theme={theme} onSetTheme={setTheme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentWorkspace={currentWorkspace} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} currentUserEmail={session.user.email} currentUserId={session.user.id} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} onProfileUpdated={updateSessionUser} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} reportRange={reportRange} setReportRange={setReportRange} reportLastUpdated={reportLastUpdated} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => openTaskModal()} onOpenTask={setSelectedTask} onActionError={message => toast.error(message)} onRefresh={() => setWorkspaceReload(current => current + 1)} onConfirm={confirmAction} />}
-        {active === 'Today' && <TodayDashboard today={today} todayLabel={todayLabel} currentUserName={currentUserName} workspaceName={currentWorkspace?.name || 'your workspace'} tasks={tasks} events={workspaceData.events} followUps={workspaceData.followUps} checkIns={workspaceData.checkIns} members={workspaceData.members} canManageMembers={canManageMembers} onAddTask={() => openTaskModal()} onOpenTask={setSelectedTask} onNavigate={setActive} onComplete={completeTask} onStatusChange={changeTaskStatus} />}
+        {active === 'Today' && <TodayDashboard today={today} todayLabel={todayLabel} currentUserName={currentUserName} workspaceName={currentWorkspace?.name || 'your workspace'} tasks={tasks} events={workspaceData.events} followUps={workspaceData.followUps} checkIns={workspaceData.checkIns} workShifts={workspaceData.workShifts} currentUserId={session.user.id} currentUserPresence={currentUserPresence} onSubmitShift={submitWorkShift} onChangePresence={changePresence} members={workspaceData.members} canManageMembers={canManageMembers} onAddTask={() => openTaskModal()} onOpenTask={setSelectedTask} onNavigate={setActive} onComplete={completeTask} onStatusChange={changeTaskStatus} />}
       </div>
       </main>
     </div>
@@ -1335,7 +1388,7 @@ function HelpView({ onNavigate }) {
       ],
     },
   ]
-  return <section className="workspace-view help-view"><WorkspaceViewHeading title="Help center" subtitle="Step-by-step instructions for getting work done in WorkSpace." /><div className="help-grid"><Card className="help-welcome"><p className="eyebrow">Welcome to WorkSpace</p><h2>Learn by doing</h2><p>Expand any workflow below to see the exact actions to take. Start with Create and assign a task, then move to Daily operations or Planner when your work has a clear home.</p><div className="help-actions"><button type="button" className="primary-button" onClick={() => onNavigate('Today')}>Open Today</button><button type="button" className="secondary-button" onClick={() => onNavigate('Planner')}>Open Planner</button></div></Card>{topics.map((topic, index) => <Card className={`help-topic ${openTopic === index ? 'is-open' : ''}`} key={topic.title}><button type="button" className="help-topic-header" onClick={() => setOpenTopic(current => current === index ? null : index)} aria-expanded={openTopic === index}><topic.icon size={16} /><h3>{topic.title}</h3><ChevronDown size={16} className="help-chevron" /></button>{openTopic === index && <div className="help-topic-content"><p>{topic.intro}</p><ol>{topic.steps.map(step => <li key={step}>{step}</li>)}</ol></div>}</Card>)}</div><Card className="help-contact"><div><p className="eyebrow">Need more help?</p><h2>Contact your workspace administrator</h2><p>For access, billing, deletion, or security requests, contact the person who manages your workspace.</p></div><button type="button" className="secondary-button" onClick={() => onNavigate('Settings')}>Open Settings</button></Card></section>
+  return <section className="workspace-view help-view"><WorkspaceViewHeading title="Help center" subtitle="Step-by-step instructions for getting work done in WorkSpace." /><div className="help-grid"><Card className="help-welcome"><p className="eyebrow">Welcome to WorkSpace</p><h2>Learn by doing</h2><p>Expand any workflow below to see the exact actions to take. Start with Create and assign a task, then move to Daily operations or Planner when your work has a clear home.</p><div className="help-actions"><button type="button" className="primary-button" onClick={() => onNavigate('Today')}>Open Today</button><button type="button" className="secondary-button" onClick={() => onNavigate('Planner')}>Open Planner</button></div></Card>{topics.map((topic, index) => <Card className={`help-topic ${openTopic === index ? 'is-open' : ''}`} key={topic.title}><button type="button" className="help-topic-header" onClick={() => setOpenTopic(current => current === index ? null : index)} aria-expanded={openTopic === index}><topic.icon size={16} /><h3>{topic.title}</h3><ChevronDown size={16} className="help-chevron" /></button>{openTopic === index && <div className="help-topic-content"><p>{topic.intro}</p><ul>{topic.steps.map(step => <li key={step}>{step}</li>)}</ul></div>}</Card>)}</div><Card className="help-contact"><div><p className="eyebrow">Need more help?</p><h2>Contact your workspace administrator</h2><p>For access, billing, deletion, or security requests, contact the person who manages your workspace.</p></div><button type="button" className="secondary-button" onClick={() => onNavigate('Settings')}>Open Settings</button></Card></section>
 }
 function LegalView() {
   const [document, setDocument] = useState('privacy')
@@ -1347,8 +1400,9 @@ function LegalView() {
     acceptable: { label: 'Acceptable use', title: 'Acceptable use policy', intro: 'Use WorkSpace responsibly and do not put other people, the service, or sensitive data at unreasonable risk.', sections: [['Do not misuse the service', 'Do not access accounts without permission, probe or disrupt systems, distribute malware, or attempt to bypass security controls.'], ['Respect people', 'Do not use WorkSpace for harassment, threats, unlawful discrimination, or sharing content that you do not have the right to distribute.'], ['Report concerns', 'Tell your workspace administrator promptly about suspected abuse, data exposure, or security issues.']] },
   }
   const current = documents[document]
-  const accept = event => { const next = event.target.checked; setAccepted(next); if (next) localStorage.setItem('workspace-legal-accepted-v1', 'true'); else localStorage.removeItem('workspace-legal-accepted-v1') }
-  return <section className="workspace-view legal-view"><WorkspaceViewHeading title="Legal & privacy" subtitle="Review the policies that govern your use of WorkSpace." /><div className="legal-layout"><nav className="legal-nav" aria-label="Legal documents">{Object.entries(documents).map(([key, item]) => <button type="button" className={document === key ? 'active' : ''} key={key} onClick={() => setDocument(key)}>{item.label}</button>)}</nav><Card className="legal-document"><p className="eyebrow">WorkSpace policies</p><h2>{current.title}</h2><p className="legal-intro">{current.intro}</p>{current.sections.map(([heading, body]) => <section key={heading}><h3>{heading}</h3><p>{body}</p></section>)}<p className="legal-meta">Last updated: 3 September 2026 · Review this policy with your legal adviser for your organisation's specific obligations.</p></Card></div><Card className="legal-acceptance"><div><h3>Policy acknowledgement</h3><p>To continue using this workspace, confirm that you have read and agree to the Terms of service and Acceptable use policy, and acknowledge the Privacy and Cookie notices.</p></div><label><input type="checkbox" checked={accepted} onChange={accept} /> I have read and accept these policies</label></Card></section>
+  const acceptPolicies = () => { localStorage.setItem('workspace-legal-accepted-v1', 'true'); setAccepted(true); window.dispatchEvent(new CustomEvent('workspace:notice', { detail: 'Policies accepted.' })) }
+  const revokePolicies = () => { localStorage.removeItem('workspace-legal-accepted-v1'); setAccepted(false) }
+  return <section className="workspace-view legal-view"><WorkspaceViewHeading title="Legal & privacy" subtitle="Review the policies that govern your use of WorkSpace." /><div className="legal-layout"><nav className="legal-nav" aria-label="Legal documents">{Object.entries(documents).map(([key, item]) => <button type="button" className={document === key ? 'active' : ''} key={key} onClick={() => setDocument(key)}>{item.label}</button>)}</nav><Card className="legal-document"><p className="eyebrow">WorkSpace policies</p><h2>{current.title}</h2><p className="legal-intro">{current.intro}</p>{current.sections.map(([heading, body]) => <section key={heading}><h3>{heading}</h3><p>{body}</p></section>)}<p className="legal-meta">Last updated: 3 September 2026 · Review this policy with your legal adviser for your organisation's specific obligations.</p></Card></div><Card className="legal-acceptance"><div><h3>Policy acknowledgement</h3><p>To continue using this workspace, confirm that you have read and agree to the Terms of service and Acceptable use policy, and acknowledge the Privacy and Cookie notices.</p></div><div className="legal-acceptance-actions"><button type="button" className="primary-button" onClick={acceptPolicies} disabled={accepted}>{accepted ? 'Policies accepted' : 'Accept policies'}</button>{accepted && <button type="button" className="secondary-button" onClick={revokePolicies}>Revoke acceptance</button>}</div></Card></section>
 }
 
 function CookieConsent({ onOpenLegal }) {
@@ -1592,6 +1646,36 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     }
   }
 
+  const archiveBucket = async bucket => {
+    if (!canManageMembers || !(await onConfirm(`Archive ${bucket.name}? Tasks can still keep their current bucket label until they are moved.`, { title: 'Archive bucket', confirmLabel: 'Archive bucket' }))) return
+    setBucketError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/${bucket.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Bucket could not be archived.')
+      setLocalData(current => ({ ...current, buckets: current.buckets.filter(item => item.id !== bucket.id) }))
+      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `${bucket.name} archived.` }))
+      onRefresh()
+    } catch (error) {
+      setBucketError(error.message || 'Bucket could not be archived.')
+    }
+  }
+
+  const archiveWorkstream = async value => {
+    if (!canManageMembers || !(await onConfirm(`Archive ${value.name}? Existing tasks will keep the label but it will no longer appear for new tasks.`, { title: 'Archive workstream', confirmLabel: 'Archive workstream' }))) return
+    setWorkstreamError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/lookup-values/${value.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Workstream could not be archived.')
+      setLocalData(current => ({ ...current, lookupValues: (current.lookupValues || []).filter(item => item.id !== value.id) }))
+      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `${value.name} archived.` }))
+      onRefresh()
+    } catch (error) {
+      setWorkstreamError(error.message || 'Workstream could not be archived.')
+    }
+  }
+
   const reorderBuckets = async bucketIds => {
     if (!canManageMembers) return
     const previousBuckets = [...localData.buckets]
@@ -1695,7 +1779,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     const buckets = [...configuredBuckets, ...[...new Set(tasks.map(task => task.bucket || 'Backlog'))].filter(name => !configuredNames.has(name)).map(name => ({ id: `legacy-${name}`, name }))]
     const availableMembers = localData.members.filter(member => member.id)
     return <section className="workspace-view planner-view-wrapper">
-      <PlannerBoard buckets={buckets} tasks={tasks} projects={localData.projects} lookupValues={localData.lookupValues || []} projectFilter="operations" scopeMode="operations" onSearchChange={onSearchChange} members={availableMembers} searchQuery={searchQuery} canManageTasks={canManageTasks} canManageBuckets={canManageMembers} currentUserId={currentUserId} onStatusChange={onStatusChange} onOpenTask={onOpenTask} onDeleteTask={onDelete} onAddTask={() => { sessionStorage.setItem('workspace-new-task-scope', 'operations'); onAddTask() }} onTaskMove={onBucketChange} onBucketReorder={reorderBuckets} newBucketName={newBucketName} setNewBucketName={setNewBucketName} bucketSubmitting={bucketSubmitting} bucketError={bucketError} onCreateBucket={createBucket} newWorkstreamName={newWorkstreamName} setNewWorkstreamName={setNewWorkstreamName} workstreamSubmitting={workstreamSubmitting} workstreamError={workstreamError} onCreateWorkstream={createWorkstream} externalFilter={plannerFilter} />
+      <PlannerBoard buckets={buckets} tasks={tasks} projects={localData.projects} lookupValues={localData.lookupValues || []} projectFilter="operations" scopeMode="operations" onSearchChange={onSearchChange} members={availableMembers} searchQuery={searchQuery} canManageTasks={canManageTasks} canManageBuckets={canManageMembers} currentUserId={currentUserId} onStatusChange={onStatusChange} onOpenTask={onOpenTask} onDeleteTask={onDelete} onAddTask={() => { sessionStorage.setItem('workspace-new-task-scope', 'operations'); onAddTask() }} onTaskMove={onBucketChange} onBucketReorder={reorderBuckets} newBucketName={newBucketName} setNewBucketName={setNewBucketName} bucketSubmitting={bucketSubmitting} bucketError={bucketError} onCreateBucket={createBucket} newWorkstreamName={newWorkstreamName} setNewWorkstreamName={setNewWorkstreamName} workstreamSubmitting={workstreamSubmitting} workstreamError={workstreamError} onCreateWorkstream={createWorkstream} onArchiveWorkstream={archiveWorkstream} onArchiveBucket={archiveBucket} externalFilter={plannerFilter} />
     </section>
   }
 
@@ -1755,7 +1839,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
           <button type="submit" className="secondary-button">Save view</button>
         </form>
       </div>
-      <PlannerBoard buckets={buckets} tasks={tasks} projects={localData.projects} lookupValues={localData.lookupValues || []} projectFilter={plannerProjectFilter} scopeMode="projects" onProjectFilterChange={setPlannerProjectFilter} onSearchChange={onSearchChange} members={availableMembers} searchQuery={searchQuery} canManageTasks={canManageTasks} canManageBuckets={canManageMembers} currentUserId={currentUserId} onStatusChange={onStatusChange} onOpenTask={onOpenTask} onDeleteTask={onDelete} onAddTask={onAddTask} onTaskMove={onBucketChange} onBucketReorder={reorderBuckets} newBucketName={newBucketName} setNewBucketName={setNewBucketName} bucketSubmitting={bucketSubmitting} bucketError={bucketError} onCreateBucket={createBucket} externalFilter={plannerFilter} />
+      <PlannerBoard buckets={buckets} tasks={tasks} projects={localData.projects} lookupValues={localData.lookupValues || []} projectFilter={plannerProjectFilter} scopeMode="projects" onProjectFilterChange={setPlannerProjectFilter} onSearchChange={onSearchChange} members={availableMembers} searchQuery={searchQuery} canManageTasks={canManageTasks} canManageBuckets={canManageMembers} currentUserId={currentUserId} onStatusChange={onStatusChange} onOpenTask={onOpenTask} onDeleteTask={onDelete} onAddTask={onAddTask} onTaskMove={onBucketChange} onBucketReorder={reorderBuckets} newBucketName={newBucketName} setNewBucketName={setNewBucketName} bucketSubmitting={bucketSubmitting} bucketError={bucketError} onCreateBucket={createBucket} onArchiveBucket={archiveBucket} externalFilter={plannerFilter} />
     </section>
   }
 
@@ -2062,7 +2146,69 @@ function ProjectRiskIssuePanel({ projects, workspaceId, hidden = false }) {
   </section>
 }
 
-function TodayDashboard({ today, todayLabel, currentUserName, workspaceName, tasks, events, followUps, checkIns, members, canManageMembers, onAddTask, onOpenTask, onNavigate, onComplete, onStatusChange }) {
+function ClockInCard({ shifts, currentUserId, presence, onSubmitShift, onChangePresence }) {
+  const [pending, setPending] = useState('')
+  const [tick, setTick] = useState(() => Date.now())
+  const mine = shifts.filter(shift => String(shift.user_id) === String(currentUserId))
+  const openShift = mine.find(shift => shift.is_open) || null
+  const closedToday = mine.filter(shift => !shift.is_open)
+  const onBreak = Boolean(openShift?.is_on_break)
+
+  useEffect(() => {
+    if (!openShift) return undefined
+    const timer = window.setInterval(() => setTick(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [openShift?.id])
+
+  // break_seconds from the API is banked time only, so a break still running is added from break_started_at here.
+  const runningBreakSeconds = openShift?.break_started_at ? Math.floor((tick - new Date(openShift.break_started_at).getTime()) / 1000) : 0
+  const liveBreakSeconds = closedToday.reduce((total, shift) => total + shift.break_seconds, 0) + (openShift?.break_seconds || 0) + Math.max(0, runningBreakSeconds)
+  // The server sends worked_seconds as of the response; count forward locally so the timer stays live between polls.
+  const liveSeconds = (() => {
+    const bankedToday = closedToday.reduce((total, shift) => total + shift.worked_seconds, 0)
+    if (!openShift) return bankedToday
+    const elapsed = Math.floor((tick - new Date(openShift.started_at).getTime()) / 1000)
+    return bankedToday + Math.max(0, elapsed - openShift.break_seconds - Math.max(0, runningBreakSeconds))
+  })()
+
+  const run = async action => {
+    setPending(action)
+    try {
+      await onSubmitShift(action)
+    } finally {
+      setPending('')
+    }
+  }
+
+  const stateLabel = !openShift ? 'Clocked out' : onBreak ? 'On break' : 'Clocked in'
+  return <div className="today-panel today-clock-panel">
+    <div className="today-panel-heading">
+      <div><h2>Time clock</h2><p>{openShift ? `Started ${formatShiftClock(openShift.started_at)}` : closedToday.length ? 'Shift ended for today' : 'Not started yet'}</p></div>
+      <span className={`clock-state clock-state-${openShift ? (onBreak ? 'break' : 'active') : 'idle'}`}><Clock3 size={14} /> {stateLabel}</span>
+    </div>
+    <strong className="today-clock-timer" role="timer" aria-live="off" aria-label={`Time worked today ${formatShiftDuration(liveSeconds)}`}>{formatShiftDuration(liveSeconds)}</strong>
+    <span className="today-muted">{liveBreakSeconds ? `Breaks ${formatShiftDuration(liveBreakSeconds)}` : 'No breaks taken'}</span>
+    <div className="today-clock-actions">
+      {openShift
+        ? <>
+            <Button variant={onBreak ? 'default' : 'outline'} size="sm" disabled={Boolean(pending)} onClick={() => run(onBreak ? 'end_break' : 'start_break')}>{onBreak ? <><Play size={15} /> Resume</> : <><Pause size={15} /> Break</>}</Button>
+            <Button variant="outline" size="sm" disabled={Boolean(pending)} onClick={() => run('clock_out')}><Square size={15} /> Clock out</Button>
+          </>
+        : <Button size="sm" disabled={Boolean(pending)} onClick={() => run('clock_in')}><Play size={15} /> Clock in</Button>}
+    </div>
+    <label className="today-status-select">
+      <span>Status</span>
+      <span className="presence-select">
+        <span className={`presence-dot presence-${presence}`} />
+        <select value={presence} onChange={event => onChangePresence(event.target.value)} aria-label="Set your status">
+          {PRESENCE_OPTIONS.map(option => <option key={option} value={option}>{PRESENCE_LABEL[option]}</option>)}
+        </select>
+      </span>
+    </label>
+  </div>
+}
+
+function TodayDashboard({ today, todayLabel, currentUserName, currentUserId, currentUserPresence, workspaceName, tasks, events, followUps, checkIns, workShifts, members, canManageMembers, onAddTask, onOpenTask, onNavigate, onComplete, onStatusChange, onSubmitShift, onChangePresence }) {
   const isOpen = task => task.status !== 'done'
   const dueToday = tasks.filter(task => task.due_date === today && isOpen(task))
   const overdue = tasks.filter(task => task.due_date && task.due_date < today && isOpen(task))
@@ -2084,7 +2230,7 @@ function TodayDashboard({ today, todayLabel, currentUserName, workspaceName, tas
     <section className="today-hero"><div><p className="eyebrow">{todayLabel}</p><h1>{greeting}, {currentUserName.split(' ')[0]}</h1><p className="subtitle">Here is what needs your attention in {workspaceName}.</p></div><div className="today-actions"><Button onClick={onAddTask}><Plus size={17} /> Add task</Button><Button variant="outline" size="sm" className="today-action-secondary" onClick={() => onNavigate('Calendar')}><CalendarDays size={16} /> Add event</Button><Button variant="outline" size="sm" className="today-action-secondary" onClick={() => onNavigate('Check-ins')}><MessageSquare size={16} /> Check in</Button></div></section>
     <section className="today-metrics"><button onClick={() => onNavigate('My tasks')}><strong>{dueToday.length}</strong><span>Due today</span></button><button className={overdue.length ? 'attention' : ''} onClick={() => onNavigate('My tasks')}><strong>{overdue.length}</strong><span>Overdue</span></button><button className={blocked.length ? 'attention' : ''} onClick={() => onNavigate('Team board')}><strong>{blocked.length}</strong><span>Blocked</span></button><button onClick={() => onNavigate('My tasks')}><strong>{completedToday.length}</strong><span>Completed today</span></button></section>
     <div className="today-grid"><div className="today-panel my-day-panel"><div className="today-panel-heading"><div><h2>My day</h2><p>Prioritized work for you</p></div><Button variant="ghost" size="sm" onClick={() => onNavigate('My tasks')}>View all <ArrowUpRight size={14} /></Button></div>{myQueue.length ? <div className="today-task-list">{myQueue.map(task => <article className={`today-task-row ${task.status}`} key={task.id}><button className={`check ${task.status === 'done' ? 'checked' : ''}`} onClick={() => onComplete(task.id)} aria-label={`Complete ${task.title}`} /><div className="today-task-copy"><button onClick={() => onOpenTask(task)}>{task.title}</button><span>{taskLabel(task)}{task.tag && ` · ${task.tag}`}</span></div><select value={task.status === 'in progress' ? 'in_progress' : task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in_progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></select></article>)}</div> : <div className="today-empty"><CheckCircle2 size={20} /><p>Your day is clear.</p><Button variant="ghost" size="sm" onClick={onAddTask}>Plan a task <ArrowUpRight size={14} /></Button></div>}</div>
-      <aside className="today-side-stack"><div className="today-panel"><div className="today-panel-heading"><div><h2>Schedule</h2><p>Events and deadlines today</p></div><Button variant="ghost" size="icon-sm" onClick={() => onNavigate('Calendar')} aria-label="Open calendar"><ArrowUpRight size={15} /></Button></div>{todaysEvents.length ? todaysEvents.map(event => <div className="today-event-row" key={event.id}><time>{new Date(event.start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time><div><strong>{event.title}</strong><span>{event.event_type || 'Event'}</span></div></div>) : <p className="today-muted">No events scheduled today.</p>}</div><div className="today-panel"><div className="today-panel-heading"><div><h2>Follow-ups</h2><p>Items needing a response</p></div><Button variant="ghost" size="icon-sm" onClick={() => onNavigate('Follow-up')} aria-label="Open follow-ups"><ArrowUpRight size={15} /></Button></div>{dueFollowUps.length ? dueFollowUps.map(item => <button className="today-followup-row" key={item.id} onClick={() => onNavigate('Follow-up')}><span className="priority-dot" /><span>{item.note}</span><small>{item.due_date || 'No due date'}</small></button>) : <p className="today-muted">No follow-ups due.</p>}</div></aside>
+      <aside className="today-side-stack"><ClockInCard shifts={workShifts} currentUserId={currentUserId} presence={currentUserPresence} onSubmitShift={onSubmitShift} onChangePresence={onChangePresence} /><div className="today-panel"><div className="today-panel-heading"><div><h2>Schedule</h2><p>Events and deadlines today</p></div><Button variant="ghost" size="icon-sm" onClick={() => onNavigate('Calendar')} aria-label="Open calendar"><ArrowUpRight size={15} /></Button></div>{todaysEvents.length ? todaysEvents.map(event => <div className="today-event-row" key={event.id}><time>{new Date(event.start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time><div><strong>{event.title}</strong><span>{event.event_type || 'Event'}</span></div></div>) : <p className="today-muted">No events scheduled today.</p>}</div><div className="today-panel"><div className="today-panel-heading"><div><h2>Follow-ups</h2><p>Items needing a response</p></div><Button variant="ghost" size="icon-sm" onClick={() => onNavigate('Follow-up')} aria-label="Open follow-ups"><ArrowUpRight size={15} /></Button></div>{dueFollowUps.length ? dueFollowUps.map(item => <button className="today-followup-row" key={item.id} onClick={() => onNavigate('Follow-up')}><span className="priority-dot" /><span>{item.note}</span><small>{item.due_date || 'No due date'}</small></button>) : <p className="today-muted">No follow-ups due.</p>}</div></aside>
     </div><div className="today-lower-grid"><div className="today-panel"><div className="today-panel-heading"><div><h2>Team attention</h2><p>{canManageMembers ? 'Exceptions worth acting on' : 'Work that may need help'}</p></div><Button variant="ghost" size="sm" onClick={() => onNavigate('Team board')}>Open board <ArrowUpRight size={14} /></Button></div>{openExceptions.length ? <div className="today-exception-list">{openExceptions.map(task => <button key={task.id} onClick={() => onOpenTask(task)}><span className={`status-dot ${task.status}`} /><span>{task.title}</span><small>{task.status === 'blocked' ? 'Blocked' : !task.assignee_id ? 'Unassigned' : 'Overdue'}</small></button>)}</div> : <p className="today-muted">No team exceptions right now.</p>}</div><div className="today-panel today-checkin-panel"><div className="today-panel-heading"><div><h2>Check-ins</h2><p>Keep the team aligned</p></div><Hash size={17} /></div><strong className="today-checkin-count">{checkInsToday} of {members.length || 1}</strong><span className="today-muted">check-ins received today</span><Button variant="outline" size="sm" onClick={() => onNavigate('Check-ins')}>{checkInsToday ? 'View check-ins' : 'Start check-in'}</Button></div></div>
   </section>
 }
