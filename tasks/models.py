@@ -845,6 +845,7 @@ class WorkShift(models.Model):
     ended_at = models.DateTimeField(null=True, blank=True)
     break_started_at = models.DateTimeField(null=True, blank=True)
     break_seconds = models.PositiveIntegerField(default=0)
+    break_plan_minutes = models.PositiveIntegerField(default=0)
     note = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -891,6 +892,7 @@ class WorkShift(models.Model):
             'ended_at': self.ended_at.isoformat() if self.ended_at else '',
             'break_started_at': self.break_started_at.isoformat() if self.break_started_at else '',
             'break_seconds': self.break_seconds,
+            'break_plan_minutes': self.break_plan_minutes,
             'break_seconds_total': self.elapsed_break_seconds(now),
             'worked_seconds': self.worked_seconds(now),
             'is_open': self.is_open,

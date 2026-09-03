@@ -1364,3 +1364,62 @@ class WorkShiftApiTests(TestCase):
         self.assertTrue(payload['is_on_break'])
         self.assertEqual(payload['break_seconds'], 0)
         self.assertGreaterEqual(payload['break_seconds_total'], 590)
+
+    def test_break_preset_is_recorded_and_cleared(self):
+        self.post('clock_in')
+        response = self.post('start_break', minutes=30)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['work_shift']['break_plan_minutes'], 30)
+
+        resumed = self.post('end_break')
+        self.assertEqual(resumed.json()['work_shift']['break_plan_minutes'], 0)
+
+        self.assertEqual(self.post('start_break', minutes=60).json()['work_shift']['break_plan_minutes'], 60)
+        self.assertEqual(self.post('clock_out').json()['work_shift']['break_plan_minutes'], 0)
+
+    def test_break_preset_must_be_a_supported_length(self):
+        self.post('clock_in')
+        response = self.post('start_break', minutes=45)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(WorkShift.objects.get(user=self.user).is_on_break)
+
+    def test_open_ended_break_is_still_allowed(self):
+        self.post('clock_in')
+        response = self.post('start_break')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['work_shift']['break_plan_minutes'], 0)
+
+    def test_report_summary_includes_time_clock_totals(self):
+        self.post('clock_in')
+        shift = WorkShift.objects.get(user=self.user)
+        shift.started_at = timezone.now() - timedelta(hours=3)
+        shift.save(update_fields=['started_at'])
+        self.post('clock_out')
+
+        response = self.client.get(reverse('report-summary', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        time_clock = response.json()['summary']['time_clock']
+        self.assertEqual(time_clock['shift_count'], 1)
+        self.assertEqual(time_clock['open_shifts'], 0)
+        self.assertGreaterEqual(time_clock['total_seconds'], 10790)
+        self.assertEqual(time_clock['by_member'][0]['user_id'], self.user.id)
+        self.assertEqual(time_clock['by_member'][0]['day_count'], 1)
+        self.assertEqual(len(time_clock['recent']), 1)
+
+    def test_report_summary_time_clock_respects_range(self):
+        old_shift = WorkShift.objects.create(
+            workspace=self.workspace,
+            user=self.user,
+            date=timezone.localdate() - timedelta(days=40),
+            started_at=timezone.now() - timedelta(days=40),
+            ended_at=timezone.now() - timedelta(days=40) + timedelta(hours=4),
+        )
+        self.assertFalse(old_shift.is_open)
+
+        all_time = self.client.get(reverse('report-summary', args=[self.workspace.id])).json()['summary']['time_clock']
+        self.assertEqual(all_time['shift_count'], 1)
+
+        this_week = self.client.get(f"{reverse('report-summary', args=[self.workspace.id])}?range=week").json()['summary']['time_clock']
+        self.assertEqual(this_week['shift_count'], 0)
+        self.assertEqual(this_week['total_seconds'], 0)
+        self.assertEqual(this_week['average_seconds'], 0)

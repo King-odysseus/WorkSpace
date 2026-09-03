@@ -1504,11 +1504,25 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .clock-state-active { border-color: rgb(34 197 94 / 0.4); color: #16a34a; }
 .clock-state-break { border-color: rgb(245 158 11 / 0.4); color: #d97706; }
 .today-clock-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+.clock-break-timer { margin: 0; padding: 6px 9px; border: 1px solid rgb(245 158 11 / 0.35); border-radius: 8px; background: rgb(245 158 11 / 0.08); color: #b45309; font: 600 10px 'DM Sans'; }
+.clock-break-timer.is-over { border-color: rgb(239 68 68 / 0.4); background: rgb(239 68 68 / 0.08); color: #dc2626; }
 .today-status-select { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: 3px; padding-top: 9px; border-top: 1px solid var(--workspace-border); }
 .today-status-select > span:first-child { color: var(--workspace-text-soft); font: 700 10px 'DM Sans'; }
 .today-checkin-panel { display: grid; align-content: start; gap: 7px; }
 .today-checkin-count { color: var(--workspace-text); font: 800 25px 'Plus Jakarta Sans'; }
 .today-checkin-panel .secondary-button { margin-top: 7px; }
+.time-clock-panel { display: grid; gap: 12px; }
+.time-clock-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.time-clock-totals div { display: grid; gap: 3px; padding: 11px 13px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface-soft); }
+.time-clock-totals strong { color: var(--workspace-text); font: 800 17px 'Plus Jakarta Sans'; font-variant-numeric: tabular-nums; }
+.time-clock-totals span { color: var(--workspace-text-soft); font: 600 9px 'DM Sans'; text-transform: uppercase; letter-spacing: 0.04em; }
+.time-clock-members { display: grid; gap: 5px; }
+.time-clock-log { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--workspace-border); }
+.time-clock-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid var(--workspace-border); border-radius: 8px; background: var(--workspace-surface-soft); }
+.time-clock-row strong { display: block; color: var(--workspace-text); font: 700 11px 'DM Sans'; }
+.time-clock-row span:not(.clock-state) { color: var(--workspace-text-soft); font-size: 9px; }
+.time-clock-row em { color: var(--workspace-text); font: 700 10px 'DM Sans'; font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 900px) { .time-clock-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .my-tasks-view { min-width: 0; }
 .my-task-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 14px; }
 .my-task-summary button { display: grid; gap: 3px; padding: 13px 15px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); color: var(--workspace-text-soft); text-align: left; cursor: pointer; }

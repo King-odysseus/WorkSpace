@@ -301,6 +301,7 @@ def report_summary(request, workspace_id):
         })
     check_in_total = CheckIn.objects.filter(workspace_id=workspace_id, date=today).count()
     member_total = Membership.objects.filter(workspace_id=workspace_id).count()
+    time_clock = time_clock_summary(workspace_id, report_range, today)
     return JsonResponse({'summary': {
         'total_tasks': tasks.count(),
         'status_counts': status_counts,
@@ -312,7 +313,54 @@ def report_summary(request, workspace_id):
         'check_ins_today': check_in_total,
         'members': member_total,
         'workload': workload,
+        'time_clock': time_clock,
     }})
+
+
+def time_clock_summary(workspace_id, report_range, today):
+    """Aggregate work shifts for the Reports page over the same window the task report uses."""
+    shifts = WorkShift.objects.filter(workspace_id=workspace_id).select_related('user')
+    if report_range == 'week':
+        shifts = shifts.filter(date__gte=today - timedelta(days=6))
+    elif report_range == 'month':
+        shifts = shifts.filter(date__gte=today.replace(day=1))
+    now = timezone.now()
+    by_member = {}
+    total_seconds = 0
+    total_break_seconds = 0
+    open_count = 0
+    for shift in shifts:
+        worked = shift.worked_seconds(now)
+        breaks = shift.elapsed_break_seconds(now)
+        total_seconds += worked
+        total_break_seconds += breaks
+        if shift.is_open:
+            open_count += 1
+        entry = by_member.setdefault(shift.user_id, {
+            'user_id': shift.user_id,
+            'user_name': shift.user.get_full_name() or shift.user.email,
+            'worked_seconds': 0,
+            'break_seconds': 0,
+            'shift_count': 0,
+            'days': set(),
+        })
+        entry['worked_seconds'] += worked
+        entry['break_seconds'] += breaks
+        entry['shift_count'] += 1
+        entry['days'].add(shift.date)
+    members = sorted(by_member.values(), key=lambda entry: entry['worked_seconds'], reverse=True)
+    for entry in members:
+        entry['day_count'] = len(entry.pop('days'))
+    shift_total = sum(entry['shift_count'] for entry in members)
+    return {
+        'total_seconds': total_seconds,
+        'break_seconds': total_break_seconds,
+        'shift_count': shift_total,
+        'open_shifts': open_count,
+        'average_seconds': round(total_seconds / shift_total) if shift_total else 0,
+        'by_member': members,
+        'recent': [shift.as_dict() for shift in shifts[:12]],
+    }
 
 
 @require_http_methods(['GET', 'POST'])
@@ -2021,6 +2069,9 @@ def follow_up_detail(request, follow_up_id):
     return JsonResponse({'follow_up': follow_up.as_dict()})
 
 
+BREAK_PRESET_MINUTES = {0, 30, 60}
+
+
 def format_worked_duration(seconds):
     hours, remainder = divmod(max(0, seconds), 3600)
     return f'{hours}h {remainder // 60:02d}m'
@@ -2061,6 +2112,13 @@ def work_shift_list(request, workspace_id):
     if note_error:
         return JsonResponse({'error': note_error}, status=400)
 
+    break_minutes = payload.get('minutes', 0)
+    if action == 'start_break':
+        if break_minutes in (None, ''):
+            break_minutes = 0
+        if break_minutes not in BREAK_PRESET_MINUTES:
+            return JsonResponse({'error': 'Break length must be 30 or 60 minutes, or 0 for an open break.'}, status=400)
+
     now = timezone.now()
     actor_name = request.user.get_full_name() or request.user.email
 
@@ -2089,21 +2147,24 @@ def work_shift_list(request, workspace_id):
                 if shift.break_started_at is not None:
                     return JsonResponse({'error': 'You are already on a break.'}, status=409)
                 shift.break_started_at = now
-                shift.save(update_fields=['break_started_at', 'updated_at'])
+                shift.break_plan_minutes = break_minutes
+                shift.save(update_fields=['break_started_at', 'break_plan_minutes', 'updated_at'])
             elif action == 'end_break':
                 if shift.break_started_at is None:
                     return JsonResponse({'error': 'You are not on a break.'}, status=409)
                 shift.break_seconds += int((now - shift.break_started_at).total_seconds())
                 shift.break_started_at = None
-                shift.save(update_fields=['break_seconds', 'break_started_at', 'updated_at'])
+                shift.break_plan_minutes = 0
+                shift.save(update_fields=['break_seconds', 'break_started_at', 'break_plan_minutes', 'updated_at'])
             else:
                 if shift.break_started_at is not None:
                     shift.break_seconds += int((now - shift.break_started_at).total_seconds())
                     shift.break_started_at = None
+                shift.break_plan_minutes = 0
                 shift.ended_at = now
                 if note:
                     shift.note = note
-                shift.save(update_fields=['break_seconds', 'break_started_at', 'ended_at', 'note', 'updated_at'])
+                shift.save(update_fields=['break_seconds', 'break_started_at', 'break_plan_minutes', 'ended_at', 'note', 'updated_at'])
                 record_activity(workspace_id, request.user, 'clocked_out', f'{actor_name} clocked out after {format_worked_duration(shift.worked_seconds(now))}.')
             status_code = 200
 

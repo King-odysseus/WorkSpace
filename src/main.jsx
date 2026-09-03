@@ -27,11 +27,18 @@ import toast, { Toaster } from 'react-hot-toast'
 const PRESENCE_LABEL = { available: 'Available', busy: 'Busy', away: 'Away', offline: 'Offline' }
 const PRESENCE_OPTIONS = ['available', 'busy', 'away', 'offline']
 const WORK_SHIFT_TOAST = { clock_in: 'Clocked in.', clock_out: 'Clocked out.', start_break: 'Break started.', end_break: 'Back from break.' }
+const BREAK_PRESETS = [30, 60]
+const BREAK_PRESET_LABEL = { 30: '30 min', 60: '1 hr' }
 
 function formatShiftDuration(totalSeconds) {
   const safe = Math.max(0, Math.floor(totalSeconds))
   const pad = value => String(value).padStart(2, '0')
   return `${pad(Math.floor(safe / 3600))}:${pad(Math.floor(safe / 60) % 60)}:${pad(safe % 60)}`
+}
+
+function formatHoursLabel(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds))
+  return safe < 60 ? `${safe}s` : `${Math.floor(safe / 3600)}h ${String(Math.floor(safe / 60) % 60).padStart(2, '0')}m`
 }
 
 function formatShiftClock(value) {
@@ -402,13 +409,13 @@ function App() {
       console.warn('Task status could not be saved.', error.message)
     }
   }
-  const submitWorkShift = async (action, note = '') => {
+  const submitWorkShift = async (action, minutes = 0, note = '') => {
     try {
       const response = await fetch(`/api/workspaces/${activeWorkspaceId}/work-shifts/`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
-        body: JSON.stringify({ action, note }),
+        body: JSON.stringify({ action, minutes, note }),
       })
       const responseData = await response.json()
       if (!response.ok) throw new Error(responseData.error || `Clock update returned ${response.status}`)
@@ -1402,7 +1409,7 @@ function LegalView() {
   const current = documents[document]
   const acceptPolicies = () => { localStorage.setItem('workspace-legal-accepted-v1', 'true'); setAccepted(true); window.dispatchEvent(new CustomEvent('workspace:notice', { detail: 'Policies accepted.' })) }
   const revokePolicies = () => { localStorage.removeItem('workspace-legal-accepted-v1'); setAccepted(false) }
-  return <section className="workspace-view legal-view"><WorkspaceViewHeading title="Legal & privacy" subtitle="Review the policies that govern your use of WorkSpace." /><div className="legal-layout"><nav className="legal-nav" aria-label="Legal documents">{Object.entries(documents).map(([key, item]) => <button type="button" className={document === key ? 'active' : ''} key={key} onClick={() => setDocument(key)}>{item.label}</button>)}</nav><Card className="legal-document"><p className="eyebrow">WorkSpace policies</p><h2>{current.title}</h2><p className="legal-intro">{current.intro}</p>{current.sections.map(([heading, body]) => <section key={heading}><h3>{heading}</h3><p>{body}</p></section>)}<p className="legal-meta">Last updated: 3 September 2026 · Review this policy with your legal adviser for your organisation's specific obligations.</p></Card></div><Card className="legal-acceptance"><div><h3>Policy acknowledgement</h3><p>To continue using this workspace, confirm that you have read and agree to the Terms of service and Acceptable use policy, and acknowledge the Privacy and Cookie notices.</p></div><div className="legal-acceptance-actions"><button type="button" className="primary-button" onClick={acceptPolicies} disabled={accepted}>{accepted ? 'Policies accepted' : 'Accept policies'}</button>{accepted && <button type="button" className="secondary-button" onClick={revokePolicies}>Revoke acceptance</button>}</div></Card></section>
+  return <section className="workspace-view legal-view"><WorkspaceViewHeading title="Legal & privacy" subtitle="Review the policies that govern your use of WorkSpace." /><div className="legal-layout"><nav className="legal-nav" aria-label="Legal documents">{Object.entries(documents).map(([key, item]) => <button type="button" className={document === key ? 'active' : ''} key={key} onClick={() => setDocument(key)}>{item.label}</button>)}</nav><Card className="legal-document"><p className="eyebrow">WorkSpace policies</p><h2>{current.title}</h2><p className="legal-intro">{current.intro}</p>{current.sections.map(([heading, body]) => <section key={heading}><h3>{heading}</h3><p>{body}</p></section>)}<p className="legal-meta">Last updated: 3 September 2026 · Review this policy with your legal adviser for your organisation's specific obligations.</p></Card></div><Card className="legal-acceptance"><div><h3>Policy acknowledgement</h3><p>To continue using this workspace, confirm that you have read and agree to the Terms of service and Acceptable use policy, and acknowledge the Privacy and Cookie notices.</p></div><div className="legal-acceptance-actions"><button type="button" className="primary-button" onClick={acceptPolicies} disabled={accepted}>{accepted ? 'Policies accepted' : 'Accept policies'}</button></div></Card></section>
 }
 
 function CookieConsent({ onOpenLegal }) {
@@ -1844,7 +1851,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   }
 
   if (active === 'Reports') {
-    const serverReport = data.reports || { total_tasks: 0, overdue_tasks: 0, due_this_week: 0, unassigned_tasks: 0, completion_rate: 0, blocked_tasks: 0, check_ins_today: 0, members: 0, status_counts: {}, workload: [] }
+    const serverReport = data.reports || { total_tasks: 0, overdue_tasks: 0, due_this_week: 0, unassigned_tasks: 0, completion_rate: 0, blocked_tasks: 0, check_ins_today: 0, members: 0, status_counts: {}, workload: [], time_clock: null }
     const statusLabels = { todo: 'To do', in_progress: 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
     // Task counts/status breakdown are recomputed client-side when a scope is picked, since the
     // server's report summary is workspace-wide. Team workload, check-ins, and the audit trail stay
@@ -1866,6 +1873,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     })() : serverReport
     const openPlannerWithFilter = filter => { onSearchChange(''); if (reportsScope !== 'all' && reportsScope !== 'operations') window.dispatchEvent(new CustomEvent('planner:project', { detail: reportsScope })); window.dispatchEvent(new CustomEvent('planner:filter', { detail: filter })); onNavigate(reportsScope === 'operations' ? 'Daily operations' : 'Planner') }
     const checkInRate = report.members ? Math.round((report.check_ins_today / report.members) * 100) : 0
+    const timeClock = report.time_clock || { total_seconds: 0, break_seconds: 0, average_seconds: 0, shift_count: 0, open_shifts: 0, by_member: [], recent: [] }
     return <section className="workspace-view"><WorkspaceViewHeading title="Reports" subtitle={subtitle} /><div className="report-toolbar"><WorkScopeSelector compact value={reportsScope} onChange={setReportsScope} projects={localData.projects} label="Scope" /><label>Reporting period<select value={reportRange} onChange={event => setReportRange(event.target.value)}><option value="all">All time</option><option value="week">Last 7 days</option><option value="month">This month</option></select></label><button type="button" className="secondary-button" onClick={onRefresh}>Refresh reports</button><span className="report-updated">{reportLastUpdated ? `Updated ${formatCalendarDate(reportLastUpdated, { timeStyle: 'short' })}` : 'Loading report data…'}</span></div><div className="report-metrics">
       <button type="button" className="report-stat report-stat-button" onClick={() => onNavigate('Planner')}><span>Total tasks</span><strong>{report.total_tasks}</strong><em>{report.completion_rate}% complete</em></button>
       <button type="button" className="report-stat report-stat-button is-warning" onClick={() => openPlannerWithFilter('overdue')}><span>Overdue</span><strong>{report.overdue_tasks}</strong><em>Needs attention</em></button>
@@ -1876,6 +1884,16 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
       <Card className="report-panel"><div className="drawer-section-heading"><h3>Team workload</h3><span>{report.members} members</span></div>{report.workload.length ? report.workload.map(member => <div className="report-member-row" key={member.user_id}><span>{member.user_name}</span><strong>{member.open} open</strong><em>{member.blocked} blocked</em></div>) : <EmptyState text="No team workload yet." />}</Card>
     </div><div className="report-grid report-risk-grid"><Card className="report-panel"><div className="drawer-section-heading"><h3>Delivery risks</h3><span>Open work</span></div><div className="report-risk-list"><button type="button" onClick={() => openPlannerWithFilter('overdue')}><strong>{report.overdue_tasks}</strong><span>Overdue tasks</span></button><button type="button" onClick={() => onNavigate('Calendar')}><strong>{report.due_this_week}</strong><span>Due this week</span></button><button type="button" onClick={() => openPlannerWithFilter('unassigned')}><strong>{report.unassigned_tasks}</strong><span>Unassigned tasks</span></button></div></Card>
       <Card className="report-panel"><div className="drawer-section-heading"><h3>Report guidance</h3><span>Next actions</span></div><p className="report-guidance">Use the period filter to compare recent delivery. Open blocked or overdue counts to resolve the underlying tasks, then use Planner to rebalance ownership.</p></Card></div>
+    <Card className="report-panel time-clock-panel"><div className="drawer-section-heading"><h3>Time clock</h3><span>{timeClock.shift_count} {timeClock.shift_count === 1 ? 'shift' : 'shifts'} logged</span></div>
+      <div className="time-clock-totals">
+        <div><strong>{formatHoursLabel(timeClock.total_seconds)}</strong><span>Hours worked</span></div>
+        <div><strong>{formatHoursLabel(timeClock.break_seconds)}</strong><span>Break time</span></div>
+        <div><strong>{formatHoursLabel(timeClock.average_seconds)}</strong><span>Average shift</span></div>
+        <div><strong>{timeClock.open_shifts}</strong><span>Clocked in now</span></div>
+      </div>
+      {timeClock.by_member.length ? <div className="time-clock-members">{timeClock.by_member.map(member => <div className="report-member-row" key={member.user_id}><span>{member.user_name}</span><strong>{formatHoursLabel(member.worked_seconds)}</strong><em>{member.day_count} {member.day_count === 1 ? 'day' : 'days'} · {formatHoursLabel(member.break_seconds)} break</em></div>)}</div> : <EmptyState text="No time has been clocked in this period." />}
+      {timeClock.recent.length > 0 && <div className="time-clock-log"><div className="drawer-section-heading"><h3>Recent entries</h3><span>Latest {timeClock.recent.length}</span></div>{timeClock.recent.map(shift => <div className="time-clock-row" key={shift.id}><span className={`clock-state clock-state-${shift.is_open ? (shift.is_on_break ? 'break' : 'active') : 'idle'}`}>{shift.is_open ? (shift.is_on_break ? 'Break' : 'Active') : 'Done'}</span><div><strong>{shift.user_name}</strong><span>{shift.date} · {formatShiftClock(shift.started_at)}{shift.ended_at ? ` – ${formatShiftClock(shift.ended_at)}` : ' – now'}</span></div><em>{formatHoursLabel(shift.worked_seconds)}{shift.break_seconds_total ? ` · ${formatHoursLabel(shift.break_seconds_total)} break` : ''}</em></div>)}</div>}
+    </Card>
     <Card className="report-panel audit-panel"><div className="drawer-section-heading"><h3>Audit trail</h3><span>Latest 12 events</span></div>{data.auditLogs?.length ? data.auditLogs.slice(0, 12).map(log => <div className="audit-row" key={log.id}><span className="audit-action">{log.action.replaceAll('_', ' ')}</span><div><strong>{log.actor_name}</strong><span>{log.target_type}{log.target_id ? ` #${log.target_id}` : ''}</span></div><time dateTime={log.created_at}>{formatCalendarDate(new Date(log.created_at), { dateStyle: 'medium', timeStyle: 'short' })}</time></div>) : <EmptyState text="No audit events recorded yet." />}</Card>
     </section>
   }
@@ -2161,40 +2179,55 @@ function ClockInCard({ shifts, currentUserId, presence, onSubmitShift, onChangeP
   }, [openShift?.id])
 
   // break_seconds from the API is banked time only, so a break still running is added from break_started_at here.
-  const runningBreakSeconds = openShift?.break_started_at ? Math.floor((tick - new Date(openShift.break_started_at).getTime()) / 1000) : 0
-  const liveBreakSeconds = closedToday.reduce((total, shift) => total + shift.break_seconds, 0) + (openShift?.break_seconds || 0) + Math.max(0, runningBreakSeconds)
-  // The server sends worked_seconds as of the response; count forward locally so the timer stays live between polls.
-  const liveSeconds = (() => {
-    const bankedToday = closedToday.reduce((total, shift) => total + shift.worked_seconds, 0)
-    if (!openShift) return bankedToday
-    const elapsed = Math.floor((tick - new Date(openShift.started_at).getTime()) / 1000)
-    return bankedToday + Math.max(0, elapsed - openShift.break_seconds - Math.max(0, runningBreakSeconds))
-  })()
+  const runningBreakSeconds = openShift?.break_started_at ? Math.max(0, Math.floor((tick - new Date(openShift.break_started_at).getTime()) / 1000)) : 0
+  // The headline timer tracks the shift in progress only, so clocking out returns it to zero.
+  const shiftSeconds = openShift
+    ? Math.max(0, Math.floor((tick - new Date(openShift.started_at).getTime()) / 1000) - openShift.break_seconds - runningBreakSeconds)
+    : 0
+  const shiftBreakSeconds = (openShift?.break_seconds || 0) + runningBreakSeconds
+  const earlierSeconds = closedToday.reduce((total, shift) => total + shift.worked_seconds, 0)
+  const dayTotalSeconds = earlierSeconds + shiftSeconds
+  const breakPlanSeconds = (openShift?.break_plan_minutes || 0) * 60
+  const breakRemaining = breakPlanSeconds ? breakPlanSeconds - runningBreakSeconds : 0
+  const breakOverrun = Boolean(breakPlanSeconds) && breakRemaining <= 0
 
-  const run = async action => {
+  const run = async (action, minutes = 0) => {
     setPending(action)
     try {
-      await onSubmitShift(action)
+      await onSubmitShift(action, minutes)
     } finally {
       setPending('')
     }
   }
 
   const stateLabel = !openShift ? 'Clocked out' : onBreak ? 'On break' : 'Clocked in'
+  const headline = openShift
+    ? `Started ${formatShiftClock(openShift.started_at)}`
+    : closedToday.length
+      ? `Last shift ended ${formatShiftClock(closedToday[0].ended_at)}`
+      : 'Not started yet'
   return <div className="today-panel today-clock-panel">
     <div className="today-panel-heading">
-      <div><h2>Time clock</h2><p>{openShift ? `Started ${formatShiftClock(openShift.started_at)}` : closedToday.length ? 'Shift ended for today' : 'Not started yet'}</p></div>
+      <div><h2>Time clock</h2><p>{headline}</p></div>
       <span className={`clock-state clock-state-${openShift ? (onBreak ? 'break' : 'active') : 'idle'}`}><Clock3 size={14} /> {stateLabel}</span>
     </div>
-    <strong className="today-clock-timer" role="timer" aria-live="off" aria-label={`Time worked today ${formatShiftDuration(liveSeconds)}`}>{formatShiftDuration(liveSeconds)}</strong>
-    <span className="today-muted">{liveBreakSeconds ? `Breaks ${formatShiftDuration(liveBreakSeconds)}` : 'No breaks taken'}</span>
+    <strong className="today-clock-timer" role="timer" aria-live="off" aria-label={`Current shift ${formatShiftDuration(shiftSeconds)}`}>{formatShiftDuration(shiftSeconds)}</strong>
+    <span className="today-muted">
+      {dayTotalSeconds ? `Today ${formatShiftDuration(dayTotalSeconds)}` : 'Nothing logged today'}
+      {shiftBreakSeconds ? ` · Breaks ${formatShiftDuration(shiftBreakSeconds)}` : ''}
+    </span>
+    {onBreak && <p className={`clock-break-timer${breakOverrun ? ' is-over' : ''}`}>
+      {breakPlanSeconds
+        ? breakOverrun
+          ? `${BREAK_PRESET_LABEL[openShift.break_plan_minutes]} break is over by ${formatShiftDuration(-breakRemaining)}`
+          : `${formatShiftDuration(breakRemaining)} left of your ${BREAK_PRESET_LABEL[openShift.break_plan_minutes]} break`
+        : `Break running ${formatShiftDuration(runningBreakSeconds)}`}
+    </p>}
     <div className="today-clock-actions">
-      {openShift
-        ? <>
-            <Button variant={onBreak ? 'default' : 'outline'} size="sm" disabled={Boolean(pending)} onClick={() => run(onBreak ? 'end_break' : 'start_break')}>{onBreak ? <><Play size={15} /> Resume</> : <><Pause size={15} /> Break</>}</Button>
-            <Button variant="outline" size="sm" disabled={Boolean(pending)} onClick={() => run('clock_out')}><Square size={15} /> Clock out</Button>
-          </>
-        : <Button size="sm" disabled={Boolean(pending)} onClick={() => run('clock_in')}><Play size={15} /> Clock in</Button>}
+      {!openShift && <Button size="sm" disabled={Boolean(pending)} onClick={() => run('clock_in')}><Play size={15} /> Clock in</Button>}
+      {openShift && onBreak && <Button size="sm" disabled={Boolean(pending)} onClick={() => run('end_break')}><Play size={15} /> Resume</Button>}
+      {openShift && !onBreak && BREAK_PRESETS.map(minutes => <Button key={minutes} variant="outline" size="sm" disabled={Boolean(pending)} onClick={() => run('start_break', minutes)}><Pause size={15} /> {BREAK_PRESET_LABEL[minutes]} break</Button>)}
+      {openShift && <Button variant="outline" size="sm" disabled={Boolean(pending)} onClick={() => run('clock_out')}><Square size={15} /> Clock out</Button>}
     </div>
     <label className="today-status-select">
       <span>Status</span>
