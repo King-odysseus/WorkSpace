@@ -417,7 +417,7 @@ function App() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
         body: JSON.stringify({ action, minutes, note }),
       })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Your clock entry could not be saved.')
       if (!response.ok) throw new Error(responseData.error || `Clock update returned ${response.status}`)
       setWorkspaceData(current => ({
         ...current,
@@ -440,7 +440,7 @@ function App() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
         body: JSON.stringify({ presence }),
       })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Your status could not be saved.')
       if (!response.ok) throw new Error(responseData.error || `Presence update returned ${response.status}`)
     } catch (error) {
       updateSessionUser({ presence: previousPresence })
