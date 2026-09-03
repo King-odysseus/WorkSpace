@@ -805,7 +805,7 @@ html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activi
 }
 
 .sidebar {
-  background: linear-gradient(180deg, var(--navy) 0%, #061525 100%);
+  background: var(--navy);
   border-right: 1px solid rgb(196 154 108 / 16%);
 }
 
