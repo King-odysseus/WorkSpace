@@ -116,7 +116,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       && (dueFilter === 'all' || (dueFilter === 'overdue' && task.due_date && task.due_date < today && task.status !== 'done') || (dueFilter === 'today' && task.due_date === today) || (dueFilter === 'none' && !task.due_date))
   }), [tasks, searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, today])
 
-  const pageSize = 12
+  const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(visibleTasks.length / pageSize))
   const tableTasks = visibleTasks.slice((page - 1) * pageSize, page * pageSize)
   useEffect(() => { setPage(1); setSelectedIds([]) }, [searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, view])

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WebhookDelivery, WorkspaceWebhook, WorkShift
 
 
 @admin.register(Workspace)
@@ -40,6 +40,10 @@ class TaskAdmin(admin.ModelAdmin):
 admin.site.register(LookupValue)
 admin.site.register(TaskSupporter)
 admin.site.register(RiskIssue)
+admin.site.register(WorkspaceWebhook)
+admin.site.register(WebhookDelivery)
+admin.site.register(WorkspaceDocument)
+admin.site.register(WorkspaceFile)
 
 
 @admin.register(TaskCodeRegistry)

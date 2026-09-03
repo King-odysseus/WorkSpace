@@ -2,6 +2,7 @@ import json
 from io import StringIO
 from datetime import timedelta
 from pathlib import Path
+from unittest import mock
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -9,8 +10,12 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift
+from .views import create_notification
+from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
 
 class TaskApiTests(TestCase):
@@ -1105,6 +1110,37 @@ class TaskApiTests(TestCase):
         self.assertEqual(denied_delete.status_code, 403)
 
 
+    def test_task_template_create_list_apply_and_delete(self):
+        create = self.client.post(
+            reverse('task-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Weekly ops', 'title': 'Run weekly ops', 'priority': 'normal', 'bucket': 'Backlog', 'recurrence': 'weekly'}),
+            content_type='application/json',
+        )
+        self.assertEqual(create.status_code, 201)
+        template_id = create.json()['task_template']['id']
+        listing = self.client.get(reverse('task-template-list', args=[self.workspace.id]))
+        self.assertEqual(len(listing.json()['task_templates']), 1)
+        apply = self.client.post(reverse('task-template-apply', args=[self.workspace.id, template_id]))
+        self.assertEqual(apply.status_code, 201)
+        self.assertEqual(apply.json()['task']['title'], 'Run weekly ops')
+        delete = self.client.delete(reverse('task-template-detail', args=[self.workspace.id, template_id]))
+        self.assertEqual(delete.status_code, 200)
+
+    def test_project_template_create_list_apply_and_delete(self):
+        create = self.client.post(
+            reverse('project-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Launch playbook', 'project_name': 'Product launch', 'description': 'Run a launch', 'due_days': 21}),
+            content_type='application/json',
+        )
+        self.assertEqual(create.status_code, 201)
+        template_id = create.json()['project_template']['id']
+        listing = self.client.get(reverse('project-template-list', args=[self.workspace.id]))
+        self.assertEqual(len(listing.json()['project_templates']), 1)
+        apply = self.client.post(reverse('project-template-apply', args=[self.workspace.id, template_id]))
+        self.assertEqual(apply.status_code, 201)
+        self.assertEqual(apply.json()['project']['name'], 'Product launch')
+        delete = self.client.delete(reverse('project-template-detail', args=[self.workspace.id, template_id]))
+        self.assertEqual(delete.status_code, 200)
 class ExecutionFoundationApiTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username='lead@example.com', email='lead@example.com', password='secure-pass-123')
@@ -1423,3 +1459,473 @@ class WorkShiftApiTests(TestCase):
         self.assertEqual(this_week['shift_count'], 0)
         self.assertEqual(this_week['total_seconds'], 0)
         self.assertEqual(this_week['average_seconds'], 0)
+
+
+class TaskDependencyApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='dep@example.com', email='dep@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Dependencies', slug='dependencies')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='owner')
+        self.client.login(username='dep@example.com', password='secure-pass-123')
+        self.blocker = Task.objects.create(workspace=self.workspace, title='Ship the API', assignee=self.user)
+        self.blocked = Task.objects.create(workspace=self.workspace, title='Write the docs', assignee=self.user)
+
+    def patch_task(self, task, payload):
+        return self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps(payload),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+
+    def test_set_and_clear_dependencies(self):
+        response = self.patch_task(self.blocked, {'blocked_by_ids': [self.blocker.id]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['task']['blocked_by_ids'], [self.blocker.id])
+        self.assertTrue(response.json()['task']['is_blocked_by_dependency'])
+
+        blocker_view = self.client.get(reverse('task-detail', args=[self.blocker.id])).json()['task']
+        self.assertEqual(blocker_view['blocking_ids'], [self.blocked.id])
+
+        cleared = self.patch_task(self.blocked, {'blocked_by_ids': []})
+        self.assertEqual(cleared.json()['task']['blocked_by_ids'], [])
+        self.assertFalse(cleared.json()['task']['is_blocked_by_dependency'])
+
+    def test_completed_blocker_stops_blocking(self):
+        self.patch_task(self.blocked, {'blocked_by_ids': [self.blocker.id]})
+        self.patch_task(self.blocker, {'status': 'done'})
+        refreshed = self.client.get(reverse('task-detail', args=[self.blocked.id])).json()['task']
+        self.assertEqual(refreshed['blocked_by_ids'], [self.blocker.id])
+        self.assertFalse(refreshed['is_blocked_by_dependency'])
+
+    def test_cancelled_blockers_are_hidden(self):
+        self.patch_task(self.blocked, {'blocked_by_ids': [self.blocker.id]})
+        self.patch_task(self.blocker, {'status': 'cancelled'})
+        refreshed = self.client.get(reverse('task-detail', args=[self.blocked.id])).json()['task']
+        self.assertEqual(refreshed['blocked_by_ids'], [])
+
+    def test_archived_blockers_are_hidden(self):
+        self.patch_task(self.blocked, {'blocked_by_ids': [self.blocker.id]})
+        self.patch_task(self.blocker, {'state': 'archived'})
+        refreshed = self.client.get(reverse('task-detail', args=[self.blocked.id])).json()['task']
+        self.assertEqual(refreshed['blocked_by_ids'], [])
+
+    def test_task_cannot_depend_on_itself(self):
+        response = self.patch_task(self.blocked, {'blocked_by_ids': [self.blocked.id]})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('itself', response.json()['error'])
+
+    def test_direct_cycle_is_rejected(self):
+        self.patch_task(self.blocked, {'blocked_by_ids': [self.blocker.id]})
+        response = self.patch_task(self.blocker, {'blocked_by_ids': [self.blocked.id]})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('circular', response.json()['error'])
+
+    def test_cross_workspace_dependency_is_rejected(self):
+        other_workspace = Workspace.objects.create(name='Other', slug='other-dep')
+        outsider = Task.objects.create(workspace=other_workspace, title='Not yours')
+        response = self.patch_task(self.blocked, {'blocked_by_ids': [outsider.id]})
+        self.assertEqual(response.status_code, 404)
+
+    def test_task_list_query_count_is_flat(self):
+        """Dependency fields must come from the prefetch cache, not one query per task."""
+        def count_queries():
+            with CaptureQueriesContext(connection) as captured:
+                response = self.client.get(reverse('task-list'), HTTP_X_WORKSPACE_ID=str(self.workspace.id))
+                self.assertEqual(response.status_code, 200)
+            return len(captured)
+
+        baseline = count_queries()
+        for index in range(20):
+            filler = Task.objects.create(workspace=self.workspace, title=f'Filler {index}', assignee=self.user)
+            filler.blocked_by.add(self.blocker)
+        self.assertEqual(count_queries(), baseline, 'task list query count grew with the number of tasks')
+
+
+class WorkspaceWebhookApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='hookowner@example.com', email='hookowner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='hookmember@example.com', email='hookmember@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Hooks', slug='hooks')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        self.client.login(username='hookowner@example.com', password='secure-pass-123')
+
+    def create_webhook(self, **overrides):
+        payload = {'kind': 'teams', 'url': 'https://example.com/hook', 'label': 'Team channel'}
+        payload.update(overrides)
+        return self.client.post(
+            reverse('workspace-webhook-list', args=[self.workspace.id]),
+            data=json.dumps(payload),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+
+    def test_create_list_and_delete_webhook(self):
+        created = self.create_webhook()
+        self.assertEqual(created.status_code, 201)
+        webhook_id = created.json()['webhook']['id']
+
+        listed = self.client.get(reverse('workspace-webhook-list', args=[self.workspace.id]))
+        self.assertEqual(len(listed.json()['webhooks']), 1)
+
+        deleted = self.client.delete(reverse('workspace-webhook-detail', args=[self.workspace.id, webhook_id]))
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(WorkspaceWebhook.objects.count(), 0)
+
+    def test_webhook_url_must_be_https(self):
+        self.assertEqual(self.create_webhook(url='http://example.com/insecure').status_code, 400)
+
+    def test_webhook_kind_is_validated(self):
+        self.assertEqual(self.create_webhook(kind='carrier-pigeon').status_code, 400)
+
+    def test_members_cannot_manage_webhooks(self):
+        self.client.logout()
+        self.client.login(username='hookmember@example.com', password='secure-pass-123')
+        self.assertEqual(self.create_webhook().status_code, 403)
+
+    def test_webhook_can_be_disabled(self):
+        webhook_id = self.create_webhook().json()['webhook']['id']
+        response = self.client.patch(
+            reverse('workspace-webhook-detail', args=[self.workspace.id, webhook_id]),
+            data=json.dumps({'is_active': False}),
+            content_type='application/json',
+        )
+        self.assertFalse(response.json()['webhook']['is_active'])
+
+    def test_events_are_queued_for_active_webhooks_only(self):
+        active = WorkspaceWebhook.objects.create(workspace=self.workspace, kind='teams', url='https://example.com/on')
+        WorkspaceWebhook.objects.create(workspace=self.workspace, kind='slack', url='https://example.com/off', is_active=False)
+
+        notify_workspace_webhooks(self.workspace.id, 'task_status', 'Task moved', 'Now in review', target_type='task', target_id='7')
+
+        queued = list(WebhookDelivery.objects.all())
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(queued[0].webhook_id, active.id)
+        self.assertEqual(queued[0].title, 'Task moved')
+        self.assertEqual(queued[0].status, 'pending')
+
+    def test_creating_a_notification_never_makes_an_inline_http_call(self):
+        WorkspaceWebhook.objects.create(workspace=self.workspace, kind='teams', url='https://example.com/on')
+        with mock.patch('tasks.webhooks.deliver_webhook') as sender:
+            create_notification(self.workspace.id, self.owner, 'task_status', 'Inline check', 'body')
+        sender.assert_not_called()
+        self.assertEqual(WebhookDelivery.objects.filter(status='pending').count(), 1)
+
+    def test_worker_marks_deliveries_sent(self):
+        webhook = WorkspaceWebhook.objects.create(workspace=self.workspace, kind='teams', url='https://example.com/on')
+        WebhookDelivery.objects.create(webhook=webhook, workspace=self.workspace, kind='task_status', title='Hello', body='World')
+
+        with mock.patch('tasks.webhooks.deliver_webhook', return_value=True) as sender:
+            sent, failed = drain_webhook_deliveries()
+
+        self.assertEqual((sent, failed), (1, 0))
+        self.assertEqual(sender.call_count, 1)
+        self.assertEqual(WebhookDelivery.objects.get().status, 'sent')
+
+    def test_worker_retries_then_gives_up(self):
+        webhook = WorkspaceWebhook.objects.create(workspace=self.workspace, kind='teams', url='https://example.com/on')
+        WebhookDelivery.objects.create(webhook=webhook, workspace=self.workspace, kind='task_status', title='Hello', body='World')
+
+        with mock.patch('tasks.webhooks.deliver_webhook', return_value=False):
+            for _ in range(WebhookDelivery.MAX_ATTEMPTS + 2):
+                drain_webhook_deliveries()
+
+        delivery = WebhookDelivery.objects.get()
+        self.assertEqual(delivery.status, 'failed')
+        self.assertEqual(delivery.attempts, WebhookDelivery.MAX_ATTEMPTS)
+
+    def test_delivery_command_runs(self):
+        webhook = WorkspaceWebhook.objects.create(workspace=self.workspace, kind='teams', url='https://example.com/on')
+        WebhookDelivery.objects.create(webhook=webhook, workspace=self.workspace, kind='task_status', title='Hello')
+        output = StringIO()
+        with mock.patch('tasks.webhooks.deliver_webhook', return_value=True):
+            call_command('deliver_webhooks', stdout=output)
+        self.assertIn('sent: 1', output.getvalue())
+
+
+class CalendarFeedTokenApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='feedowner@example.com', email='feedowner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='feedmember@example.com', email='feedmember@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Feeds', slug='feeds')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        self.client.login(username='feedowner@example.com', password='secure-pass-123')
+        CalendarEvent.objects.create(
+            workspace=self.workspace,
+            title='Sprint review',
+            start_at=timezone.now() + timedelta(days=1),
+            end_at=timezone.now() + timedelta(days=1, hours=1),
+            created_by=self.owner,
+        )
+
+    def fetch_token(self):
+        return self.client.get(reverse('calendar-feed-token', args=[self.workspace.id])).json()['token']
+
+    def test_token_is_generated_once_and_reused(self):
+        first = self.fetch_token()
+        self.assertTrue(first)
+        self.assertEqual(first, self.fetch_token())
+
+    def test_feed_is_reachable_without_a_session_when_token_is_valid(self):
+        token = self.fetch_token()
+        self.client.logout()
+        response = self.client.get(f"{reverse('calendar-ics', args=[self.workspace.id])}?token={token}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Sprint review', response.content.decode())
+        self.assertTrue(response['Content-Disposition'].startswith('inline'))
+
+    def test_bad_token_is_rejected(self):
+        self.fetch_token()
+        self.client.logout()
+        response = self.client.get(f"{reverse('calendar-ics', args=[self.workspace.id])}?token=not-the-real-token")
+        self.assertEqual(response.status_code, 403)
+
+    def test_empty_token_does_not_bypass_authentication(self):
+        self.fetch_token()
+        self.client.logout()
+        response = self.client.get(f"{reverse('calendar-ics', args=[self.workspace.id])}?token=")
+        self.assertEqual(response.status_code, 401)
+
+    def test_token_of_one_workspace_does_not_open_another(self):
+        token = self.fetch_token()
+        other = Workspace.objects.create(name='Elsewhere', slug='elsewhere-feed')
+        self.client.logout()
+        response = self.client.get(f"{reverse('calendar-ics', args=[other.id])}?token={token}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_reset_invalidates_the_previous_link(self):
+        original = self.fetch_token()
+        rotated = self.client.post(reverse('calendar-feed-token', args=[self.workspace.id])).json()['token']
+        self.assertNotEqual(original, rotated)
+        self.client.logout()
+        stale = self.client.get(f"{reverse('calendar-ics', args=[self.workspace.id])}?token={original}")
+        self.assertEqual(stale.status_code, 403)
+
+    def test_members_cannot_rotate_the_token(self):
+        self.client.logout()
+        self.client.login(username='feedmember@example.com', password='secure-pass-123')
+        response = self.client.post(reverse('calendar-feed-token', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 403)
+
+
+class WorkspaceSearchApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='searcher@example.com', email='searcher@example.com', password='secure-pass-123')
+        self.other = User.objects.create_user(username='otherperson@example.com', email='otherperson@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Searchable', slug='searchable')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
+        self.client.login(username='searcher@example.com', password='secure-pass-123')
+
+    def search(self, query):
+        response = self.client.get(f"{reverse('workspace-search', args=[self.workspace.id])}?q={query}")
+        self.assertEqual(response.status_code, 200)
+        return response.json()['results']
+
+    def test_short_queries_return_nothing(self):
+        Task.objects.create(workspace=self.workspace, title='Migrate the warehouse')
+        self.assertEqual(self.search('m'), [])
+
+    def test_finds_tasks_comments_and_risks(self):
+        task = Task.objects.create(workspace=self.workspace, title='Migrate the warehouse')
+        TaskComment.objects.create(task=task, author=self.user, body='Warehouse cutover is scheduled')
+        RiskIssue.objects.create(workspace=self.workspace, kind='risk', title='Warehouse downtime', created_by=self.user)
+
+        self.assertEqual({result['kind'] for result in self.search('warehouse')}, {'task', 'task_comment', 'risk_issue'})
+
+    def test_archived_tasks_are_excluded(self):
+        Task.objects.create(workspace=self.workspace, title='Migrate the warehouse', state='archived')
+        self.assertEqual(self.search('warehouse'), [])
+
+    def test_private_channel_messages_are_hidden_from_non_members(self):
+        private = ChatChannel.objects.create(workspace=self.workspace, name='leadership', is_private=True, created_by=self.other)
+        ChatMessage.objects.create(workspace=self.workspace, author=self.other, channel=private.name, message='Confidential warehouse plan')
+
+        self.assertEqual(self.search('warehouse'), [])
+
+        private.members.add(self.user)
+        self.assertEqual({result['kind'] for result in self.search('warehouse')}, {'chat_message'})
+
+    def test_direct_messages_between_other_people_are_not_searchable(self):
+        third = User.objects.create_user(username='third@example.com', email='third@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=third, role='member')
+        conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.other.id}-{third.id}')
+        conversation.participants.add(self.other, third)
+        DirectMessage.objects.create(conversation=conversation, author=self.other, message='Private warehouse chatter')
+
+        self.assertEqual(self.search('warehouse'), [])
+
+    def test_own_direct_messages_are_searchable(self):
+        conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.user.id}-{self.other.id}')
+        conversation.participants.add(self.user, self.other)
+        DirectMessage.objects.create(conversation=conversation, author=self.other, message='Warehouse handover notes')
+
+        self.assertEqual({result['kind'] for result in self.search('warehouse')}, {'direct_message'})
+
+    def test_search_is_scoped_to_the_workspace(self):
+        other_workspace = Workspace.objects.create(name='Elsewhere', slug='elsewhere-search')
+        Task.objects.create(workspace=other_workspace, title='Warehouse in another workspace')
+        self.assertEqual(self.search('warehouse'), [])
+
+    def test_non_members_cannot_search(self):
+        User.objects.create_user(username='outsider@example.com', email='outsider@example.com', password='secure-pass-123')
+        self.client.logout()
+        self.client.login(username='outsider@example.com', password='secure-pass-123')
+        response = self.client.get(f"{reverse('workspace-search', args=[self.workspace.id])}?q=warehouse")
+        self.assertEqual(response.status_code, 403)
+
+
+class WorkspacePulseApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='pulse@example.com', email='pulse@example.com', password='secure-pass-123')
+        self.other = User.objects.create_user(username='pulseother@example.com', email='pulseother@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Pulse', slug='pulse')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
+        self.client.login(username='pulse@example.com', password='secure-pass-123')
+
+    def fingerprint(self):
+        response = self.client.get(reverse('workspace-pulse', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        return response.json()['fingerprint']
+
+    def test_fingerprint_is_stable_when_nothing_changes(self):
+        self.assertEqual(self.fingerprint(), self.fingerprint())
+
+    def test_new_task_changes_the_fingerprint(self):
+        before = self.fingerprint()
+        Task.objects.create(workspace=self.workspace, title='Something new')
+        self.assertNotEqual(before, self.fingerprint())
+
+    def test_editing_a_task_changes_the_fingerprint(self):
+        task = Task.objects.create(workspace=self.workspace, title='Edit me')
+        before = self.fingerprint()
+        task.title = 'Edited'
+        task.save()
+        self.assertNotEqual(before, self.fingerprint())
+
+    def test_deleting_a_task_changes_the_fingerprint(self):
+        task = Task.objects.create(workspace=self.workspace, title='Delete me')
+        before = self.fingerprint()
+        task.delete()
+        self.assertNotEqual(before, self.fingerprint(), 'deletions must move the fingerprint')
+
+    def test_activity_in_another_workspace_is_ignored(self):
+        other_workspace = Workspace.objects.create(name='Unrelated', slug='unrelated-pulse')
+        before = self.fingerprint()
+        Task.objects.create(workspace=other_workspace, title='Not mine')
+        self.assertEqual(before, self.fingerprint())
+
+    def test_notifications_are_scoped_per_user(self):
+        before = self.fingerprint()
+        WorkspaceNotification.objects.create(workspace=self.workspace, recipient=self.other, kind='task_status', title='For someone else')
+        self.assertEqual(before, self.fingerprint(), "another person's notification must not move my fingerprint")
+
+        WorkspaceNotification.objects.create(workspace=self.workspace, recipient=self.user, kind='task_status', title='For me')
+        self.assertNotEqual(before, self.fingerprint())
+
+    def test_reading_a_notification_changes_the_fingerprint(self):
+        notification = WorkspaceNotification.objects.create(workspace=self.workspace, recipient=self.user, kind='task_status', title='Unread')
+        before = self.fingerprint()
+        notification.read_at = timezone.now()
+        notification.save()
+        self.assertNotEqual(before, self.fingerprint(), 'the unread badge must be able to clear')
+
+    def test_direct_messages_are_scoped_to_participants(self):
+        third = User.objects.create_user(username='pulsethird@example.com', email='pulsethird@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=third, role='member')
+        conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.other.id}-{third.id}')
+        conversation.participants.add(self.other, third)
+
+        before = self.fingerprint()
+        DirectMessage.objects.create(conversation=conversation, author=self.other, message='Not for you')
+        self.assertEqual(before, self.fingerprint())
+
+        mine = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.user.id}-{self.other.id}')
+        mine.participants.add(self.user, self.other)
+        before_mine = self.fingerprint()
+        DirectMessage.objects.create(conversation=mine, author=self.other, message='For you')
+        self.assertNotEqual(before_mine, self.fingerprint())
+
+    def test_pulse_runs_in_a_small_fixed_number_of_queries(self):
+        """This runs on a timer in every open tab, so its cost must stay flat and small."""
+        def pulse_queries():
+            with CaptureQueriesContext(connection) as captured:
+                self.assertEqual(self.client.get(reverse('workspace-pulse', args=[self.workspace.id])).status_code, 200)
+            return len(captured)
+
+        baseline = pulse_queries()
+        self.assertLessEqual(baseline, 8, 'pulse should fold its aggregates into a few round trips')
+
+        for index in range(25):
+            Task.objects.create(workspace=self.workspace, title=f'Task {index}')
+        self.assertEqual(pulse_queries(), baseline, 'pulse cost must not grow with workspace size')
+
+    def test_non_members_cannot_read_the_pulse(self):
+        User.objects.create_user(username='pulseoutsider@example.com', email='pulseoutsider@example.com', password='secure-pass-123')
+        self.client.logout()
+        self.client.login(username='pulseoutsider@example.com', password='secure-pass-123')
+        response = self.client.get(reverse('workspace-pulse', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 403)
+
+
+class ActivityPaginationApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='activity@example.com', email='activity@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Activity', slug='activity-pagination')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='owner')
+        self.client.login(username='activity@example.com', password='secure-pass-123')
+        for index in range(95):
+            ActivityEvent.objects.create(workspace=self.workspace, actor=self.user, kind='task_status', message=f'Event {index}')
+
+    def fetch(self, query=''):
+        response = self.client.get(f"{reverse('activity-list', args=[self.workspace.id])}{query}")
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_response_reports_pagination(self):
+        payload = self.fetch('?page_size=40')
+        self.assertEqual(len(payload['activity']), 40)
+        self.assertEqual(payload['pagination']['total_items'], 95)
+        self.assertEqual(payload['pagination']['total_pages'], 3)
+        self.assertTrue(payload['pagination']['has_next'])
+        self.assertFalse(payload['pagination']['has_previous'])
+
+    def test_pages_do_not_overlap_and_cover_everything(self):
+        seen = []
+        for page in (1, 2, 3):
+            seen.extend(event['id'] for event in self.fetch(f'?page_size=40&page={page}')['activity'])
+        self.assertEqual(len(seen), 95)
+        self.assertEqual(len(set(seen)), 95, 'pages must not repeat entries')
+
+    def test_last_page_holds_the_remainder(self):
+        payload = self.fetch('?page_size=40&page=3')
+        self.assertEqual(len(payload['activity']), 15)
+        self.assertTrue(payload['pagination']['has_previous'])
+        self.assertFalse(payload['pagination']['has_next'])
+
+    def test_newest_events_come_first(self):
+        activity = self.fetch('?page_size=40')['activity']
+        timestamps = [event['created_at'] for event in activity]
+        self.assertEqual(timestamps, sorted(timestamps, reverse=True))
+
+    def test_page_beyond_the_end_returns_the_last_page(self):
+        payload = self.fetch('?page_size=40&page=99')
+        self.assertEqual(payload['pagination']['page'], 3)
+        self.assertEqual(len(payload['activity']), 15)
+
+    def test_page_size_is_capped(self):
+        self.assertEqual(self.fetch('?page_size=99999')['pagination']['page_size'], 500)
+
+    def test_invalid_paging_values_are_rejected(self):
+        response = self.client.get(f"{reverse('activity-list', args=[self.workspace.id])}?page=abc")
+        self.assertEqual(response.status_code, 400)
+
+    def test_non_members_cannot_read_activity(self):
+        User.objects.create_user(username='activityoutsider@example.com', email='activityoutsider@example.com', password='secure-pass-123')
+        self.client.logout()
+        self.client.login(username='activityoutsider@example.com', password='secure-pass-123')
+        response = self.client.get(reverse('activity-list', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 403)

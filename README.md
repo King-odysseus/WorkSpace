@@ -54,7 +54,7 @@ The web application will be available at `http://localhost:8080`. The compose se
 
    `WORKSPACE_ALLOWED_HOSTS` and `WORKSPACE_CSRF_TRUSTED_ORIGINS` don't need to be set manually for Railway-generated `*.up.railway.app` domains. `backend/settings.py` reads Railway's domain variables when present and uses a Railway-runtime suffix fallback when they are not. Add the settings explicitly when attaching a custom domain.
 4. Add a **Volume** mounted at `/app/media` if task attachments and profile photos should survive redeploys - the container filesystem is otherwise ephemeral.
-5. For the reminder delivery command (`deliver_calendar_reminders`), add a Railway **Cron Job** on this same service running `python manage.py deliver_calendar_reminders` on a `* * * * *` schedule, instead of replicating the `docker-compose` sleep-loop worker as a second always-on service.
+5. For the background delivery commands (`deliver_calendar_reminders` and `deliver_webhooks`), add a Railway **Cron Job** on this same service running `python manage.py deliver_calendar_reminders && python manage.py deliver_webhooks` on a `* * * * *` schedule, instead of replicating the `docker-compose` sleep-loop worker as a second always-on service. `deliver_webhooks` drains the outbound webhook queue - without it, workspace webhooks are recorded but never sent.
 
 Migrations run automatically on each deploy (`python manage.py migrate --noinput`, in the container's start command).
 
@@ -65,4 +65,5 @@ npm run build
 python manage.py test tasks
 python manage.py check
 python manage.py deliver_calendar_reminders
+python manage.py deliver_webhooks
 ```

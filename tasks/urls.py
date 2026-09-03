@@ -1,7 +1,9 @@
 from django.urls import path
 
 from .auth_views import auth_csrf, auth_login, auth_logout, auth_me, user_avatar, user_avatar_download, user_presence
-from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, work_shift_list
+from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_feed_token, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_list, project_resource_detail, project_resource_list, project_stakeholder_detail, project_stakeholder_list, project_template_apply, project_template_detail, project_template_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, task_template_apply, task_template_detail, task_template_list, work_shift_list, workspace_search, workspace_webhook_detail, workspace_webhook_list
+from .pulse import workspace_pulse
+from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_document_detail, workspace_document_list, workspace_file_download, workspace_file_list
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -14,11 +16,21 @@ urlpatterns = [
     path('users/<int:user_id>/avatar/', user_avatar_download, name='user-avatar-download'),
     path('workspaces/<int:workspace_id>/members/', member_list, name='member-list'),
     path('workspaces/<int:workspace_id>/members/<int:user_id>/', member_detail, name='member-detail'),
+    path('workspaces/<int:workspace_id>/ai/settings/', workspace_ai_settings, name='workspace-ai-settings'),
+    path('workspaces/<int:workspace_id>/ai/chat/', workspace_ai_chat, name='workspace-ai-chat'),
+    path('workspaces/<int:workspace_id>/documents/', workspace_document_list, name='workspace-document-list'),
+    path('workspaces/<int:workspace_id>/documents/<int:document_id>/', workspace_document_detail, name='workspace-document-detail'),
+    path('workspaces/<int:workspace_id>/files/', workspace_file_list, name='workspace-file-list'),
+    path('workspace-files/<int:file_id>/download/', workspace_file_download, name='workspace-file-download'),
     path('workspaces/<int:workspace_id>/invitations/', invitation_list, name='invitation-list'),
     path('workspaces/<int:workspace_id>/invitations/<int:invitation_id>/', invitation_detail, name='invitation-detail'),
     path('invitations/<int:invitation_id>/accept/', invitation_accept, name='invitation-accept'),
     path('workspaces/<int:workspace_id>/projects/', project_list, name='project-list'),
     path('workspaces/<int:workspace_id>/projects/<int:project_id>/', project_detail, name='project-detail'),
+    path('workspaces/<int:workspace_id>/projects/<int:project_id>/resources/', project_resource_list, name='project-resource-list'),
+    path('workspaces/<int:workspace_id>/projects/<int:project_id>/resources/<int:resource_id>/', project_resource_detail, name='project-resource-detail'),
+    path('workspaces/<int:workspace_id>/projects/<int:project_id>/stakeholders/', project_stakeholder_list, name='project-stakeholder-list'),
+    path('workspaces/<int:workspace_id>/projects/<int:project_id>/stakeholders/<int:stakeholder_id>/', project_stakeholder_detail, name='project-stakeholder-detail'),
     path('workspaces/<int:workspace_id>/tasks/', task_list, name='workspace-task-list'),
     path('workspaces/<int:workspace_id>/lookup-values/', lookup_value_list, name='lookup-value-list'),
     path('workspaces/<int:workspace_id>/lookup-values/<int:value_id>/', lookup_value_detail, name='lookup-value-detail'),
@@ -27,6 +39,11 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/calendar-events/', calendar_event_list, name='calendar-event-list'),
     path('workspaces/<int:workspace_id>/calendar-events/<int:event_id>/', calendar_event_detail, name='calendar-event-detail'),
     path('workspaces/<int:workspace_id>/calendar.ics', calendar_ics, name='calendar-ics'),
+    path('workspaces/<int:workspace_id>/calendar-feed-token/', calendar_feed_token, name='calendar-feed-token'),
+    path('workspaces/<int:workspace_id>/search/', workspace_search, name='workspace-search'),
+    path('workspaces/<int:workspace_id>/pulse/', workspace_pulse, name='workspace-pulse'),
+    path('workspaces/<int:workspace_id>/webhooks/', workspace_webhook_list, name='workspace-webhook-list'),
+    path('workspaces/<int:workspace_id>/webhooks/<int:webhook_id>/', workspace_webhook_detail, name='workspace-webhook-detail'),
     path('workspaces/<int:workspace_id>/check-ins/', check_in_list, name='check-in-list'),
     path('workspaces/<int:workspace_id>/work-shifts/', work_shift_list, name='work-shift-list'),
     path('workspaces/<int:workspace_id>/chat-channels/', chat_channel_list, name='chat-channel-list'),
@@ -44,6 +61,12 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/plan-buckets/<int:bucket_id>/', plan_bucket_detail, name='plan-bucket-detail'),
     path('workspaces/<int:workspace_id>/plan-buckets/reorder/', plan_bucket_reorder, name='plan-bucket-reorder'),
     path('workspaces/<int:workspace_id>/tasks/reorder/', task_reorder, name='task-reorder'),
+    path('workspaces/<int:workspace_id>/task-templates/', task_template_list, name='task-template-list'),
+    path('workspaces/<int:workspace_id>/task-templates/<int:template_id>/', task_template_detail, name='task-template-detail'),
+    path('workspaces/<int:workspace_id>/task-templates/<int:template_id>/apply/', task_template_apply, name='task-template-apply'),
+    path('workspaces/<int:workspace_id>/project-templates/', project_template_list, name='project-template-list'),
+    path('workspaces/<int:workspace_id>/project-templates/<int:template_id>/', project_template_detail, name='project-template-detail'),
+    path('workspaces/<int:workspace_id>/project-templates/<int:template_id>/apply/', project_template_apply, name='project-template-apply'),
     path('workspaces/<int:workspace_id>/saved-views/', saved_view_list, name='saved-view-list'),
     path('workspaces/<int:workspace_id>/saved-views/<int:view_id>/', saved_view_detail, name='saved-view-detail'),
     path('follow-ups/<int:follow_up_id>/', follow_up_detail, name='follow-up-detail'),

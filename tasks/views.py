@@ -1,5 +1,6 @@
 import json
 import re
+import secrets
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone as datetime_timezone
@@ -16,7 +17,8 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceInvitation, WorkShift
+from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectResource, ProjectStakeholder, ProjectTemplate, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceWebhook, WorkShift
+from .webhooks import notify_workspace_webhooks
 
 
 def user_workspace_ids(user):
@@ -64,7 +66,9 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
         preference = NotificationPreference.objects.filter(workspace_id=workspace_id, user=recipient).first()
         if preference is not None and not getattr(preference, preference_field):
             return None
-    return WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '')
+    notification = WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '')
+    notify_workspace_webhooks(workspace_id, kind, title, body, target_type=target_type, target_id=target_id)
+    return notification
 
 
 def parse_task_labels(value):
@@ -171,6 +175,26 @@ def set_task_supporters(task, supporter_ids, actor):
     return None
 
 
+def set_task_blocked_by(task, blocked_by_ids):
+    if blocked_by_ids is None:
+        return None
+    if not isinstance(blocked_by_ids, list):
+        return JsonResponse({'error': 'blocked_by_ids must be a list.'}, status=400)
+    try:
+        ids = {int(value) for value in blocked_by_ids}
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'blocked_by_ids must contain valid task IDs.'}, status=400)
+    if task.id in ids:
+        return JsonResponse({'error': 'A task cannot depend on itself.'}, status=400)
+    valid_ids = set(Task.objects.filter(id__in=ids, workspace_id=task.workspace_id).values_list('id', flat=True))
+    if ids != valid_ids:
+        return JsonResponse({'error': 'Every blocking task must belong to the same workspace.'}, status=404)
+    if ids and Task.objects.filter(id__in=ids, blocked_by=task).exists():
+        return JsonResponse({'error': 'That would create a circular dependency.'}, status=400)
+    task.blocked_by.set(ids)
+    return None
+
+
 def deliver_due_calendar_reminders(workspace_id):
     now = timezone.now()
     horizon = now + timedelta(days=7)
@@ -270,6 +294,58 @@ def require_follow_up_editor(request, follow_up, fields):
 
 def health(request):
     return JsonResponse({'status': 'ok', 'service': 'workspace-api'})
+
+
+@require_http_methods(['GET'])
+def workspace_search(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    query = request.GET.get('q', '').strip()
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+    if len(query) > 200:
+        return JsonResponse({'error': 'q must be 200 characters or fewer.'}, status=400)
+    limit_per_kind = 8
+    results = []
+
+    tasks = Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').filter(
+        Q(title__icontains=query) | Q(description__icontains=query) | Q(code__icontains=query)
+    ).order_by('-updated_at')[:limit_per_kind]
+    for task in tasks:
+        results.append({'kind': 'task', 'id': task.id, 'title': task.title, 'snippet': (task.description or '')[:160], 'target_type': 'task', 'target_id': task.id, 'meta': task.status})
+
+    risks = RiskIssue.objects.filter(workspace_id=workspace_id).filter(archived_at__isnull=True).filter(
+        Q(title__icontains=query) | Q(detail__icontains=query)
+    ).order_by('-updated_at')[:limit_per_kind]
+    for risk in risks:
+        results.append({'kind': 'risk_issue', 'id': risk.id, 'title': risk.title, 'snippet': (risk.detail or '')[:160], 'target_type': 'risk_issue', 'target_id': risk.id, 'meta': risk.kind})
+
+    comments = TaskComment.objects.filter(task__workspace_id=workspace_id).filter(body__icontains=query).select_related('task', 'author').order_by('-created_at')[:limit_per_kind]
+    for comment in comments:
+        results.append({'kind': 'task_comment', 'id': comment.id, 'title': comment.task.title, 'snippet': comment.body[:160], 'target_type': 'task', 'target_id': comment.task_id, 'meta': comment.author.get_full_name() or comment.author.email})
+
+    allowed_channels = set(accessible_chat_channels(workspace_id, request.user).values_list('name', flat=True))
+    messages = ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=allowed_channels).filter(message__icontains=query).select_related('author').order_by('-created_at')[:limit_per_kind]
+    for message in messages:
+        results.append({'kind': 'chat_message', 'id': message.id, 'title': f'#{message.channel}', 'snippet': message.message[:160], 'target_type': 'chat_channel', 'target_id': message.channel, 'meta': message.author.get_full_name() or message.author.email})
+
+    direct_messages = DirectMessage.objects.filter(conversation__workspace_id=workspace_id, conversation__participants=request.user).filter(message__icontains=query).select_related('author', 'conversation').order_by('-created_at')[:limit_per_kind]
+    for message in direct_messages:
+        results.append({'kind': 'direct_message', 'id': message.id, 'title': 'Direct message', 'snippet': message.message[:160], 'target_type': 'direct_conversation', 'target_id': message.conversation_id, 'meta': message.author.get_full_name() or message.author.email})
+
+    check_ins = CheckIn.objects.filter(workspace_id=workspace_id).filter(
+        Q(completed__icontains=query) | Q(next_steps__icontains=query) | Q(blockers__icontains=query)
+    ).select_related('user').order_by('-date')[:limit_per_kind]
+    for check_in in check_ins:
+        snippet = check_in.completed or check_in.next_steps or check_in.blockers
+        results.append({'kind': 'check_in', 'id': check_in.id, 'title': f'{check_in.user.get_full_name() or check_in.user.email} - {check_in.date.isoformat()}', 'snippet': (snippet or '')[:160], 'target_type': 'check_in', 'target_id': check_in.id, 'meta': check_in.date.isoformat()})
+
+    follow_ups = FollowUp.objects.filter(workspace_id=workspace_id).filter(note__icontains=query).order_by('-updated_at')[:limit_per_kind]
+    for follow_up in follow_ups:
+        results.append({'kind': 'follow_up', 'id': follow_up.id, 'title': follow_up.note[:80], 'snippet': follow_up.note[:160], 'target_type': 'follow_up', 'target_id': follow_up.id, 'meta': follow_up.status})
+
+    return JsonResponse({'results': results, 'query': query})
 
 
 @require_http_methods(['GET'])
@@ -377,7 +453,7 @@ def task_list(request, workspace_id=None):
         return error
 
     if request.method == 'GET':
-        tasks = Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref').prefetch_related('supporters')
+        tasks = Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref').prefetch_related('supporters', 'blocked_by', 'blocks')
         scope = request.GET.get('scope', 'all')
         project_filter = request.GET.get('project') or request.GET.get('project_id')
         if scope == 'operations':
@@ -570,7 +646,7 @@ def task_reorder(request, workspace_id):
     columns = payload.get('columns')
     if not isinstance(columns, list) or not columns:
         return JsonResponse({'error': 'columns must be a non-empty list.'}, status=400)
-    tasks = {task.id: task for task in Task.objects.filter(workspace_id=workspace_id).exclude(state='archived')}
+    tasks = {task.id: task for task in Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').prefetch_related('supporters', 'blocked_by', 'blocks')}
     supplied_ids = []
     updates = []
     reorder_history = []
@@ -701,6 +777,288 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
     bucket.save()
     return JsonResponse({'bucket': bucket.as_dict()})
 
+
+
+@require_http_methods(['GET', 'POST'])
+
+
+@require_http_methods(['GET', 'POST'])
+def project_resource_list(request, workspace_id, project_id):
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
+    if project is None:
+        return JsonResponse({'error': 'Project was not found.'}, status=404)
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        resources = ProjectResource.objects.filter(project_id=project_id, is_active=True)
+        return JsonResponse({'resources': [resource.as_dict() for resource in resources]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    if not name or len(name) > 160:
+        return JsonResponse({'error': 'Resource name must be between 1 and 160 characters.'}, status=400)
+    resource_type = payload.get('resource_type', 'person')
+    if resource_type not in dict(ProjectResource.RESOURCE_TYPES):
+        return JsonResponse({'error': 'Invalid resource type.'}, status=400)
+    resource = ProjectResource.objects.create(project_id=project_id, name=name, resource_type=resource_type, availability=str(payload.get('availability', '')).strip(), notes=str(payload.get('notes', '')).strip())
+    return JsonResponse({'resource': resource.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def project_resource_detail(request, workspace_id, project_id, resource_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    resource = ProjectResource.objects.filter(id=resource_id, project_id=project_id).first()
+    if resource is None:
+        return JsonResponse({'error': 'Resource was not found.'}, status=404)
+    if request.method == 'DELETE':
+        resource.is_active = False
+        resource.save(update_fields=['is_active'])
+        return JsonResponse({'archived': resource_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) - {'name', 'resource_type', 'availability', 'notes'}:
+        return JsonResponse({'error': 'Unsupported resource fields.'}, status=400)
+    if 'name' in payload:
+        name = str(payload['name']).strip()
+        if not name or len(name) > 160:
+            return JsonResponse({'error': 'Resource name must be between 1 and 160 characters.'}, status=400)
+        resource.name = name
+    if 'resource_type' in payload:
+        if payload['resource_type'] not in dict(ProjectResource.RESOURCE_TYPES):
+            return JsonResponse({'error': 'Invalid resource type.'}, status=400)
+        resource.resource_type = payload['resource_type']
+    if 'availability' in payload:
+        resource.availability = str(payload['availability']).strip()
+    if 'notes' in payload:
+        resource.notes = str(payload['notes']).strip()
+    resource.save()
+    return JsonResponse({'resource': resource.as_dict()})
+
+
+@require_http_methods(['GET', 'POST'])
+def project_stakeholder_list(request, workspace_id, project_id):
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
+    if project is None:
+        return JsonResponse({'error': 'Project was not found.'}, status=404)
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        stakeholders = ProjectStakeholder.objects.filter(project_id=project_id, is_active=True)
+        return JsonResponse({'stakeholders': [stakeholder.as_dict() for stakeholder in stakeholders]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    if not name or len(name) > 160:
+        return JsonResponse({'error': 'Stakeholder name must be between 1 and 160 characters.'}, status=400)
+    influence = payload.get('influence', 'medium')
+    interest = payload.get('interest', 'medium')
+    if influence not in dict(ProjectStakeholder.INFLUENCE_CHOICES) or interest not in dict(ProjectStakeholder.INTEREST_CHOICES):
+        return JsonResponse({'error': 'Invalid influence or interest.'}, status=400)
+    stakeholder = ProjectStakeholder.objects.create(project_id=project_id, name=name, role=str(payload.get('role', '')).strip(), email=str(payload.get('email', '')).strip(), influence=influence, interest=interest, notes=str(payload.get('notes', '')).strip())
+    return JsonResponse({'stakeholder': stakeholder.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def project_stakeholder_detail(request, workspace_id, project_id, stakeholder_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    stakeholder = ProjectStakeholder.objects.filter(id=stakeholder_id, project_id=project_id).first()
+    if stakeholder is None:
+        return JsonResponse({'error': 'Stakeholder was not found.'}, status=404)
+    if request.method == 'DELETE':
+        stakeholder.is_active = False
+        stakeholder.save(update_fields=['is_active'])
+        return JsonResponse({'archived': stakeholder_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) - {'name', 'role', 'email', 'influence', 'interest', 'notes'}:
+        return JsonResponse({'error': 'Unsupported stakeholder fields.'}, status=400)
+    if 'name' in payload:
+        name = str(payload['name']).strip()
+        if not name or len(name) > 160:
+            return JsonResponse({'error': 'Stakeholder name must be between 1 and 160 characters.'}, status=400)
+        stakeholder.name = name
+    if 'role' in payload:
+        stakeholder.role = str(payload['role']).strip()
+    if 'email' in payload:
+        stakeholder.email = str(payload['email']).strip()
+    if 'influence' in payload and payload['influence'] not in dict(ProjectStakeholder.INFLUENCE_CHOICES):
+        return JsonResponse({'error': 'Invalid influence.'}, status=400)
+    if 'interest' in payload and payload['interest'] not in dict(ProjectStakeholder.INTEREST_CHOICES):
+        return JsonResponse({'error': 'Invalid interest.'}, status=400)
+    for field in ('role', 'email', 'influence', 'interest', 'notes'):
+        if field in payload:
+            setattr(stakeholder, field, payload[field])
+    stakeholder.save()
+    return JsonResponse({'stakeholder': stakeholder.as_dict()})
+
+def task_template_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        templates = TaskTemplate.objects.filter(workspace_id=workspace_id)
+        return JsonResponse({'task_templates': [template.as_dict() for template in templates]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    title = str(payload.get('title', '')).strip()
+    if not name or len(name) > 120:
+        return JsonResponse({'error': 'Template name must be between 1 and 120 characters.'}, status=400)
+    if not title or len(title) > 200:
+        return JsonResponse({'error': 'Task title must be between 1 and 200 characters.'}, status=400)
+    priority = payload.get('priority', 'normal')
+    if priority not in dict(Task.PRIORITY_CHOICES):
+        return JsonResponse({'error': 'Invalid task priority.'}, status=400)
+    recurrence = payload.get('recurrence', 'none')
+    if recurrence not in dict(Task.RECURRENCE_CHOICES):
+        return JsonResponse({'error': 'Invalid recurrence.'}, status=400)
+    project = Project.objects.filter(id=payload.get('project_id'), workspace_id=workspace_id).first() if payload.get('project_id') else None
+    if payload.get('project_id') and project is None:
+        return JsonResponse({'error': 'Project was not found.'}, status=404)
+    assignee = User.objects.filter(id=payload.get('assignee_id')).first() if payload.get('assignee_id') else None
+    labels = payload.get('labels')
+    if labels is not None and not isinstance(labels, list):
+        return JsonResponse({'error': 'labels must be a list.'}, status=400)
+    template = TaskTemplate.objects.create(
+        workspace_id=workspace_id,
+        name=name,
+        title=title,
+        description=str(payload.get('description', '')).strip(),
+        priority=priority,
+        bucket=str(payload.get('bucket', 'Backlog')).strip() or 'Backlog',
+        recurrence=recurrence,
+        project=project,
+        assignee=assignee,
+        workstream=str(payload.get('workstream', '')).strip(),
+        labels=labels or [],
+        created_by=request.user,
+    )
+    record_activity(workspace_id, request.user, 'task_template_created', f'{request.user.get_full_name() or request.user.email} created task template {template.name}.')
+    return JsonResponse({'task_template': template.as_dict()}, status=201)
+
+
+@require_http_methods(['DELETE'])
+def task_template_detail(request, workspace_id, template_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    template = TaskTemplate.objects.filter(id=template_id, workspace_id=workspace_id).first()
+    if template is None:
+        return JsonResponse({'error': 'Task template was not found.'}, status=404)
+    template.delete()
+    record_activity(workspace_id, request.user, 'task_template_deleted', f'{request.user.get_full_name() or request.user.email} deleted task template {template.name}.')
+    return JsonResponse({'deleted': template_id})
+
+
+@require_http_methods(['POST'])
+def task_template_apply(request, workspace_id, template_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    template = TaskTemplate.objects.filter(id=template_id, workspace_id=workspace_id).first()
+    if template is None:
+        return JsonResponse({'error': 'Task template was not found.'}, status=404)
+    task = Task.objects.create(
+        workspace_id=workspace_id,
+        title=template.title,
+        description=template.description,
+        priority=template.priority,
+        bucket=template.bucket,
+        recurrence=template.recurrence,
+        project_ref=template.project,
+        assignee=template.assignee,
+        assignee_name=template.assignee.get_full_name() or template.assignee.email if template.assignee else '',
+        project=template.project.name if template.project else '',
+        workstream=template.workstream,
+        labels=template.labels or [],
+    )
+    record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title} from template {template.name}.')
+    return JsonResponse({'task': task.as_dict()}, status=201)
+
+
+@require_http_methods(['GET', 'POST'])
+def project_template_list(request, workspace_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        templates = ProjectTemplate.objects.filter(workspace_id=workspace_id)
+        return JsonResponse({'project_templates': [template.as_dict() for template in templates]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    project_name = str(payload.get('project_name', '')).strip()
+    if not name or len(name) > 120:
+        return JsonResponse({'error': 'Template name must be between 1 and 120 characters.'}, status=400)
+    if not project_name or len(project_name) > 160:
+        return JsonResponse({'error': 'Project name must be between 1 and 160 characters.'}, status=400)
+    try:
+        due_days = int(payload.get('due_days', 14))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'due_days must be an integer.'}, status=400)
+    if not 0 <= due_days <= 365:
+        return JsonResponse({'error': 'due_days must be between 0 and 365.'}, status=400)
+    template = ProjectTemplate.objects.create(
+        workspace_id=workspace_id,
+        name=name,
+        project_name=project_name,
+        description=str(payload.get('description', '')).strip(),
+        due_days=due_days,
+        created_by=request.user,
+    )
+    record_activity(workspace_id, request.user, 'project_template_created', f'{request.user.get_full_name() or request.user.email} created project template {template.name}.')
+    return JsonResponse({'project_template': template.as_dict()}, status=201)
+
+
+@require_http_methods(['DELETE'])
+def project_template_detail(request, workspace_id, template_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    template = ProjectTemplate.objects.filter(id=template_id, workspace_id=workspace_id).first()
+    if template is None:
+        return JsonResponse({'error': 'Project template was not found.'}, status=404)
+    template.delete()
+    record_activity(workspace_id, request.user, 'project_template_deleted', f'{request.user.get_full_name() or request.user.email} deleted project template {template.name}.')
+    return JsonResponse({'deleted': template_id})
+
+
+@require_http_methods(['POST'])
+def project_template_apply(request, workspace_id, template_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    template = ProjectTemplate.objects.filter(id=template_id, workspace_id=workspace_id).first()
+    if template is None:
+        return JsonResponse({'error': 'Project template was not found.'}, status=404)
+    project = Project.objects.create(
+        workspace_id=workspace_id,
+        name=template.project_name,
+        description=template.description,
+        status='planning',
+        due_date=date.today() + timedelta(days=template.due_days),
+    )
+    record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name} from template {template.name}.')
+    return JsonResponse({'project': project.as_dict()}, status=201)
+
 def saved_view_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
@@ -778,7 +1136,7 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state', 'blocked_by_ids'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -906,6 +1264,10 @@ def task_detail(request, task_id):
         if supporter_error:
             transaction.set_rollback(True)
             return supporter_error
+        blocked_by_error = set_task_blocked_by(task, payload.get('blocked_by_ids') if 'blocked_by_ids' in payload else None)
+        if blocked_by_error:
+            transaction.set_rollback(True)
+            return blocked_by_error
         record_task_changes(task, request.user, previous_values, material_fields)
         if 'supporter_ids' in payload:
             new_supporters = list(task.supporters.values_list('id', flat=True))
@@ -1161,14 +1523,91 @@ def notification_preference_detail(request, workspace_id):
     return JsonResponse({'preferences': preference.as_dict()})
 
 
+@require_http_methods(['GET', 'POST'])
+def workspace_webhook_list(request, workspace_id):
+    membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
+    _, error = membership_check(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        hooks = WorkspaceWebhook.objects.filter(workspace_id=workspace_id)
+        return JsonResponse({'webhooks': [hook.as_dict() for hook in hooks]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    url = str(payload.get('url', '')).strip()
+    kind = str(payload.get('kind', 'teams')).strip()
+    label = str(payload.get('label', '')).strip()
+    if kind not in {choice[0] for choice in WorkspaceWebhook.KIND_CHOICES}:
+        return JsonResponse({'error': 'kind must be teams, slack, or generic.'}, status=400)
+    if not url.startswith('https://') or len(url) > 500:
+        return JsonResponse({'error': 'url must be an https link of 500 characters or fewer.'}, status=400)
+    if len(label) > 120:
+        return JsonResponse({'error': 'label must be 120 characters or fewer.'}, status=400)
+    hook = WorkspaceWebhook.objects.create(workspace_id=workspace_id, kind=kind, url=url, label=label, created_by=request.user)
+    record_activity(workspace_id, request.user, 'webhook_created', f'{request.user.get_full_name() or request.user.email} connected a {hook.get_kind_display()} webhook.')
+    return JsonResponse({'webhook': hook.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def workspace_webhook_detail(request, workspace_id, webhook_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    hook = WorkspaceWebhook.objects.filter(id=webhook_id, workspace_id=workspace_id).first()
+    if hook is None:
+        return JsonResponse({'error': 'Webhook was not found.'}, status=404)
+    if request.method == 'DELETE':
+        hook.delete()
+        return JsonResponse({'deleted': webhook_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) - {'is_active', 'label'}:
+        return JsonResponse({'error': 'Unsupported webhook fields.'}, status=400)
+    if 'is_active' in payload:
+        if not isinstance(payload['is_active'], bool):
+            return JsonResponse({'error': 'is_active must be a boolean.'}, status=400)
+        hook.is_active = payload['is_active']
+    if 'label' in payload:
+        label = str(payload['label']).strip()
+        if len(label) > 120:
+            return JsonResponse({'error': 'label must be 120 characters or fewer.'}, status=400)
+        hook.label = label
+    hook.save()
+    return JsonResponse({'webhook': hook.as_dict()})
+
+
 @require_http_methods(['GET'])
 def activity_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     from .models import ActivityEvent
-    events = ActivityEvent.objects.filter(workspace_id=workspace_id).select_related('actor')[:50]
-    return JsonResponse({'activity': [event.as_dict() for event in events]})
+    events = ActivityEvent.objects.filter(workspace_id=workspace_id).select_related('actor')
+    try:
+        page_size = min(max(int(request.GET.get('page_size', 50)), 1), 500)
+        page_number = max(int(request.GET.get('page', 1)), 1)
+    except ValueError:
+        return JsonResponse({'error': 'page and page_size must be integers.'}, status=400)
+    paginator = Paginator(events, page_size)
+    try:
+        page = paginator.page(page_number)
+    except EmptyPage:
+        page = paginator.page(paginator.num_pages)
+    return JsonResponse({
+        'activity': [event.as_dict() for event in page.object_list],
+        'pagination': {
+            'page': page.number,
+            'page_size': page_size,
+            'total_items': paginator.count,
+            'total_pages': paginator.num_pages,
+            'has_next': page.has_next(),
+            'has_previous': page.has_previous(),
+        },
+    })
 
 
 @require_http_methods(['GET'])
@@ -1697,19 +2136,45 @@ def ics_escape(value):
 
 @require_http_methods(['GET'])
 def calendar_ics(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
-    if error:
-        return error
+    token = request.GET.get('token', '')
+    if token:
+        workspace = Workspace.objects.filter(id=workspace_id, calendar_feed_token=token).first()
+        if workspace is None or not token:
+            return JsonResponse({'error': 'Invalid calendar feed link.'}, status=403)
+    else:
+        _, error = require_workspace_member(request, workspace_id)
+        if error:
+            return error
     events = CalendarEvent.objects.filter(workspace_id=workspace_id)
-    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WorkSpace//Team Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH']
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WorkSpace//Team Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:WorkSpace', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H']
     for event in events:
         start = event.start_at.astimezone(datetime_timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         end = event.end_at.astimezone(datetime_timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         lines.extend(['BEGIN:VEVENT', f'UID:workspace-event-{event.id}@workspace', f'DTSTAMP:{start}', f'DTSTART:{start}', f'DTEND:{end}', f'SUMMARY:{ics_escape(event.title)}', f'DESCRIPTION:{ics_escape(event.description)}', 'END:VEVENT'])
     lines.append('END:VCALENDAR')
     response = HttpResponse('\r\n'.join(lines) + '\r\n', content_type='text/calendar; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="workspace-{workspace_id}.ics"'
+    if token:
+        response['Content-Disposition'] = f'inline; filename="workspace-{workspace_id}.ics"'
+    else:
+        response['Content-Disposition'] = f'attachment; filename="workspace-{workspace_id}.ics"'
     return response
+
+
+@require_http_methods(['GET', 'POST'])
+def calendar_feed_token(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if request.method == 'POST':
+        if membership.role not in {'owner', 'manager'}:
+            return JsonResponse({'error': 'Owner or manager access is required to reset the subscribe link.'}, status=403)
+        workspace.calendar_feed_token = secrets.token_urlsafe(32)
+        workspace.save(update_fields=['calendar_feed_token'])
+    elif not workspace.calendar_feed_token:
+        workspace.calendar_feed_token = secrets.token_urlsafe(32)
+        workspace.save(update_fields=['calendar_feed_token'])
+    return JsonResponse({'token': workspace.calendar_feed_token})
 
 
 @require_http_methods(['GET', 'POST'])
@@ -1780,6 +2245,26 @@ def ensure_workspace_channels(workspace_id, user):
     for legacy_name in legacy_names:
         if legacy_name and legacy_name not in existing_names:
             ChatChannel.objects.get_or_create(workspace_id=workspace_id, name=legacy_name, defaults={'created_by': user})
+
+
+def shared_chat_items(workspace_id, payload):
+    document_ids = {int(value) for value in (payload.get('document_ids') or []) if str(value).isdigit()}
+    file_ids = {int(value) for value in (payload.get('file_ids') or []) if str(value).isdigit()}
+    documents = [document.as_dict() for document in WorkspaceDocument.objects.filter(workspace_id=workspace_id, id__in=document_ids)]
+    files = [item.as_dict() for item in WorkspaceFile.objects.filter(workspace_id=workspace_id, id__in=file_ids)]
+    return documents, files
+
+
+def notify_mentions(workspace_id, actor, text, target_type, target_id, recipients=None):
+    tokens = {token.lower() for token in re.findall(r'@([A-Za-z0-9_.-]+)', text)}
+    if not tokens:
+        return
+    members = recipients or Membership.objects.filter(workspace_id=workspace_id).select_related('user')
+    for member in members:
+        aliases = {member.user.email.split('@')[0].lower(), member.user.first_name.lower(), member.user.last_name.lower()}
+        if 'channel' in tokens or tokens.intersection(aliases):
+            if member.user != actor:
+                create_notification(workspace_id, member.user, 'mention', f'{actor.get_full_name() or actor.email} mentioned you', text[:120], target_type=target_type, target_id=target_id)
 
 
 @require_http_methods(['GET', 'POST'])
@@ -1890,15 +2375,10 @@ def chat_message_list(request, workspace_id):
         parent = ChatMessage.objects.filter(id=payload['parent_id'], workspace_id=workspace_id, channel=channel, parent__isnull=True).first()
         if parent is None:
             return JsonResponse({'error': 'The parent message was not found in this channel.'}, status=404)
-    message = ChatMessage.objects.create(workspace_id=workspace_id, author=request.user, channel=channel, parent=parent, message=message_text)
+    shared_documents, shared_files = shared_chat_items(workspace_id, payload)
+    message = ChatMessage.objects.create(workspace_id=workspace_id, author=request.user, channel=channel, parent=parent, message=message_text, shared_documents=shared_documents, shared_files=shared_files)
     record_activity(workspace_id, request.user, 'chat_message', f'{request.user.get_full_name() or request.user.email} posted in #{channel}.')
-    mentioned_tokens = {token.lower() for token in re.findall(r'@([A-Za-z0-9_.-]+)', message_text)}
-    if mentioned_tokens:
-        members = Membership.objects.filter(workspace_id=workspace_id).select_related('user')
-        for member in members:
-            aliases = {member.user.email.split('@')[0].lower(), member.user.first_name.lower(), member.user.last_name.lower()}
-            if mentioned_tokens.intersection(aliases) and member.user != request.user:
-                create_notification(workspace_id, member.user, 'mention', f'{request.user.get_full_name() or request.user.email} mentioned you', message_text[:120], target_type='chat_channel', target_id=channel)
+    notify_mentions(workspace_id, request.user, message_text, 'chat_channel', channel)
     return JsonResponse({'message': message.as_dict()}, status=201)
 
 
@@ -1948,10 +2428,12 @@ def direct_message_list(request, conversation_id):
         return JsonResponse({'error': 'Message is required.'}, status=400)
     if len(message_text) > 4000:
         return JsonResponse({'error': 'Message must be 4000 characters or fewer.'}, status=400)
-    message = DirectMessage.objects.create(conversation=conversation, author=request.user, message=message_text)
+    shared_documents, shared_files = shared_chat_items(conversation.workspace_id, data)
+    message = DirectMessage.objects.create(conversation=conversation, author=request.user, message=message_text, shared_documents=shared_documents, shared_files=shared_files)
     sender = request.user.get_full_name() or request.user.email
     for participant in conversation.participants.exclude(id=request.user.id):
         create_notification(conversation.workspace_id, participant, 'direct_message', f'New message from {sender}', message_text[:120], target_type='direct_conversation', target_id=conversation.id)
+    notify_mentions(conversation.workspace_id, request.user, message_text, 'direct_conversation', conversation.id, Membership.objects.filter(workspace_id=conversation.workspace_id, user__in=conversation.participants.all()).select_related('user'))
     return JsonResponse({'message': message.as_dict()}, status=201)
 
 

@@ -11,6 +11,7 @@ class Workspace(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     members = models.ManyToManyField(User, through='Membership', related_name='workspaces')
     next_task_number = models.PositiveBigIntegerField(default=1)
+    calendar_feed_token = models.CharField(max_length=64, blank=True, default='')
 
     class Meta:
         ordering = ['name']
@@ -149,6 +150,64 @@ class Project(models.Model):
         }
 
 
+
+
+class ProjectResource(models.Model):
+    RESOURCE_TYPES = [('person', 'Person'), ('equipment', 'Equipment'), ('budget', 'Budget'), ('other', 'Other')]
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='resources')
+    name = models.CharField(max_length=160)
+    resource_type = models.CharField(max_length=20, choices=RESOURCE_TYPES, default='person')
+    availability = models.CharField(max_length=160, blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['resource_type', 'name']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'project_id': self.project_id,
+            'name': self.name,
+            'resource_type': self.resource_type,
+            'availability': self.availability,
+            'notes': self.notes,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class ProjectStakeholder(models.Model):
+    INFLUENCE_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    INTEREST_CHOICES = [('low', 'Low'), ('medium', 'Medium'), ('high', 'High')]
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='stakeholders')
+    name = models.CharField(max_length=160)
+    role = models.CharField(max_length=160, blank=True)
+    email = models.EmailField(blank=True)
+    influence = models.CharField(max_length=20, choices=INFLUENCE_CHOICES, default='medium')
+    interest = models.CharField(max_length=20, choices=INTEREST_CHOICES, default='medium')
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'project_id': self.project_id,
+            'name': self.name,
+            'role': self.role,
+            'email': self.email,
+            'influence': self.influence,
+            'interest': self.interest,
+            'notes': self.notes,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat(),
+        }
+
 class LookupValue(models.Model):
     KIND_CHOICES = [('workstream', 'Workstream'), ('phase', 'Phase / quarter')]
 
@@ -175,6 +234,69 @@ class LookupValue(models.Model):
     def as_dict(self):
         return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'kind': self.kind, 'name': self.name, 'slug': self.slug, 'position': self.position, 'is_active': self.is_active}
 
+
+
+
+class TaskTemplate(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='task_templates')
+    name = models.CharField(max_length=120)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    priority = models.CharField(max_length=20, choices=[('urgent', 'Urgent'), ('high', 'High'), ('normal', 'Normal'), ('low', 'Low')], default='normal')
+    bucket = models.CharField(max_length=80, default='Backlog')
+    recurrence = models.CharField(max_length=20, default='none')
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='task_templates')
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='task_templates')
+    workstream = models.CharField(max_length=120, blank=True)
+    labels = models.JSONField(default=list, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_task_templates')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'name': self.name,
+            'title': self.title,
+            'description': self.description,
+            'priority': self.priority,
+            'bucket': self.bucket,
+            'recurrence': self.recurrence,
+            'project_id': self.project_id,
+            'assignee_id': self.assignee_id,
+            'workstream': self.workstream,
+            'labels': self.labels or [],
+            'created_by': self.created_by_id,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class ProjectTemplate(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='project_templates')
+    name = models.CharField(max_length=120)
+    project_name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    due_days = models.PositiveIntegerField(default=14)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_project_templates')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'name': self.name,
+            'project_name': self.project_name,
+            'description': self.description,
+            'due_days': self.due_days,
+            'created_by': self.created_by_id,
+            'created_at': self.created_at.isoformat(),
+        }
 
 class CalendarEvent(models.Model):
     EVENT_TYPES = [
@@ -249,6 +371,8 @@ class ChatMessage(models.Model):
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     channel = models.CharField(max_length=80, default='general')
     message = models.TextField(max_length=4000)
+    shared_documents = models.JSONField(default=list, blank=True)
+    shared_files = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -264,6 +388,8 @@ class ChatMessage(models.Model):
             'reply_count': self.replies.count(),
             'channel': self.channel,
             'message': self.message,
+            'shared_documents': self.shared_documents or [],
+            'shared_files': self.shared_files or [],
             'created_at': self.created_at.isoformat(),
         }
 
@@ -328,6 +454,8 @@ class DirectMessage(models.Model):
     conversation = models.ForeignKey(DirectConversation, on_delete=models.CASCADE, related_name='messages')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_messages')
     message = models.TextField(max_length=4000)
+    shared_documents = models.JSONField(default=list, blank=True)
+    shared_files = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -340,6 +468,8 @@ class DirectMessage(models.Model):
             'author_id': self.author_id,
             'author_name': self.author.get_full_name() or self.author.email,
             'message': self.message,
+            'shared_documents': self.shared_documents or [],
+            'shared_files': self.shared_files or [],
             'created_at': self.created_at.isoformat(),
         }
 
@@ -426,6 +556,7 @@ class Task(models.Model):
     phase_ref = models.ForeignKey(LookupValue, on_delete=models.SET_NULL, null=True, blank=True, related_name='phase_tasks')
     supporters = models.ManyToManyField(User, through='TaskSupporter', through_fields=('task', 'user'), related_name='task_support_roles')
     recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default='none')
+    blocked_by = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='blocks')
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -471,7 +602,17 @@ class Task(models.Model):
         """Canonical public name; ``code`` remains the stored legacy field."""
         return self.code
 
+    def _visible_dependencies(self, related_manager):
+        """Dependency rows that still count, filtered in Python so a
+        ``prefetch_related`` cache is reused instead of issuing a query per task."""
+        return [
+            task for task in related_manager.all()
+            if task.state != 'archived' and task.status != 'cancelled'
+        ]
+
     def as_dict(self):
+        blocked_by = self._visible_dependencies(self.blocked_by)
+        blocking = self._visible_dependencies(self.blocks)
         return {
             'id': self.id,
             'workspace_id': self.workspace_id,
@@ -501,10 +642,13 @@ class Task(models.Model):
             'blocker_details': self.blocker_details,
             'state': self.state,
             'archived_at': self.archived_at.isoformat() if self.archived_at else None,
-            'supporter_ids': list(self.supporters.values_list('id', flat=True)),
+            'supporter_ids': [supporter.id for supporter in self.supporters.all()],
             'recurrence': self.recurrence,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'blocked_by_ids': [task.id for task in blocked_by],
+            'blocking_ids': [task.id for task in blocking],
+            'is_blocked_by_dependency': any(task.status != 'done' for task in blocked_by),
         }
 
 
@@ -770,6 +914,12 @@ class WorkspaceSetting(models.Model):
     due_soon_days = models.PositiveIntegerField(default=7)
     stale_days = models.PositiveIntegerField(default=14)
     kpi_targets = models.JSONField(default=dict, blank=True)
+    ai_enabled = models.BooleanField(default=False)
+    ai_user_ids = models.JSONField(default=list, blank=True)
+    ai_model = models.CharField(max_length=120, blank=True, default='')
+    ai_default_provider = models.CharField(max_length=30, default='openai')
+    ai_enabled_providers = models.JSONField(default=list, blank=True)
+    ai_provider_config = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def as_dict(self):
@@ -778,8 +928,48 @@ class WorkspaceSetting(models.Model):
             'due_soon_days': self.due_soon_days,
             'stale_days': self.stale_days,
             'kpi_targets': self.kpi_targets or {},
+            'ai_enabled': self.ai_enabled,
+            'ai_user_ids': self.ai_user_ids or [],
+            'ai_model': self.ai_model,
+            'ai_default_provider': self.ai_default_provider,
+            'ai_enabled_providers': self.ai_enabled_providers or [],
             'updated_at': self.updated_at.isoformat(),
         }
+
+
+class WorkspaceDocument(models.Model):
+    KIND_CHOICES = [('document', 'Document'), ('presentation', 'Presentation')]
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='documents')
+    title = models.CharField(max_length=200)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='document')
+    content = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_documents')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def as_dict(self):
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'title': self.title, 'kind': self.kind, 'content': self.content or {}, 'created_by': self.created_by_id, 'updated_at': self.updated_at.isoformat(), 'created_at': self.created_at.isoformat()}
+
+
+class WorkspaceFile(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='files')
+    file = models.FileField(upload_to='workspace-files/%Y/%m/', blank=True)
+    original_name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=160, blank=True)
+    size = models.PositiveBigIntegerField(default=0)
+    cloudinary_url = models.URLField(max_length=1000, blank=True)
+    cloudinary_public_id = models.CharField(max_length=500, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_files')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def as_dict(self):
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'original_name': self.original_name, 'mime_type': self.mime_type, 'size': self.size, 'url': self.cloudinary_url or (f'/api/workspace-files/{self.id}/download/' if self.file else ''), 'uploaded_by': self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown user', 'created_at': self.created_at.isoformat()}
 
 
 class NotificationDelivery(models.Model):
@@ -898,4 +1088,78 @@ class WorkShift(models.Model):
             'is_open': self.is_open,
             'is_on_break': self.is_on_break,
             'note': self.note,
+        }
+
+
+class WorkspaceWebhook(models.Model):
+    KIND_CHOICES = [
+        ('teams', 'Microsoft Teams'),
+        ('slack', 'Slack'),
+        ('generic', 'Generic JSON'),
+    ]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='webhooks')
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='teams')
+    url = models.URLField(max_length=500)
+    label = models.CharField(max_length=120, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_webhooks')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'kind': self.kind,
+            'url': self.url,
+            'label': self.label,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class WebhookDelivery(models.Model):
+    """Queued outbound webhook post.
+
+    Notifications enqueue rows here instead of making the HTTP call inline, so a
+    slow or unreachable endpoint can never stall the request that triggered it.
+    The ``deliver_webhooks`` management command drains the queue.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+    ]
+    MAX_ATTEMPTS = 3
+
+    webhook = models.ForeignKey(WorkspaceWebhook, on_delete=models.CASCADE, related_name='deliveries')
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='webhook_deliveries')
+    kind = models.CharField(max_length=40)
+    title = models.CharField(max_length=200)
+    body = models.CharField(max_length=500, blank=True)
+    target_type = models.CharField(max_length=40, blank=True)
+    target_id = models.CharField(max_length=80, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_error = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [models.Index(fields=['status', 'created_at'])]
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'webhook_id': self.webhook_id,
+            'kind': self.kind,
+            'title': self.title,
+            'status': self.status,
+            'attempts': self.attempts,
+            'created_at': self.created_at.isoformat(),
         }
