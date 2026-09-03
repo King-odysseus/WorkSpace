@@ -2657,3 +2657,49 @@ html[data-theme='dark'] :where(
 ) {
   box-shadow: 10px 10px 24px rgb(2 5 31 / 0.48), -8px -8px 20px rgb(255 255 255 / 0.04);
 }
+/* Soften card and container borders so neumorphic shadows, not outlines, define edges. */
+:where(
+  .workspace-card,
+  .workspace-side-card,
+  .project-card,
+  .planner-column,
+  .calendar-panel,
+  .chat-panel,
+  .follow-up-panel,
+  .settings-panel,
+  .report-card,
+  .report-panel,
+  .task-drawer,
+  .metric-card,
+  .today-panel,
+  .team-member-card,
+  .team-board-column,
+  .team-access-panel,
+  .my-task-group,
+  .help-welcome,
+  .help-topic,
+  .help-contact,
+  .legal-document,
+  .legal-acceptance,
+  .modal,
+  .notification-panel,
+  .project-register-card,
+  .project-record-card,
+  .project-detail-links button,
+  .planner-commandbar,
+  .planner-saved-views-bar,
+  .planner-scope-switch,
+  .checkin-toolbar,
+  .team-board-toolbar,
+  .my-task-toolbar,
+  .operations-workstream-create,
+  .planner-add-bucket,
+  .calendar-toolbar,
+  .chat-toolbar,
+  .report-toolbar,
+  .activity-toolbar,
+  .project-toolbar,
+  .follow-up-toolbar
+) {
+  border-color: var(--workspace-surface);
+}
