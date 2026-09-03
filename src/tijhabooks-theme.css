@@ -939,3 +939,131 @@ html[data-theme='light'] .mobile-pill-nav {
   background: rgb(7 26 46 / 96%);
   border-color: rgb(196 154 108 / 42%);
 }
+
+/* Use one TijhaBooks popup treatment for dialogs, drawers, notifications, and menus. */
+.modal-backdrop,
+.drawer-backdrop {
+  background: rgb(7 26 46 / 70%);
+  backdrop-filter: blur(4px);
+}
+
+.modal,
+.task-drawer,
+.notification-panel {
+  border: 1px solid var(--workspace-border);
+  border-radius: 18px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text);
+  box-shadow: 0 24px 70px rgb(7 26 46 / 24%);
+}
+
+.modal {
+  padding: 28px;
+}
+
+.modal-heading,
+.drawer-heading {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--workspace-border);
+}
+
+.modal h2,
+.drawer-heading h2 {
+  color: var(--workspace-text);
+}
+
+.close-button {
+  border: 1px solid var(--workspace-border);
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text-soft);
+}
+
+.close-button:hover {
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+  color: var(--navy);
+}
+
+.modal label,
+.drawer-task-form label {
+  color: var(--workspace-text-soft);
+}
+
+.modal input,
+.modal select,
+.modal textarea,
+.drawer-task-form input,
+.drawer-task-form select,
+.drawer-comment-form textarea {
+  border-color: var(--workspace-border);
+  border-radius: 10px;
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text);
+}
+
+.notification-panel {
+  padding: 14px;
+}
+
+.notification-panel-heading {
+  border-bottom-color: var(--workspace-border);
+  color: var(--workspace-text);
+}
+
+.notification-panel-heading button {
+  color: var(--brand-accent);
+}
+
+.notification-row {
+  border-radius: 10px;
+  color: var(--workspace-text-soft);
+}
+
+.notification-row:hover,
+.notification-row.unread {
+  background: var(--workspace-surface-soft);
+}
+
+.notification-row strong {
+  color: var(--workspace-text);
+}
+
+.task-drawer {
+  border-radius: 20px 0 0 20px;
+  background: var(--workspace-surface);
+}
+
+html[data-theme='dark'] .modal,
+html[data-theme='dark'] .task-drawer,
+html[data-theme='dark'] .notification-panel {
+  background: #0D2945;
+  border-color: #28516F;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 38%);
+}
+
+html[data-theme='dark'] .modal-heading,
+html[data-theme='dark'] .drawer-heading,
+html[data-theme='dark'] .notification-panel-heading {
+  border-bottom-color: #28516F;
+}
+
+html[data-theme='dark'] .modal input,
+html[data-theme='dark'] .modal select,
+html[data-theme='dark'] .modal textarea,
+html[data-theme='dark'] .drawer-task-form input,
+html[data-theme='dark'] .drawer-task-form select,
+html[data-theme='dark'] .drawer-comment-form textarea {
+  background: #092038;
+  border-color: #28516F;
+}
+
+@media (max-width: 600px) {
+  .modal {
+    padding: 22px;
+    border-radius: 16px;
+  }
+
+  .task-drawer {
+    border-radius: 18px 0 0 18px;
+  }
+}
