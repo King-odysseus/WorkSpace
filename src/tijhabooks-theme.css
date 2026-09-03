@@ -1,14 +1,14 @@
 /* Shared TijhaBooks brand tokens keep WorkSpace visually consistent with the wider Tijha product family. */
 :root {
-  --navy: #071A2E;
-  --navy2: #0D2945;
-  --brand-navy-soft: #123A5B;
+  --navy: #0B0B45;
+  --navy2: #15155C;
+  --brand-navy-soft: #1C1C6E;
   --brand-accent: #C49A6C;
   --brand-accent-hover: #B0895A;
   --line: #E2E2E6;
   --muted: #6B7280;
   --blue: #1D4ED8;
-  --teal: #0A9E87;
+  --teal: #16A34A;
   color-scheme: light;
 }
 
@@ -504,8 +504,8 @@ html[data-theme='dark'] .planner-filter-controls > select { border-color: #28516
 @media (max-width: 750px) { .sidebar, .sidebar-collapsed .sidebar { display: none; } .mobile-pill-nav { position: fixed; left: 50%; bottom: 16px; z-index: 25; display: flex; max-width: calc(100vw - 24px); overflow-x: auto; transform: translateX(-50%); gap: 4px; padding: 5px; border: 1px solid #28516F; border-radius: 18px; background: #0B223AEE; box-shadow: 0 12px 28px #02051f40; scrollbar-width: none; } .mobile-pill-nav::-webkit-scrollbar { display: none; } .mobile-pill-nav button { flex: 0 0 40px; display: grid; place-items: center; width: 40px; height: 36px; border: 0; border-radius: 13px; background: transparent; color: #B9CCDD; cursor: pointer; } .mobile-pill-nav button.active { background: #C49A6C; color: #071A2E; } .page-content { padding-bottom: 92px; } }
 
 /* Keep shared surfaces and controls aligned with the selected theme. */
-:root { --workspace-surface: #FFFFFF; --workspace-surface-soft: #F7F9FC; --workspace-text: #071A2E; --workspace-text-soft: #4B5563; --workspace-border: #E2E2E6; }
-html[data-theme='dark'] { color-scheme: dark; --navy: #071A2E; --navy2: #0D2945; --brand-navy-soft: #123A5B; --workspace-surface: #0E2A46; --workspace-surface-soft: #092038; --workspace-text: #FFFFFF; --workspace-text-soft: #B9CCDD; --workspace-border: #28516F; }
+:root { --workspace-surface: #FFFFFF; --workspace-surface-soft: #F8F9FA; --workspace-text: #1F2937; --workspace-text-soft: #4B5563; --workspace-border: #E2E2E6; }
+html[data-theme='dark'] { color-scheme: dark; --navy: #0C0C28; --navy2: #15153A; --brand-navy-soft: #1E1E4C; --workspace-surface: #15153A; --workspace-surface-soft: #0C0C28; --workspace-text: #ECECF7; --workspace-text-soft: #C2C2DC; --workspace-border: #2A2A5C; }
 body, .topbar, .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal, .task-drawer, .notification-panel, .settings-panel, .report-panel, .report-stat { color: var(--workspace-text); }
 .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal { background: var(--workspace-surface); border-color: var(--workspace-border); }
 .section-header h2, .section-header h3, .page-heading h1, .workspace-view-heading h1, .workspace-view-heading h2, .metric-card strong, .focus-card strong, .checkin-card h3, .activity-card h2, .modal h2 { color: var(--workspace-text); }
@@ -820,7 +820,7 @@ html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activi
 }
 
 .workspace-switcher {
-  background: rgb(18 58 91 / 72%);
+  background: rgb(28 28 110 / 72%);
   border-color: rgb(196 154 108 / 30%);
   border-radius: 10px;
 }
@@ -836,12 +836,12 @@ html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activi
 }
 
 .nav-item:hover {
-  background: rgb(18 58 91 / 84%);
+  background: rgb(28 28 110 / 84%);
   color: #FFFFFF;
 }
 
 .nav-item.active {
-  background: linear-gradient(90deg, #123A5B 0%, #0D2945 100%);
+  background: linear-gradient(90deg, #1C1C6E 0%, #15155C 100%);
   box-shadow: inset 3px 0 var(--brand-accent), 0 6px 16px rgb(0 0 0 / 12%);
   color: #FFFFFF;
 }
@@ -877,7 +877,7 @@ html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activi
 
 .top-search {
   border-color: #28516F;
-  background: #0D2945;
+  background: var(--navy2);
   color: #B9CCDD;
 }
 
@@ -896,7 +896,7 @@ html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activi
 
 .icon-button {
   border-color: #28516F;
-  background: #0D2945;
+  background: var(--navy2);
 }
 
 .icon-button:hover,
@@ -936,7 +936,7 @@ html[data-theme='light'] .theme-toggle {
 }
 
 html[data-theme='light'] .mobile-pill-nav {
-  background: rgb(7 26 46 / 96%);
+  background: rgb(11 11 69 / 96%);
   border-color: rgb(196 154 108 / 42%);
 }
 
@@ -1036,15 +1036,15 @@ html[data-theme='light'] .mobile-pill-nav {
 html[data-theme='dark'] .modal,
 html[data-theme='dark'] .task-drawer,
 html[data-theme='dark'] .notification-panel {
-  background: #0D2945;
-  border-color: #28516F;
+  background: #15153A;
+  border-color: #2A2A5C;
   box-shadow: 0 24px 70px rgb(0 0 0 / 38%);
 }
 
 html[data-theme='dark'] .modal-heading,
 html[data-theme='dark'] .drawer-heading,
 html[data-theme='dark'] .notification-panel-heading {
-  border-bottom-color: #28516F;
+  border-bottom-color: #2A2A5C;
 }
 
 html[data-theme='dark'] .modal input,
@@ -1053,8 +1053,37 @@ html[data-theme='dark'] .modal textarea,
 html[data-theme='dark'] .drawer-task-form input,
 html[data-theme='dark'] .drawer-task-form select,
 html[data-theme='dark'] .drawer-comment-form textarea {
-  background: #092038;
-  border-color: #28516F;
+  background: #0C0C28;
+  border-color: #2A2A5C;
+}
+
+html[data-theme='dark'] .sidebar,
+html[data-theme='dark'] .topbar {
+  background: #0C0C28;
+}
+
+html[data-theme='dark'] .sidebar {
+  border-right-color: #2A2A5C;
+}
+
+html[data-theme='dark'] .topbar {
+  border-bottom-color: #2A2A5C;
+}
+
+html[data-theme='dark'] .workspace-switcher,
+html[data-theme='dark'] .icon-button,
+html[data-theme='dark'] .top-search {
+  background: #15153A;
+  border-color: #2A2A5C;
+}
+
+html[data-theme='dark'] .nav-item:hover,
+html[data-theme='dark'] .nav-item.active {
+  background: #1E1E4C;
+}
+
+html[data-theme='dark'] .nav-item.active {
+  box-shadow: inset 3px 0 var(--brand-accent), 0 6px 16px rgb(0 0 0 / 12%);
 }
 
 @media (max-width: 600px) {
