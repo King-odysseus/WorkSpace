@@ -1,0 +1,30 @@
+# Single-service build for Railway: the React app is built once, then served straight out of
+# the Django process via WhiteNoise (see backend/settings.py) so there is only one container,
+# one port, and no nginx/reverse-proxy or private networking to wire up between services.
+# Keep Dockerfile.api / Dockerfile.web / docker-compose.yml as-is for local dev and any
+# deployment target that wants the frontend and API split into separate containers.
+
+FROM node:22-alpine AS frontend
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM python:3.13-slim
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt gunicorn
+COPY . .
+COPY --from=frontend /app/dist ./dist
+RUN addgroup --system workspace \
+    && adduser --system --ingroup workspace workspace \
+    && mkdir -p /app/media /app/staticfiles \
+    && chown -R workspace:workspace /app
+
+USER workspace
+
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3"]
