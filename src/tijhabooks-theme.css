@@ -798,3 +798,144 @@ html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activi
     min-height: 42px;
   }
 }
+
+/* Match the TijhaBooks shell: a calm branded rail around a focused work surface. */
+.app-shell {
+  background: var(--navy);
+}
+
+.sidebar {
+  background: linear-gradient(180deg, var(--navy) 0%, #061525 100%);
+  border-right: 1px solid rgb(196 154 108 / 16%);
+}
+
+.brand {
+  min-height: 34px;
+  letter-spacing: -.2px;
+}
+
+.brand-mark {
+  border-radius: 9px;
+  box-shadow: 0 5px 14px rgb(196 154 108 / 22%);
+}
+
+.workspace-switcher {
+  background: rgb(18 58 91 / 72%);
+  border-color: rgb(196 154 108 / 30%);
+  border-radius: 10px;
+}
+
+.main-nav {
+  margin-top: 26px;
+}
+
+.nav-item {
+  min-height: 42px;
+  border-radius: 10px;
+  color: #B9CCDD;
+}
+
+.nav-item:hover {
+  background: rgb(18 58 91 / 84%);
+  color: #FFFFFF;
+}
+
+.nav-item.active {
+  background: linear-gradient(90deg, #123A5B 0%, #0D2945 100%);
+  box-shadow: inset 3px 0 var(--brand-accent), 0 6px 16px rgb(0 0 0 / 12%);
+  color: #FFFFFF;
+}
+
+.nav-item.active svg {
+  color: var(--brand-accent);
+}
+
+.nav-badge {
+  background: #28516F;
+  color: #F1E4D0;
+}
+
+.nav-badge.alert {
+  background: #9B5D45;
+  color: #FFF7F0;
+}
+
+.topbar {
+  min-height: 72px;
+  background: var(--navy);
+  border-bottom: 1px solid rgb(196 154 108 / 22%);
+  color: #FFFFFF;
+}
+
+.breadcrumbs {
+  color: #8EA3B8;
+}
+
+.breadcrumbs strong {
+  color: #FFFFFF;
+}
+
+.top-search {
+  border-color: #28516F;
+  background: #0D2945;
+  color: #B9CCDD;
+}
+
+.top-search input {
+  color: #FFFFFF;
+}
+
+.top-search input::placeholder {
+  color: #8EA3B8;
+}
+
+.icon-button,
+.help-button {
+  color: #B9CCDD;
+}
+
+.icon-button {
+  border-color: #28516F;
+  background: #0D2945;
+}
+
+.icon-button:hover,
+.help-button:hover {
+  color: #FFFFFF;
+}
+
+.user-avatar {
+  background: var(--brand-accent);
+  border-color: var(--brand-accent);
+  color: var(--navy);
+}
+
+html[data-theme='light'] .main-content {
+  background: #F7F9FC;
+}
+
+html[data-theme='light'] .topbar {
+  background: var(--navy);
+  border-bottom-color: rgb(196 154 108 / 22%);
+}
+
+html[data-theme='light'] .breadcrumbs,
+html[data-theme='light'] .help-button,
+html[data-theme='light'] .icon-button {
+  color: #B9CCDD;
+}
+
+html[data-theme='light'] .breadcrumbs strong {
+  color: #FFFFFF;
+}
+
+html[data-theme='light'] .theme-toggle {
+  background: #F1E4D0;
+  border-color: var(--brand-accent);
+  color: var(--navy);
+}
+
+html[data-theme='light'] .mobile-pill-nav {
+  background: rgb(7 26 46 / 96%);
+  border-color: rgb(196 154 108 / 42%);
+}
