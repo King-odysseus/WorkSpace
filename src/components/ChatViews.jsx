@@ -8,19 +8,30 @@ import { Card } from './ui/card.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { formatRelativeActivityTime, getCsrfToken, toDateKey } from '../lib/workspace-format.js'
 
-const CHAT_EMOJIS = [
-  '😀', '😄', '😂', '😊', '😍', '🥳', '😎', '🤔',
-  '👍', '👏', '🙌', '🙏', '💪', '🤝', '👌', '👀',
-  '❤️', '💛', '💚', '💙', '💜', '🔥', '✨', '🎉',
-  '✅', '⭐', '💡', '🚀', '📌', '📣', '💬', '☕',
+const EMOJI_CATEGORIES = [
+  ['Smileys', '😀', ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😋', '😛', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '🥺', '😢', '😭', '😤', '😠', '😡', '🤯', '😳', '🥵', '🥶', '😱', '😨', '🤗', '🤔', '🫡', '🤭', '🫢', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😴', '🤤', '😷', '🤒', '🤕']],
+  ['People', '👋', ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🫰', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '🫶', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '👀', '👁️', '🧠', '🫂', '🙋', '🙆', '🙅', '🤷', '🤦', '🧑‍💻', '🧑‍💼', '🧑‍🎨', '🧑‍🔧', '🧑‍🚀']],
+  ['Animals', '🐶', ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐔', '🐧', '🐦', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐢', '🐍', '🦎', '🦖', '🐙', '🦑', '🦀', '🐠', '🐟', '🐬', '🐳', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🐘', '🦒', '🦘', '🐕', '🐈', '🪶', '🌿', '🌵', '🌴', '🌳', '🌻', '🌹', '🌸']],
+  ['Food', '🍕', ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🥑', '🥦', '🥕', '🌽', '🌶️', '🍄', '🥐', '🥯', '🍞', '🧀', '🥚', '🍳', '🥞', '🧇', '🥓', '🍔', '🍟', '🍕', '🌭', '🥪', '🌮', '🌯', '🥗', '🍝', '🍜', '🍣', '🍱', '🍛', '🍚', '🍦', '🍩', '🍪', '🎂', '🍰', '🍫', '🍿', '☕', '🍵', '🥤', '🧃', '🍺', '🥂']],
+  ['Activities', '⚽', ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🏓', '🏸', '🥅', '⛳', '🏹', '🎣', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸️', '🎿', '🏂', '🏋️', '🤸', '🏊', '🚴', '🏆', '🥇', '🥈', '🥉', '🎯', '🎮', '🕹️', '🎲', '🧩', '🎨', '🎭', '🎤', '🎧', '🎸', '🎹', '🥁', '🎬']],
+  ['Travel', '🚀', ['🚗', '🚕', '🚌', '🏎️', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚜', '🛵', '🏍️', '🚲', '✈️', '🚁', '🚀', '🛸', '🚢', '⛵', '🚤', '🗺️', '🗿', '🗽', '🗼', '🏰', '🏯', '🎡', '🎢', '⛲', '⛺', '🏖️', '🏝️', '🏔️', '🌋', '🏕️', '🌅', '🌄', '🌠', '🌌', '☀️', '🌤️', '⛈️', '🌈', '❄️', '☔', '⚡']],
+  ['Objects', '💡', ['⌚', '📱', '💻', '⌨️', '🖥️', '🖨️', '🖱️', '💾', '📷', '📹', '🎥', '☎️', '📺', '📻', '⏰', '⌛', '💡', '🔦', '🕯️', '🧯', '💰', '💳', '💎', '🧰', '🔧', '🔨', '⚙️', '🧲', '🔬', '🔭', '💊', '🩹', '🚪', '🪑', '🎁', '🎈', '📌', '📍', '📎', '✂️', '📝', '✏️', '🔍', '🔐', '🔑', '📣', '🔔', '💬']],
+  ['Symbols', '❤️', ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '☯️', '♾️', '⚛️', '✅', '☑️', '✔️', '❌', '❗', '❓', '‼️', '💯', '🔥', '✨', '⭐', '🌟', '💫', '⚡', '💥', '🎉', '🎊', '🚩', '🏁', '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '⚫', '⚪']],
+  ['Flags', '🏳️', ['🏳️', '🏴', '🏁', '🚩', '🏳️‍🌈', '🏳️‍⚧️', '🇬🇧', '🇺🇸', '🇨🇦', '🇲🇽', '🇧🇷', '🇦🇷', '🇫🇷', '🇩🇪', '🇪🇸', '🇮🇹', '🇵🇹', '🇳🇱', '🇧🇪', '🇮🇪', '🇳🇴', '🇸🇪', '🇩🇰', '🇫🇮', '🇵🇱', '🇺🇦', '🇬🇷', '🇹🇷', '🇿🇦', '🇳🇬', '🇬🇭', '🇰🇪', '🇪🇬', '🇲🇦', '🇮🇳', '🇵🇰', '🇧🇩', '🇨🇳', '🇯🇵', '🇰🇷', '🇸🇬', '🇵🇭', '🇮🇩', '🇦🇺', '🇳🇿', '🇦🇪', '🇸🇦']],
 ]
 function renderMessageText(text) {
   return String(text || '').split(/(@[A-Za-z0-9_.-]+)/g).map((part, index) => part.startsWith('@') ? <mark className="chat-mention" key={index}>{part}</mark> : <span key={index}>{part}</span>)
 }
 
 function EmojiPicker({ onSelect }) {
-  return <div className="chat-emoji-picker" role="listbox" aria-label="Choose an emoji">
-    {CHAT_EMOJIS.map(emoji => <button type="button" key={emoji} onClick={() => onSelect(emoji)} aria-label={`Insert ${emoji}`}>{emoji}</button>)}
+  const [category, setCategory] = useState(0)
+  return <div className="chat-emoji-picker" aria-label="Choose an emoji">
+    <div className="chat-emoji-categories" role="tablist" aria-label="Emoji categories">
+      {EMOJI_CATEGORIES.map(([label, icon], index) => <button type="button" role="tab" aria-selected={category === index} className={category === index ? 'active' : ''} key={label} title={label} onClick={() => setCategory(index)}><span aria-hidden="true">{icon}</span><small>{label}</small></button>)}
+    </div>
+    <div className="chat-emoji-grid" role="listbox" aria-label={EMOJI_CATEGORIES[category][0]}>
+      {EMOJI_CATEGORIES[category][2].map((emoji, index) => <button type="button" role="option" key={`${emoji}-${index}`} onClick={() => onSelect(emoji)} aria-label={`Insert ${emoji}`}>{emoji}</button>)}
+    </div>
   </div>
 }
 

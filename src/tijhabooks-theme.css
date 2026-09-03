@@ -1755,7 +1755,8 @@ html[data-theme='dark'] .channel-row-wrap .channel-row.active, html[data-theme='
 .help-actions { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; }
 .help-topic { padding:20px; }
 .help-topic h3 { margin:0 0 8px; }
-.help-contact { margin-top:16px; padding:20px; display:flex; justify-content:space-between; align-items:center; gap:20px; }
+.help-contact { margin-top:16px; padding:20px; display:flex; justify-content:space-between; align-items:center; gap:20px; text-align:left; }
+.help-contact > div { flex:1; text-align:left; }
 .help-contact h2 { margin:4px 0; font-size:1.1rem; }
 .legal-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:16px; align-items:start; }
 .legal-nav { display:flex; flex-direction:column; gap:5px; }
