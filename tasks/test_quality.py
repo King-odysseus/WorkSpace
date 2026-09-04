@@ -7,20 +7,26 @@ another agent) so these can change independently of view wiring.
 
 from datetime import date, datetime, timedelta
 from io import BytesIO
+import json
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from .automation import deliver_once, run_workspace_automation
 from .integrity import run_integrity_checks
 from .models import (
+    AuditLog,
     ImportRun,
     LookupValue,
     Membership,
     NotificationDelivery,
     Project,
     Task,
+    TaskChangeHistory,
+    TaskCodeRegistry,
     TaskSubtask,
     Workspace,
     WorkspaceInvitation,
@@ -145,8 +151,8 @@ class ReportingCalculationTests(TestCase):
         kpis = compute_kpis(applicable=6, completed=3, overdue=0, blocked=4, stale=1, targets={
             'completion_rate': 80, 'overdue': 0, 'blocked': 0, 'stale': 5,
         })
-        self.assertEqual(kpis['completion_rate']['actual'], 3)
-        self.assertFalse(kpis['completion_rate']['met'])  # 3 < 80 target
+        self.assertEqual(kpis['completion_rate']['actual'], 50)
+        self.assertFalse(kpis['completion_rate']['met'])  # 50% < 80% target
         self.assertEqual(kpis['overdue']['met'], True)
         self.assertEqual(kpis['overdue']['score'], 100.0)  # zero actual, zero target
         self.assertEqual(kpis['blocked']['met'], False)
@@ -383,3 +389,92 @@ class ImportTests(TestCase):
         self.assertEqual(existing.blocker_details, 'on hold')
         self.assertFalse(Task.objects.filter(code='T-999').exists())
         self.assertEqual(Task.objects.count(), 1)  # only the pre-existing task
+
+
+class QualityHttpApiTests(TestCase):
+    def setUp(self):
+        self.workspace = make_workspace(slug='quality-http')
+        self.owner = make_user('http-owner@example.com', 'http-owner@example.com', 'HTTP', 'Owner')
+        self.member = make_user('http-member@example.com', 'http-member@example.com', 'HTTP', 'Member')
+        self.outsider = make_user('http-outsider@example.com', 'http-outsider@example.com')
+        make_member(self.workspace, self.owner, 'owner')
+        make_member(self.workspace, self.member, 'member')
+        self.project = Project.objects.create(workspace=self.workspace, name='API Project')
+
+    def _workbook_bytes(self):
+        from openpyxl import Workbook
+        from .importer import DEFAULT_GENERAL_COLUMNS
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'General'
+        sheet.append(list(DEFAULT_GENERAL_COLUMNS.values()))
+        sheet.append(['IMP-1', 'Imported over HTTP', '', 'http-member@example.com', '', '', '', '', '', 'normal', 'todo', '', '', '', ''])
+        output = BytesIO()
+        workbook.save(output)
+        return output.getvalue()
+
+    def test_reports_are_member_scoped_and_legacy_denominator_excludes_cancelled(self):
+        Task.objects.create(workspace=self.workspace, title='Done', status='done', progress_percent=100, completed_at=timezone.now())
+        Task.objects.create(workspace=self.workspace, title='Cancelled', status='cancelled')
+        self.client.force_login(self.member)
+        report = self.client.get(reverse('workspace-report', args=[self.workspace.id]))
+        self.assertEqual(report.status_code, 200)
+        self.assertEqual(report.json()['report']['totals']['completion_rate'], 100)
+        legacy = self.client.get(reverse('report-summary', args=[self.workspace.id]))
+        self.assertEqual(legacy.status_code, 200)
+        self.assertEqual(legacy.json()['summary']['completion_rate'], 100)
+
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(reverse('workspace-report', args=[self.workspace.id])).status_code, 403)
+
+    def test_project_health_validates_workspace_project(self):
+        self.client.force_login(self.member)
+        response = self.client.get(reverse('project-health-report', args=[self.workspace.id]), {'project_id': self.project.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(response.json()['health']['health'], {'on-track', 'at-risk', 'off-track', 'completed'})
+        other = make_workspace(slug='quality-other-http')
+        foreign_project = Project.objects.create(workspace=other, name='Foreign')
+        self.assertEqual(self.client.get(reverse('project-health-report', args=[self.workspace.id]), {'project_id': foreign_project.id}).status_code, 404)
+
+    def test_integrity_and_automation_require_leader(self):
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(reverse('workspace-integrity', args=[self.workspace.id])).status_code, 403)
+        self.assertEqual(self.client.post(reverse('workspace-automation-run', args=[self.workspace.id])).status_code, 403)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse('workspace-integrity', args=[self.workspace.id])).status_code, 200)
+        automation = self.client.post(reverse('workspace-automation-run', args=[self.workspace.id]))
+        self.assertEqual(automation.status_code, 200)
+        self.assertTrue(AuditLog.objects.filter(workspace=self.workspace, actor=self.owner, action='workspace_automation_run').exists())
+
+    def test_import_requires_leader_and_exact_preview_checksum(self):
+        content = self._workbook_bytes()
+        preview_url = reverse('import-preview', args=[self.workspace.id])
+        commit_url = reverse('import-commit', args=[self.workspace.id])
+        self.client.force_login(self.member)
+        denied = self.client.post(preview_url, {'workbook': SimpleUploadedFile('tasks.xlsx', content)})
+        self.assertEqual(denied.status_code, 403)
+
+        self.client.force_login(self.owner)
+        preview = self.client.post(preview_url, {'workbook': SimpleUploadedFile('tasks.xlsx', content)})
+        self.assertEqual(preview.status_code, 200)
+        checksum = preview.json()['preview']['checksum']
+        preview_id = preview.json()['preview']['preview_id']
+        self.assertEqual(preview.json()['preview']['summary']['creates'], 1)
+        self.assertFalse(Task.objects.filter(code='IMP-1').exists())
+        missing_checksum = self.client.post(commit_url, {'workbook': SimpleUploadedFile('tasks.xlsx', content)})
+        self.assertEqual(missing_checksum.status_code, 409)
+        committed = self.client.post(commit_url, {'workbook': SimpleUploadedFile('tasks.xlsx', content), 'preview_checksum': checksum, 'preview_id': preview_id})
+        self.assertEqual(committed.status_code, 200)
+        task = Task.objects.get(code='IMP-1')
+        self.assertTrue(TaskCodeRegistry.objects.filter(workspace=self.workspace, code='IMP-1', task_id=task.id).exists())
+        self.assertTrue(TaskChangeHistory.objects.filter(task=task, actor=self.owner, field='imported').exists())
+        reused = self.client.post(commit_url, {'workbook': SimpleUploadedFile('tasks.xlsx', content), 'preview_checksum': checksum, 'preview_id': preview_id})
+        self.assertEqual(reused.status_code, 409)
+
+    def test_import_rejects_previously_used_task_code(self):
+        TaskCodeRegistry.objects.create(workspace=self.workspace, code='IMP-1', task_id=99999)
+        self.client.force_login(self.owner)
+        preview = self.client.post(reverse('import-preview', args=[self.workspace.id]), {'workbook': SimpleUploadedFile('tasks.xlsx', self._workbook_bytes())})
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()['preview']['summary']['exceptions'], 1)
+        self.assertIn('previously used', preview.json()['preview']['exceptions'][0]['message'])

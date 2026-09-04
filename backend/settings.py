@@ -130,6 +130,7 @@ STORAGES = {
 }
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+PRIVATE_MEDIA_ROOT = Path(os.environ.get('WORKSPACE_PRIVATE_MEDIA_ROOT', BASE_DIR / 'private_media'))
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # The frontend build (`npm run build`) lands in dist/ - on Railway's single-service deploy

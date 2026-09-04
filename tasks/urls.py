@@ -3,6 +3,8 @@ from django.urls import path
 from .auth_views import auth_csrf, auth_login, auth_logout, auth_me, user_avatar, user_avatar_download, user_presence
 from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_feed_token, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_list, project_resource_detail, project_resource_list, project_stakeholder_detail, project_stakeholder_list, project_template_apply, project_template_detail, project_template_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, task_template_apply, task_template_detail, task_template_list, work_shift_list, workspace_search, workspace_webhook_detail, workspace_webhook_list
 from .pulse import workspace_pulse
+from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
+from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_document_detail, workspace_document_list, workspace_file_download, workspace_file_list
 
 urlpatterns = [
@@ -46,6 +48,11 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/webhooks/<int:webhook_id>/', workspace_webhook_detail, name='workspace-webhook-detail'),
     path('workspaces/<int:workspace_id>/check-ins/', check_in_list, name='check-in-list'),
     path('workspaces/<int:workspace_id>/work-shifts/', work_shift_list, name='work-shift-list'),
+    path('workspaces/<int:workspace_id>/screen-sharing/policy/', screen_sharing_policy, name='screen-sharing-policy'),
+    path('workspaces/<int:workspace_id>/screen-sharing/sessions/', screen_share_session_list, name='screen-share-session-list'),
+    path('workspaces/<int:workspace_id>/screen-sharing/sessions/<uuid:session_id>/', screen_share_session_detail, name='screen-share-session-detail'),
+    path('workspaces/<int:workspace_id>/screen-sharing/sessions/<uuid:session_id>/heartbeat/', screen_share_heartbeat, name='screen-share-heartbeat'),
+    path('workspaces/<int:workspace_id>/screen-sharing/sessions/<uuid:session_id>/captures/', screen_capture_list, name='screen-capture-list'),
     path('workspaces/<int:workspace_id>/chat-channels/', chat_channel_list, name='chat-channel-list'),
     path('chat-channels/<int:channel_id>/', chat_channel_detail, name='chat-channel-detail'),
     path('workspaces/<int:workspace_id>/chat-messages/', chat_message_list, name='chat-message-list'),
@@ -57,6 +64,12 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/activity/', activity_list, name='activity-list'),
     path('workspaces/<int:workspace_id>/audit-logs/', audit_log_list, name='audit-log-list'),
     path('workspaces/<int:workspace_id>/reports/summary/', report_summary, name='report-summary'),
+    path('workspaces/<int:workspace_id>/reports/', workspace_report, name='workspace-report'),
+    path('workspaces/<int:workspace_id>/reports/project-health/', project_health_report, name='project-health-report'),
+    path('workspaces/<int:workspace_id>/integrity/', workspace_integrity, name='workspace-integrity'),
+    path('workspaces/<int:workspace_id>/automation/run/', workspace_automation_run, name='workspace-automation-run'),
+    path('workspaces/<int:workspace_id>/imports/preview/', import_preview, name='import-preview'),
+    path('workspaces/<int:workspace_id>/imports/commit/', import_commit, name='import-commit'),
     path('workspaces/<int:workspace_id>/plan-buckets/', plan_bucket_list, name='plan-bucket-list'),
     path('workspaces/<int:workspace_id>/plan-buckets/<int:bucket_id>/', plan_bucket_detail, name='plan-bucket-detail'),
     path('workspaces/<int:workspace_id>/plan-buckets/reorder/', plan_bucket_reorder, name='plan-bucket-reorder'),
@@ -79,4 +92,5 @@ urlpatterns = [
     path('subtasks/<int:subtask_id>/', task_subtask_detail, name='task-subtask-detail'),
     path('attachments/<int:attachment_id>/', task_attachment_detail, name='task-attachment-detail'),
     path('attachments/<int:attachment_id>/download/', task_attachment_download, name='task-attachment-download'),
+    path('screen-captures/<uuid:capture_id>/', screen_capture_detail, name='screen-capture-detail'),
 ]

@@ -32,6 +32,53 @@
   --radius-xl: calc(var(--sc-radius) + 4px);
 }
 
+/* Consent-bound screen sharing */
+.screen-share-video-source { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.screen-share-consent-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem; background: rgb(11 11 69 / 0.62); backdrop-filter: blur(6px); }
+.screen-share-consent-card { width: min(680px, 100%); max-height: 92vh; overflow: auto; display: grid; grid-template-columns: auto 1fr; gap: 1rem; padding: 1.5rem; }
+.screen-share-consent-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 999px; color: var(--primary, #1d4ed8); background: #eff6ff; }
+.screen-share-consent-card h2 { margin: .2rem 0 1rem; font-size: 1.35rem; }
+.screen-share-policy-copy { white-space: pre-wrap; line-height: 1.6; color: var(--text-secondary, #475467); }
+.screen-share-request-message { margin: .5rem 0 1rem; font-weight: 600; }
+.screen-share-assurances { margin: 1rem 0; padding-left: 1.2rem; color: var(--text-secondary, #475467); }
+.screen-share-assurances li { margin: .35rem 0; }
+.screen-share-actions { display: flex; justify-content: flex-end; gap: .75rem; margin-top: 1.25rem; }
+.screen-share-active { position: fixed; z-index: 95; left: 50%; top: .65rem; transform: translateX(-50%); display: flex; align-items: center; gap: .75rem; min-width: min(94vw, 520px); padding: .7rem .85rem; border: 1px solid rgb(255 255 255 / .18); border-radius: .8rem; color: white; background: #7f1d1d; box-shadow: 0 10px 32px rgb(0 0 0 / .28); }
+.screen-share-active div { display: flex; flex: 1; flex-direction: column; font-size: .78rem; }
+.screen-share-active strong { font-size: .9rem; }
+.screen-share-active button { display: inline-flex; align-items: center; gap: .3rem; padding: .45rem .65rem; border-radius: .5rem; background: white; color: #7f1d1d; font-weight: 700; }
+.screen-share-live-dot { width: .65rem; height: .65rem; border-radius: 50%; background: #fca5a5; box-shadow: 0 0 0 5px rgb(252 165 165 / .2); }
+.screen-share-floating-error { position: fixed; z-index: 96; top: 5rem; left: 50%; transform: translateX(-50%); padding: .6rem 1rem; border-radius: .5rem; color: #991b1b; background: #fee2e2; }
+.screen-sharing-view { display: grid; gap: 1rem; }
+.screen-sharing-policy-card, .screen-sharing-request-card, .screen-sharing-session-card, .screen-sharing-captures { padding: 1.25rem; }
+.screen-sharing-policy-card h3, .screen-sharing-policy-card .drawer-section-heading h3 { display: flex; align-items: center; gap: .5rem; }
+.screen-sharing-policy-form, .screen-sharing-request-card form { display: grid; gap: 1rem; }
+.screen-sharing-policy-form label, .screen-sharing-request-card label { display: grid; gap: .4rem; font-weight: 600; }
+.screen-sharing-policy-form input, .screen-sharing-policy-form textarea, .screen-sharing-request-card select, .screen-sharing-request-card textarea { width: 100%; }
+.screen-share-toggle { grid-template-columns: auto 1fr !important; justify-content: start; align-items: center; }
+.screen-share-toggle input { width: auto; }
+.screen-share-policy-meta { color: var(--text-secondary, #667085); font-size: .85rem; }
+.screen-sharing-session-list { display: grid; gap: .65rem; }
+.screen-sharing-session-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .8rem; border: 1px solid var(--border, #e4e7ec); border-radius: .7rem; }
+.screen-sharing-session-row > div { display: flex; flex: 1 1 260px; flex-direction: column; }
+.screen-sharing-session-row span { color: var(--text-secondary, #667085); font-size: .8rem; }
+.screen-share-status { padding: .25rem .55rem; border-radius: 999px; text-transform: capitalize; font-weight: 700; background: #f2f4f7; }
+.screen-share-status.status-active { color: #166534; background: #dcfce7; }
+.screen-share-status.status-pending { color: #92400e; background: #fef3c7; }
+.screen-capture-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+.screen-capture-grid article { overflow: hidden; border: 1px solid var(--border, #e4e7ec); border-radius: .7rem; }
+.screen-capture-grid img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #101828; }
+.screen-capture-grid article > div { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .7rem; }
+.screen-capture-grid article > div > span { display: flex; flex: 1 1 100%; flex-direction: column; font-size: .82rem; }
+.screen-capture-grid small { color: var(--text-secondary, #667085); }
+.secondary-button.danger { color: #b42318; }
+
+@media (max-width: 600px) {
+  .screen-share-consent-card { grid-template-columns: 1fr; padding: 1rem; }
+  .screen-share-active { top: .4rem; min-width: calc(100vw - .8rem); }
+  .screen-share-active div span { display: none; }
+}
+
 /* Light values: shared TijhaBooks tokens for the shadcn primitives. */
 :root {
   --sc-background: #FFFFFF;
@@ -250,6 +297,18 @@ html[data-theme='dark'] select:not([class*='bg-transparent']) {
   margin-right: 0;
   text-align: left !important;
 }
+.ai-provider-default,
+.ai-provider-switch { display:inline-flex; align-items:center; gap:.5rem; color:var(--text-muted); font-size:.75rem; font-weight:650; cursor:pointer; }
+.ai-provider-default input { width:1rem; height:1rem; accent-color:var(--accent); cursor:pointer; }
+.ai-provider-switch input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.ai-provider-switch-track { position:relative; width:2.25rem; height:1.25rem; flex:0 0 auto; border-radius:999px; background:color-mix(in srgb, var(--text-muted) 24%, transparent); transition:background .18s ease; }
+.ai-provider-switch-track > span { position:absolute; top:.2rem; left:.2rem; width:.85rem; height:.85rem; border-radius:50%; background:var(--surface); box-shadow:0 1px 4px rgb(7 26 46 / 18%); transition:transform .18s ease; }
+.ai-provider-switch input:checked + .ai-provider-switch-track { background:var(--accent); }
+.ai-provider-switch input:checked + .ai-provider-switch-track > span { transform:translateX(1rem); }
+.ai-provider-switch input:focus-visible + .ai-provider-switch-track,
+.ai-provider-default input:focus-visible { outline:2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset:2px; }
+.ai-provider-switch:has(input:disabled),
+.ai-provider-default:has(input:disabled) { cursor:not-allowed; opacity:.55; }
 .chat-emoji-trigger { display:grid; width:42px; height:42px; flex:0 0 42px; place-items:center; border:0; border-radius:.75rem; background:transparent; color:var(--text-muted); cursor:pointer; }
 .chat-emoji-trigger:hover, .chat-emoji-trigger.active { background:var(--surface-secondary); color:var(--accent); }
 .chat-mention { padding:0 .15rem; border-radius:.25rem; background:color-mix(in srgb, var(--accent) 24%, transparent); color:var(--text-primary); }

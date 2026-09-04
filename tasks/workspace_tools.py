@@ -127,6 +127,10 @@ def workspace_ai_settings(request, workspace_id):
     provider_config = _safe_provider_config(setting)
     providers = {provider: values['has_api_key'] for provider, values in provider_config.items()}
     requested_enabled = payload.get('ai_enabled_providers', setting.ai_enabled_providers or [])
+    missing_keys = [provider for provider in requested_enabled if provider in providers and not providers[provider]]
+    if missing_keys:
+        labels = ', '.join(provider.title() for provider in missing_keys)
+        return JsonResponse({'error': f'Add and save an API key before enabling {labels}.'}, status=400)
     setting.ai_enabled_providers = [provider for provider in requested_enabled if provider in providers and providers[provider]]
     setting.save(update_fields=['ai_enabled', 'ai_user_ids', 'ai_model', 'ai_default_provider', 'ai_enabled_providers', 'ai_provider_config', 'updated_at'])
     return JsonResponse({'settings': setting.as_dict(), 'providers': providers, 'provider_config': provider_config})

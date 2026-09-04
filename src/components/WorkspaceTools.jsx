@@ -59,6 +59,8 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   const [helpOpen, setHelpOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savingProvider, setSavingProvider] = useState('')
+  const [providerNotices, setProviderNotices] = useState({})
 
   useEffect(() => {
     let active = true
@@ -85,7 +87,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   settings.ai_user_ids = settings.ai_user_ids || []
   settings.ai_enabled_providers = settings.ai_enabled_providers || []
   const providerConfig = data.provider_config || {}
-  const mayManage = Boolean(canManageMembers && data.can_manage !== false)
+  const mayManage = Boolean(data.can_manage)
 
   const updateSettings = changes => setData(current => ({
     ...current,
@@ -108,29 +110,59 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
     ? settings.ai_user_ids.filter(value => value !== id)
     : [...settings.ai_user_ids, id] })
 
-  const save = async () => {
-    setSaving(true)
-    setNotice('')
-    const submittedProviders = Object.fromEntries(AI_PROVIDERS.map(([provider]) => {
-      const config = providerConfig[provider] || {}
-      return [provider, {
-        base_url: config.base_url || '',
-        model: config.model || '',
-        api_key: config.api_key || '',
-        clear_api_key: Boolean(config.clear_api_key),
-      }]
-    }))
+  const providerPayload = provider => {
+    const config = providerConfig[provider] || {}
+    return {
+      base_url: config.base_url || '',
+      model: config.model || '',
+      api_key: config.api_key || '',
+      clear_api_key: Boolean(config.clear_api_key),
+    }
+  }
+
+  const saveProvider = async provider => {
+    setSavingProvider(provider)
+    setProviderNotices(current => ({ ...current, [provider]: '' }))
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/ai/settings/`, {
         method: 'PATCH',
         credentials: 'include',
         headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ ...settings, provider_config: submittedProviders }),
+        body: JSON.stringify({ ...settings, provider_config: { [provider]: providerPayload(provider) } }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || `Could not save ${provider}.`)
+      setData(current => ({
+        ...current,
+        providers: result.providers,
+        settings: result.settings,
+        provider_config: {
+          ...current.provider_config,
+          [provider]: result.provider_config[provider],
+        },
+      }))
+      setProviderNotices(current => ({ ...current, [provider]: 'Saved' }))
+    } catch (error) {
+      setProviderNotices(current => ({ ...current, [provider]: error.message || 'Could not save provider.' }))
+    } finally {
+      setSavingProvider('')
+    }
+  }
+
+  const save = async () => {
+    setSaving(true)
+    setNotice('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/ai/settings/`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
+        body: JSON.stringify(settings),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Could not save AI settings.')
       setData(current => ({ ...current, ...result, can_manage: current.can_manage }))
-      setNotice('AI provider details and access settings saved.')
+      setNotice('Workspace AI access settings saved.')
     } catch (error) {
       setNotice(error.message || 'Could not save AI settings.')
     } finally {
@@ -160,15 +192,24 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       {AI_PROVIDERS.map(([provider, label]) => {
         const config = providerConfig[provider] || {}
         const enabled = settings.ai_enabled_providers.includes(provider)
+        const isDefault = settings.ai_default_provider === provider
         return <section key={provider} className="rounded-2xl bg-surface-secondary p-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold">{label}</h3>
               <p className="text-xs text-text-muted">{config.has_api_key && !config.clear_api_key ? `Key saved (${config.key_hint})` : 'No API key saved'}</p>
             </div>
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input type="checkbox" checked={enabled} onChange={() => toggleProvider(provider)} disabled={!mayManage} /> Enable
-            </label>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="ai-provider-default">
+                <input type="radio" name="company-default-ai-provider" checked={isDefault} onChange={() => updateSettings({ ai_default_provider: provider })} disabled={!mayManage} />
+                <span>Company default</span>
+              </label>
+              <label className="ai-provider-switch">
+                <input type="checkbox" checked={enabled} onChange={() => toggleProvider(provider)} disabled={!mayManage} />
+                <span className="ai-provider-switch-track" aria-hidden="true"><span /></span>
+                <span>{enabled ? 'Enabled' : 'Disabled'}</span>
+              </label>
+            </div>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <label className="text-sm lg:col-span-2">API key
@@ -203,19 +244,24 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
           {mayManage && config.has_api_key && <button
             type="button"
             className="mt-3 text-xs font-semibold text-danger"
-            onClick={() => updateProvider(provider, { api_key: '', clear_api_key: !config.clear_api_key })}
+            onClick={() => {
+              const clearing = !config.clear_api_key
+              updateProvider(provider, { api_key: '', clear_api_key: clearing })
+              if (clearing && enabled) toggleProvider(provider)
+            }}
           >{config.clear_api_key ? 'Keep saved key' : 'Remove saved key'}</button>}
+          {mayManage && <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button type="button" className="primary-button" onClick={() => saveProvider(provider)} disabled={Boolean(savingProvider)}>
+              <Save size={15} /> {savingProvider === provider ? 'Saving…' : `Save ${label}`}
+            </button>
+            {providerNotices[provider] && <span className={`text-xs ${providerNotices[provider] === 'Saved' ? 'text-text-muted' : 'text-danger'}`} role="status">{providerNotices[provider]}</span>}
+          </div>}
         </section>
       })}
     </div>
 
-    <div className="mt-5 grid gap-4 md:grid-cols-2">
-      <label className="text-sm">Default provider
-        <select value={settings.ai_default_provider} onChange={event => updateSettings({ ai_default_provider: event.target.value })} className="mt-1 w-full rounded-xl bg-surface-secondary px-3 py-2.5" disabled={!mayManage}>
-          {AI_PROVIDERS.map(([provider, label]) => <option key={provider} value={provider}>{label}</option>)}
-        </select>
-      </label>
-      <label className="flex items-center gap-3 rounded-xl bg-surface-secondary px-4 py-3 text-sm font-semibold self-end">
+    <div className="mt-5">
+      <label className="flex items-center gap-3 rounded-xl bg-surface-secondary px-4 py-3 text-sm font-semibold">
         <input type="checkbox" checked={settings.ai_enabled} onChange={event => updateSettings({ ai_enabled: event.target.checked })} disabled={!mayManage} />
         Enable the assistant for this workspace
       </label>
@@ -233,7 +279,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
     </div>
 
     {mayManage && <button type="button" className="primary-button mt-5" onClick={save} disabled={saving}>
-      <Save size={15} /> {saving ? 'Saving…' : 'Save AI settings'}
+      <Save size={15} /> {saving ? 'Saving…' : 'Save workspace access'}
     </button>}
     {notice && <p className="workspace-inline-status mt-3" role="status">{notice}</p>}
   </Card>

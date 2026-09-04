@@ -57,7 +57,7 @@ services:
       WORKSPACE_DB_PASSWORD: ${WORKSPACE_DB_PASSWORD:?Set WORKSPACE_DB_PASSWORD before starting compose}
       WORKSPACE_DB_HOST: database
       WORKSPACE_DB_PORT: 5432
-    command: ["sh", "-c", "while true; do python manage.py deliver_calendar_reminders; python manage.py deliver_webhooks; sleep 60; done"]
+    command: ["sh", "-c", "while true; do python manage.py deliver_calendar_reminders; python manage.py deliver_webhooks; python manage.py run_automation; python manage.py purge_screen_captures; sleep 60; done"]
     depends_on:
       api:
         condition: service_healthy

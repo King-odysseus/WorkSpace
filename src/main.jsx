@@ -4,7 +4,7 @@ import {
   AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Brush, Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ClipboardList,
   CircleHelp, Clock3, Copy, Filter, FileText, Hash, LayoutDashboard, LayoutGrid, Link2, LogOut, MessageSquare, MoreHorizontal,
   ChevronLeft, ChevronRight,
-  Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
+  MonitorUp, Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
 } from 'lucide-react'
 import 'flowbite/dist/flowbite.css'
 import './tijhabooks-theme.css'
@@ -35,6 +35,7 @@ import { ChatWorkspaceView, WorkspaceComposer } from './components/ChatViews.jsx
 import { CalendarEventEditDialog, CheckInEditDialog, FollowUpEditDialog, ProjectEditDrawer } from './components/RecordDialogs.jsx'
 import { TaskCard, TaskDetailDrawer } from './components/TaskViews.jsx'
 import SettingsView from './components/SettingsView.jsx'
+import ScreenSharingView, { ScreenShareControl } from './components/ScreenSharing.jsx'
 import { CookieConsent, HelpView, LegalView } from './components/StaticViews.jsx'
 import {
   ConfirmDialog, DateField, DateTimeField, EmptyState, SelectField, WorkspaceViewHeading,
@@ -572,7 +573,7 @@ function App() {
       toast.error(error.message || 'Notification could not be marked as read.')
     }
   }
-  const notificationDestinations = { follow_up: 'Follow-up', chat_channel: 'Channels', direct_conversation: 'Chats', calendar_event: 'Calendar', check_in: 'Check-ins' }
+  const notificationDestinations = { follow_up: 'Follow-up', chat_channel: 'Channels', direct_conversation: 'Chats', calendar_event: 'Calendar', check_in: 'Check-ins', screen_share_session: 'Screen sharing' }
   const openNotification = notification => {
     setNotificationOpen(false)
     markNotificationRead(notification.id)
@@ -703,6 +704,7 @@ function App() {
       heading: 'Resources',
       items: [
         { label: 'Files', icon: FileText },
+        { label: 'Screen sharing', icon: MonitorUp },
         { label: 'Help', icon: CircleHelp },
         { label: 'Legal', icon: FileText },
       ],
@@ -729,6 +731,7 @@ function App() {
       }}
     />
     <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
+    <ScreenShareControl workspaceId={workspaceId} currentUserId={session.user.id} />
     {aiFlyoutOpen && <AssistantFlyout workspaceId={activeWorkspaceId} onClose={() => setAiFlyoutOpen(false)} />}
     <a className="skip-link" href="#main-content">Skip to main content</a>
 
@@ -1629,6 +1632,9 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
 
   if (active === 'Settings') {
     return <SettingsView theme={theme} onSetTheme={onSetTheme || onToggleTheme} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={onToggleSidebar} currentWorkspace={currentWorkspace} currentUserName={currentUserName} currentUserEmail={currentUserEmail} currentUserId={currentUserId} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} onProfileUpdated={onProfileUpdated} canManageMembers={canManageMembers} members={localData.members} notifications={localData.notifications} workspaceId={workspaceId} taskTemplates={localData.taskTemplates || []} projectTemplates={localData.projectTemplates || []} projects={localData.projects} onRefresh={onRefresh} />
+  }
+  if (active === 'Screen sharing') {
+    return <ScreenSharingView workspaceId={workspaceId} members={localData.members} currentUserId={currentUserId} role={currentWorkspace?.role} />
   }
   if (active === 'Help') return <HelpView onNavigate={onNavigate} />
   if (active === 'Legal') return <LegalView />

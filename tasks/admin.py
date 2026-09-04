@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WebhookDelivery, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WebhookDelivery, WorkspaceWebhook, WorkShift
 
 
 @admin.register(Workspace)
@@ -154,7 +154,7 @@ class FollowUpAdmin(admin.ModelAdmin):
 
 @admin.register(WorkspaceSetting)
 class WorkspaceSettingAdmin(admin.ModelAdmin):
-    list_display = ('workspace', 'due_soon_days', 'stale_days', 'updated_at')
+    list_display = ('workspace', 'due_soon_days', 'stale_days', 'screen_sharing_enabled', 'screen_capture_retention_days', 'updated_at')
     search_fields = ('workspace__name',)
 
 
@@ -178,3 +178,36 @@ class WorkShiftAdmin(admin.ModelAdmin):
     list_display = ('workspace', 'user', 'date', 'started_at', 'ended_at', 'break_seconds')
     list_filter = ('date',)
     search_fields = ('workspace__name', 'user__email')
+
+
+@admin.register(ScreenShareSession)
+class ScreenShareSessionAdmin(admin.ModelAdmin):
+    list_display = ('workspace', 'employee_email', 'requested_by', 'status', 'started_at', 'ended_at', 'created_at')
+    list_filter = ('status', 'workspace')
+    search_fields = ('employee_email', 'employee_name', 'requested_by__email')
+    readonly_fields = tuple(field.name for field in ScreenShareSession._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ScreenCapture)
+class ScreenCaptureAdmin(admin.ModelAdmin):
+    list_display = ('session', 'workspace', 'captured_by', 'captured_at', 'expires_at', 'size')
+    list_filter = ('workspace', 'captured_at')
+    readonly_fields = tuple(field.name for field in ScreenCapture._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

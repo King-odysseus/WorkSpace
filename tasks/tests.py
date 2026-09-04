@@ -1,19 +1,22 @@
 import json
+import base64
+import tempfile
 from io import StringIO
 from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.files.storage import FileSystemStorage
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .views import create_notification
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
@@ -1929,3 +1932,272 @@ class ActivityPaginationApiTests(TestCase):
         self.client.login(username='activityoutsider@example.com', password='secure-pass-123')
         response = self.client.get(reverse('activity-list', args=[self.workspace.id]))
         self.assertEqual(response.status_code, 403)
+
+
+class ScreenSharingApiTests(TestCase):
+    ONE_PIXEL_PNG = base64.b64decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    )
+
+    def setUp(self):
+        self.media_directory = tempfile.TemporaryDirectory()
+        self.media_override = override_settings(MEDIA_ROOT=self.media_directory.name, PRIVATE_MEDIA_ROOT=self.media_directory.name)
+        self.media_override.enable()
+        self.addCleanup(self.media_override.disable)
+        self.addCleanup(self.media_directory.cleanup)
+        image_field = ScreenCapture._meta.get_field('image')
+        original_storage = image_field.storage
+        image_field.storage = FileSystemStorage(location=self.media_directory.name, base_url=None)
+        self.addCleanup(setattr, image_field, 'storage', original_storage)
+        self.owner = User.objects.create_user(username='share-owner@example.com', email='share-owner@example.com', password='secure-pass-123')
+        self.manager = User.objects.create_user(username='share-manager@example.com', email='share-manager@example.com', password='secure-pass-123')
+        self.employee = User.objects.create_user(username='share-employee@example.com', email='share-employee@example.com', password='secure-pass-123')
+        self.viewer = User.objects.create_user(username='share-viewer@example.com', email='share-viewer@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Consent Workspace', slug='consent-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=self.employee, role='member')
+        Membership.objects.create(workspace=self.workspace, user=self.viewer, role='member')
+        self.setting = WorkspaceSetting.objects.create(workspace=self.workspace, screen_sharing_enabled=True, screen_capture_interval_seconds=30, screen_capture_retention_days=2)
+
+    def login(self, user):
+        self.client.force_login(user)
+
+    def request_session(self):
+        self.login(self.manager)
+        response = self.client.post(
+            reverse('screen-share-session-list', args=[self.workspace.id]),
+            data=json.dumps({'employee_id': self.employee.id, 'message': 'Please demonstrate the reported issue.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return ScreenShareSession.objects.get(id=response.json()['session']['id'])
+
+    def accept_session(self, session):
+        self.login(self.employee)
+        response = self.client.patch(
+            reverse('screen-share-session-detail', args=[self.workspace.id, session.id]),
+            data=json.dumps({'action': 'accept'}), content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        return session
+
+    def upload_capture(self, session):
+        self.login(self.employee)
+        upload = SimpleUploadedFile('capture.png', self.ONE_PIXEL_PNG, content_type='image/png')
+        return self.client.post(reverse('screen-capture-list', args=[self.workspace.id, session.id]), {'capture': upload})
+
+    def test_only_owner_can_publish_policy_and_changes_are_audited(self):
+        policy_url = reverse('screen-sharing-policy', args=[self.workspace.id])
+        self.login(self.manager)
+        denied = self.client.patch(policy_url, data=json.dumps({'enabled': False}), content_type='application/json')
+        self.assertEqual(denied.status_code, 403)
+
+        self.login(self.owner)
+        text = 'Employees must explicitly consent in the browser before sharing. No audio or webcam is collected. Employees can stop at any time. Access is limited and audited, and screenshots expire automatically.'
+        updated = self.client.patch(policy_url, data=json.dumps({'enabled': True, 'capture_interval_seconds': 45, 'capture_retention_days': 3, 'text': text}), content_type='application/json')
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()['policy']['version'], 2)
+        self.assertTrue(AuditLog.objects.filter(action='screen_sharing_policy_updated', actor=self.owner).exists())
+
+    def test_leader_requests_and_only_employee_can_consent(self):
+        session = self.request_session()
+        self.assertTrue(WorkspaceNotification.objects.filter(recipient=self.employee, target_type='screen_share_session', target_id=str(session.id)).exists())
+        self.login(self.viewer)
+        denied = self.client.patch(reverse('screen-share-session-detail', args=[self.workspace.id, session.id]), data=json.dumps({'action': 'accept'}), content_type='application/json')
+        self.assertEqual(denied.status_code, 403)
+        self.accept_session(session)
+        self.assertEqual(session.status, 'active')
+        self.assertIsNotNone(session.accepted_at)
+        self.assertEqual(session.policy_text, self.setting.screen_sharing_policy)
+        self.assertTrue(AuditLog.objects.filter(action='screen_share_accepted', actor=self.employee).exists())
+
+    def test_members_cannot_request_or_list_other_employee_sessions(self):
+        session = self.request_session()
+        self.login(self.viewer)
+        denied = self.client.post(reverse('screen-share-session-list', args=[self.workspace.id]), data=json.dumps({'employee_id': self.employee.id}), content_type='application/json')
+        self.assertEqual(denied.status_code, 403)
+        listing = self.client.get(reverse('screen-share-session-list', args=[self.workspace.id]))
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.json()['sessions'], [])
+        self.assertEqual(ScreenShareSession.objects.filter(id=session.id).count(), 1)
+
+    def test_capture_requires_active_employee_and_leader_access_is_audited(self):
+        session = self.request_session()
+        before_consent = self.upload_capture(session)
+        self.assertEqual(before_consent.status_code, 409)
+        self.accept_session(session)
+        uploaded = self.upload_capture(session)
+        self.assertEqual(uploaded.status_code, 201)
+        capture = ScreenCapture.objects.get()
+
+        self.login(self.viewer)
+        self.assertEqual(self.client.get(reverse('screen-capture-list', args=[self.workspace.id, session.id])).status_code, 403)
+        self.assertEqual(self.client.get(reverse('screen-capture-detail', args=[capture.id])).status_code, 403)
+
+        self.login(self.manager)
+        listing = self.client.get(reverse('screen-capture-list', args=[self.workspace.id, session.id]))
+        self.assertEqual(listing.status_code, 200)
+        viewed = self.client.get(reverse('screen-capture-detail', args=[capture.id]))
+        self.assertEqual(viewed.status_code, 200)
+        viewed.close()
+        downloaded = self.client.get(f"{reverse('screen-capture-detail', args=[capture.id])}?download=true")
+        self.assertEqual(downloaded.status_code, 200)
+        downloaded.close()
+        self.assertTrue(AuditLog.objects.filter(action='screen_captures_viewed', actor=self.manager).exists())
+        self.assertTrue(AuditLog.objects.filter(action='screen_capture_viewed', actor=self.manager).exists())
+        self.assertTrue(AuditLog.objects.filter(action='screen_capture_downloaded', actor=self.manager).exists())
+
+        deleted = self.client.delete(reverse('screen-capture-detail', args=[capture.id]))
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(ScreenCapture.objects.filter(id=capture.id).exists())
+        self.assertTrue(AuditLog.objects.filter(action='screen_capture_deleted', actor=self.manager).exists())
+
+    def test_employee_can_stop_and_heartbeat_timeout_expires_session(self):
+        session = self.accept_session(self.request_session())
+        self.login(self.employee)
+        heartbeat = self.client.post(reverse('screen-share-heartbeat', args=[self.workspace.id, session.id]))
+        self.assertEqual(heartbeat.status_code, 200)
+        stopped = self.client.patch(reverse('screen-share-session-detail', args=[self.workspace.id, session.id]), data=json.dumps({'action': 'stop'}), content_type='application/json')
+        self.assertEqual(stopped.status_code, 200)
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'stopped')
+
+        another = self.accept_session(self.request_session())
+        ScreenShareSession.objects.filter(id=another.id).update(last_heartbeat_at=timezone.now() - timedelta(minutes=5))
+        self.client.get(reverse('screen-share-session-list', args=[self.workspace.id]))
+        another.refresh_from_db()
+        self.assertEqual(another.status, 'expired')
+        self.assertEqual(another.stop_reason, 'heartbeat_timeout')
+
+    def test_expired_captures_are_removed_by_management_command(self):
+        session = self.accept_session(self.request_session())
+        self.assertEqual(self.upload_capture(session).status_code, 201)
+        capture = ScreenCapture.objects.get()
+        image_path = Path(capture.image.path)
+        self.assertTrue(image_path.exists())
+        ScreenCapture.objects.filter(id=capture.id).update(expires_at=timezone.now() - timedelta(seconds=1))
+        output = StringIO()
+        call_command('purge_screen_captures', stdout=output)
+        self.assertFalse(ScreenCapture.objects.filter(id=capture.id).exists())
+        self.assertFalse(image_path.exists())
+        self.assertIn('deleted 1 screenshots', output.getvalue())
+        self.assertTrue(AuditLog.objects.filter(action='screen_capture_expired', actor__isnull=True).exists())
+
+    def test_subject_can_review_own_captures_but_not_delete_them(self):
+        session = self.accept_session(self.request_session())
+        self.assertEqual(self.upload_capture(session).status_code, 201)
+        capture = ScreenCapture.objects.get()
+
+        self.login(self.employee)
+        listing = self.client.get(reverse('screen-capture-list', args=[self.workspace.id, session.id]))
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(len(listing.json()['captures']), 1)
+        viewed = self.client.get(reverse('screen-capture-detail', args=[capture.id]))
+        self.assertEqual(viewed.status_code, 200)
+        viewed.close()
+        self.assertEqual(self.client.delete(reverse('screen-capture-detail', args=[capture.id])).status_code, 403)
+        self.assertTrue(ScreenCapture.objects.filter(id=capture.id).exists())
+
+        self.login(self.viewer)
+        self.assertEqual(self.client.get(reverse('screen-capture-list', args=[self.workspace.id, session.id])).status_code, 403)
+        self.assertEqual(self.client.get(reverse('screen-capture-detail', args=[capture.id])).status_code, 403)
+
+    def test_leader_session_listing_does_not_run_a_count_per_session(self):
+        for _ in range(4):
+            session = self.accept_session(self.request_session())
+            ScreenShareSession.objects.filter(id=session.id).update(status='stopped')
+        self.login(self.owner)
+        url = reverse('screen-share-session-list', args=[self.workspace.id])
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['sessions']), 4)
+        counts = [query for query in queries.captured_queries if 'COUNT' in query['sql'].upper()]
+        self.assertLessEqual(len(counts), 1)
+
+    def test_scope_mine_returns_only_own_sessions_without_capture_counts(self):
+        session = self.request_session()
+        self.login(self.employee)
+        scoped = self.client.get(f"{reverse('screen-share-session-list', args=[self.workspace.id])}?scope=mine")
+        self.assertEqual([item['id'] for item in scoped.json()['sessions']], [str(session.id)])
+        self.assertNotIn('capture_count', scoped.json()['sessions'][0])
+
+        self.login(self.owner)
+        scoped_leader = self.client.get(f"{reverse('screen-share-session-list', args=[self.workspace.id])}?scope=mine")
+        self.assertEqual(scoped_leader.json()['sessions'], [])
+
+    def test_requesting_leader_is_notified_of_the_employee_response(self):
+        session = self.request_session()
+        self.login(self.employee)
+        self.client.patch(
+            reverse('screen-share-session-detail', args=[self.workspace.id, session.id]),
+            data=json.dumps({'action': 'decline'}), content_type='application/json',
+        )
+        self.assertTrue(WorkspaceNotification.objects.filter(
+            recipient=self.manager, kind='screen_share_response', target_id=str(session.id),
+        ).exists())
+
+    def test_cascade_delete_removes_the_stored_image_file(self):
+        session = self.accept_session(self.request_session())
+        self.assertEqual(self.upload_capture(session).status_code, 201)
+        image_path = Path(ScreenCapture.objects.get().image.path)
+        self.assertTrue(image_path.exists())
+        self.workspace.delete()
+        self.assertEqual(ScreenCapture.objects.count(), 0)
+        self.assertFalse(image_path.exists())
+
+
+class WorkspaceAiSettingsApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='ai-owner@example.com', email='ai-owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='ai-member@example.com', email='ai-member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='AI Workspace', slug='ai-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        self.url = reverse('workspace-ai-settings', args=[self.workspace.id])
+        blank_keys = {name: '' for name in ('OPENAI_API_KEY', 'AI_API_KEY', 'ANTHROPIC_API_KEY', 'KIMI_API_KEY', 'DEEPSEEK_API_KEY')}
+        environment = mock.patch.dict('os.environ', blank_keys)
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def patch(self, payload):
+        return self.client.patch(self.url, data=json.dumps(payload), content_type='application/json')
+
+    def test_members_can_read_settings_but_only_leaders_can_change_them(self):
+        self.client.force_login(self.member)
+        read = self.client.get(self.url)
+        self.assertEqual(read.status_code, 200)
+        self.assertFalse(read.json()['can_manage'])
+        self.assertEqual(self.patch({'ai_enabled': True}).status_code, 403)
+
+        self.client.force_login(self.owner)
+        self.assertTrue(self.client.get(self.url).json()['can_manage'])
+
+    def test_enabling_a_provider_without_a_saved_key_is_rejected(self):
+        self.client.force_login(self.owner)
+        rejected = self.patch({'ai_enabled_providers': ['claude']})
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn('Claude', rejected.json()['error'])
+        self.workspace.settings.refresh_from_db()
+        self.assertEqual(self.workspace.settings.ai_enabled_providers, [])
+
+    def test_saving_a_key_lets_the_provider_be_enabled_and_never_returns_it(self):
+        self.client.force_login(self.owner)
+        saved = self.patch({'ai_enabled_providers': ['claude'], 'provider_config': {'claude': {'api_key': 'sk-secret-value'}}})
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()['settings']['ai_enabled_providers'], ['claude'])
+        self.assertTrue(saved.json()['providers']['claude'])
+        self.assertNotIn('sk-secret-value', saved.content.decode())
+        self.assertEqual(saved.json()['provider_config']['claude']['key_hint'], '••••alue')
+
+        cleared = self.patch({'ai_enabled_providers': [], 'provider_config': {'claude': {'clear_api_key': True}}})
+        self.assertEqual(cleared.status_code, 200)
+        self.assertFalse(cleared.json()['providers']['claude'])
+
+    def test_base_url_must_be_https(self):
+        self.client.force_login(self.owner)
+        rejected = self.patch({'provider_config': {'openai': {'base_url': 'http://internal.example.com/v1'}}})
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn('HTTPS', rejected.json()['error'])

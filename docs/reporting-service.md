@@ -255,36 +255,20 @@ each. Keys take the form:
 
 ---
 
-## 5. Deferred wiring (apply later — touches contested files)
+## 5. HTTP API contract
 
-These are documented rather than applied because the target files are owned by
-the concurrent execution-foundation work.
+All endpoints require an authenticated workspace member. Integrity, automation,
+preview, and commit additionally require an owner or manager.
 
-1. **`report_summary` period basis.** `tasks/views.py::report_summary` filters
-   `range=week|month` on `created_at__date`. It must switch to
-   `apply_report_period` (delivery/completion based), and its `completion_rate`
-   denominator must use `applicable` (exclude cancelled) rather than
-   `tasks.count()`.
+* `GET /api/workspaces/{id}/reports/?scope=&period=&project_id=&start=&end=&filter=` → `{"report": ...}`. Scope is `all`, `operations`, or `project`; period is `all`, `week`, `month`, or `custom`. Custom periods require ISO `start` and `end`. `filter` is a JSON-encoded drill-down filter using the vocabulary in §1.
+* `GET /api/workspaces/{id}/reports/project-health/?project_id=` → `{"health": ...}`.
+* `GET /api/workspaces/{id}/integrity/` → `{"checks": [...]}`; leader only.
+* `POST /api/workspaces/{id}/automation/run/` → `{"deliveries": ...}`; leader only and audited.
+* `POST /api/workspaces/{id}/imports/preview/` accepts multipart `workbook` (`.xlsx`, maximum 20 MB) and optional JSON `column_map`. It returns a safe, serializable preview plus `preview_id` and SHA-256 `checksum`.
+* `POST /api/workspaces/{id}/imports/commit/` requires the same multipart workbook, the same optional `column_map`, `preview_id`, and `preview_checksum`. The server requires a matching preview by the same leader from the prior hour, locks and consumes it once, rebuilds the plan, rejects workspace drift, then commits transactionally and audits the result.
 
-2. **Endpoint URL wiring.** The following service functions need view/URL
-   exposure; recommended paths (mirroring the existing scoped URL style):
+The legacy `GET /api/workspaces/{id}/reports/summary/?range=` now uses the same delivery/completion-based period and excludes cancelled tasks from the completion-rate denominator.
 
-   * `GET /api/workspaces/{id}/reports/?scope=&period=&project_id=` → `build_report`
-   * `GET /api/workspaces/{id}/reports/project-health/?project_id=` → `project_health`
-   * `GET /api/workspaces/{id}/integrity/` → `run_integrity_checks`
-   * `POST /api/workspaces/{id}/automation/run/` → `run_workspace_automation`
-   * `POST /api/workspaces/{id}/imports/preview/` → `build_import_plan`
-   * `POST /api/workspaces/{id}/imports/commit/` → `commit_import_plan`
-
-3. **`NOTIFICATION_KIND_PREFERENCE`.** `tasks/views.py` must add the five new
-   automation kinds so per-user notification preferences can gate them:
-
-   * `due_soon_reminder`
-   * `overdue_reminder`
-   * `blocked_alert`
-   * `stale_update_reminder`
-   * `workspace_digest`
-
-   Until they are added, `create_notification` treats these kinds as having no
-   preference field and always delivers them (safe default: no reminder is
-   silently dropped).
+The five automation kinds (`due_soon_reminder`, `overdue_reminder`,
+`blocked_alert`, `stale_update_reminder`, and `workspace_digest`) map to the
+user's `task_updates` notification preference.

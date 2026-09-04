@@ -1,8 +1,17 @@
 from django.db import models
+import uuid
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.files.storage import FileSystemStorage
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.conf import settings
 from django.utils import timezone
+
+
+def private_screen_capture_storage():
+    """Storage with no public base URL; captures are streamed by an audited API."""
+    return FileSystemStorage(location=settings.PRIVATE_MEDIA_ROOT, base_url=None)
 
 
 class Workspace(models.Model):
@@ -920,6 +929,11 @@ class WorkspaceSetting(models.Model):
     ai_default_provider = models.CharField(max_length=30, default='openai')
     ai_enabled_providers = models.JSONField(default=list, blank=True)
     ai_provider_config = models.JSONField(default=dict, blank=True)
+    screen_sharing_enabled = models.BooleanField(default=False)
+    screen_capture_interval_seconds = models.PositiveSmallIntegerField(default=60)
+    screen_capture_retention_days = models.PositiveSmallIntegerField(default=7)
+    screen_sharing_policy = models.TextField(default='Screen sharing is optional and starts only after the employee accepts a request and chooses a screen or window in the browser. WorkSpace captures screenshots only while sharing is active, never captures audio or webcam data, and lets the employee stop at any time. Authorised workspace leaders can view, download, or delete captures; every such action is audited. Captures expire automatically after the configured retention period.')
+    screen_sharing_policy_version = models.PositiveIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
 
     def as_dict(self):
@@ -933,8 +947,114 @@ class WorkspaceSetting(models.Model):
             'ai_model': self.ai_model,
             'ai_default_provider': self.ai_default_provider,
             'ai_enabled_providers': self.ai_enabled_providers or [],
+            'screen_sharing_enabled': self.screen_sharing_enabled,
+            'screen_capture_interval_seconds': self.screen_capture_interval_seconds,
+            'screen_capture_retention_days': self.screen_capture_retention_days,
+            'screen_sharing_policy': self.screen_sharing_policy,
+            'screen_sharing_policy_version': self.screen_sharing_policy_version,
             'updated_at': self.updated_at.isoformat(),
         }
+
+
+class ScreenShareSession(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending consent'),
+        ('active', 'Active'),
+        ('declined', 'Declined'),
+        ('cancelled', 'Cancelled'),
+        ('stopped', 'Stopped'),
+        ('expired', 'Expired'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='screen_share_sessions')
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='requested_screen_share_sessions')
+    employee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='screen_share_sessions')
+    employee_name = models.CharField(max_length=200)
+    employee_email = models.EmailField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    message = models.CharField(max_length=500, blank=True)
+    policy_text = models.TextField()
+    policy_version = models.PositiveIntegerField()
+    capture_interval_seconds = models.PositiveSmallIntegerField(default=60)
+    capture_retention_days = models.PositiveSmallIntegerField(default=7)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    last_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    stop_reason = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['workspace', 'status', 'created_at']), models.Index(fields=['employee', 'status'])]
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'employee'], condition=models.Q(status__in=['pending', 'active']), name='one_open_screen_share_per_employee'),
+        ]
+
+    def as_dict(self, include_capture_count=False):
+        data = {
+            'id': str(self.id), 'workspace_id': self.workspace_id,
+            'requested_by_id': self.requested_by_id,
+            'requested_by_name': (self.requested_by.get_full_name() or self.requested_by.email) if self.requested_by else 'Former member',
+            'employee_id': self.employee_id, 'employee_name': self.employee_name,
+            'employee_email': self.employee_email, 'status': self.status,
+            'message': self.message, 'policy_text': self.policy_text,
+            'policy_version': self.policy_version,
+            'capture_interval_seconds': self.capture_interval_seconds,
+            'capture_retention_days': self.capture_retention_days,
+            'expires_at': self.expires_at.isoformat(),
+            'accepted_at': self.accepted_at.isoformat() if self.accepted_at else None,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'ended_at': self.ended_at.isoformat() if self.ended_at else None,
+            'last_heartbeat_at': self.last_heartbeat_at.isoformat() if self.last_heartbeat_at else None,
+            'stop_reason': self.stop_reason, 'created_at': self.created_at.isoformat(),
+        }
+        if include_capture_count:
+            annotated = getattr(self, 'capture_total', None)
+            data['capture_count'] = self.captures.count() if annotated is None else annotated
+        return data
+
+
+class ScreenCapture(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(ScreenShareSession, on_delete=models.CASCADE, related_name='captures')
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='screen_captures')
+    captured_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='screen_captures')
+    image = models.ImageField(upload_to='screen-captures/%Y/%m/%d/', storage=private_screen_capture_storage)
+    mime_type = models.CharField(max_length=40, default='image/jpeg')
+    size = models.PositiveIntegerField()
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    sha256 = models.CharField(max_length=64)
+    captured_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ['-captured_at']
+        indexes = [models.Index(fields=['workspace', 'expires_at']), models.Index(fields=['session', 'captured_at'])]
+
+    def as_dict(self):
+        return {
+            'id': str(self.id), 'session_id': str(self.session_id),
+            'captured_at': self.captured_at.isoformat(), 'expires_at': self.expires_at.isoformat(),
+            'mime_type': self.mime_type, 'size': self.size, 'width': self.width, 'height': self.height,
+            'view_url': f'/api/screen-captures/{self.id}/',
+            'download_url': f'/api/screen-captures/{self.id}/?download=true',
+        }
+
+
+@receiver(post_delete, sender=ScreenCapture)
+def delete_screen_capture_file(sender, instance, **kwargs):
+    """Remove the image file whenever the row goes, including cascade deletes."""
+    if not instance.image:
+        return
+    try:
+        instance.image.delete(save=False)
+    except (OSError, ValueError):
+        pass
 
 
 class WorkspaceDocument(models.Model):

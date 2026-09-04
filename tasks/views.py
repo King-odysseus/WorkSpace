@@ -56,6 +56,11 @@ NOTIFICATION_KIND_PREFERENCE = {
     'follow_up_completed': 'task_updates',
     'check_in_blocker': 'task_updates',
     'calendar_reminder': 'calendar_reminders',
+    'due_soon_reminder': 'task_updates',
+    'overdue_reminder': 'task_updates',
+    'blocked_alert': 'task_updates',
+    'stale_update_reminder': 'task_updates',
+    'workspace_digest': 'task_updates',
 }
 
 
@@ -356,14 +361,12 @@ def report_summary(request, workspace_id):
     tasks = Task.objects.filter(workspace_id=workspace_id).exclude(state='archived')
     report_range = request.GET.get('range', 'all')
     today = timezone.localdate()
-    if report_range == 'week':
-        tasks = tasks.filter(created_at__date__gte=today - timedelta(days=6))
-    elif report_range == 'month':
-        tasks = tasks.filter(created_at__date__gte=today.replace(day=1))
+    from .reporting import PROGRESSABLE_STATUSES, apply_report_period
+    tasks = apply_report_period(tasks, report_range, today=today)
     status_counts = {item['status']: item['count'] for item in tasks.values('status').annotate(count=Count('id'))}
-    overdue_count = tasks.filter(due_date__lt=today).exclude(status='done').count()
-    due_this_week = tasks.filter(due_date__gte=today, due_date__lte=today + timedelta(days=6)).exclude(status='done').count()
-    unassigned_count = tasks.filter(assignee__isnull=True).exclude(status='done').count()
+    overdue_count = tasks.filter(due_date__lt=today, status__in=PROGRESSABLE_STATUSES).count()
+    due_this_week = tasks.filter(due_date__gte=today, due_date__lte=today + timedelta(days=6), status__in=PROGRESSABLE_STATUSES).count()
+    unassigned_count = tasks.filter(assignee__isnull=True).exclude(status__in=['done', 'cancelled']).count()
     completed_count = status_counts.get('done', 0)
     workload = []
     for membership in Membership.objects.filter(workspace_id=workspace_id).select_related('user'):
@@ -378,13 +381,15 @@ def report_summary(request, workspace_id):
     check_in_total = CheckIn.objects.filter(workspace_id=workspace_id, date=today).count()
     member_total = Membership.objects.filter(workspace_id=workspace_id).count()
     time_clock = time_clock_summary(workspace_id, report_range, today)
+    task_count = tasks.count()
+    applicable_count = tasks.exclude(status='cancelled').count()
     return JsonResponse({'summary': {
-        'total_tasks': tasks.count(),
+        'total_tasks': task_count,
         'status_counts': status_counts,
         'overdue_tasks': overdue_count,
         'due_this_week': due_this_week,
         'unassigned_tasks': unassigned_count,
-        'completion_rate': round((completed_count / tasks.count()) * 100) if tasks.count() else 0,
+        'completion_rate': round((completed_count / applicable_count) * 100) if applicable_count else 0,
         'blocked_tasks': status_counts.get('blocked', 0),
         'check_ins_today': check_in_total,
         'members': member_total,

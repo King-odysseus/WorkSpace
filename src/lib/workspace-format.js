@@ -126,10 +126,16 @@ function getCalendarDays(view, referenceDate) {
   return Array.from({ length: 7 }, (_, index) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index))
 }
 
-async function getCsrfToken() {
-  await fetch('/api/auth/csrf/', { credentials: 'include' })
+function readCsrfCookie() {
   const cookie = document.cookie.split('; ').find(value => value.startsWith('csrftoken='))
   return cookie?.split('=')[1] || ''
+}
+
+async function getCsrfToken() {
+  const existing = readCsrfCookie()
+  if (existing) return existing
+  await fetch('/api/auth/csrf/', { credentials: 'include' })
+  return readCsrfCookie()
 }
 
 async function readJsonResponse(response, fallbackMessage) {

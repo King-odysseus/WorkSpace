@@ -39,7 +39,7 @@ For a containerized deployment, set `WORKSPACE_SECRET_KEY` and `WORKSPACE_DB_PAS
 docker compose up --build
 ```
 
-The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves authorized attachment downloads through the Django API, proxies `/api/` requests through Nginx to Django, accepts task uploads up to 10 MB, runs a reminder worker every 60 seconds, and waits for the API health check before starting the web dependency.
+The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves authorized attachment downloads through the Django API, proxies `/api/` requests through Nginx to Django, accepts task uploads up to 10 MB, runs a reminder, webhook, and screenshot-retention worker every 60 seconds, and waits for the API health check before starting the web dependency.
 
 ## Deploying to Railway
 
@@ -53,8 +53,8 @@ The web application will be available at `http://localhost:8080`. The compose se
    - `WORKSPACE_SECURE_SSL_REDIRECT=true`, `WORKSPACE_HSTS_SECONDS=31536000` once the Railway domain is serving HTTPS (it is, by default).
 
    `WORKSPACE_ALLOWED_HOSTS` and `WORKSPACE_CSRF_TRUSTED_ORIGINS` don't need to be set manually for Railway-generated `*.up.railway.app` domains. `backend/settings.py` reads Railway's domain variables when present and uses a Railway-runtime suffix fallback when they are not. Add the settings explicitly when attaching a custom domain.
-4. Add a **Volume** mounted at `/app/media` if task attachments and profile photos should survive redeploys - the container filesystem is otherwise ephemeral.
-5. For the background delivery commands (`deliver_calendar_reminders` and `deliver_webhooks`), add a Railway **Cron Job** on this same service running `python manage.py deliver_calendar_reminders && python manage.py deliver_webhooks` on a `* * * * *` schedule, instead of replicating the `docker-compose` sleep-loop worker as a second always-on service. `deliver_webhooks` drains the outbound webhook queue - without it, workspace webhooks are recorded but never sent.
+4. Add a **Volume** mounted at `/app/media` if task attachments and profile photos should survive redeploys. If screen sharing is enabled, also mount durable private storage at `/app/private_media` (or set `WORKSPACE_PRIVATE_MEDIA_ROOT` to a protected persistent path). Screen captures deliberately use authenticated Django endpoints and a separate non-public storage root.
+5. For background delivery, automation, and retention, add a Railway **Cron Job** on this same service running `python manage.py deliver_calendar_reminders && python manage.py deliver_webhooks && python manage.py run_automation && python manage.py purge_screen_captures` on a `* * * * *` schedule. The automation command is idempotent, `deliver_webhooks` drains the outbound webhook queue, and `purge_screen_captures` expires abandoned screen-sharing sessions and deletes screenshots after their configured retention.
 
 Migrations run automatically on each deploy (`python manage.py migrate --noinput`, in the container's start command).
 
@@ -66,4 +66,8 @@ python manage.py test tasks
 python manage.py check
 python manage.py deliver_calendar_reminders
 python manage.py deliver_webhooks
+python manage.py run_automation
+python manage.py purge_screen_captures
 ```
+
+The consent, access, lifecycle, and frontend integration contract for screen sharing is in [`docs/screen-sharing-api-contract.md`](docs/screen-sharing-api-contract.md). A policy template for company review is in [`docs/screen-sharing-company-policy.md`](docs/screen-sharing-company-policy.md).

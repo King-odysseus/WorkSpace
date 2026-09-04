@@ -408,8 +408,9 @@ def compute_kpis(applicable, completed, overdue, blocked, stale, targets=None):
       - met is True only when actual satisfies the target direction.
     """
     targets = targets or {}
+    completion_rate = round(completed * 100 / applicable) if applicable else 0
     definitions = [
-        ('completion_rate', completed, targets.get('completion_rate', DEFAULT_KPI_TARGETS['completion_rate']), 'gte'),
+        ('completion_rate', completion_rate, targets.get('completion_rate', DEFAULT_KPI_TARGETS['completion_rate']), 'gte'),
         ('overdue', overdue, targets.get('overdue', DEFAULT_KPI_TARGETS['overdue']), 'lte'),
         ('blocked', blocked, targets.get('blocked', DEFAULT_KPI_TARGETS['blocked']), 'lte'),
         ('stale', stale, targets.get('stale', DEFAULT_KPI_TARGETS['stale']), 'lte'),
@@ -454,7 +455,7 @@ def project_health(workspace_id, project, today=None):
     today = today or timezone.localdate()
     due_soon_days, _stale_days, _kpi = get_workspace_setting(workspace_id)
     tasks = list(Task.objects.filter(workspace_id=workspace_id, project_ref_id=project.id))
-    applicable = [t for t in tasks if t.status not in EXCLUDED_STATUSES]
+    applicable = [t for t in tasks if t.status not in EXCLUDED_STATUSES and getattr(t, 'state', 'active') != 'archived']
     completed = [t for t in applicable if t.status == COMPLETED_STATUS]
     blocked = [t for t in applicable if t.status == BLOCKED_STATUS]
     on_hold = [t for t in applicable if t.status == ON_HOLD_STATUS]

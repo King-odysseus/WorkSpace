@@ -9,5 +9,6 @@ __pycache__/
 *.py[cod]
 .DS_Store
 media/
+private_media/
 .claude/
 .vscode/

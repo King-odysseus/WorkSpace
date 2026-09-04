@@ -32,9 +32,10 @@ from datetime import date, datetime
 
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.utils import timezone
 from django.utils.text import slugify
 
-from .models import ImportRun, Membership, Project, Task, WorkspaceInvitation
+from .models import ImportRun, Membership, Project, Task, TaskChangeHistory, TaskCodeRegistry, Workspace, WorkspaceInvitation
 
 STATUS_ALIASES = {
     'todo': 'todo', 'to do': 'todo', 'not started': 'todo', 'backlog': 'todo',
@@ -66,6 +67,8 @@ DEFAULT_GENERAL_COLUMNS = {
     'due_date': 'Due date',
     'progress_percent': 'Progress %',
     'labels': 'Labels',
+    'blocker_details': 'Blocker details',
+    'actual_completion_date': 'Actual completion',
 }
 
 GENERAL_SHEET = 'General'
@@ -188,7 +191,11 @@ def build_import_plan(workspace, workbook, column_map=None):
         return {'error': 'The General sheet must include a Title column.'}
 
     email_index, name_index, _members = _member_indexes(workspace)
-    existing_by_code = {t.code.strip().lower(): t for t in Task.objects.filter(workspace=workspace).exclude(code='')}
+    existing_by_code = {}
+    for task in Task.objects.filter(workspace=workspace).exclude(code=''):
+        existing_by_code.setdefault(task.code.strip().lower(), []).append(task)
+    reserved_codes = set(TaskCodeRegistry.objects.filter(workspace=workspace).values_list('code', flat=True))
+    reserved_codes = {code.strip().lower() for code in reserved_codes}
 
     seen_codes = set()
     for row_number, row in enumerate(rows[1:], start=2):
@@ -227,6 +234,19 @@ def build_import_plan(workspace, workbook, column_map=None):
         if due_error:
             exceptions.append({'row': row_number, 'field': 'due_date', 'message': due_error})
             continue
+        actual_completion_date, actual_error = _parse_date(values.get('actual_completion_date'))
+        if actual_error:
+            exceptions.append({'row': row_number, 'field': 'actual_completion_date', 'message': actual_error})
+            continue
+        if start_date and due_date and due_date < start_date:
+            exceptions.append({'row': row_number, 'field': 'due_date', 'message': 'Target date cannot precede start date.'})
+            continue
+        if start_date and actual_completion_date and actual_completion_date < start_date:
+            exceptions.append({'row': row_number, 'field': 'actual_completion_date', 'message': 'Actual completion cannot precede start date.'})
+            continue
+        if actual_completion_date and status != 'done':
+            exceptions.append({'row': row_number, 'field': 'actual_completion_date', 'message': 'Actual completion requires completed status.'})
+            continue
 
         progress_raw = values.get('progress_percent')
         progress = None
@@ -238,6 +258,10 @@ def build_import_plan(workspace, workbook, column_map=None):
             except (TypeError, ValueError):
                 exceptions.append({'row': row_number, 'field': 'progress_percent', 'message': f'Invalid progress "{progress_raw}".'})
                 continue
+        blocker_details = str(values.get('blocker_details') or '').strip()
+        if status == 'blocked' and not blocker_details:
+            exceptions.append({'row': row_number, 'field': 'blocker_details', 'message': 'Blocked tasks require blocker details.'})
+            continue
 
         owner_value = values.get('owner')
         owner, owner_invite = _match_user(owner_value, email_index, name_index)
@@ -268,7 +292,14 @@ def build_import_plan(workspace, workbook, column_map=None):
                 exceptions.append({'row': row_number, 'field': 'project', 'message': f'Unknown project "{project_name}" (create it first, or add it to the Lists sheet).'})
                 continue
 
-        existing = existing_by_code.get(code_lower) if code else None
+        matches = existing_by_code.get(code_lower, []) if code else []
+        if len(matches) > 1:
+            exceptions.append({'row': row_number, 'field': 'code', 'message': f'Code "{code}" matches multiple existing tasks.'})
+            continue
+        existing = matches[0] if matches else None
+        if code and existing is None and code_lower in reserved_codes:
+            exceptions.append({'row': row_number, 'field': 'code', 'message': f'Code "{code}" was previously used and cannot be reused.'})
+            continue
         normalized.append({
             'row': row_number,
             'action': 'update' if existing else 'create',
@@ -286,7 +317,9 @@ def build_import_plan(workspace, workbook, column_map=None):
             'status': status or 'todo',
             'start_date': start_date,
             'due_date': due_date,
+            'actual_completion_date': actual_completion_date,
             'progress_percent': progress,
+            'blocker_details': blocker_details,
             'labels': _split_list(values.get('labels')),
         })
 
@@ -298,7 +331,7 @@ def build_import_plan(workspace, workbook, column_map=None):
     for sheet_name in wb.sheetnames:
         if sheet_name in (GENERAL_SHEET, LISTS_SHEET):
             continue
-        owner_sheets[sheet_name] = _parse_owner_sheet(wb[sheet_name], existing_by_code)
+        owner_sheets[sheet_name] = _parse_owner_sheet(wb[sheet_name], {key: values[0] for key, values in existing_by_code.items() if len(values) == 1})
 
     summary = {
         'total_rows': len(normalized) + len(exceptions),
@@ -370,14 +403,17 @@ def commit_import_plan(workspace, actor, plan):
     created = 0
     updated = 0
     with transaction.atomic():
+        touched = {}
+        previous = {}
         for norm in plan['normalized']:
             task, is_new = _upsert_task(workspace, norm)
+            touched[task.id] = task
+            previous[task.id] = None if is_new else getattr(task, '_import_previous', None)
             if is_new:
                 created += 1
             else:
                 updated += 1
-            if norm['supporters']:
-                task.supporters.set(norm['supporters'])
+            task.supporters.set(norm['supporters'])
 
         for enrichment_sheet in plan['owner_sheets'].values():
             for entry in enrichment_sheet:
@@ -386,7 +422,11 @@ def commit_import_plan(workspace, actor, plan):
                 task = Task.objects.filter(id=entry['task_id'], workspace_id=workspace.id).first()
                 if task is None:
                     continue
+                if task.id not in previous:
+                    previous[task.id] = _history_snapshot(task)
+                    _ensure_code_registry(workspace, task.code, task.id)
                 _apply_enrichment(task, entry)
+                touched[task.id] = task
 
         for invite in plan['invitations']:
             WorkspaceInvitation.objects.get_or_create(
@@ -394,6 +434,21 @@ def commit_import_plan(workspace, actor, plan):
                 email=invite['email'],
                 status='pending',
                 defaults={'role': invite['role'], 'invited_by': actor},
+            )
+
+        for task in touched.values():
+            if task.status == 'done':
+                task.progress_percent = 100
+                if task.actual_completion_date:
+                    task.completed_at = timezone.make_aware(datetime.combine(task.actual_completion_date, datetime.min.time()))
+            elif task.actual_completion_date:
+                raise ValueError(f'Task "{task.code}" has an actual completion date but is not completed.')
+            task.full_clean()
+            task.save()
+            TaskChangeHistory.objects.create(
+                task=task, task_code=task.code, workspace=workspace, actor=actor,
+                field='imported' if previous.get(task.id) is None else 'import_updated',
+                previous_value=previous.get(task.id), new_value=_history_snapshot(task),
             )
 
         ImportRun.objects.create(
@@ -411,12 +466,57 @@ def commit_import_plan(workspace, actor, plan):
 def _upsert_task(workspace, norm):
     if norm['action'] == 'update':
         task = Task.objects.get(id=norm['existing_task_id'])
+        task._import_previous = _history_snapshot(task)
+        _ensure_code_registry(workspace, task.code, task.id)
         _apply_task_fields(task, norm)
         return task, False
 
-    task = Task.objects.create(workspace=workspace, title=norm['title'])
+    code = norm['code'].strip() if norm['code'] else _reserve_generated_code(workspace)
+    if code and (TaskCodeRegistry.objects.filter(workspace=workspace, code__iexact=code).exists() or Task.objects.filter(workspace=workspace, code__iexact=code).exists()):
+        raise ValueError(f'Task code "{code}" was previously used and cannot be reused.')
+    task = Task.objects.create(workspace=workspace, title=norm['title'], code=code)
+    TaskCodeRegistry.objects.create(workspace=workspace, code=code, task_id=task.id)
+    norm = {**norm, 'code': code}
     _apply_task_fields(task, norm)
     return task, True
+
+
+def _reserve_generated_code(workspace):
+    locked = Workspace.objects.select_for_update().get(id=workspace.id)
+    prefix = (slugify(locked.slug or locked.name).replace('-', '')[:8] or 'TASK').upper()
+    number = locked.next_task_number
+    while True:
+        code = f'{prefix}-{number:06d}'
+        if not TaskCodeRegistry.objects.filter(workspace=locked, code__iexact=code).exists() and not Task.objects.filter(workspace=locked, code__iexact=code).exists():
+            break
+        number += 1
+    locked.next_task_number = number + 1
+    locked.save(update_fields=['next_task_number'])
+    return code
+
+
+def _ensure_code_registry(workspace, code, task_id):
+    registry = TaskCodeRegistry.objects.filter(workspace=workspace, code__iexact=code).first()
+    if registry and registry.task_id not in (None, task_id):
+        raise ValueError(f'Task code "{code}" is reserved for another task.')
+    if registry is None:
+        TaskCodeRegistry.objects.create(workspace=workspace, code=code, task_id=task_id)
+    elif registry.task_id is None:
+        registry.task_id = task_id
+        registry.save(update_fields=['task_id'])
+
+
+def _history_snapshot(task):
+    return {
+        'title': task.title, 'code': task.code, 'assignee_id': task.assignee_id,
+        'project_id': task.project_ref_id, 'status': task.status, 'priority': task.priority,
+        'start_date': task.start_date.isoformat() if task.start_date else None,
+        'due_date': task.due_date.isoformat() if task.due_date else None,
+        'actual_completion_date': task.actual_completion_date.isoformat() if task.actual_completion_date else None,
+        'progress_percent': task.progress_percent, 'blocker_details': task.blocker_details,
+        'workstream': task.workstream, 'phase': task.phase, 'state': task.state,
+        'supporter_ids': list(task.supporters.values_list('id', flat=True)),
+    }
 
 
 def _apply_task_fields(task, norm):
@@ -432,11 +532,17 @@ def _apply_task_fields(task, norm):
     task.status = norm['status']
     task.start_date = norm['start_date']
     task.due_date = norm['due_date']
+    task.actual_completion_date = norm.get('actual_completion_date')
+    task.blocker_details = norm.get('blocker_details', '')
     if norm['progress_percent'] is not None:
         task.progress_percent = norm['progress_percent']
     task.labels = norm['labels']
     if norm['status'] == 'done':
         task.progress_percent = 100
+        if task.actual_completion_date:
+            task.completed_at = timezone.make_aware(datetime.combine(task.actual_completion_date, datetime.min.time()))
+    else:
+        task.completed_at = None
     task.save()
 
 

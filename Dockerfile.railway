@@ -22,7 +22,7 @@ COPY . .
 COPY --from=frontend /app/dist ./dist
 RUN addgroup --system workspace \
     && adduser --system --ingroup workspace workspace \
-    && mkdir -p /app/media /app/staticfiles \
+    && mkdir -p /app/media /app/private_media /app/staticfiles \
     && chown -R workspace:workspace /app
 
 USER workspace
