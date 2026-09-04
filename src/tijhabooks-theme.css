@@ -2273,6 +2273,9 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .spreadsheet-canvas { min-width:0; padding:20px; border:1px solid var(--workspace-border); border-radius:14px; background:var(--workspace-surface-soft); overflow:auto; }
 .spreadsheet-editor { min-width:720px; background:var(--workspace-surface); border:1px solid var(--workspace-border); border-radius:10px; overflow:hidden; }
 .spreadsheet-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 12px; border-bottom:1px solid var(--workspace-border); background:var(--workspace-surface); }
+.spreadsheet-tabs { display:flex; gap:4px; width:100%; border-bottom:1px solid var(--workspace-border); padding-bottom:6px; }
+.spreadsheet-tabs button { padding:5px 10px; border-radius:6px; color:var(--workspace-text-soft); font-size:12px; }
+.spreadsheet-tabs button.active { background:var(--brand-accent); color:var(--workspace-on-accent); }
 .spreadsheet-toolbar span { margin-left:auto; color:var(--workspace-text-soft); font-size:11px; }
 .spreadsheet-scroll { overflow:auto; }
 .spreadsheet-scroll table { width:100%; border-collapse:collapse; }
