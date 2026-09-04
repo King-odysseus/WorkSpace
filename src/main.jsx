@@ -86,7 +86,7 @@ function App() {
   const [globalSearchResults, setGlobalSearchResults] = useState([])
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
-  const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'dark')
+  const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'light')
   const [session, setSession] = useState({ loading: true, user: null, error: '' })
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
   const [workspaceLoading, setWorkspaceLoading] = useState(false)

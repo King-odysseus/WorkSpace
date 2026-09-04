@@ -244,7 +244,6 @@ export function ScreenShareControl({ workspaceId, currentUserId }) {
 
 export default function ScreenSharingView({ workspaceId, members = [], currentUserId, role }) {
   const canLead = ['owner', 'manager'].includes(role)
-  const isOwner = role === 'owner'
   const [policy, setPolicy] = useState(null)
   const [draftPolicy, setDraftPolicy] = useState(null)
   const [sessions, setSessions] = useState([])
@@ -254,6 +253,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const canManagePolicy = Boolean(policy?.can_manage) || ['owner', 'admin'].includes(role)
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return
@@ -285,6 +285,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
         body: JSON.stringify({ enabled: draftPolicy.enabled, capture_interval_seconds: Number(draftPolicy.capture_interval_seconds), capture_retention_days: Number(draftPolicy.capture_retention_days), text: draftPolicy.text }),
       })
       setPolicy(data.policy); setDraftPolicy(data.policy)
+      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: 'Screen-sharing policy published.' }))
     } catch (requestError) { setError(requestError.message) } finally { setSaving(false) }
   }
 
@@ -326,9 +327,10 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
     {error && <p className="auth-error" role="alert">{error}</p>}
     <Card className="screen-sharing-policy-card">
       <div className="drawer-section-heading"><h3><ShieldCheck size={18} /> Company policy</h3><span>Version {policy?.version || '—'}</span></div>
-      {policy && !isOwner && <><p className="screen-share-policy-copy">{policy.text}</p><p className="screen-share-policy-meta">{policy.enabled ? 'Enabled' : 'Disabled'} · every {policy.capture_interval_seconds} seconds · retained {policy.capture_retention_days} days</p></>}
-      {policy && isOwner && <form onSubmit={savePolicy} className="screen-sharing-policy-form">
+      {policy && !canManagePolicy && <><p className="screen-share-policy-copy">{policy.text}</p><p className="screen-share-policy-meta">{policy.enabled ? 'Enabled' : 'Disabled'} · every {policy.capture_interval_seconds} seconds · retained {policy.capture_retention_days} days</p><p className="screen-share-policy-hint">Only the workspace owner can enable or publish this policy.</p></>}
+      {policy && canManagePolicy && <form onSubmit={savePolicy} className="screen-sharing-policy-form">
         <label className="screen-share-toggle"><input type="checkbox" checked={draftPolicy.enabled} onChange={event => setDraftPolicy(current => ({ ...current, enabled: event.target.checked }))} /> Enable screen-sharing requests</label>
+        <p className="screen-share-policy-hint">Turn this on, then publish the policy, before managers can send screen-sharing requests.</p>
         <div className="modal-grid"><label>Capture interval (seconds)<input type="number" min="30" max="300" value={draftPolicy.capture_interval_seconds} onChange={event => setDraftPolicy(current => ({ ...current, capture_interval_seconds: event.target.value }))} /></label><label>Retention (days)<input type="number" min="1" max="30" value={draftPolicy.capture_retention_days} onChange={event => setDraftPolicy(current => ({ ...current, capture_retention_days: event.target.value }))} /></label></div>
         <label>Policy shown before every request<textarea rows="7" minLength="100" maxLength="5000" value={draftPolicy.text} onChange={event => setDraftPolicy(current => ({ ...current, text: event.target.value }))} /></label>
         <button className="primary-button" disabled={saving}>{saving ? 'Publishing…' : 'Publish policy'}</button>
@@ -336,6 +338,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
     </Card>
     {canLead && <Card className="screen-sharing-request-card">
       <div className="drawer-section-heading"><h3>Request screen sharing</h3><span>Employee consent required</span></div>
+      {policy && !policy.enabled && <p className="workspace-inline-status screen-share-policy-hint" role="status">Screen sharing is currently disabled. A workspace owner must enable it in Company policy above and publish the policy before a request can be sent.</p>}
       <form onSubmit={requestShare}><label>Employee<select required value={employeeId} onChange={event => setEmployeeId(event.target.value)}><option value="">Select an employee</option>{members.filter(member => String(member.id) !== String(currentUserId)).map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Reason (optional)<textarea maxLength="500" rows="3" value={message} onChange={event => setMessage(event.target.value)} placeholder="Explain why screen sharing is requested." /></label><button className="primary-button" disabled={saving || !policy?.enabled}>{policy?.enabled ? 'Send request' : 'Policy must be enabled first'}</button></form>
     </Card>}
     <Card className="screen-sharing-session-card">

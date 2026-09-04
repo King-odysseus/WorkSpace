@@ -33,10 +33,10 @@ def _membership(request, workspace_id, leader=False, owner=False):
     membership = Membership.objects.filter(workspace_id=workspace_id, user=request.user).first()
     if membership is None:
         return None, JsonResponse({'error': 'You do not belong to this workspace.'}, status=403)
-    if owner and membership.role != 'owner':
-        return None, JsonResponse({'error': 'Workspace owner access is required.'}, status=403)
-    if leader and membership.role not in {'owner', 'manager'}:
-        return None, JsonResponse({'error': 'Owner or manager access is required.'}, status=403)
+    if owner and membership.role not in {'owner', 'admin'}:
+        return None, JsonResponse({'error': 'Workspace owner/admin access is required.'}, status=403)
+    if leader and membership.role not in {'owner', 'admin', 'manager'}:
+        return None, JsonResponse({'error': 'Owner, admin, or manager access is required.'}, status=403)
     return membership, None
 
 
@@ -103,7 +103,7 @@ def screen_sharing_policy(request, workspace_id):
         return error
     setting, _ = WorkspaceSetting.objects.get_or_create(workspace_id=workspace_id)
     if request.method == 'GET':
-        return JsonResponse({'policy': _policy_payload(setting, membership.role == 'owner')})
+        return JsonResponse({'policy': _policy_payload(setting, membership.role in {'owner', 'admin'})})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
