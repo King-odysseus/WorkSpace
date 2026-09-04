@@ -790,8 +790,8 @@ html[data-theme='dark'] .planner-filter-controls > select { border-color: #28516
 @media (max-width: 750px) { .sidebar, .sidebar-collapsed .sidebar { display: none; } .mobile-pill-nav { position: fixed; left: 50%; bottom: 16px; z-index: 25; display: flex; max-width: calc(100vw - 24px); overflow-x: auto; transform: translateX(-50%); gap: 4px; padding: 5px; border: 1px solid #28516F; border-radius: 18px; background: #0B223AEE; box-shadow: 0 12px 28px #02051f40; scrollbar-width: none; } .mobile-pill-nav::-webkit-scrollbar { display: none; } .mobile-pill-nav button { flex: 0 0 40px; display: grid; place-items: center; width: 40px; height: 36px; border: 0; border-radius: 13px; background: transparent; color: #B9CCDD; cursor: pointer; } .mobile-pill-nav button.active { background: #C49A6C; color: #071A2E; } .page-content { padding-bottom: 92px; } }
 
 /* Keep shared surfaces and controls aligned with the selected theme. */
-:root { --workspace-surface: var(--color-surface); --workspace-surface-soft: var(--color-surface-secondary); --workspace-text: var(--color-text-primary); --workspace-text-soft: var(--color-text-secondary); --workspace-border: var(--color-border); }
-html[data-theme='dark'] { color-scheme: dark; --navy: var(--color-navy); --navy2: #15153A; --brand-navy-soft: #1E1E4C; --workspace-surface: var(--color-surface); --workspace-surface-soft: var(--color-surface-secondary); --workspace-text: var(--color-text-primary); --workspace-text-soft: var(--color-text-secondary); --workspace-border: var(--color-border); }
+:root { --workspace-surface: var(--color-surface); --workspace-surface-soft: var(--color-surface-secondary); --workspace-text: var(--color-text-primary); --workspace-text-soft: var(--color-text-secondary); --workspace-border: var(--color-border); --workspace-on-accent: var(--color-accent-foreground); }
+html[data-theme='dark'] { color-scheme: dark; --navy: var(--color-navy); --navy2: #15153A; --brand-navy-soft: #1E1E4C; --workspace-surface: var(--color-surface); --workspace-surface-soft: var(--color-surface-secondary); --workspace-text: var(--color-text-primary); --workspace-text-soft: var(--color-text-secondary); --workspace-border: var(--color-border); --workspace-on-accent: var(--color-accent-foreground); }
 body, .topbar, .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal, .task-drawer, .notification-panel, .settings-panel, .report-panel, .report-stat { color: var(--workspace-text); }
 .workspace-card, .board-section, .focus-card, .checkin-card, .activity-card, .calendar-week, .modal { background: var(--workspace-surface); }
 .section-header h2, .section-header h3, .page-heading h1, .workspace-view-heading h1, .workspace-view-heading h2, .metric-card strong, .focus-card strong, .checkin-card h3, .activity-card h2, .modal h2 { color: var(--workspace-text); }
@@ -3257,6 +3257,8 @@ html[data-theme='dark'] :where(
 .calendar-filter-row select { min-width:140px; min-height:36px; padding:0 10px; font-size:12px; }
 .calendar-summary-badges { grid-area:summary; display:flex; flex-wrap:wrap; gap:8px; }
 .calendar-summary-badge { display:inline-flex; align-items:center; min-height:28px; padding:0 10px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font-size:11px; font-weight:700; }
+.close-button:hover, .sidebar-toggle:hover, .help-button:hover { color:var(--workspace-on-accent) !important; }
+.rich-toolbar-button.is-active, .spreadsheet-tabs button.active, .spreadsheet-scroll th.active { color:var(--workspace-on-accent) !important; }
 @media (max-width:600px) {
   .calendar-toolbar { grid-template-columns:1fr; grid-template-areas:"title" "actions" "filters" "summary"; gap:12px; }
   .calendar-toolbar-actions { justify-content:flex-start; }
