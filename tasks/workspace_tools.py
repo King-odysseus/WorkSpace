@@ -14,11 +14,13 @@ from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings as django_settings
 from django.db import transaction
 from django.http import FileResponse, JsonResponse
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from openpyxl import Workbook, load_workbook
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .models import Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
+from .sanitize import sanitize_document_content
 from .views import require_workspace_leader, require_workspace_member
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,23 @@ def _document_permission(document, membership, user):
         return 'edit'
     share = document.shares.filter(user=user).only('permission').first()
     return share.permission if share else 'view'
+
+
+# Autosave fires every time typing pauses, so an unthrottled snapshot per change
+# would store dozens of full document copies per editing session.
+REVISION_THROTTLE_SECONDS = 300
+REVISION_KEEP = 40
+
+
+def _record_revision(document, user):
+    """Snapshot the pre-edit content, collapsing rapid autosaves by one author."""
+    latest = document.revisions.first()
+    if latest and latest.created_by_id == user.id and (timezone.now() - latest.created_at).total_seconds() < REVISION_THROTTLE_SECONDS:
+        return
+    WorkspaceDocumentRevision.objects.create(document=document, created_by=user, title=document.title, content=document.content or {})
+    stale = list(document.revisions.values_list('id', flat=True)[REVISION_KEEP:])
+    if stale:
+        WorkspaceDocumentRevision.objects.filter(id__in=stale).delete()
 
 
 AI_PROVIDER_DEFAULTS = {
@@ -209,7 +228,7 @@ def workspace_document_list(request, workspace_id):
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     title = str(payload.get('title', '')).strip()[:200] or 'Untitled document'
     kind = payload.get('kind', 'document') if payload.get('kind') in {'document', 'presentation', 'spreadsheet'} else 'document'
-    document = WorkspaceDocument.objects.create(workspace_id=workspace_id, title=title, kind=kind, content=payload.get('content') or {}, created_by=request.user)
+    document = WorkspaceDocument.objects.create(workspace_id=workspace_id, title=title, kind=kind, content=sanitize_document_content(payload.get('content') or {}), created_by=request.user)
     return JsonResponse({'document': {**document.as_dict(), 'permission': 'edit'}}, status=201)
 
 
@@ -235,6 +254,12 @@ def workspace_document_detail(request, workspace_id, document_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    base_updated_at = str(payload.get('base_updated_at') or '').strip()
+    if base_updated_at and base_updated_at != document.updated_at.isoformat():
+        return JsonResponse({
+            'error': 'Someone else saved this document while you were editing. Reload to see their changes.',
+            'document': {**document.as_dict(), 'permission': permission},
+        }, status=409)
     if 'title' in payload:
         document.title = str(payload['title']).strip()[:200] or document.title
     try:
@@ -244,13 +269,54 @@ def workspace_document_detail(request, workspace_id, document_id):
                     json.dumps(payload['content'], allow_nan=False)
                 except (TypeError, ValueError):
                     return JsonResponse({'error': 'Document content contains invalid values.'}, status=400)
-                if payload['content'] != document.content:
-                    WorkspaceDocumentRevision.objects.create(document=document, created_by=request.user, title=document.title, content=document.content or {})
-                document.content = payload['content']
+                content = sanitize_document_content(payload['content'])
+                if content != document.content:
+                    _record_revision(document, request.user)
+                document.content = content
             document.save(update_fields=['title', 'content', 'updated_at'])
     except Exception as exc:
         logger.exception('Document save failed for %s', document.id)
         return JsonResponse({'error': f'Document could not be saved: {exc}'}, status=500)
+    return JsonResponse({'document': {**document.as_dict(), 'permission': permission}})
+
+
+@require_http_methods(['GET'])
+def workspace_document_revision_list(request, workspace_id, document_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    document = WorkspaceDocument.objects.filter(workspace_id=workspace_id, id=document_id).first()
+    if not document:
+        return JsonResponse({'error': 'Document not found.'}, status=404)
+    revisions = document.revisions.select_related('created_by')[:REVISION_KEEP]
+    return JsonResponse({'revisions': [{
+        'id': revision.id,
+        'title': revision.title,
+        'created_at': revision.created_at.isoformat(),
+        'created_by': revision.created_by.get_full_name() or revision.created_by.email if revision.created_by else 'Unknown user',
+    } for revision in revisions]})
+
+
+@require_http_methods(['POST'])
+def workspace_document_revision_restore(request, workspace_id, document_id, revision_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    document = WorkspaceDocument.objects.filter(workspace_id=workspace_id, id=document_id).first()
+    if not document:
+        return JsonResponse({'error': 'Document not found.'}, status=404)
+    permission = _document_permission(document, membership, request.user)
+    if permission != 'edit':
+        return JsonResponse({'error': 'Edit access is required.'}, status=403)
+    revision = document.revisions.filter(id=revision_id).first()
+    if not revision:
+        return JsonResponse({'error': 'Version not found.'}, status=404)
+    with transaction.atomic():
+        # Snapshot what is on screen now so restoring is itself undoable.
+        WorkspaceDocumentRevision.objects.create(document=document, created_by=request.user, title=document.title, content=document.content or {})
+        document.title = revision.title
+        document.content = sanitize_document_content(revision.content or {})
+        document.save(update_fields=['title', 'content', 'updated_at'])
     return JsonResponse({'document': {**document.as_dict(), 'permission': permission}})
 
 
@@ -394,6 +460,26 @@ def workspace_document_comment_detail(request, workspace_id, document_id, commen
     return JsonResponse({'comment': comment.as_dict()})
 
 
+UPLOAD_MAX_BYTES = getattr(django_settings, 'WORKSPACE_UPLOAD_MAX_BYTES', 25 * 1024 * 1024)
+
+# Deliberately excludes anything a browser or the OS will execute.
+UPLOAD_ALLOWED_EXTENSIONS = {
+    '.csv', '.doc', '.docx', '.gif', '.jpeg', '.jpg', '.json', '.md', '.mp3', '.mp4', '.odp', '.ods',
+    '.odt', '.pdf', '.png', '.ppt', '.pptx', '.rtf', '.txt', '.wav', '.webm', '.webp', '.xls',
+    '.xlsx', '.xml', '.zip',
+}
+
+
+def _reject_upload(uploaded):
+    """Return an error response when an upload fails size or type checks."""
+    if uploaded.size > UPLOAD_MAX_BYTES:
+        return JsonResponse({'error': f'Files must be {UPLOAD_MAX_BYTES // (1024 * 1024)} MB or smaller.'}, status=400)
+    extension = os.path.splitext(uploaded.name or '')[1].lower()
+    if extension not in UPLOAD_ALLOWED_EXTENSIONS:
+        return JsonResponse({'error': f'{extension or "That file type"} is not an allowed file type.'}, status=400)
+    return None
+
+
 @require_http_methods(['GET', 'POST'])
 def workspace_file_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
@@ -404,7 +490,12 @@ def workspace_file_list(request, workspace_id):
     uploaded = request.FILES.get('file')
     if not uploaded:
         return JsonResponse({'error': 'Choose a file to upload.'}, status=400)
-    item = WorkspaceFile.objects.create(workspace_id=workspace_id, file=uploaded, original_name=uploaded.name[:255], mime_type=uploaded.content_type or mimetypes.guess_type(uploaded.name)[0] or '', size=uploaded.size, uploaded_by=request.user)
+    invalid = _reject_upload(uploaded)
+    if invalid:
+        return invalid
+    # Trust the extension we validated, not the client-supplied content type.
+    mime_type = mimetypes.guess_type(uploaded.name)[0] or uploaded.content_type or ''
+    item = WorkspaceFile.objects.create(workspace_id=workspace_id, file=uploaded, original_name=uploaded.name[:255], mime_type=mime_type[:160], size=uploaded.size, uploaded_by=request.user)
     cloudinary_url = os.environ.get('CLOUDINARY_URL', '').strip()
     if cloudinary_url:
         try:
@@ -424,6 +515,37 @@ def workspace_file_download(request, file_id):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
     item = WorkspaceFile.objects.filter(id=file_id, workspace__members=request.user).first()
-    if not item or not item.file:
+    if not item:
+        return JsonResponse({'error': 'File not found.'}, status=404)
+    if not item.file:
+        # Stored only in Cloudinary. Membership is already checked above, so the
+        # redirect is the one place the public URL is handed out.
+        if item.cloudinary_url:
+            return HttpResponseRedirect(item.cloudinary_url)
         return JsonResponse({'error': 'File not found.'}, status=404)
     return FileResponse(item.file.open('rb'), as_attachment=True, filename=item.original_name)
+
+
+@require_http_methods(['DELETE'])
+def workspace_file_detail(request, workspace_id, file_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    item = WorkspaceFile.objects.filter(workspace_id=workspace_id, id=file_id).first()
+    if not item:
+        return JsonResponse({'error': 'File not found.'}, status=404)
+    if membership.role not in {'owner', 'manager'} and item.uploaded_by_id != request.user.id:
+        return JsonResponse({'error': 'Only the uploader or a workspace leader can delete this file.'}, status=403)
+    if item.cloudinary_public_id:
+        try:
+            import cloudinary.uploader
+            cloudinary.uploader.destroy(item.cloudinary_public_id, invalidate=True)
+        except Exception:
+            logger.exception('Cloudinary delete failed for workspace file %s', item.id)
+    if item.file:
+        try:
+            item.file.delete(save=False)
+        except (OSError, ValueError):
+            logger.warning('Stored file could not be removed for workspace file %s', item.id, exc_info=True)
+    item.delete()
+    return JsonResponse({'status': 'deleted'})

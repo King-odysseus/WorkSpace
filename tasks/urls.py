@@ -6,7 +6,7 @@ from .pulse import workspace_pulse
 from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .import_templates import import_template
-from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
+from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -30,7 +30,10 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/shares/<int:share_id>/', workspace_document_share_detail, name='workspace-document-share-detail'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/comments/', workspace_document_comment_list, name='workspace-document-comment-list'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/comments/<int:comment_id>/', workspace_document_comment_detail, name='workspace-document-comment-detail'),
+    path('workspaces/<int:workspace_id>/documents/<int:document_id>/revisions/', workspace_document_revision_list, name='workspace-document-revision-list'),
+    path('workspaces/<int:workspace_id>/documents/<int:document_id>/revisions/<int:revision_id>/restore/', workspace_document_revision_restore, name='workspace-document-revision-restore'),
     path('workspaces/<int:workspace_id>/files/', workspace_file_list, name='workspace-file-list'),
+    path('workspaces/<int:workspace_id>/files/<int:file_id>/', workspace_file_detail, name='workspace-file-detail'),
     path('workspace-files/<int:file_id>/download/', workspace_file_download, name='workspace-file-download'),
     path('workspaces/<int:workspace_id>/invitations/', invitation_list, name='invitation-list'),
     path('workspaces/<int:workspace_id>/invitations/<int:invitation_id>/', invitation_detail, name='invitation-detail'),

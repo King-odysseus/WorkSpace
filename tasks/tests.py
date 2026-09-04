@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .views import create_notification
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
@@ -2329,3 +2329,104 @@ class WorkspaceDocumentCollaborationTests(TestCase):
         url = reverse('workspace-document-comment-detail', args=[self.workspace.id, self.document.id, comment.id])
         response = self.client.patch(url, data=json.dumps({'resolved': True}), content_type='application/json')
         self.assertEqual(response.status_code, 403)
+
+
+class WorkspaceDocumentHardeningTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='hardening-owner@example.com', email='hardening-owner@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Hardening Workspace', slug='hardening-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, created_by=self.owner, title='Notes', kind='document', content={'html': '<p>start</p>', 'text': 'start'})
+        self.detail_url = reverse('workspace-document-detail', args=[self.workspace.id, self.document.id])
+        self.client.force_login(self.owner)
+
+    def _patch(self, payload):
+        return self.client.patch(self.detail_url, data=json.dumps(payload), content_type='application/json')
+
+    def test_script_and_javascript_urls_are_stripped_on_save(self):
+        response = self._patch({'content': {'html': '<p onclick="steal()">hi</p><script>alert(1)</script><a href="javascript:alert(1)">x</a>'}})
+        self.assertEqual(response.status_code, 200)
+        self.document.refresh_from_db()
+        stored = self.document.content['html']
+        self.assertNotIn('script', stored)
+        self.assertNotIn('javascript:', stored)
+        self.assertNotIn('onclick', stored)
+        self.assertIn('hi', stored)
+
+    def test_safe_markup_survives_save(self):
+        response = self._patch({'content': {'html': '<p style="color:red"><strong>keep</strong> <a href="https://example.com">link</a></p>'}})
+        self.assertEqual(response.status_code, 200)
+        stored = response.json()['document']['content']['html']
+        self.assertIn('<strong>keep</strong>', stored)
+        self.assertIn('href="https://example.com"', stored)
+        self.assertIn('rel="noopener noreferrer"', stored)
+
+    def test_stale_base_updated_at_is_rejected(self):
+        stale = self.document.updated_at.isoformat()
+        self.assertEqual(self._patch({'content': {'html': '<p>first</p>'}, 'base_updated_at': stale}).status_code, 200)
+        conflict = self._patch({'content': {'html': '<p>second</p>'}, 'base_updated_at': stale})
+        self.assertEqual(conflict.status_code, 409)
+        self.document.refresh_from_db()
+        self.assertIn('first', self.document.content['html'])
+
+    def test_rapid_autosaves_collapse_into_one_revision(self):
+        for index in range(5):
+            self.assertEqual(self._patch({'content': {'html': f'<p>edit {index}</p>'}}).status_code, 200)
+        self.assertEqual(self.document.revisions.count(), 1)
+
+    def test_revision_can_be_listed_and_restored(self):
+        self._patch({'content': {'html': '<p>changed</p>'}})
+        listing = self.client.get(reverse('workspace-document-revision-list', args=[self.workspace.id, self.document.id]))
+        self.assertEqual(listing.status_code, 200)
+        revisions = listing.json()['revisions']
+        self.assertEqual(len(revisions), 1)
+        restore = self.client.post(reverse('workspace-document-revision-restore', args=[self.workspace.id, self.document.id, revisions[0]['id']]))
+        self.assertEqual(restore.status_code, 200)
+        self.document.refresh_from_db()
+        self.assertIn('start', self.document.content['html'])
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class WorkspaceFileUploadTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='upload-owner@example.com', email='upload-owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='upload-member@example.com', email='upload-member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Upload Workspace', slug='upload-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        self.list_url = reverse('workspace-file-list', args=[self.workspace.id])
+
+    def test_disallowed_extension_is_rejected(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.list_url, {'file': SimpleUploadedFile('payload.exe', b'MZ', content_type='text/plain')})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(WorkspaceFile.objects.count(), 0)
+
+    def test_oversized_file_is_rejected(self):
+        self.client.force_login(self.owner)
+        oversized = SimpleUploadedFile('big.txt', b'x' * 32, content_type='text/plain')
+        with mock.patch('tasks.workspace_tools.UPLOAD_MAX_BYTES', 16):
+            response = self.client.post(self.list_url, {'file': oversized})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(WorkspaceFile.objects.count(), 0)
+
+    def test_upload_url_never_exposes_public_cloudinary_link(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.list_url, {'file': SimpleUploadedFile('notes.txt', b'hello', content_type='text/plain')})
+        self.assertEqual(response.status_code, 201)
+        item = WorkspaceFile.objects.get()
+        item.cloudinary_url = 'https://res.cloudinary.com/demo/raw/upload/leak.txt'
+        item.save(update_fields=['cloudinary_url'])
+        self.assertNotIn('cloudinary', item.as_dict()['url'])
+        self.assertIn(f'/api/workspace-files/{item.id}/download/', item.as_dict()['url'])
+
+    def test_only_uploader_or_leader_can_delete(self):
+        self.client.force_login(self.owner)
+        self.client.post(self.list_url, {'file': SimpleUploadedFile('notes.txt', b'hello', content_type='text/plain')})
+        item = WorkspaceFile.objects.get()
+        detail_url = reverse('workspace-file-detail', args=[self.workspace.id, item.id])
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.delete(detail_url).status_code, 403)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.delete(detail_url).status_code, 200)
+        self.assertEqual(WorkspaceFile.objects.count(), 0)

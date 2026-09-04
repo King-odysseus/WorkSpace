@@ -133,6 +133,13 @@ MEDIA_ROOT = BASE_DIR / 'media'
 PRIVATE_MEDIA_ROOT = Path(os.environ.get('WORKSPACE_PRIVATE_MEDIA_ROOT', BASE_DIR / 'private_media'))
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Upload ceilings. WORKSPACE_UPLOAD_MAX_BYTES is what the workspace file endpoint
+# enforces per file; the Django limits below stop an oversized request from being
+# buffered into memory before that check ever runs.
+WORKSPACE_UPLOAD_MAX_BYTES = int(os.environ.get('WORKSPACE_UPLOAD_MAX_BYTES', 25 * 1024 * 1024))
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = WORKSPACE_UPLOAD_MAX_BYTES + (1024 * 1024)
+
 # The frontend build (`npm run build`) lands in dist/ - on Railway's single-service deploy
 # (see Dockerfile.railway) WhiteNoise serves it straight from the Django process, so there's
 # no separate nginx/static host to configure. Only wired up when the build actually exists,

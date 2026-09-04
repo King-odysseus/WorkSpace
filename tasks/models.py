@@ -1133,7 +1133,10 @@ class WorkspaceFile(models.Model):
         ordering = ['-created_at']
 
     def as_dict(self):
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'original_name': self.original_name, 'mime_type': self.mime_type, 'size': self.size, 'url': self.cloudinary_url or (f'/api/workspace-files/{self.id}/download/' if self.file else ''), 'uploaded_by': self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown user', 'created_at': self.created_at.isoformat()}
+        # Always hand out the membership-checked download route. The Cloudinary
+        # URL is public and unauthenticated, so exposing it would let anyone with
+        # the link - including removed members - keep reading the file.
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'original_name': self.original_name, 'mime_type': self.mime_type, 'size': self.size, 'url': f'/api/workspace-files/{self.id}/download/' if (self.file or self.cloudinary_url) else '', 'uploaded_by_id': self.uploaded_by_id, 'uploaded_by': self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown user', 'created_at': self.created_at.isoformat()}
 
 
 class NotificationDelivery(models.Model):
