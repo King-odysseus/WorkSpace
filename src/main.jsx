@@ -349,7 +349,7 @@ function App() {
       return isDailyBoardTask && matchesStatus && matchesSearch
     })
   }, [tasks, selectedFilter, searchQuery, today])
-  if (session.loading) return <div className="auth-loading">Loading WorkSpace...</div>
+  if (session.loading) return <BrandedStatusScreen loading />
   if (!session.user) return <AuthScreen theme={theme} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
   const mapApiTask = apiTask => mapTaskFromApi(apiTask, {
     today,
@@ -1766,8 +1766,12 @@ class AppErrorBoundary extends React.Component {
 
   render() {
     if (!this.state.hasError) return this.props.children
-    return <main className="error-boundary"><div><p className="eyebrow">WorkSpace</p><h1>Something went wrong</h1><p>The workspace could not render this view. Reload to try again.</p><button className="primary-button" onClick={() => window.location.reload()}>Reload workspace</button></div></main>
+    return <BrandedStatusScreen error="The workspace could not render this view." />
   }
+}
+
+function BrandedStatusScreen({ loading = false, error = '' }) {
+  return <main className={`branded-status-screen ${error ? 'is-error' : 'is-loading'}`} role={error ? 'alert' : 'status'}><section className="branded-status-content"><img className="branded-status-logo" src="/tijha-logo.png" alt="TijhaBooks" /><p className="branded-status-wordmark">WorkSpace</p><div className="branded-status-mark">{error ? '!' : ''}</div><p className="eyebrow">{error ? 'WorkSpace error' : 'WorkSpace'}</p><h1>{error ? 'There was an error' : 'Loading WorkSpace'}</h1><p>{error || 'Preparing your workspace...'}</p>{error && <button className="primary-button" onClick={() => window.location.reload()}>Try again</button>}</section></main>
 }
 
 createRoot(document.getElementById('root')).render(<AppErrorBoundary><App /></AppErrorBoundary>)
