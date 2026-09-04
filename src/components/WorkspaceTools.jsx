@@ -19,7 +19,7 @@ function cleanHtml(value) {
   return doc.body.innerHTML
 }
 
-function RichEditor({ value, onChange, compact = false, readOnly = false }) {
+function RichEditor({ value, onChange, compact = false, readOnly = false, hideToolbar = false }) {
   const editorRef = useRef(null)
   useEffect(() => { if (editorRef.current && editorRef.current.innerHTML !== value) editorRef.current.innerHTML = cleanHtml(value) }, [value])
   const command = (name, argument = null) => { editorRef.current?.focus(); document.execCommand(name, false, argument); onChange(editorRef.current?.innerHTML || '') }
@@ -30,7 +30,7 @@ function RichEditor({ value, onChange, compact = false, readOnly = false }) {
   }
   const toolbarButton = (label, icon, action) => <button type="button" className="rich-toolbar-button" onMouseDown={event => event.preventDefault()} onClick={action} aria-label={label} title={label}>{icon}</button>
   return <div className={`rich-editor ${compact ? 'is-compact' : ''}`}>
-    {!readOnly && <div className="rich-toolbar" role="toolbar" aria-label="Text formatting">
+    {!readOnly && !hideToolbar && <div className="rich-toolbar" role="toolbar" aria-label="Text formatting">
       <div className="rich-toolbar-row">
         <div className="rich-toolbar-group"><span>Edit</span>{toolbarButton('Undo', <Undo2 size={15} />, () => command('undo'))}{toolbarButton('Redo', <Redo2 size={15} />, () => command('redo'))}</div>
         <div className="rich-toolbar-group rich-toolbar-font"><span>Font</span><select onChange={event => command('fontName', event.target.value)} defaultValue="Arial" aria-label="Font family"><option>Arial</option><option>Calibri</option><option>Georgia</option><option>Times New Roman</option><option>Verdana</option></select><select onChange={event => command('fontSize', event.target.value)} defaultValue="3" aria-label="Font size"><option value="1">10</option><option value="2">12</option><option value="3">14</option><option value="4">18</option><option value="5">24</option><option value="6">32</option><option value="7">48</option></select></div>
@@ -50,6 +50,12 @@ function DocumentEditorSurface({ value, onChange, readOnly = false }) {
   return <div className="document-page-wrap"><div className="document-ruler" aria-hidden="true"><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span></div><RichEditor value={value} onChange={onChange} readOnly={readOnly} /></div>
 }
 
+function PresentationToolbar({ readOnly, onAddTextBox }) {
+  const format = command => { document.execCommand(command, false, null) }
+  const button = (label, command) => <button type="button" className="presentation-tool-button" onMouseDown={event => event.preventDefault()} onClick={() => format(command)} disabled={readOnly}>{label}</button>
+  return <div className="presentation-toolbar" role="toolbar" aria-label="Presentation tools"><span className="presentation-toolbar-label">Slide tools</span><button type="button" className="presentation-tool-button presentation-add-text" onClick={onAddTextBox} disabled={readOnly}>Add text box</button>{button('Bold', 'bold')}{button('Italic', 'italic')}{button('Underline', 'underline')}{button('Bullets', 'insertUnorderedList')}{button('Align left', 'justifyLeft')}{button('Center', 'justifyCenter')}{button('Align right', 'justifyRight')}</div>
+}
+
 function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
   const canvasRef = useRef(null)
   const dragState = useRef(null)
@@ -58,19 +64,29 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
     body: { x: 7, y: 29, width: 86, height: 62 },
     ...(slide.layout || {}),
   }
+  const textBoxes = slide.text_boxes || []
 
-  const updateLayout = (block, values) => onChange({ ...slide, layout: { ...layout, [block]: { ...layout[block], ...values } } })
+  const blockLayoutFor = block => block.startsWith('text-') ? textBoxes[Number(block.slice(5))] : layout[block]
+  const updateLayout = (block, values) => {
+    if (block.startsWith('text-')) {
+      const index = Number(block.slice(5))
+      onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, ...values } : item) })
+      return
+    }
+    onChange({ ...slide, layout: { ...layout, [block]: { ...layout[block], ...values } } })
+  }
   const startDrag = (event, block) => {
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    dragState.current = { block, startX: event.clientX, startY: event.clientY, x: layout[block].x, y: layout[block].y }
+    const blockLayout = blockLayoutFor(block)
+    dragState.current = { block, startX: event.clientX, startY: event.clientY, x: blockLayout.x, y: blockLayout.y }
   }
   const moveDrag = event => {
     const drag = dragState.current
     const canvas = canvasRef.current
     if (!drag || !canvas) return
     const bounds = canvas.getBoundingClientRect()
-    const blockLayout = layout[drag.block]
+    const blockLayout = blockLayoutFor(drag.block)
     const x = Math.max(0, Math.min(100 - blockLayout.width, drag.x + ((event.clientX - drag.startX) / bounds.width) * 100))
     const y = Math.max(0, Math.min(100 - blockLayout.height, drag.y + ((event.clientY - drag.startY) / bounds.height) * 100))
     updateLayout(drag.block, { x, y })
@@ -80,20 +96,23 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
     if (dragState.current || !canvasRef.current) return
     const bounds = canvasRef.current.getBoundingClientRect()
     const elementBounds = event.currentTarget.getBoundingClientRect()
-    updateLayout(block, { width: Math.min(100 - layout[block].x, (elementBounds.width / bounds.width) * 100), height: Math.min(100 - layout[block].y, (elementBounds.height / bounds.height) * 100) })
+    const blockLayout = blockLayoutFor(block)
+    updateLayout(block, { width: Math.min(100 - blockLayout.x, (elementBounds.width / bounds.width) * 100), height: Math.min(100 - blockLayout.y, (elementBounds.height / bounds.height) * 100) })
   }
   const blockStyle = block => ({ left: `${layout[block].x}%`, top: `${layout[block].y}%`, width: `${layout[block].width}%`, height: `${layout[block].height}%` })
 
-  return <div className="presentation-slide" ref={canvasRef}>
+  const addTextBox = () => onChange({ ...slide, text_boxes: [...textBoxes, { id: `text-${Date.now()}`, text: 'New text box', x: 12, y: 18 + (textBoxes.length * 8) % 60, width: 34, height: 16 }] })
+  return <div className="presentation-slide-shell"><PresentationToolbar readOnly={readOnly} onAddTextBox={addTextBox} /><div className="presentation-slide" ref={canvasRef}>
     <section className="slide-editable-block slide-title-block" style={blockStyle('title')} onPointerUp={event => captureSize(event, 'title')}>
       {!readOnly && <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, 'title')} onPointerMove={moveDrag} onPointerUp={finishDrag}>Drag title</button>}
       <input value={slide.title || ''} onChange={event => onChange({ ...slide, title: event.target.value })} placeholder="Slide title" readOnly={readOnly} />
     </section>
     <section className="slide-editable-block slide-body-block" style={blockStyle('body')} onPointerUp={event => captureSize(event, 'body')}>
       {!readOnly && <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, 'body')} onPointerMove={moveDrag} onPointerUp={finishDrag}>Drag text</button>}
-      <RichEditor value={slide.body || ''} onChange={body => onChange({ ...slide, body })} compact readOnly={readOnly} />
+      <RichEditor value={slide.body || ''} onChange={body => onChange({ ...slide, body })} compact hideToolbar readOnly={readOnly} />
     </section>
-  </div>
+    {textBoxes.map((box, index) => <section key={box.id || index} className="slide-editable-block slide-text-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%` }} onPointerUp={event => captureSize(event, `text-${index}`)}><button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, `text-${index}`)} disabled={readOnly}>Drag text</button><RichEditor value={box.text || ''} onChange={text => onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item) })} compact hideToolbar readOnly={readOnly} /></section>)}
+  </div></div>
 }
 
 export function FilesWorkspaceView({ workspaceId }) {
