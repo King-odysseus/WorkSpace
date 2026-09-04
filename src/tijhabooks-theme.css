@@ -3247,3 +3247,18 @@ html[data-theme='dark'] :where(
 .calendar-task-deadline strong, .calendar-task-deadline small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .calendar-task-deadline strong { font-size:12px; }
 .calendar-task-deadline small { color:var(--workspace-text-soft); font-size:10px; }
+
+/* Give the calendar toolbar distinct breathing room between navigation, views, and filters. */
+.calendar-toolbar { display:grid !important; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"title actions" "filters filters"; align-items:center; column-gap:20px; row-gap:14px; }
+.calendar-toolbar-title { grid-area:title; min-width:0; }
+.calendar-toolbar-actions { grid-area:actions; justify-content:flex-end; }
+.calendar-filter-row { grid-area:filters; display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-left:0; padding-top:12px; border-top:1px solid var(--workspace-border); }
+.calendar-filter-row label { display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.calendar-filter-row select { min-width:140px; min-height:36px; padding:0 10px; font-size:12px; }
+@media (max-width:600px) {
+  .calendar-toolbar { grid-template-columns:1fr; grid-template-areas:"title" "actions" "filters"; gap:12px; }
+  .calendar-toolbar-actions { justify-content:flex-start; }
+  .calendar-filter-row { align-items:stretch; flex-direction:column; gap:9px; }
+  .calendar-filter-row label { justify-content:space-between; }
+  .calendar-filter-row select { flex:1; }
+}
