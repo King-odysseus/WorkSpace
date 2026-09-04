@@ -1778,6 +1778,10 @@ html[data-theme='dark'] .channel-row-wrap .channel-row.active, html[data-theme='
 .chat-mode-channels .chat-list-heading h3 { font-size:15px !important; }
 .chat-mode-channels .channel-row { min-height:42px; padding:10px 11px; font-size:14px; }
 .chat-mode-channels .channel-row .channel-name { margin-left:0; font-size:inherit; color:inherit; }
+.chat-mode-channels .chat-conversation-list { background:#071a2e !important; color:#fff !important; box-shadow:none !important; }
+.chat-mode-channels .channel-row { background:transparent !important; color:#f8fafc !important; }
+.chat-mode-channels .channel-row.active { background:#1d4ed8 !important; color:#fff !important; }
+.chat-mode-channels .channel-row .channel-name { color:inherit !important; }
 
 /* Settings workspace */
 .help-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
