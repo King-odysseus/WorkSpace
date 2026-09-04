@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { AlignCenter, AlignLeft, AlignRight, Bold, Bot, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Bot, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { readJsonResponse } from '../lib/workspace-format.js'
 
@@ -11,22 +11,60 @@ async function csrf(extra = {}) {
   return { ...extra, 'X-CSRFToken': token }
 }
 
+// Schemes a link or image may use. Anything else - javascript:, vbscript:,
+// data: with a non-image type - can run script when a reader clicks it.
+const SAFE_URL = /^(?:https?:\/\/|mailto:|tel:|\/|#|\.\/|\.\.\/)/i
+const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,[a-z0-9+/=\s]+$/i
+
+export function safeUrl(value) {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  // Browsers ignore control characters, so "java\tscript:alert(1)" still runs.
+  const [head, ...rest] = trimmed.split('/')
+  const candidate = [head.replace(/[\x00-\x20]/g, ''), ...rest].join('/')
+  return SAFE_DATA_IMAGE.test(candidate) || SAFE_URL.test(candidate) ? candidate : ''
+}
+
 function cleanHtml(value) {
   if (typeof window === 'undefined') return value || ''
   const doc = new DOMParser().parseFromString(value || '', 'text/html')
-  doc.querySelectorAll('script,style,iframe,object,embed').forEach(node => node.remove())
+  doc.querySelectorAll('script,style,iframe,object,embed,noscript,svg,math').forEach(node => node.remove())
   doc.querySelectorAll('*').forEach(node => [...node.attributes].forEach(attribute => { if (attribute.name.toLowerCase().startsWith('on')) node.removeAttribute(attribute.name) }))
+  doc.querySelectorAll('[href],[src]').forEach(node => ['href', 'src'].forEach(attribute => {
+    if (!node.hasAttribute(attribute)) return
+    const url = safeUrl(node.getAttribute(attribute))
+    if (url) node.setAttribute(attribute, url)
+    else node.removeAttribute(attribute)
+  }))
+  doc.querySelectorAll('a[href]').forEach(node => node.setAttribute('rel', 'noopener noreferrer'))
   return doc.body.innerHTML
 }
 
 function RichEditor({ value, onChange, compact = false, readOnly = false, hideToolbar = false }) {
   const editorRef = useRef(null)
-  useEffect(() => { if (editorRef.current && editorRef.current.innerHTML !== value) editorRef.current.innerHTML = cleanHtml(value) }, [value])
-  const command = (name, argument = null) => { editorRef.current?.focus(); document.execCommand(name, false, argument); onChange(editorRef.current?.innerHTML || '') }
+  // What we last handed to onChange. cleanHtml normalizes markup, so the value
+  // coming back from the parent rarely matches innerHTML byte for byte; without
+  // this guard the effect rewrites the DOM mid-keystroke and the caret jumps to
+  // the start of the document.
+  const lastEmitted = useRef(null)
+  const emit = html => { lastEmitted.current = html; onChange(html) }
+  useEffect(() => {
+    if (!editorRef.current || value === lastEmitted.current) return
+    if (editorRef.current.innerHTML !== value) editorRef.current.innerHTML = cleanHtml(value)
+  }, [value])
+  const command = (name, argument = null) => { editorRef.current?.focus(); document.execCommand(name, false, argument); emit(editorRef.current?.innerHTML || '') }
   const insertTable = () => {
     editorRef.current?.focus()
     document.execCommand('insertHTML', false, '<table><tbody><tr><td>Cell</td><td>Cell</td></tr><tr><td>Cell</td><td>Cell</td></tr></tbody></table><p><br></p>')
-    onChange(editorRef.current?.innerHTML || '')
+    emit(editorRef.current?.innerHTML || '')
+  }
+  const addLink = () => {
+    const entered = window.prompt('Link URL')
+    if (entered === null) return
+    const url = safeUrl(entered)
+    if (url) command('createLink', url)
+    else window.alert('Links must start with http://, https://, mailto:, tel:, or /.')
   }
   const toolbarButton = (label, icon, action) => <button type="button" className="rich-toolbar-button" onMouseDown={event => event.preventDefault()} onClick={action} aria-label={label} title={label}>{icon}</button>
   return <div className={`rich-editor ${compact ? 'is-compact' : ''}`}>
@@ -39,10 +77,10 @@ function RichEditor({ value, onChange, compact = false, readOnly = false, hideTo
       <div className="rich-toolbar-row">
         <div className="rich-toolbar-group"><span>Paragraph</span><select onChange={event => command('formatBlock', event.target.value)} defaultValue="p" aria-label="Paragraph style"><option value="p">Paragraph</option><option value="h1">Title</option><option value="h2">Heading 1</option><option value="h3">Heading 2</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>{toolbarButton('Bulleted list', <List size={15} />, () => command('insertUnorderedList'))}{toolbarButton('Numbered list', <ListOrdered size={15} />, () => command('insertOrderedList'))}{toolbarButton('Decrease indent', <IndentDecrease size={15} />, () => command('outdent'))}{toolbarButton('Increase indent', <IndentIncrease size={15} />, () => command('indent'))}</div>
         <div className="rich-toolbar-group"><span>Align</span>{toolbarButton('Align left', <AlignLeft size={15} />, () => command('justifyLeft'))}{toolbarButton('Align center', <AlignCenter size={15} />, () => command('justifyCenter'))}{toolbarButton('Align right', <AlignRight size={15} />, () => command('justifyRight'))}</div>
-        <div className="rich-toolbar-group"><span>Insert</span>{toolbarButton('Add link', <Link2 size={15} />, () => { const url = window.prompt('Link URL'); if (url) command('createLink', url) })}{toolbarButton('Insert table', <Table2 size={15} />, insertTable)}{toolbarButton('Horizontal line', <Minus size={15} />, () => command('insertHorizontalRule'))}{toolbarButton('Code block', <Code size={15} />, () => command('formatBlock', 'pre'))}{toolbarButton('Clear formatting', <RemoveFormatting size={15} />, () => command('removeFormat'))}</div>
+        <div className="rich-toolbar-group"><span>Insert</span>{toolbarButton('Add link', <Link2 size={15} />, addLink)}{toolbarButton('Insert table', <Table2 size={15} />, insertTable)}{toolbarButton('Horizontal line', <Minus size={15} />, () => command('insertHorizontalRule'))}{toolbarButton('Code block', <Code size={15} />, () => command('formatBlock', 'pre'))}{toolbarButton('Clear formatting', <RemoveFormatting size={15} />, () => command('removeFormat'))}</div>
       </div>
     </div>}
-    <div ref={editorRef} contentEditable={!readOnly} suppressContentEditableWarning onInput={event => onChange(cleanHtml(event.currentTarget.innerHTML))} className="rich-editor-surface" data-placeholder="Start writing..." />
+    <div ref={editorRef} contentEditable={!readOnly} suppressContentEditableWarning onInput={event => emit(cleanHtml(event.currentTarget.innerHTML))} className="rich-editor-surface" data-placeholder="Start writing..." />
   </div>
 }
 
@@ -85,6 +123,18 @@ function PresentationToolbar({ readOnly, onAddTextBox, onAddColorBox, onAddImage
   return <div className="presentation-toolbar" role="toolbar" aria-label="Presentation tools"><span className="presentation-toolbar-label">Slide tools</span><button type="button" className="presentation-tool-button presentation-add-text" onClick={onAddTextBox} disabled={readOnly}>Add text box</button><button type="button" className="presentation-tool-button" onClick={onAddTitle} disabled={readOnly}>Add title</button><button type="button" className="presentation-tool-button" onClick={onAddColorBox} disabled={readOnly}>Color box</button><button type="button" className="presentation-tool-button" onClick={onAddImage} disabled={readOnly}>Add image</button><button type="button" className="presentation-tool-button" onClick={onAddIcon} disabled={readOnly}>Add icon</button><button type="button" className="presentation-tool-button" onClick={onResizeSlide} disabled={readOnly}>Resize slide</button>{button('Bold', 'bold')}{button('Italic', 'italic')}{button('Underline', 'underline')}{button('Bullets', 'insertUnorderedList')}{button('Align left', 'justifyLeft')}{button('Center', 'justifyCenter')}{button('Align right', 'justifyRight')}</div>
 }
 
+function promptForImage(label) {
+  const entered = window.prompt(label)
+  if (entered === null) return ''
+  const url = safeUrl(entered)
+  if (!url) window.alert('Image links must start with http://, https://, or / .')
+  return url
+}
+
+// Keys are the block-address prefix; "title" and "body" are deliberately absent
+// because those two live in slide.layout rather than in a collection.
+const SLIDE_COLLECTIONS = { text: 'text_boxes', color: 'color_boxes', image: 'images', icon: 'icons' }
+
 function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
   const canvasRef = useRef(null)
   const dragState = useRef(null)
@@ -97,14 +147,29 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
   const colorBoxes = slide.color_boxes || []
   const images = slide.images || []
 
-  const blockLayoutFor = block => block.startsWith('text-') ? textBoxes[Number(block.slice(5))] : layout[block]
+  const icons = slide.icons || []
+  // Every placed element is addressed as "<prefix>-<index>" so one set of drag,
+  // resize, and delete handlers covers text boxes, color boxes, images, and
+  // icons alike. The built-in title and body live in slide.layout instead.
+  const collectionOf = block => SLIDE_COLLECTIONS[block.split('-')[0]]
+  const blockLayoutFor = block => {
+    const collection = collectionOf(block)
+    return collection ? (slide[collection] || [])[Number(block.split('-')[1])] : layout[block]
+  }
   const updateLayout = (block, values) => {
-    if (block.startsWith('text-')) {
-      const index = Number(block.slice(5))
-      onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, ...values } : item) })
+    const collection = collectionOf(block)
+    if (collection) {
+      const index = Number(block.split('-')[1])
+      onChange({ ...slide, [collection]: (slide[collection] || []).map((item, itemIndex) => itemIndex === index ? { ...item, ...values } : item) })
       return
     }
     onChange({ ...slide, layout: { ...layout, [block]: { ...layout[block], ...values } } })
+  }
+  const removeBlock = block => {
+    const collection = collectionOf(block)
+    if (!collection) return
+    const index = Number(block.split('-')[1])
+    onChange({ ...slide, [collection]: (slide[collection] || []).filter((item, itemIndex) => itemIndex !== index) })
   }
   const startDrag = (event, block) => {
     event.preventDefault()
@@ -131,26 +196,28 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
     updateLayout(block, { width: Math.min(100 - blockLayout.x, (elementBounds.width / bounds.width) * 100), height: Math.min(100 - blockLayout.y, (elementBounds.height / bounds.height) * 100) })
   }
   const blockStyle = block => ({ left: `${layout[block].x}%`, top: `${layout[block].y}%`, width: `${layout[block].width}%`, height: `${layout[block].height}%` })
+  const dragHandle = (block, label) => <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, block)} onPointerMove={moveDrag} onPointerUp={finishDrag} disabled={readOnly}>{label}</button>
+  const blockControls = (block, label) => readOnly ? null : <>{dragHandle(block, label)}<button type="button" className="slide-delete-handle" onClick={() => removeBlock(block)} aria-label={`Delete ${label.replace('Drag ', '')}`} title="Delete"><X size={12} /></button></>
 
   const addTextBox = () => onChange({ ...slide, text_boxes: [...textBoxes, { id: `text-${Date.now()}`, text: 'New text box', x: 12, y: 18 + (textBoxes.length * 8) % 60, width: 34, height: 16 }] })
   const addTitle = () => onChange({ ...slide, text_boxes: [...textBoxes, { id: `title-${Date.now()}`, text: 'New title', x: 12, y: 8, width: 60, height: 14 }] })
   const addColorBox = () => onChange({ ...slide, color_boxes: [...colorBoxes, { id: `color-${Date.now()}`, x: 50, y: 20 + (colorBoxes.length * 8) % 60, width: 22, height: 18, color: '#dbeafe' }] })
-  const addImage = () => { const url = window.prompt('Image URL'); if (url) onChange({ ...slide, images: [...images, { id: `image-${Date.now()}`, url, x: 42, y: 20, width: 28, height: 28 }] }) }
-  const addIcon = () => { const url = window.prompt('Icon image URL'); if (url) onChange({ ...slide, icons: [...(slide.icons || []), { id: `icon-${Date.now()}`, url, x: 75, y: 10, width: 10, height: 10 }] }) }
+  const addImage = () => { const url = promptForImage('Image URL'); if (url) onChange({ ...slide, images: [...images, { id: `image-${Date.now()}`, url, x: 42, y: 20, width: 28, height: 28 }] }) }
+  const addIcon = () => { const url = promptForImage('Icon image URL'); if (url) onChange({ ...slide, icons: [...icons, { id: `icon-${Date.now()}`, url, x: 75, y: 10, width: 10, height: 10 }] }) }
   const resizeSlide = () => onChange({ ...slide, aspect_ratio: slide.aspect_ratio === '4/3' ? '16/9' : '4/3' })
   return <div className="presentation-slide-shell"><PresentationToolbar readOnly={readOnly} onAddTextBox={addTextBox} onAddTitle={addTitle} onAddColorBox={addColorBox} onAddImage={addImage} onAddIcon={addIcon} onResizeSlide={resizeSlide} /><div className="presentation-slide" style={{ aspectRatio: slide.aspect_ratio || '16/9' }} ref={canvasRef}>
     <section className="slide-editable-block slide-title-block" style={blockStyle('title')} onPointerUp={event => captureSize(event, 'title')}>
-      {!readOnly && <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, 'title')} onPointerMove={moveDrag} onPointerUp={finishDrag}>Drag title</button>}
+      {!readOnly && dragHandle('title', 'Drag title')}
       <input value={slide.title || ''} onChange={event => onChange({ ...slide, title: event.target.value })} placeholder="Slide title" readOnly={readOnly} />
     </section>
     <section className="slide-editable-block slide-body-block" style={blockStyle('body')} onPointerUp={event => captureSize(event, 'body')}>
-      {!readOnly && <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, 'body')} onPointerMove={moveDrag} onPointerUp={finishDrag}>Drag text</button>}
+      {!readOnly && dragHandle('body', 'Drag text')}
       <RichEditor value={slide.body || ''} onChange={body => onChange({ ...slide, body })} compact hideToolbar readOnly={readOnly} />
     </section>
-    {textBoxes.map((box, index) => <section key={box.id || index} className="slide-editable-block slide-text-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%` }} onPointerUp={event => captureSize(event, `text-${index}`)}><button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, `text-${index}`)} disabled={readOnly}>Drag text</button><RichEditor value={box.text || ''} onChange={text => onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item) })} compact hideToolbar readOnly={readOnly} /></section>)}
-    {colorBoxes.map(box => <div key={box.id} className="slide-color-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, background: box.color }} />)}
-    {images.map(image => <img key={image.id} className="slide-image-box" src={image.url} alt="" style={{ left: `${image.x}%`, top: `${image.y}%`, width: `${image.width}%`, height: `${image.height}%` }} />)}
-    {(slide.icons || []).map(icon => <img key={icon.id} className="slide-icon-box" src={icon.url} alt="" style={{ left: `${icon.x}%`, top: `${icon.y}%`, width: `${icon.width}%`, height: `${icon.height}%` }} />)}
+    {textBoxes.map((box, index) => <section key={box.id || index} className="slide-editable-block slide-text-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%` }} onPointerUp={event => captureSize(event, `text-${index}`)}>{blockControls(`text-${index}`, 'Drag text')}<RichEditor value={box.text || ''} onChange={text => onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item) })} compact hideToolbar readOnly={readOnly} /></section>)}
+    {colorBoxes.map((box, index) => <section key={box.id || index} className="slide-editable-block slide-color-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, background: box.color }} onPointerUp={event => captureSize(event, `color-${index}`)}>{blockControls(`color-${index}`, 'Drag box')}{!readOnly && <input type="color" className="slide-color-input" value={box.color || '#dbeafe'} onChange={event => updateLayout(`color-${index}`, { color: event.target.value })} aria-label="Box color" />}</section>)}
+    {images.map((image, index) => <section key={image.id || index} className="slide-editable-block slide-image-box" style={{ left: `${image.x}%`, top: `${image.y}%`, width: `${image.width}%`, height: `${image.height}%` }} onPointerUp={event => captureSize(event, `image-${index}`)}>{blockControls(`image-${index}`, 'Drag image')}<img src={image.url} alt={image.alt || ''} /></section>)}
+    {icons.map((icon, index) => <section key={icon.id || index} className="slide-editable-block slide-icon-box" style={{ left: `${icon.x}%`, top: `${icon.y}%`, width: `${icon.width}%`, height: `${icon.height}%` }} onPointerUp={event => captureSize(event, `icon-${index}`)}>{blockControls(`icon-${index}`, 'Drag icon')}<img src={icon.url} alt="" /></section>)}
   </div></div>
 }
 
@@ -174,6 +241,10 @@ export function FilesWorkspaceView({ workspaceId }) {
   const [comments, setComments] = useState([])
   const [shares, setShares] = useState([])
   const [commentDraft, setCommentDraft] = useState('')
+  const [dragActive, setDragActive] = useState(false)
+  const [conflict, setConflict] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [revisions, setRevisions] = useState([])
   const [shareUserId, setShareUserId] = useState('')
   const [sharePermission, setSharePermission] = useState('comment')
   const draggedSlideIndex = useRef(null)
@@ -230,22 +301,30 @@ export function FilesWorkspaceView({ workspaceId }) {
     setStatus('Saving…')
     const content = selected.kind === 'presentation' ? { ...selected.content, slides } : selected.kind === 'spreadsheet' ? { ...selected.content, sheets: spreadsheetData.sheets } : { ...selected.content, html: cleanHtml(documentHtml), text: cleanHtml(documentHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: selected.title, content }) })
+      const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: selected.title, content, base_updated_at: selected.updated_at }) })
       const data = await readJsonResponse(response, 'Changes could not be saved.')
+      if (response.status === 409) {
+        // Someone else saved first. Keep the local edits on screen and let the
+        // author decide, rather than silently overwriting their colleague.
+        setConflict(data.document || null)
+        setStatus(data.error || 'Someone else saved this document while you were editing.')
+        return
+      }
       if (!response.ok) throw new Error(data.error || 'Could not save changes.')
       setSelected(data.document)
       setDocuments(current => current.map(item => item.id === data.document.id ? data.document : item))
       setDirty(false)
+      setConflict(null)
       setStatus('Saved')
     } catch (error) { setStatus(error.message || 'Save failed.') } finally { setBusy(false) }
-  }, [busy, documentHtml, selected, slides, workspaceId])
+  }, [busy, documentHtml, selected, slides, spreadsheetData, workspaceId])
 
   useEffect(() => {
-    if (!dirty || !selected) return undefined
+    if (!dirty || !selected || conflict) return undefined
     setStatus('Unsaved changes')
     const timer = window.setTimeout(saveDocument, 1200)
     return () => window.clearTimeout(timer)
-  }, [dirty, documentHtml, slides, selected?.title])
+  }, [dirty, documentHtml, slides, spreadsheetData, selected?.title, conflict, saveDocument])
 
   const createDocument = async kind => {
     setBusy(true)
@@ -260,18 +339,72 @@ export function FilesWorkspaceView({ workspaceId }) {
     } catch (error) { setStatus(error.message) } finally { setBusy(false) }
   }
 
-  const upload = async event => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    const body = new FormData(); body.append('file', file)
+  const uploadFiles = async fileList => {
+    const chosen = [...(fileList || [])]
+    if (!chosen.length) return
     setBusy(true)
+    const failures = []
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body })
-      const data = await readJsonResponse(response, 'The file could not be uploaded.')
-      if (!response.ok) throw new Error(data.error || 'Upload failed.')
-      setFiles(current => [data.file, ...current]); setStatus('File uploaded.')
-    } catch (error) { setStatus(error.message) } finally { setBusy(false) }
+      for (const [index, file] of chosen.entries()) {
+        setStatus(chosen.length > 1 ? `Uploading ${index + 1} of ${chosen.length}...` : 'Uploading...')
+        const body = new FormData(); body.append('file', file)
+        const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body })
+        const data = await readJsonResponse(response, 'The file could not be uploaded.')
+        if (!response.ok) { failures.push(`${file.name}: ${data.error || 'upload failed'}`); continue }
+        setFiles(current => [data.file, ...current])
+      }
+      const uploaded = chosen.length - failures.length
+      setStatus(failures.length ? `${uploaded} of ${chosen.length} uploaded. ${failures.join('; ')}` : `${uploaded} file${uploaded === 1 ? '' : 's'} uploaded.`)
+    } catch (error) { setStatus(error.message || 'Upload failed.') } finally { setBusy(false) }
+  }
+
+  const upload = async event => {
+    const chosen = event.target.files
+    const list = chosen ? [...chosen] : []
+    event.target.value = ''
+    await uploadFiles(list)
+  }
+
+  const removeFile = async item => {
+    if (!window.confirm(`Delete "${item.original_name}"? This cannot be undone.`)) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/files/${item.id}/`, { method: 'DELETE', credentials: 'include', headers: await csrf(headers(workspaceId)) })
+    const data = await readJsonResponse(response, 'The file could not be deleted.')
+    if (!response.ok) return setStatus(data.error || 'Could not delete file.')
+    setFiles(current => current.filter(entry => entry.id !== item.id))
+    setStatus('File deleted.')
+  }
+
+  const openHistory = async () => {
+    setHistoryOpen(current => !current)
+    if (historyOpen || !selected) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/revisions/`, { credentials: 'include', headers: headers(workspaceId) })
+    const data = await readJsonResponse(response, 'Version history could not be loaded.')
+    if (!response.ok) return setStatus(data.error || 'Version history could not be loaded.')
+    setRevisions(data.revisions || [])
+  }
+
+  const restoreRevision = async revision => {
+    if (!window.confirm(`Restore the version from ${new Date(revision.created_at).toLocaleString()}? The current version is kept in history.`)) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/revisions/${revision.id}/restore/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)) })
+    const data = await readJsonResponse(response, 'The version could not be restored.')
+    if (!response.ok) return setStatus(data.error || 'Could not restore that version.')
+    await openDocument(data.document)
+    setStatus('Version restored.')
+  }
+
+  const discardConflict = async () => {
+    if (!conflict) return
+    setConflict(null)
+    await openDocument(conflict)
+    setStatus('Reloaded the newer version.')
+  }
+
+  const overwriteConflict = () => {
+    // Drop the base stamp so the next save is unconditional.
+    setSelected(current => ({ ...current, updated_at: conflict?.updated_at || current.updated_at }))
+    setConflict(null)
+    setDirty(true)
+    setStatus('Your version will overwrite theirs on the next save.')
   }
 
   const addComment = async event => {
@@ -315,16 +448,24 @@ export function FilesWorkspaceView({ workspaceId }) {
     const canComment = ['comment', 'edit'].includes(selected.permission)
     const updateSlide = patch => { setSlides(current => current.map((slide, index) => index === activeSlide ? { ...slide, ...patch } : slide)); setDirty(true) }
     return <section className="workspace-view file-editor-view">
-      <div className="file-editor-commandbar"><button type="button" className="secondary-button" onClick={() => setSelected(null)}><ChevronLeft size={15} /> Files</button><input className="file-editor-title" value={selected.title} onChange={event => { setSelected(current => ({ ...current, title: event.target.value })); setDirty(true) }} readOnly={!canEdit} /><span className={`file-save-status ${dirty ? 'is-dirty' : ''}`} role="status">{canEdit ? (status || 'Saved') : `Read only (${selected.permission || 'view'})`}</span><button type="button" className="secondary-button" onClick={() => setCommentsOpen(current => !current)}><MessageSquare size={15} /> Comments ({comments.filter(item => !item.resolved).length})</button>{canEdit && <><button type="button" className="primary-button" onClick={() => setShareOpen(current => !current)}><Share2 size={15} /> Share</button><button type="button" className="secondary-button" onClick={saveDocument} disabled={busy}><Save size={15} /> Save</button><button type="button" className="file-delete-button" onClick={removeDocument} aria-label="Delete"><Trash2 size={16} /></button></>}</div>
-      <div className={`file-editor-layout ${(commentsOpen || shareOpen) ? 'has-review-panel' : ''}`}>
+      <div className="file-editor-commandbar"><button type="button" className="secondary-button" onClick={() => setSelected(null)}><ChevronLeft size={15} /> Files</button><input className="file-editor-title" value={selected.title} onChange={event => { setSelected(current => ({ ...current, title: event.target.value })); setDirty(true) }} readOnly={!canEdit} /><span className={`file-save-status ${dirty ? 'is-dirty' : ''}`} role="status">{canEdit ? (status || 'Saved') : `Read only (${selected.permission || 'view'})`}</span><button type="button" className="secondary-button" onClick={() => setCommentsOpen(current => !current)}><MessageSquare size={15} /> Comments ({comments.filter(item => !item.resolved).length})</button><button type="button" className="secondary-button" onClick={() => openHistory().catch(() => setStatus('Version history could not be loaded.'))}><History size={15} /> History</button>{canEdit && <><button type="button" className="primary-button" onClick={() => setShareOpen(current => !current)}><Share2 size={15} /> Share</button><button type="button" className="secondary-button" onClick={saveDocument} disabled={busy}><Save size={15} /> Save</button><button type="button" className="file-delete-button" onClick={removeDocument} aria-label="Delete"><Trash2 size={16} /></button></>}</div>
+      {conflict && <div className="document-conflict-banner" role="alert"><strong>This document changed while you were editing.</strong><span>{conflict.title} was saved by someone else. Autosave is paused so your work is not lost.</span><button type="button" className="secondary-button" onClick={() => discardConflict().catch(() => setStatus('Could not reload the document.'))}>Discard mine and reload</button><button type="button" className="primary-button" onClick={overwriteConflict}>Keep mine and overwrite</button></div>}
+      <div className={`file-editor-layout ${(commentsOpen || shareOpen || historyOpen) ? 'has-review-panel' : ''}`}>
         {selected.kind === 'presentation' && <aside className="slide-rail">{canEdit && <button type="button" className="secondary-button" onClick={() => { setSlides(current => [...current, { title: `Slide ${current.length + 1}`, body: '' }]); setActiveSlide(slides.length); setDirty(true) }}><Plus size={14} /> Slide</button>}{slides.map((slide, index) => <button type="button" draggable={canEdit} className={index === activeSlide ? 'active' : ''} onClick={() => setActiveSlide(index)} onDragStart={() => { draggedSlideIndex.current = index }} onDragOver={event => { if (canEdit) event.preventDefault() }} onDrop={() => { const source = draggedSlideIndex.current; if (!canEdit || source === null || source === index) return; setSlides(current => { const reordered = [...current]; const [moved] = reordered.splice(source, 1); reordered.splice(index, 0, moved); return reordered }); setActiveSlide(index); setDirty(true); draggedSlideIndex.current = null }} key={index}><span>{index + 1}</span><strong>{slide.title || `Slide ${index + 1}`}</strong></button>)}</aside>}
         <main className={selected.kind === 'presentation' ? 'presentation-canvas' : selected.kind === 'spreadsheet' ? 'spreadsheet-canvas' : 'document-canvas'}>{selected.kind === 'presentation' ? <PresentationSlideEditor slide={slides[activeSlide] || { title: '', body: '' }} onChange={nextSlide => updateSlide(nextSlide)} readOnly={!canEdit} /> : selected.kind === 'spreadsheet' ? <SpreadsheetEditor workspaceId={workspaceId} documentId={selected.id} value={spreadsheetData} onChange={value => { setSpreadsheetData(value); setDirty(true) }} onImport={value => { setSpreadsheetData(value); setDirty(true) }} readOnly={!canEdit} /> : <DocumentEditorSurface value={documentHtml} onChange={value => { setDocumentHtml(value); setDirty(true) }} readOnly={!canEdit} />}</main>
-        {(commentsOpen || shareOpen) && <aside className="document-review-panel">{shareOpen && <><h3>Share</h3><form onSubmit={shareDocument}><select value={shareUserId} onChange={event => setShareUserId(event.target.value)} required><option value="">Choose a team member</option>{members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select><select value={sharePermission} onChange={event => setSharePermission(event.target.value)}><option value="view">Can view</option><option value="comment">Can comment</option><option value="edit">Can edit</option></select><button className="primary-button">Share</button></form>{shares.map(share => <div className="document-share-row" key={share.id}><strong>{share.user_name}</strong><span>{share.permission}</span></div>)}</>}{commentsOpen && <><h3>Review comments</h3><div className="document-comment-list">{comments.map(comment => <article className={comment.resolved ? 'resolved' : ''} key={comment.id}><strong>{comment.author_name}</strong><span>{new Date(comment.created_at).toLocaleString()}{comment.anchor?.slide ? `, Slide ${comment.anchor.slide}` : ''}</span><p>{comment.body}</p>{canComment && <button type="button" onClick={() => resolveComment(comment)}>{comment.resolved ? 'Reopen' : 'Resolve'}</button>}</article>)}</div>{canComment ? <form onSubmit={addComment}><textarea value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Add a review comment..." /><button className="primary-button">Comment</button></form> : <p className="workspace-inline-status">View-only access does not allow comments.</p>}</>}</aside>}
+        {(commentsOpen || shareOpen || historyOpen) && <aside className="document-review-panel">{historyOpen && <><h3>Version history</h3><div className="document-revision-list">{revisions.map(revision => <article key={revision.id}><strong>{new Date(revision.created_at).toLocaleString()}</strong><span>{revision.created_by}</span>{canEdit && <button type="button" onClick={() => restoreRevision(revision).catch(() => setStatus('Could not restore that version.'))}>Restore</button>}</article>)}</div>{!revisions.length && <p className="workspace-inline-status">No earlier versions yet.</p>}</>}{shareOpen && <><h3>Share</h3><form onSubmit={shareDocument}><select value={shareUserId} onChange={event => setShareUserId(event.target.value)} required><option value="">Choose a team member</option>{members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select><select value={sharePermission} onChange={event => setSharePermission(event.target.value)}><option value="view">Can view</option><option value="comment">Can comment</option><option value="edit">Can edit</option></select><button className="primary-button">Share</button></form>{shares.map(share => <div className="document-share-row" key={share.id}><strong>{share.user_name}</strong><span>{share.permission}</span></div>)}</>}{commentsOpen && <><h3>Review comments</h3><div className="document-comment-list">{comments.map(comment => <article className={comment.resolved ? 'resolved' : ''} key={comment.id}><strong>{comment.author_name}</strong><span>{new Date(comment.created_at).toLocaleString()}{comment.anchor?.slide ? `, Slide ${comment.anchor.slide}` : ''}</span><p>{comment.body}</p>{canComment && <button type="button" onClick={() => resolveComment(comment)}>{comment.resolved ? 'Reopen' : 'Resolve'}</button>}</article>)}</div>{canComment ? <form onSubmit={addComment}><textarea value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Add a review comment..." /><button className="primary-button">Comment</button></form> : <p className="workspace-inline-status">View-only access does not allow comments.</p>}</>}</aside>}
       </div>
     </section>
   }
 
-  return <section className="workspace-view files-browser-view"><div className="files-browser-heading"><div><p className="eyebrow">Workspace resources</p><h2>Files</h2><p>Browse documents, presentations, and uploads.</p></div><div className="files-create-actions"><button type="button" className="secondary-button" onClick={() => createDocument('document')}><FileText size={15} /> New document</button><button type="button" className="secondary-button" onClick={() => createDocument('presentation')}><Presentation size={15} /> New presentation</button><button type="button" className="secondary-button" onClick={() => createDocument('spreadsheet')}><Table2 size={15} /> New spreadsheet</button><label className="primary-button"><Upload size={15} /> Upload<input type="file" hidden onChange={upload} /></label></div></div>{status && <p className="workspace-inline-status" role="status">{status}</p>}<div className="files-browser-toolbar"><div className="files-categories">{[['all', 'All'], ['document', 'Documents'], ['presentation', 'Presentations'], ['spreadsheet', 'Spreadsheets'], ['file', 'Uploads']].map(([value, label]) => <button type="button" className={category === value ? 'active' : ''} onClick={() => setCategory(value)} key={value}>{label}</button>)}</div><label className="files-search"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search files" /></label><div className="files-view-switch"><button type="button" className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')} aria-label="Thumbnail view"><Grid3X3 size={16} /></button><button type="button" className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} aria-label="Table view"><Table2 size={16} /></button></div></div>{viewMode === 'grid' ? <div className="files-thumbnail-grid">{items.map(item => <button type="button" key={`${item.itemType}-${item.id}`} onClick={() => item.itemType === 'file' ? window.open(item.url, '_blank', 'noopener') : openDocument(item)}><span className={`file-thumbnail file-thumbnail-${item.itemType}`}>{item.itemType === 'presentation' ? <Presentation size={38} /> : item.itemType === 'spreadsheet' ? <Table2 size={38} /> : <FileText size={38} />}</span><strong>{item.title}</strong><small>{item.itemType === 'presentation' ? 'Presentation' : item.itemType === 'document' ? 'Document' : 'Uploaded file'} · {new Date(item.modified).toLocaleDateString()}</small></button>)}</div> : <div className="files-table-wrap"><table className="files-table"><thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Modified</th><th>Size</th></tr></thead><tbody>{items.map(item => <tr key={`${item.itemType}-${item.id}`} onClick={() => item.itemType === 'file' ? window.open(item.url, '_blank', 'noopener') : openDocument(item)}><td><span>{item.itemType === 'presentation' ? <Presentation size={17} /> : <FileText size={17} />}</span>{item.title}</td><td>{item.itemType}</td><td>{item.owner ? [item.owner.first_name, item.owner.last_name].filter(Boolean).join(' ') || item.owner.email : '-'}</td><td>{new Date(item.modified).toLocaleString()}</td><td>{item.size ? `${Math.ceil(item.size / 1024)} KB` : '-'}</td></tr>)}</tbody></table></div>}{!items.length && <div className="files-empty">No matching files.</div>}</section>
+  const typeLabel = itemType => itemType === 'presentation' ? 'Presentation' : itemType === 'document' ? 'Document' : itemType === 'spreadsheet' ? 'Spreadsheet' : 'Uploaded file'
+  const openItem = item => item.itemType === 'file' ? window.open(item.url, '_blank', 'noopener') : openDocument(item)
+  return <section
+    className={`workspace-view files-browser-view ${dragActive ? 'is-drop-target' : ''}`}
+    onDragOver={event => { event.preventDefault(); setDragActive(true) }}
+    onDragLeave={event => { if (event.currentTarget === event.target) setDragActive(false) }}
+    onDrop={event => { event.preventDefault(); setDragActive(false); uploadFiles(event.dataTransfer?.files) }}
+  ><div className="files-browser-heading"><div><p className="eyebrow">Workspace resources</p><h2>Files</h2><p>Browse documents, presentations, and uploads.</p></div><div className="files-create-actions"><button type="button" className="secondary-button" onClick={() => createDocument('document')}><FileText size={15} /> New document</button><button type="button" className="secondary-button" onClick={() => createDocument('presentation')}><Presentation size={15} /> New presentation</button><button type="button" className="secondary-button" onClick={() => createDocument('spreadsheet')}><Table2 size={15} /> New spreadsheet</button><label className="primary-button"><Upload size={15} /> Upload<input type="file" hidden multiple onChange={upload} /></label></div></div>{status && <p className="workspace-inline-status" role="status">{status}</p>}<div className="files-browser-toolbar"><div className="files-categories">{[['all', 'All'], ['document', 'Documents'], ['presentation', 'Presentations'], ['spreadsheet', 'Spreadsheets'], ['file', 'Uploads']].map(([value, label]) => <button type="button" className={category === value ? 'active' : ''} onClick={() => setCategory(value)} key={value}>{label}</button>)}</div><label className="files-search"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search files" /></label><div className="files-view-switch"><button type="button" className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')} aria-label="Thumbnail view"><Grid3X3 size={16} /></button><button type="button" className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} aria-label="Table view"><Table2 size={16} /></button></div></div>{viewMode === 'grid' ? <div className="files-thumbnail-grid">{items.map(item => <div className="files-thumbnail-tile" key={`${item.itemType}-${item.id}`}><button type="button" onClick={() => openItem(item)}><span className={`file-thumbnail file-thumbnail-${item.itemType}`}>{item.itemType === 'presentation' ? <Presentation size={38} /> : item.itemType === 'spreadsheet' ? <Table2 size={38} /> : <FileText size={38} />}</span><strong>{item.title}</strong><small>{typeLabel(item.itemType)} · {new Date(item.modified).toLocaleDateString()}</small></button>{item.itemType === 'file' && <button type="button" className="files-tile-delete" onClick={() => removeFile(item)} aria-label={`Delete ${item.title}`} title="Delete"><Trash2 size={14} /></button>}</div>)}</div> : <div className="files-table-wrap"><table className="files-table"><thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Modified</th><th>Size</th><th><span className="visually-hidden">Actions</span></th></tr></thead><tbody>{items.map(item => <tr key={`${item.itemType}-${item.id}`} tabIndex={0} role="button" aria-label={`Open ${item.title}`} onClick={() => openItem(item)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openItem(item) } }}><td><span>{item.itemType === 'presentation' ? <Presentation size={17} /> : item.itemType === 'spreadsheet' ? <Table2 size={17} /> : <FileText size={17} />}</span>{item.title}</td><td>{typeLabel(item.itemType)}</td><td>{item.owner ? [item.owner.first_name, item.owner.last_name].filter(Boolean).join(' ') || item.owner.email : '-'}</td><td>{new Date(item.modified).toLocaleString()}</td><td>{item.size ? `${Math.ceil(item.size / 1024)} KB` : '-'}</td><td>{item.itemType === 'file' && <button type="button" className="files-row-delete" onClick={event => { event.stopPropagation(); removeFile(item) }} aria-label={`Delete ${item.title}`} title="Delete"><Trash2 size={15} /></button>}</td></tr>)}</tbody></table></div>}{!items.length && <div className="files-empty">No matching files.</div>}</section>
 }
 
 export function AssistantFlyout({ workspaceId, onClose }) {
