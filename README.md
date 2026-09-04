@@ -71,3 +71,5 @@ python manage.py purge_screen_captures
 ```
 
 The consent, access, lifecycle, and frontend integration contract for screen sharing is in [`docs/screen-sharing-api-contract.md`](docs/screen-sharing-api-contract.md). A policy template for company review is in [`docs/screen-sharing-company-policy.md`](docs/screen-sharing-company-policy.md).
+
+Workspace imports are documented in [`docs/import-api-contract.md`](docs/import-api-contract.md). The Import data page provides task, project, and stakeholder templates in Excel and CSV formats.

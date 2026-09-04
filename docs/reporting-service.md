@@ -265,7 +265,7 @@ preview, and commit additionally require an owner or manager.
 * `GET /api/workspaces/{id}/integrity/` → `{"checks": [...]}`; leader only.
 * `POST /api/workspaces/{id}/automation/run/` → `{"deliveries": ...}`; leader only and audited.
 * `POST /api/workspaces/{id}/imports/preview/` accepts multipart `workbook` (`.xlsx`, maximum 20 MB) and optional JSON `column_map`. It returns a safe, serializable preview plus `preview_id` and SHA-256 `checksum`.
-* `POST /api/workspaces/{id}/imports/commit/` requires the same multipart workbook, the same optional `column_map`, `preview_id`, and `preview_checksum`. The server requires a matching preview by the same leader from the prior hour, locks and consumes it once, rebuilds the plan, rejects workspace drift, then commits transactionally and audits the result.
+* `POST /api/workspaces/{id}/imports/commit/` requires the same multipart workbook, the same optional `column_map`, `preview_id`, and `preview_checksum`. The server requires a matching workspace preview from the prior hour, locks and consumes it once, rebuilds the plan, rejects workspace drift, then commits transactionally and audits the result.
 
 The legacy `GET /api/workspaces/{id}/reports/summary/?range=` now uses the same delivery/completion-based period and excludes cancelled tasks from the completion-rate denominator.
 

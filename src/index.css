@@ -72,6 +72,25 @@
 .screen-capture-grid article > div > span { display: flex; flex: 1 1 100%; flex-direction: column; font-size: .82rem; }
 .screen-capture-grid small { color: var(--text-secondary, #667085); }
 .secondary-button.danger { color: #b42318; }
+.import-view { display: grid; gap: 1rem; }
+.import-panel, .import-preview-panel { padding: 1.25rem; }
+.import-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+.import-type-option { display: grid; gap: .35rem; text-align: left; padding: 1rem; border: 1px solid var(--border, #e4e7ec); border-radius: .7rem; color: var(--text-secondary, #667085); background: transparent; }
+.import-type-option.is-selected { border-color: var(--primary, #1d4ed8); color: var(--text-primary, #101828); background: #eff6ff; box-shadow: 0 0 0 1px var(--primary, #1d4ed8); }
+.import-type-option span { font-size: .8rem; line-height: 1.4; }
+.import-template-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border, #e4e7ec); }
+.import-template-actions label { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; }
+.import-upload-form { display: grid; gap: 1rem; margin-top: 1rem; }
+.import-upload-form label { display: grid; gap: .4rem; font-weight: 600; }
+.import-file-input input { padding: .7rem; border: 1px dashed var(--border, #98a2b3); border-radius: .5rem; }
+.import-summary { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
+.import-summary strong { padding: .4rem .65rem; border-radius: 999px; color: #166534; background: #dcfce7; }
+.import-summary strong.has-errors { color: #991b1b; background: #fee2e2; }
+.import-errors { display: grid; gap: .35rem; max-height: 280px; overflow: auto; padding: .8rem; border-radius: .5rem; background: #fff7ed; color: #9a3412; }
+.import-errors p { margin: 0; font-size: .85rem; }
+.import-preview-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1rem; }
+.import-preview-actions p { margin: 0; color: var(--text-secondary, #667085); }
+@media (max-width: 700px) { .import-type-grid { grid-template-columns: 1fr; } .import-template-actions label { margin-left: 0; } }
 
 @media (max-width: 600px) {
   .screen-share-consent-card { grid-template-columns: 1fr; padding: 1rem; }

@@ -24,6 +24,7 @@ from .models import (
     Membership,
     NotificationDelivery,
     Project,
+    ProjectStakeholder,
     Task,
     TaskChangeHistory,
     TaskCodeRegistry,
@@ -452,7 +453,8 @@ class QualityHttpApiTests(TestCase):
         commit_url = reverse('import-commit', args=[self.workspace.id])
         self.client.force_login(self.member)
         denied = self.client.post(preview_url, {'workbook': SimpleUploadedFile('tasks.xlsx', content)})
-        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(denied.status_code, 200)
+        self.assertEqual(denied.json()['preview']['summary']['creates'], 1)
 
         self.client.force_login(self.owner)
         preview = self.client.post(preview_url, {'workbook': SimpleUploadedFile('tasks.xlsx', content)})
@@ -478,3 +480,41 @@ class QualityHttpApiTests(TestCase):
         self.assertEqual(preview.status_code, 200)
         self.assertEqual(preview.json()['preview']['summary']['exceptions'], 1)
         self.assertIn('previously used', preview.json()['preview']['exceptions'][0]['message'])
+
+    def test_project_and_stakeholder_csv_imports_and_templates(self):
+        self.client.force_login(self.member)
+        template = self.client.get(reverse('import-template', args=[self.workspace.id, 'projects', 'csv']))
+        self.assertEqual(template.status_code, 200)
+        self.assertIn('text/csv', template['Content-Type'])
+        self.assertIn('workspace-projects-import-template.csv', template['Content-Disposition'])
+
+        projects_csv = 'Name,Description,Status,Start date,End date,Due date,Timezone,Week anchor date,Due soon days,Configuration JSON\nApollo,Launch project,active,2026-01-01,2026-03-31,2026-03-31,Europe/London,2026-01-05,7,"{ ""stream"": ""A"" }"\n'.encode()
+        preview_url = reverse('import-preview', args=[self.workspace.id])
+        commit_url = reverse('import-commit', args=[self.workspace.id])
+        project_preview = self.client.post(preview_url, {'import_type': 'projects', 'workbook': SimpleUploadedFile('projects.csv', projects_csv)})
+        self.assertEqual(project_preview.status_code, 200)
+        self.assertEqual(project_preview.json()['preview']['summary']['creates'], 1)
+        self.client.force_login(self.owner)
+        project_data = project_preview.json()['preview']
+        project_commit = self.client.post(commit_url, {'import_type': 'projects', 'workbook': SimpleUploadedFile('projects.csv', projects_csv), 'preview_id': project_data['preview_id'], 'preview_checksum': project_data['checksum']})
+        self.assertEqual(project_commit.status_code, 200, project_commit.content)
+        project = Project.objects.get(name='Apollo')
+        self.assertEqual(project.configuration, {'stream': 'A'})
+
+        stakeholders_csv = b'Project,Name,Role,Email,Influence,Interest,Notes\nApollo,Pat Sponsor,Sponsor,pat@example.com,high,medium,Key approver\n'
+        stakeholder_preview = self.client.post(preview_url, {'import_type': 'stakeholders', 'workbook': SimpleUploadedFile('stakeholders.csv', stakeholders_csv)})
+        self.assertEqual(stakeholder_preview.status_code, 200)
+        stakeholder_data = stakeholder_preview.json()['preview']
+        stakeholder_commit = self.client.post(commit_url, {'import_type': 'stakeholders', 'workbook': SimpleUploadedFile('stakeholders.csv', stakeholders_csv), 'preview_id': stakeholder_data['preview_id'], 'preview_checksum': stakeholder_data['checksum']})
+        self.assertEqual(stakeholder_commit.status_code, 200)
+        self.assertTrue(ProjectStakeholder.objects.filter(project=project, email='pat@example.com', influence='high').exists())
+
+    def test_csv_task_import_and_xlsx_template(self):
+        self.client.force_login(self.owner)
+        template = self.client.get(reverse('import-template', args=[self.workspace.id, 'tasks', 'xlsx']))
+        self.assertEqual(template.status_code, 200)
+        self.assertIn('spreadsheetml', template['Content-Type'])
+        tasks_csv = b'Code,Title,Description,Owner,Supporters,Project,Workstream,Phase,Bucket,Priority,Status,Start date,Due date,Progress %,Labels,Blocker details,Actual completion\nCSV-1,CSV task,,,,,,,Backlog,normal,todo,,,0,,,\n'
+        preview = self.client.post(reverse('import-preview', args=[self.workspace.id]), {'import_type': 'tasks', 'workbook': SimpleUploadedFile('tasks.csv', tasks_csv)})
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()['preview']['summary']['creates'], 1)

@@ -3,9 +3,11 @@
 import csv
 import io
 import json
-from datetime import date
+from datetime import date, datetime
 
 from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 from .models import Project, ProjectStakeholder
 
@@ -21,7 +23,8 @@ STAKEHOLDER_COLUMNS = {
 }
 
 
-def _rows_from_file(content, filename, sheet_name, columns):
+def _rows_from_file(content, filename, sheet_name, columns, column_map=None):
+    columns = {key: (column_map or {}).get(key, header) for key, header in columns.items()}
     if filename.lower().endswith('.csv'):
         text = content.decode('utf-8-sig')
         reader = csv.DictReader(io.StringIO(text))
@@ -42,6 +45,8 @@ def _rows_from_file(content, filename, sheet_name, columns):
 def _parse_date(value, field, row, exceptions):
     if value in (None, ''):
         return None
+    if isinstance(value, datetime):
+        return value.date()
     if isinstance(value, date):
         return value
     try:
@@ -51,8 +56,8 @@ def _parse_date(value, field, row, exceptions):
         return None
 
 
-def build_project_plan(workspace, content, filename):
-    rows = _rows_from_file(content, filename, 'Projects', PROJECT_COLUMNS)
+def build_project_plan(workspace, content, filename, column_map=None):
+    rows = _rows_from_file(content, filename, 'Projects', PROJECT_COLUMNS, column_map)
     exceptions, normalized = [], []
     existing = {}
     for project in Project.objects.filter(workspace=workspace):
@@ -72,7 +77,10 @@ def build_project_plan(workspace, content, filename):
         if len(matches) > 1:
             exceptions.append({'row': row_number, 'field': 'name', 'message': f'Project name "{name}" matches multiple existing projects.'})
             continue
+        date_exception_count = len(exceptions)
         parsed = {field: _parse_date(values.get(field), PROJECT_COLUMNS[field], row_number, exceptions) for field in ('start_date', 'end_date', 'due_date', 'week_anchor_date')}
+        if len(exceptions) > date_exception_count:
+            continue
         if parsed['start_date'] and parsed['end_date'] and parsed['end_date'] < parsed['start_date']:
             exceptions.append({'row': row_number, 'field': 'end_date', 'message': 'End date cannot precede start date.'})
             continue
@@ -117,8 +125,8 @@ def commit_project_plan(workspace, actor, plan):
     return {'created': sum(item['action'] == 'create' for item in plan['normalized']), 'updated': sum(item['action'] == 'update' for item in plan['normalized']), 'exceptions': plan['exceptions']}
 
 
-def build_stakeholder_plan(workspace, content, filename):
-    rows = _rows_from_file(content, filename, 'Stakeholders', STAKEHOLDER_COLUMNS)
+def build_stakeholder_plan(workspace, content, filename, column_map=None):
+    rows = _rows_from_file(content, filename, 'Stakeholders', STAKEHOLDER_COLUMNS, column_map)
     exceptions, normalized = [], []
     projects = {project.name.strip().lower(): project for project in Project.objects.filter(workspace=workspace)}
     seen = set()
@@ -133,6 +141,12 @@ def build_stakeholder_plan(workspace, content, filename):
             exceptions.append({'row': row_number, 'field': 'name', 'message': 'Stakeholder name is required and must be 160 characters or fewer.'})
             continue
         email = str(values.get('email') or '').strip()
+        if email:
+            try:
+                validate_email(email)
+            except ValidationError:
+                exceptions.append({'row': row_number, 'field': 'email', 'message': 'Stakeholder email is invalid.'})
+                continue
         key = (project.id, (email.lower() if email else name.lower()))
         if key in seen:
             exceptions.append({'row': row_number, 'field': 'email' if email else 'name', 'message': 'Duplicate stakeholder in file.'})

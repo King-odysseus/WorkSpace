@@ -5,6 +5,7 @@ from .views import activity_list, audit_log_list, calendar_event_detail, calenda
 from .pulse import workspace_pulse
 from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
+from .import_templates import import_template
 from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_document_detail, workspace_document_list, workspace_file_download, workspace_file_list
 
 urlpatterns = [
@@ -70,6 +71,7 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/automation/run/', workspace_automation_run, name='workspace-automation-run'),
     path('workspaces/<int:workspace_id>/imports/preview/', import_preview, name='import-preview'),
     path('workspaces/<int:workspace_id>/imports/commit/', import_commit, name='import-commit'),
+    path('workspaces/<int:workspace_id>/imports/templates/<str:kind>.<str:file_format>', import_template, name='import-template'),
     path('workspaces/<int:workspace_id>/plan-buckets/', plan_bucket_list, name='plan-bucket-list'),
     path('workspaces/<int:workspace_id>/plan-buckets/<int:bucket_id>/', plan_bucket_detail, name='plan-bucket-detail'),
     path('workspaces/<int:workspace_id>/plan-buckets/reorder/', plan_bucket_reorder, name='plan-bucket-reorder'),

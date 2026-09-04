@@ -36,6 +36,7 @@ import { CalendarEventEditDialog, CheckInEditDialog, FollowUpEditDialog, Project
 import { TaskCard, TaskDetailDrawer } from './components/TaskViews.jsx'
 import SettingsView from './components/SettingsView.jsx'
 import ScreenSharingView, { ScreenShareControl } from './components/ScreenSharing.jsx'
+import ImportView from './components/ImportView.jsx'
 import { CookieConsent, HelpView, LegalView } from './components/StaticViews.jsx'
 import {
   ConfirmDialog, DateField, DateTimeField, EmptyState, SelectField, WorkspaceViewHeading,
@@ -705,6 +706,7 @@ function App() {
       items: [
         { label: 'Files', icon: FileText },
         { label: 'Screen sharing', icon: MonitorUp },
+        { label: 'Import data', icon: FileText },
         { label: 'Help', icon: CircleHelp },
         { label: 'Legal', icon: FileText },
       ],
@@ -1635,6 +1637,9 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   }
   if (active === 'Screen sharing') {
     return <ScreenSharingView workspaceId={workspaceId} members={localData.members} currentUserId={currentUserId} role={currentWorkspace?.role} />
+  }
+  if (active === 'Import data') {
+    return <ImportView workspaceId={workspaceId} role={currentWorkspace?.role} />
   }
   if (active === 'Help') return <HelpView onNavigate={onNavigate} />
   if (active === 'Legal') return <LegalView />

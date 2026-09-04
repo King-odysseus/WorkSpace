@@ -1,6 +1,8 @@
 """Authenticated HTTP adapters for reporting, integrity, automation, and Excel import."""
 
 import hashlib
+import csv
+import io
 import json
 from datetime import date, timedelta
 from zipfile import BadZipFile
@@ -123,16 +125,35 @@ def workspace_automation_run(request, workspace_id):
     return JsonResponse({'deliveries': counts})
 
 
-def _workbook_request(request):
+def _workbook_request(request, import_type='tasks'):
     uploaded = request.FILES.get('workbook') or request.FILES.get('file')
     if uploaded is None:
         return None, None, None, JsonResponse({'error': 'A workbook file is required.'}, status=400)
     if uploaded.size > IMPORT_MAX_BYTES:
         return None, None, None, JsonResponse({'error': 'Workbook must be no larger than 20 MB.'}, status=400)
-    if not uploaded.name.lower().endswith('.xlsx'):
-        return None, None, None, JsonResponse({'error': 'Workbook must use the .xlsx format.'}, status=400)
+    if not (uploaded.name.lower().endswith('.xlsx') or uploaded.name.lower().endswith('.csv')):
+        return None, None, None, JsonResponse({'error': 'Import files must use .xlsx or .csv format.'}, status=400)
     content = uploaded.read()
     uploaded.seek(0)
+    if uploaded.name.lower().endswith('.csv') and import_type == 'tasks':
+        from openpyxl import Workbook
+        try:
+            reader = csv.DictReader(io.StringIO(content.decode('utf-8-sig')))
+            rows = list(reader)
+        except (UnicodeDecodeError, csv.Error) as exc:
+            return None, None, None, JsonResponse({'error': f'CSV could not be read: {exc}'}, status=400)
+        workbook = Workbook()
+        workbook.active.title = 'General'
+        headers = reader.fieldnames or []
+        workbook.active.append(headers)
+        for row in rows:
+            workbook.active.append([row.get(header, '') for header in headers])
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        output.name = uploaded.name
+        uploaded = output
+    uploaded._raw_content = content
     checksum = hashlib.sha256(content).hexdigest()
     column_map = None
     if request.POST.get('column_map'):
@@ -166,25 +187,39 @@ def _public_import_plan(plan, checksum):
     }
 
 
+def _public_workspace_plan(plan, checksum):
+    return {'checksum': checksum, 'source': plan.get('source', ''), 'kind': plan.get('kind'), 'summary': plan.get('summary', {}), 'exceptions': plan.get('exceptions', []), 'rows': [{key: (value.isoformat() if hasattr(value, 'isoformat') else value) for key, value in item.items() if key not in {'existing_id'}} | {'existing_id': item.get('existing_id')} for item in plan.get('normalized', [])]}
+
+
 @require_POST
 def import_preview(request, workspace_id):
-    membership, error = require_workspace_leader(request, workspace_id)
+    membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
-    workbook, checksum, column_map, error = _workbook_request(request)
+    import_type = request.POST.get('import_type', 'tasks').strip().lower()
+    if import_type not in {'tasks', 'projects', 'stakeholders'}:
+        return JsonResponse({'error': 'import_type must be tasks, projects, or stakeholders.'}, status=400)
+    workbook, checksum, column_map, error = _workbook_request(request, import_type)
     if error:
         return error
     from .importer import build_import_plan
     try:
-        plan = build_import_plan(membership.workspace, workbook, column_map=column_map)
+        if import_type == 'tasks':
+            plan = build_import_plan(membership.workspace, workbook, column_map=column_map)
+        elif import_type == 'projects':
+            from .workspace_imports import build_project_plan
+            plan = build_project_plan(membership.workspace, workbook._raw_content, workbook.name, column_map=column_map)
+        else:
+            from .workspace_imports import build_stakeholder_plan
+            plan = build_stakeholder_plan(membership.workspace, workbook._raw_content, workbook.name, column_map=column_map)
     except (OSError, ValueError, KeyError, BadZipFile, InvalidFileException) as exc:
         return JsonResponse({'error': f'Workbook could not be read: {exc}'}, status=400)
     if plan.get('error'):
         return JsonResponse({'error': plan['error']}, status=400)
-    preview = _public_import_plan(plan, checksum)
+    preview = _public_import_plan(plan, checksum) if import_type == 'tasks' else _public_workspace_plan(plan, checksum)
     run = ImportRun.objects.create(
         workspace=membership.workspace, actor=request.user, mode='preview', source=workbook.name,
-        summary={'plan': plan.get('summary', {}), 'preview_checksum': checksum, 'column_map': column_map},
+        summary={'plan': plan.get('summary', {}), 'preview_checksum': checksum, 'column_map': column_map, 'kind': import_type},
         exceptions=plan.get('exceptions', []),
     )
     preview['preview_id'] = run.id
@@ -196,7 +231,10 @@ def import_commit(request, workspace_id):
     membership, error = require_workspace_leader(request, workspace_id)
     if error:
         return error
-    workbook, checksum, column_map, error = _workbook_request(request)
+    import_type = request.POST.get('import_type', 'tasks').strip().lower()
+    if import_type not in {'tasks', 'projects', 'stakeholders'}:
+        return JsonResponse({'error': 'import_type must be tasks, projects, or stakeholders.'}, status=400)
+    workbook, checksum, column_map, error = _workbook_request(request, import_type)
     if error:
         return error
     expected_checksum = request.POST.get('preview_checksum', '').strip().lower()
@@ -210,21 +248,35 @@ def import_commit(request, workspace_id):
     try:
         with transaction.atomic():
             preview_run = ImportRun.objects.select_for_update().filter(
-                id=preview_id, workspace_id=workspace_id, actor=request.user, mode='preview',
+                id=preview_id, workspace_id=workspace_id, mode='preview',
                 created_at__gte=timezone.now() - timedelta(hours=1),
             ).first()
             preview_summary = preview_run.summary if preview_run else {}
             if (
                 preview_run is None or preview_summary.get('preview_checksum') != checksum
-                or preview_summary.get('column_map') != column_map or preview_summary.get('committed_at')
+                or preview_summary.get('column_map') != column_map or preview_summary.get('kind') != import_type or preview_summary.get('committed_at')
             ):
                 return JsonResponse({'error': 'The preview is missing, expired, already committed, or does not match this import.'}, status=409)
-            plan = build_import_plan(membership.workspace, workbook, column_map=column_map)
+            if import_type == 'tasks':
+                plan = build_import_plan(membership.workspace, workbook, column_map=column_map)
+            elif import_type == 'projects':
+                from .workspace_imports import build_project_plan
+                plan = build_project_plan(membership.workspace, workbook._raw_content, workbook.name, column_map=column_map)
+            else:
+                from .workspace_imports import build_stakeholder_plan
+                plan = build_stakeholder_plan(membership.workspace, workbook._raw_content, workbook.name, column_map=column_map)
             if plan.get('error'):
                 return JsonResponse({'error': plan['error']}, status=400)
             if plan.get('summary', {}) != preview_summary.get('plan', {}):
                 return JsonResponse({'error': 'Workspace data changed after preview. Preview the workbook again before committing.'}, status=409)
-            result = commit_import_plan(membership.workspace, request.user, plan)
+            if import_type == 'tasks':
+                result = commit_import_plan(membership.workspace, request.user, plan)
+            elif import_type == 'projects':
+                from .workspace_imports import commit_project_plan
+                result = commit_project_plan(membership.workspace, request.user, plan)
+            else:
+                from .workspace_imports import commit_stakeholder_plan
+                result = commit_stakeholder_plan(membership.workspace, request.user, plan)
             preview_run.summary = {**preview_summary, 'committed_at': timezone.now().isoformat()}
             preview_run.save(update_fields=['summary'])
             AuditLog.objects.create(workspace_id=workspace_id, actor=request.user, action='excel_import_committed', target_type='workspace', target_id=str(workspace_id), details={'checksum': checksum, 'result': result})
