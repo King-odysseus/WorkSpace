@@ -204,7 +204,7 @@ def workspace_document_list(request, workspace_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     title = str(payload.get('title', '')).strip()[:200] or 'Untitled document'
-    kind = payload.get('kind', 'document') if payload.get('kind') in {'document', 'presentation'} else 'document'
+    kind = payload.get('kind', 'document') if payload.get('kind') in {'document', 'presentation', 'spreadsheet'} else 'document'
     document = WorkspaceDocument.objects.create(workspace_id=workspace_id, title=title, kind=kind, content=payload.get('content') or {}, created_by=request.user)
     return JsonResponse({'document': {**document.as_dict(), 'permission': 'edit'}}, status=201)
 

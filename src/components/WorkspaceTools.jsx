@@ -50,6 +50,15 @@ function DocumentEditorSurface({ value, onChange, readOnly = false }) {
   return <div className="document-page-wrap"><div className="document-ruler" aria-hidden="true"><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span></div><RichEditor value={value} onChange={onChange} readOnly={readOnly} /></div>
 }
 
+function SpreadsheetEditor({ value, onChange, readOnly = false }) {
+  const sheets = value?.sheets?.length ? value.sheets : [{ name: 'Sheet 1', rows: [['', '', ''], ['', '', ''], ['', '', '']] }]
+  const sheet = sheets[0]
+  const updateCell = (rowIndex, columnIndex, cellValue) => onChange({ sheets: sheets.map((item, index) => index === 0 ? { ...item, rows: item.rows.map((row, r) => r === rowIndex ? row.map((cell, c) => c === columnIndex ? cellValue : cell) : row) } : item) })
+  const addRow = () => onChange({ sheets: sheets.map((item, index) => index === 0 ? { ...item, rows: [...item.rows, Array(item.rows[0]?.length || 3).fill('')] } : item) })
+  const addColumn = () => onChange({ sheets: sheets.map((item, index) => index === 0 ? { ...item, rows: item.rows.map(row => [...row, '']) } : item) })
+  return <div className="spreadsheet-editor"><div className="spreadsheet-toolbar"><strong>{sheet.name}</strong><button type="button" className="secondary-button" onClick={addRow} disabled={readOnly}>Add row</button><button type="button" className="secondary-button" onClick={addColumn} disabled={readOnly}>Add column</button><span>Enter formulas such as =SUM(A1:A3)</span></div><div className="spreadsheet-scroll"><table><tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex}><th>{rowIndex + 1}</th>{row.map((cell, columnIndex) => <td key={columnIndex}><input value={cell || ''} onChange={event => updateCell(rowIndex, columnIndex, event.target.value)} readOnly={readOnly} aria-label={`Row ${rowIndex + 1}, column ${columnIndex + 1}`} /></td>)}</tr>)}</tbody></table></div></div>
+}
+
 function PresentationToolbar({ readOnly, onAddTextBox, onAddColorBox, onAddImage, onAddTitle, onAddIcon, onResizeSlide }) {
   const format = command => { document.execCommand(command, false, null) }
   const button = (label, command) => <button type="button" className="presentation-tool-button" onMouseDown={event => event.preventDefault()} onClick={() => format(command)} disabled={readOnly}>{label}</button>
@@ -132,6 +141,7 @@ export function FilesWorkspaceView({ workspaceId }) {
   const [selected, setSelected] = useState(null)
   const [documentHtml, setDocumentHtml] = useState('')
   const [slides, setSlides] = useState([])
+  const [spreadsheetData, setSpreadsheetData] = useState({ sheets: [] })
   const [activeSlide, setActiveSlide] = useState(0)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('workspace-files-view') || 'grid')
   const [category, setCategory] = useState('all')
@@ -174,6 +184,7 @@ export function FilesWorkspaceView({ workspaceId }) {
     setSelected(document)
     setDocumentHtml(document.content?.html || document.content?.text || '')
     setSlides(document.content?.slides?.length ? document.content.slides : [{ title: 'New slide', body: '' }])
+    setSpreadsheetData(document.content || { sheets: [] })
     setActiveSlide(0)
     setDirty(false)
     setStatus('Saved')
@@ -197,9 +208,7 @@ export function FilesWorkspaceView({ workspaceId }) {
     if (!selected || busy) return
     setBusy(true)
     setStatus('Saving…')
-    const content = selected.kind === 'presentation'
-      ? { ...selected.content, slides }
-      : { ...selected.content, html: cleanHtml(documentHtml), text: cleanHtml(documentHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
+    const content = selected.kind === 'presentation' ? { ...selected.content, slides } : selected.kind === 'spreadsheet' ? { ...selected.content, sheets: spreadsheetData.sheets } : { ...selected.content, html: cleanHtml(documentHtml), text: cleanHtml(documentHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: selected.title, content }) })
       const data = await readJsonResponse(response, 'Changes could not be saved.')
@@ -221,7 +230,9 @@ export function FilesWorkspaceView({ workspaceId }) {
   const createDocument = async kind => {
     setBusy(true)
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/documents/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: kind === 'presentation' ? 'Untitled presentation' : 'Untitled document', kind, content: kind === 'presentation' ? { slides: [{ title: 'New slide', body: '' }] } : { html: '', text: '' } }) })
+      const content = kind === 'presentation' ? { slides: [{ title: 'New slide', body: '' }] } : kind === 'spreadsheet' ? { sheets: [{ name: 'Sheet 1', rows: [['', '', ''], ['', '', ''], ['', '', '']] }] } : { html: '', text: '' }
+      const title = kind === 'presentation' ? 'Untitled presentation' : kind === 'spreadsheet' ? 'Untitled spreadsheet' : 'Untitled document'
+      const response = await fetch(`/api/workspaces/${workspaceId}/documents/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title, kind, content }) })
       const data = await readJsonResponse(response, 'The item could not be created.')
       if (!response.ok) throw new Error(data.error || 'Could not create item.')
       setDocuments(current => [data.document, ...current])
@@ -287,7 +298,7 @@ export function FilesWorkspaceView({ workspaceId }) {
       <div className="file-editor-commandbar"><button type="button" className="secondary-button" onClick={() => setSelected(null)}><ChevronLeft size={15} /> Files</button><input className="file-editor-title" value={selected.title} onChange={event => { setSelected(current => ({ ...current, title: event.target.value })); setDirty(true) }} readOnly={!canEdit} /><span className={`file-save-status ${dirty ? 'is-dirty' : ''}`} role="status">{canEdit ? (status || 'Saved') : `Read only (${selected.permission || 'view'})`}</span><button type="button" className="secondary-button" onClick={() => setCommentsOpen(current => !current)}><MessageSquare size={15} /> Comments ({comments.filter(item => !item.resolved).length})</button>{canEdit && <><button type="button" className="primary-button" onClick={() => setShareOpen(current => !current)}><Share2 size={15} /> Share</button><button type="button" className="secondary-button" onClick={saveDocument} disabled={busy}><Save size={15} /> Save</button><button type="button" className="file-delete-button" onClick={removeDocument} aria-label="Delete"><Trash2 size={16} /></button></>}</div>
       <div className={`file-editor-layout ${(commentsOpen || shareOpen) ? 'has-review-panel' : ''}`}>
         {selected.kind === 'presentation' && <aside className="slide-rail">{canEdit && <button type="button" className="secondary-button" onClick={() => { setSlides(current => [...current, { title: `Slide ${current.length + 1}`, body: '' }]); setActiveSlide(slides.length); setDirty(true) }}><Plus size={14} /> Slide</button>}{slides.map((slide, index) => <button type="button" draggable={canEdit} className={index === activeSlide ? 'active' : ''} onClick={() => setActiveSlide(index)} onDragStart={() => { draggedSlideIndex.current = index }} onDragOver={event => { if (canEdit) event.preventDefault() }} onDrop={() => { const source = draggedSlideIndex.current; if (!canEdit || source === null || source === index) return; setSlides(current => { const reordered = [...current]; const [moved] = reordered.splice(source, 1); reordered.splice(index, 0, moved); return reordered }); setActiveSlide(index); setDirty(true); draggedSlideIndex.current = null }} key={index}><span>{index + 1}</span><strong>{slide.title || `Slide ${index + 1}`}</strong></button>)}</aside>}
-        <main className={selected.kind === 'presentation' ? 'presentation-canvas' : 'document-canvas'}>{selected.kind === 'presentation' ? <PresentationSlideEditor slide={slides[activeSlide] || { title: '', body: '' }} onChange={nextSlide => updateSlide(nextSlide)} readOnly={!canEdit} /> : <DocumentEditorSurface value={documentHtml} onChange={value => { setDocumentHtml(value); setDirty(true) }} readOnly={!canEdit} />}</main>
+        <main className={selected.kind === 'presentation' ? 'presentation-canvas' : selected.kind === 'spreadsheet' ? 'spreadsheet-canvas' : 'document-canvas'}>{selected.kind === 'presentation' ? <PresentationSlideEditor slide={slides[activeSlide] || { title: '', body: '' }} onChange={nextSlide => updateSlide(nextSlide)} readOnly={!canEdit} /> : selected.kind === 'spreadsheet' ? <SpreadsheetEditor value={spreadsheetData} onChange={value => { setSpreadsheetData(value); setDirty(true) }} readOnly={!canEdit} /> : <DocumentEditorSurface value={documentHtml} onChange={value => { setDocumentHtml(value); setDirty(true) }} readOnly={!canEdit} />}</main>
         {(commentsOpen || shareOpen) && <aside className="document-review-panel">{shareOpen && <><h3>Share</h3><form onSubmit={shareDocument}><select value={shareUserId} onChange={event => setShareUserId(event.target.value)} required><option value="">Choose a team member</option>{members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select><select value={sharePermission} onChange={event => setSharePermission(event.target.value)}><option value="view">Can view</option><option value="comment">Can comment</option><option value="edit">Can edit</option></select><button className="primary-button">Share</button></form>{shares.map(share => <div className="document-share-row" key={share.id}><strong>{share.user_name}</strong><span>{share.permission}</span></div>)}</>}{commentsOpen && <><h3>Review comments</h3><div className="document-comment-list">{comments.map(comment => <article className={comment.resolved ? 'resolved' : ''} key={comment.id}><strong>{comment.author_name}</strong><span>{new Date(comment.created_at).toLocaleString()}{comment.anchor?.slide ? `, Slide ${comment.anchor.slide}` : ''}</span><p>{comment.body}</p>{canComment && <button type="button" onClick={() => resolveComment(comment)}>{comment.resolved ? 'Reopen' : 'Resolve'}</button>}</article>)}</div>{canComment ? <form onSubmit={addComment}><textarea value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Add a review comment..." /><button className="primary-button">Comment</button></form> : <p className="workspace-inline-status">View-only access does not allow comments.</p>}</>}</aside>}
       </div>
     </section>

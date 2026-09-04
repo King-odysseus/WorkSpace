@@ -1058,7 +1058,7 @@ def delete_screen_capture_file(sender, instance, **kwargs):
 
 
 class WorkspaceDocument(models.Model):
-    KIND_CHOICES = [('document', 'Document'), ('presentation', 'Presentation')]
+    KIND_CHOICES = [('document', 'Document'), ('presentation', 'Presentation'), ('spreadsheet', 'Spreadsheet')]
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='documents')
     title = models.CharField(max_length=200)
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='document')
