@@ -25,9 +25,9 @@ No endpoint provides webcam, microphone, remote-control, or hidden-capture capab
 
 Returns `{"policy": {"enabled", "capture_interval_seconds", "capture_retention_days", "text", "version", "can_manage"}}`.
 
-`PATCH /api/workspaces/{workspace_id}/screen-sharing/policy/` — owner only
+`PATCH /api/workspaces/{workspace_id}/screen-sharing/policy/` - owner only
 
-Accepts any of `enabled` (boolean), `capture_interval_seconds` (30–300), `capture_retention_days` (1–30), and `text` (100–5000 characters). Changing policy text increments its version. Every update is audited.
+Accepts any of `enabled` (boolean), `capture_interval_seconds` (30-300), `capture_retention_days` (1-30), and `text` (100-5000 characters). Changing policy text increments its version. Every update is audited.
 
 ## Sessions
 
@@ -37,7 +37,7 @@ Owners/managers receive workspace sessions; members receive only sessions addres
 
 Add `?scope=mine` to receive only sessions addressed to the caller, without `capture_count`. The always-mounted consent control in the frontend polls this cheaper variant; the leader-facing page uses the full listing, whose counts are annotated in a single query.
 
-`POST /api/workspaces/{workspace_id}/screen-sharing/sessions/` — owner/manager
+`POST /api/workspaces/{workspace_id}/screen-sharing/sessions/` - owner/manager
 
 Body: `{"employee_id": 123, "message": "Optional reason"}`. The policy must be enabled. Creates a ten-minute `pending` request and an employee notification. Only one pending/active request may exist per employee and workspace.
 
@@ -56,19 +56,19 @@ Active sessions have a four-hour hard limit. The employee frontend calls `POST .
 
 ## Captures
 
-`POST /api/workspaces/{workspace_id}/screen-sharing/sessions/{session_uuid}/captures/` — sharing employee only
+`POST /api/workspaces/{workspace_id}/screen-sharing/sessions/{session_uuid}/captures/` - sharing employee only
 
 Multipart field `capture`; JPEG, PNG, or WebP; maximum 5 MB and 10,000×10,000 pixels. The session must be active and uploads are rate-limited to its snapshotted interval. The first capture is taken immediately on accept, then at the configured interval. The response contains an authenticated `view_url` and `download_url`.
 
-`GET /api/workspaces/{workspace_id}/screen-sharing/sessions/{session_uuid}/captures/` — owner/manager, or the session's own employee
+`GET /api/workspaces/{workspace_id}/screen-sharing/sessions/{session_uuid}/captures/` - owner/manager, or the session's own employee
 
 Lists up to 200 unexpired captures. Listing the collection is audited.
 
-`GET /api/screen-captures/{capture_uuid}/` — owner/manager, or the employee the capture is of
+`GET /api/screen-captures/{capture_uuid}/` - owner/manager, or the employee the capture is of
 
 Streams inline with `Cache-Control: private, no-store`. Add `?download=true` for an attachment. Viewing and downloading are separate audit actions. Employees have read access to their own captures so they can exercise subject-access rights; the audit log records their access the same way.
 
-`DELETE /api/screen-captures/{capture_uuid}/` — owner/manager only
+`DELETE /api/screen-captures/{capture_uuid}/` - owner/manager only
 
 Permanently deletes the database row and private image file. The deletion is audited first.
 

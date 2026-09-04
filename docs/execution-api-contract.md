@@ -23,7 +23,7 @@ Project writes require an owner or manager. In addition to the existing fields, 
 }
 ```
 
-`timezone` must be an IANA name, `configuration` must be an object, and `due_soon_days` is 0–365.
+`timezone` must be an IANA name, `configuration` must be an object, and `due_soon_days` is 0-365.
 
 ## Tasks
 

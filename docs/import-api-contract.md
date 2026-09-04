@@ -37,7 +37,7 @@ Preview rows are serializable and do not expose model objects. Exceptions includ
 
 ## Commit
 
-`POST /api/workspaces/{workspace_id}/imports/commit/` — owner/manager only
+`POST /api/workspaces/{workspace_id}/imports/commit/` - owner/manager only
 
 Send the exact same file and `import_type`, plus `preview_id` and `preview_checksum`. The optional `column_map` must also be identical. The server locks and consumes the preview once, rebuilds the plan, rejects workspace data drift, then applies the import transactionally. It returns `{ "result": {"created", "updated", "exceptions": []} }` and writes an audit event.
 

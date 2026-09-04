@@ -80,7 +80,7 @@ excluded from overdue/due-soon because a parked task is not expected to move.
 
 ### 1.4 Task progress precedence
 
-`task_progress(task)` returns 0–100 in this order:
+`task_progress(task)` returns 0-100 in this order:
 
 1. `status == 'done'` → `100`.
 2. an explicit `progress_percent` (canonical field) when non-zero → that value.
@@ -126,10 +126,10 @@ accepts any subset of:
 
 `apply_report_period(queryset, period, today, start, end)`:
 
-* `all` — no constraint.
-* `week` — last 7 days (today-6 … today).
-* `month` — current calendar month (day 1 … today).
-* `custom` — explicit `start`/`end`.
+* `all` - no constraint.
+* `week` - last 7 days (today-6 … today).
+* `month` - current calendar month (day 1 … today).
+* `custom` - explicit `start`/`end`.
 
 A task belongs to a period by **delivery/completion date, never creation date**:
 
@@ -150,7 +150,7 @@ one entry per KPI: `{target, actual, met, score}`.
 | `blocked` | ≤ (lte) | 0 |
 | `stale` | ≤ (lte) | 0 |
 
-`score` is a 0–100 attainment figure that never divides by zero:
+`score` is a 0-100 attainment figure that never divides by zero:
 
 * a zero target with zero actual → `met = true`, `score = 100`;
 * a zero target with non-zero actual (an lte KPI) → `met = false`, `score = 0`;
@@ -164,10 +164,10 @@ Targets are stored on `WorkspaceSetting.kpi_targets` and defaulted by
 `project_health(workspace_id, project, today)` returns `{project_id, name,
 status, due_date, health, metrics}`. `health` is one of:
 
-* `completed` — project `status == 'completed'`;
-* `off-track` — project past due, or any applicable task overdue;
-* `at-risk` — any blocked/on-hold task, or project due within `due_soon_days`;
-* `on-track` — otherwise.
+* `completed` - project `status == 'completed'`;
+* `off-track` - project past due, or any applicable task overdue;
+* `at-risk` - any blocked/on-hold task, or project due within `due_soon_days`;
+* `on-track` - otherwise.
 
 `metrics` carries `total_tasks`, `applicable_tasks`, `completed_tasks`,
 `completion_rate`, `blocked_tasks`, `overdue_tasks`, `on_hold_tasks`.
@@ -232,17 +232,17 @@ each. Keys take the form:
 | --- | --- |
 | `General` | **authoritative** task source; upsert keyed by `code` (create when absent, update when present) |
 | `Lists` | configuration (header row of kinds, a column of values each) |
-| every other sheet | **owner sheets** — execution enrichment keyed by `code`; never create tasks |
+| every other sheet | **owner sheets** - execution enrichment keyed by `code`; never create tasks |
 
 ### Guarantees
 
-* **Preview before commit** — `build_import_plan` validates and matches users
+* **Preview before commit** - `build_import_plan` validates and matches users
   without writing; `commit_import_plan` applies in one `transaction.atomic()`.
-* **User matching** — owner/supporter matched by email (case-insensitive) then
+* **User matching** - owner/supporter matched by email (case-insensitive) then
   unique full name. Unmatched emails become pending `WorkspaceInvitation`s;
   unmatched names become row exceptions.
-* **Exception reporting** — every row problem carries `{row, field, message}`.
-* **Transactional** — any unexpected error rolls the whole import back; per-row
+* **Exception reporting** - every row problem carries `{row, field, message}`.
+* **Transactional** - any unexpected error rolls the whole import back; per-row
   problems are reported and skipped, not rolled back.
 
 ### Workbook-required (cannot be verified without the original file)

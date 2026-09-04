@@ -14,12 +14,12 @@ screen-reader pass to confirm, and are not asserted as defects.
 | Visible focus | global `:focus-visible` outline (tijhabooks-theme.css:946), plus per-control focus styles |
 | Reduced motion | `@media (prefers-reduced-motion: reduce)` collapses transitions/animations (line 970) |
 | Dialogs | `role="dialog" aria-modal="true" aria-labelledby` on the quick-capture modal (main.jsx:992) |
-| Live regions | errors use `role="alert"`, loading uses `role="status"` (main.jsx:985–986, 992) |
-| Icon-only buttons | aria-labels on drag/archive/move/pagination/close buttons (PlannerBoard.jsx:34–51, 188) |
+| Live regions | errors use `role="alert"`, loading uses `role="status"` (main.jsx:985-986, 992) |
+| Icon-only buttons | aria-labels on drag/archive/move/pagination/close buttons (PlannerBoard.jsx:34-51, 188) |
 | Current page | `aria-current="page"` on active nav items (main.jsx:720, 758) |
-| Toggle state | `aria-pressed` on sidebar/notification/theme switches (main.jsx:784, 906, 1103–1104) |
+| Toggle state | `aria-pressed` on sidebar/notification/theme switches (main.jsx:784, 906, 1103-1104) |
 | Decorative images | empty `alt=""` on avatars/icons; logos carry `alt="TijhaBooks"` (main.jsx:35, 691, 931) |
-| Keyboard drag fallback | planner cards expose Move up/down/left/right buttons (PlannerBoard.jsx:47–51) |
+| Keyboard drag fallback | planner cards expose Move up/down/left/right buttons (PlannerBoard.jsx:47-51) |
 | Semantic structure | `<table>` for planner table view, `<nav aria-label>` for settings/legal sections |
 
 ## Responsive coverage (verified)

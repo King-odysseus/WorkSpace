@@ -13,19 +13,19 @@ assessed against the integrated working tree.
 
 ## Delivered in this workstream
 
-1. **Shared reporting service** — `tasks/reporting.py`: workspace / operations /
+1. **Shared reporting service** - `tasks/reporting.py`: workspace / operations /
    project scopes, delivery-based periods, full metric set, replayable drill-down
    filters, workload, progress groups, KPI zero-target protection, project health.
-2. **Data-integrity checks** — `tasks/integrity.py`: seven checks with severity and
+2. **Data-integrity checks** - `tasks/integrity.py`: seven checks with severity and
    drill-down filters.
-3. **Scheduled automation** — `tasks/automation.py` + management command
+3. **Scheduled automation** - `tasks/automation.py` + management command
    `run_automation`: due-soon, overdue, blocked, stale, and digest reminders,
    idempotent via `NotificationDelivery`.
-4. **Excel migration** — `tasks/importer.py` + management command `import_excel`:
+4. **Excel migration** - `tasks/importer.py` + management command `import_excel`:
    preview-before-commit, authoritative General sheet, Lists configuration, owner
    sheets for enrichment only, user matching with invitations, exception reporting,
    transactional commit. `openpyxl` added to `requirements.txt`.
-5. **Documentation** — `docs/reporting-service.md`,
+5. **Documentation** - `docs/reporting-service.md`,
    `docs/accessibility-responsive-review.md`, this report.
 
 ## Release status and follow-ups

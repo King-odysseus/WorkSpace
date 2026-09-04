@@ -12,3 +12,15 @@ media/
 private_media/
 .claude/
 .vscode/
+Instruct.md
+AGENTS.md
+CLAUDE.md
+QWEN.md
+.mcp.json
+.kilo/
+.qwen/
+.continue/
+.cursor/
+.kimi/
+.kimi-code/
+.agents/

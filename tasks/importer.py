@@ -28,6 +28,7 @@ WORKBOOK-REQUIRED NOTES (cannot be verified without the original file):
   * the exact Lists-sheet layout and the owner-sheet enrichment columns.
 """
 
+import logging
 from datetime import date, datetime
 
 from django.contrib.auth.models import User
@@ -558,7 +559,9 @@ def _apply_enrichment(task, entry):
             task.progress_percent = int(float(progress))
             changed = True
         except (TypeError, ValueError):
-            pass
+            logging.getLogger(__name__).warning(
+                'Import: could not parse progress_percent %r for task %s', progress, task.code
+            )
     blocker_details = entry.get('blocker_details')
     if blocker_details not in (None, ''):
         task.blocker_details = str(blocker_details).strip()
