@@ -1774,6 +1774,11 @@ html[data-theme='dark'] .channel-row-wrap .channel-row.active, html[data-theme='
 .chat-mode-direct .chat-feed-heading { min-height:78px; padding:16px 22px; }
 @media (max-width:850px) { .chat-layout { grid-template-columns:1fr; gap:14px; }.chat-layout .chat-conversation-list { grid-column:1; grid-row:1; min-height:0; max-height:190px; border-right:1px solid var(--workspace-border); border-bottom:1px solid var(--workspace-border); }.chat-layout .chat-feed { grid-column:1; grid-row:2; } }
 
+/* Keep channel navigation text legible at a glance. */
+.chat-mode-channels .chat-list-heading h3 { font-size:15px !important; }
+.chat-mode-channels .channel-row { min-height:42px; padding:10px 11px; font-size:14px; }
+.chat-mode-channels .channel-row .channel-name { margin-left:0; font-size:inherit; color:inherit; }
+
 /* Settings workspace */
 .help-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .help-welcome { grid-column:1 / -1; padding:28px; background:linear-gradient(135deg,var(--workspace-surface),var(--workspace-surface-soft)); }
