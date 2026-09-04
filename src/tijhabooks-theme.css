@@ -3188,3 +3188,12 @@ html[data-theme='dark'] :where(
 /* Give direct-chat rows a comfortable left inset inside the navigation rail. */
 .chat-mode-direct .chat-list-heading { padding-left:10px; padding-right:10px; }
 .chat-mode-direct .direct-row { padding-left:14px; padding-right:12px; }
+
+/* Keep the channel rail light while making its labels readable and inset. */
+.chat-mode-channels .chat-conversation-list { background:var(--workspace-surface) !important; color:var(--workspace-text) !important; padding:16px 14px !important; box-shadow:none !important; }
+.chat-mode-channels .chat-list-heading { padding:0 2px 8px; }
+.chat-mode-channels .chat-list-heading h3 { color:var(--workspace-text) !important; }
+.chat-mode-channels .channel-row { background:transparent !important; color:var(--workspace-text) !important; padding-left:14px; padding-right:12px; }
+.chat-mode-channels .channel-row:hover { background:var(--workspace-surface-soft) !important; color:var(--workspace-text) !important; }
+.chat-mode-channels .channel-row.active { background:#eaf0ff !important; color:#1d4ed8 !important; }
+.chat-mode-channels .channel-row .channel-name { color:inherit !important; }
