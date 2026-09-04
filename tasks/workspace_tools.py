@@ -1,4 +1,6 @@
 import json
+import csv
+import io
 import mimetypes
 import os
 import base64
@@ -12,6 +14,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings as django_settings
 from django.db import transaction
 from django.http import FileResponse, JsonResponse
+from django.http import HttpResponse
+from openpyxl import Workbook, load_workbook
 from django.views.decorators.http import require_http_methods
 
 from .models import Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
@@ -248,6 +252,53 @@ def workspace_document_detail(request, workspace_id, document_id):
         logger.exception('Document save failed for %s', document.id)
         return JsonResponse({'error': f'Document could not be saved: {exc}'}, status=500)
     return JsonResponse({'document': {**document.as_dict(), 'permission': permission}})
+
+
+@require_http_methods(['GET'])
+def workspace_document_export(request, workspace_id, document_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    document = WorkspaceDocument.objects.filter(workspace_id=workspace_id, id=document_id).first()
+    if not document:
+        return JsonResponse({'error': 'Document not found.'}, status=404)
+    if document.kind != 'spreadsheet':
+        return JsonResponse({'error': 'Only spreadsheets can be exported here.'}, status=400)
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for sheet_data in document.content.get('sheets', []):
+        sheet = workbook.create_sheet(str(sheet_data.get('name') or 'Sheet'))
+        for row in sheet_data.get('rows', []):
+            sheet.append(row)
+    if not workbook.worksheets:
+        workbook.create_sheet('Sheet 1')
+    stream = io.BytesIO()
+    workbook.save(stream)
+    response = HttpResponse(stream.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="{document.title[:80]}.xlsx"'
+    return response
+
+
+@require_http_methods(['POST'])
+def workspace_spreadsheet_import(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if membership.role not in {'owner', 'manager'}:
+        return JsonResponse({'error': 'Only workspace leaders can import spreadsheets.'}, status=403)
+    uploaded = request.FILES.get('file')
+    if not uploaded:
+        return JsonResponse({'error': 'Choose a CSV or XLSX file.'}, status=400)
+    name = uploaded.name.lower()
+    if name.endswith('.csv'):
+        rows = list(csv.reader(io.TextIOWrapper(uploaded.file, encoding='utf-8-sig')))
+        sheets = [{'name': 'Sheet 1', 'rows': rows}]
+    elif name.endswith('.xlsx'):
+        workbook = load_workbook(uploaded, read_only=True, data_only=False)
+        sheets = [{'name': sheet.title, 'rows': [[cell.value if cell.value is not None else '' for cell in row] for row in sheet.iter_rows()]} for sheet in workbook.worksheets]
+    else:
+        return JsonResponse({'error': 'Only CSV and XLSX files are supported.'}, status=400)
+    return JsonResponse({'sheets': sheets})
 
 
 @require_http_methods(['GET', 'POST'])

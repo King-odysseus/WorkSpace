@@ -6,7 +6,7 @@ from .pulse import workspace_pulse
 from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .import_templates import import_template
-from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list
+from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -24,6 +24,8 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/ai/chat/', workspace_ai_chat, name='workspace-ai-chat'),
     path('workspaces/<int:workspace_id>/documents/', workspace_document_list, name='workspace-document-list'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/', workspace_document_detail, name='workspace-document-detail'),
+    path('workspaces/<int:workspace_id>/documents/<int:document_id>/export/', workspace_document_export, name='workspace-document-export'),
+    path('workspaces/<int:workspace_id>/spreadsheets/import/', workspace_spreadsheet_import, name='workspace-spreadsheet-import'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/shares/', workspace_document_share_list, name='workspace-document-share-list'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/shares/<int:share_id>/', workspace_document_share_detail, name='workspace-document-share-detail'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/comments/', workspace_document_comment_list, name='workspace-document-comment-list'),
