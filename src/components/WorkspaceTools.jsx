@@ -50,10 +50,10 @@ function DocumentEditorSurface({ value, onChange, readOnly = false }) {
   return <div className="document-page-wrap"><div className="document-ruler" aria-hidden="true"><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span></div><RichEditor value={value} onChange={onChange} readOnly={readOnly} /></div>
 }
 
-function PresentationToolbar({ readOnly, onAddTextBox, onAddColorBox, onAddImage }) {
+function PresentationToolbar({ readOnly, onAddTextBox, onAddColorBox, onAddImage, onAddTitle, onAddIcon, onResizeSlide }) {
   const format = command => { document.execCommand(command, false, null) }
   const button = (label, command) => <button type="button" className="presentation-tool-button" onMouseDown={event => event.preventDefault()} onClick={() => format(command)} disabled={readOnly}>{label}</button>
-  return <div className="presentation-toolbar" role="toolbar" aria-label="Presentation tools"><span className="presentation-toolbar-label">Slide tools</span><button type="button" className="presentation-tool-button presentation-add-text" onClick={onAddTextBox} disabled={readOnly}>Add text box</button><button type="button" className="presentation-tool-button" onClick={onAddColorBox} disabled={readOnly}>Color box</button><button type="button" className="presentation-tool-button" onClick={onAddImage} disabled={readOnly}>Add image</button>{button('Bold', 'bold')}{button('Italic', 'italic')}{button('Underline', 'underline')}{button('Bullets', 'insertUnorderedList')}{button('Align left', 'justifyLeft')}{button('Center', 'justifyCenter')}{button('Align right', 'justifyRight')}</div>
+  return <div className="presentation-toolbar" role="toolbar" aria-label="Presentation tools"><span className="presentation-toolbar-label">Slide tools</span><button type="button" className="presentation-tool-button presentation-add-text" onClick={onAddTextBox} disabled={readOnly}>Add text box</button><button type="button" className="presentation-tool-button" onClick={onAddTitle} disabled={readOnly}>Add title</button><button type="button" className="presentation-tool-button" onClick={onAddColorBox} disabled={readOnly}>Color box</button><button type="button" className="presentation-tool-button" onClick={onAddImage} disabled={readOnly}>Add image</button><button type="button" className="presentation-tool-button" onClick={onAddIcon} disabled={readOnly}>Add icon</button><button type="button" className="presentation-tool-button" onClick={onResizeSlide} disabled={readOnly}>Resize slide</button>{button('Bold', 'bold')}{button('Italic', 'italic')}{button('Underline', 'underline')}{button('Bullets', 'insertUnorderedList')}{button('Align left', 'justifyLeft')}{button('Center', 'justifyCenter')}{button('Align right', 'justifyRight')}</div>
 }
 
 function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
@@ -104,9 +104,12 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
   const blockStyle = block => ({ left: `${layout[block].x}%`, top: `${layout[block].y}%`, width: `${layout[block].width}%`, height: `${layout[block].height}%` })
 
   const addTextBox = () => onChange({ ...slide, text_boxes: [...textBoxes, { id: `text-${Date.now()}`, text: 'New text box', x: 12, y: 18 + (textBoxes.length * 8) % 60, width: 34, height: 16 }] })
+  const addTitle = () => onChange({ ...slide, text_boxes: [...textBoxes, { id: `title-${Date.now()}`, text: 'New title', x: 12, y: 8, width: 60, height: 14 }] })
   const addColorBox = () => onChange({ ...slide, color_boxes: [...colorBoxes, { id: `color-${Date.now()}`, x: 50, y: 20 + (colorBoxes.length * 8) % 60, width: 22, height: 18, color: '#dbeafe' }] })
   const addImage = () => { const url = window.prompt('Image URL'); if (url) onChange({ ...slide, images: [...images, { id: `image-${Date.now()}`, url, x: 42, y: 20, width: 28, height: 28 }] }) }
-  return <div className="presentation-slide-shell"><PresentationToolbar readOnly={readOnly} onAddTextBox={addTextBox} onAddColorBox={addColorBox} onAddImage={addImage} /><div className="presentation-slide" ref={canvasRef}>
+  const addIcon = () => { const url = window.prompt('Icon image URL'); if (url) onChange({ ...slide, icons: [...(slide.icons || []), { id: `icon-${Date.now()}`, url, x: 75, y: 10, width: 10, height: 10 }] }) }
+  const resizeSlide = () => onChange({ ...slide, aspect_ratio: slide.aspect_ratio === '4/3' ? '16/9' : '4/3' })
+  return <div className="presentation-slide-shell"><PresentationToolbar readOnly={readOnly} onAddTextBox={addTextBox} onAddTitle={addTitle} onAddColorBox={addColorBox} onAddImage={addImage} onAddIcon={addIcon} onResizeSlide={resizeSlide} /><div className="presentation-slide" style={{ aspectRatio: slide.aspect_ratio || '16/9' }} ref={canvasRef}>
     <section className="slide-editable-block slide-title-block" style={blockStyle('title')} onPointerUp={event => captureSize(event, 'title')}>
       {!readOnly && <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, 'title')} onPointerMove={moveDrag} onPointerUp={finishDrag}>Drag title</button>}
       <input value={slide.title || ''} onChange={event => onChange({ ...slide, title: event.target.value })} placeholder="Slide title" readOnly={readOnly} />
@@ -118,6 +121,7 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
     {textBoxes.map((box, index) => <section key={box.id || index} className="slide-editable-block slide-text-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%` }} onPointerUp={event => captureSize(event, `text-${index}`)}><button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, `text-${index}`)} disabled={readOnly}>Drag text</button><RichEditor value={box.text || ''} onChange={text => onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item) })} compact hideToolbar readOnly={readOnly} /></section>)}
     {colorBoxes.map(box => <div key={box.id} className="slide-color-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, background: box.color }} />)}
     {images.map(image => <img key={image.id} className="slide-image-box" src={image.url} alt="" style={{ left: `${image.x}%`, top: `${image.y}%`, width: `${image.width}%`, height: `${image.height}%` }} />)}
+    {(slide.icons || []).map(icon => <img key={icon.id} className="slide-icon-box" src={icon.url} alt="" style={{ left: `${icon.x}%`, top: `${icon.y}%`, width: `${icon.width}%`, height: `${icon.height}%` }} />)}
   </div></div>
 }
 
