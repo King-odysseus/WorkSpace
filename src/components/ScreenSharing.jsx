@@ -249,6 +249,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
   const [sessions, setSessions] = useState([])
   const [selectedSession, setSelectedSession] = useState(null)
   const [captures, setCaptures] = useState([])
+  const [captureToDelete, setCaptureToDelete] = useState(null)
   const [employeeId, setEmployeeId] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -315,7 +316,13 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
   }
 
   const deleteCapture = async capture => {
-    if (!window.confirm('Permanently delete this screenshot? This action is audited.')) return
+    setCaptureToDelete(capture)
+  }
+
+  const confirmDeleteCapture = async () => {
+    const capture = captureToDelete
+    setCaptureToDelete(null)
+    if (!capture) return
     try {
       await apiRequest(capture.view_url, { method: 'DELETE' })
       setCaptures(current => current.filter(item => item.id !== capture.id))
@@ -323,6 +330,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
   }
 
   return <section className="workspace-view screen-sharing-view">
+    {captureToDelete && <div className="modal-backdrop" onMouseDown={() => setCaptureToDelete(null)}><form className="modal file-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="capture-delete-title" onSubmit={event => { event.preventDefault(); confirmDeleteCapture() }} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Screen sharing</p><h2 id="capture-delete-title">Delete screenshot?</h2></div><button type="button" className="close-button" onClick={() => setCaptureToDelete(null)} aria-label="Close delete dialog"><X size={18} /></button></div><p className="file-delete-copy">This screenshot will be permanently deleted. The action will be audited.</p><div className="file-delete-actions"><button type="button" className="secondary-button" onClick={() => setCaptureToDelete(null)}>Cancel</button><button type="submit" className="file-delete-confirm">Delete</button></div></form></div>}
     <WorkspaceViewHeading title="Screen sharing" subtitle="Consent-based screen capture with visible controls, restricted access, and a complete audit trail." />
     {error && <p className="auth-error" role="alert">{error}</p>}
     <Card className="screen-sharing-policy-card">
