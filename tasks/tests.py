@@ -2314,6 +2314,15 @@ class WorkspaceDocumentCollaborationTests(TestCase):
         revision = WorkspaceDocumentRevision.objects.get(document=self.document)
         self.assertEqual(revision.content, {'slides': [{'title': 'Start', 'body': ''}]})
 
+    def test_presentation_layout_and_rich_tables_save(self):
+        WorkspaceDocumentShare.objects.create(document=self.document, user=self.member, shared_by=self.owner, permission='edit')
+        self.client.force_login(self.member)
+        updated_content = {'slides': [{'title': 'Updated', 'body': '<table><tbody><tr><td>Cell</td></tr></tbody></table>', 'layout': {'title': {'x': 8, 'y': 6, 'width': 80, 'height': 20}, 'body': {'x': 8, 'y': 30, 'width': 80, 'height': 60}}}]}
+        response = self.client.patch(self.detail_url, data=json.dumps({'content': updated_content}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.document.refresh_from_db()
+        self.assertEqual(self.document.content, updated_content)
+
     def test_unrelated_member_cannot_resolve_another_members_comment(self):
         comment = WorkspaceDocumentComment.objects.create(document=self.document, author=self.member, body='Review this.')
         self.client.force_login(self.viewer)

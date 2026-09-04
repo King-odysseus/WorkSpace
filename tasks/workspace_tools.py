@@ -233,10 +233,18 @@ def workspace_document_detail(request, workspace_id, document_id):
     if 'title' in payload:
         document.title = str(payload['title']).strip()[:200] or document.title
     if 'content' in payload and isinstance(payload['content'], dict):
+        try:
+            json.dumps(payload['content'], allow_nan=False)
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Document content contains invalid values.'}, status=400)
         if payload['content'] != document.content:
             WorkspaceDocumentRevision.objects.create(document=document, created_by=request.user, title=document.title, content=document.content or {})
         document.content = payload['content']
-    document.save(update_fields=['title', 'content', 'updated_at'])
+    try:
+        document.save(update_fields=['title', 'content', 'updated_at'])
+    except (TypeError, ValueError) as exc:
+        logger.exception('Document save failed for %s', document.id)
+        return JsonResponse({'error': f'Document could not be saved: {exc}'}, status=400)
     return JsonResponse({'document': {**document.as_dict(), 'permission': permission}})
 
 
