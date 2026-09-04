@@ -3,6 +3,7 @@ import mimetypes
 import os
 import base64
 import hashlib
+import logging
 from urllib import request as urlrequest
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -12,12 +13,21 @@ from django.conf import settings as django_settings
 from django.http import FileResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from .models import WorkspaceDocument, WorkspaceFile, WorkspaceSetting
+from .models import Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
 from .views import require_workspace_leader, require_workspace_member
+
+logger = logging.getLogger(__name__)
 
 
 def _setting(workspace_id):
     return WorkspaceSetting.objects.get_or_create(workspace_id=workspace_id)[0]
+
+
+def _document_permission(document, membership, user):
+    if membership.role in {'owner', 'manager'} or document.created_by_id == user.id:
+        return 'edit'
+    share = document.shares.filter(user=user).only('permission').first()
+    return share.permission if share else 'view'
 
 
 AI_PROVIDER_DEFAULTS = {
@@ -179,11 +189,15 @@ def workspace_ai_chat(request, workspace_id):
 
 @require_http_methods(['GET', 'POST'])
 def workspace_document_list(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
+    membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     if request.method == 'GET':
-        return JsonResponse({'documents': [document.as_dict() for document in WorkspaceDocument.objects.filter(workspace_id=workspace_id)]})
+        documents = list(WorkspaceDocument.objects.filter(workspace_id=workspace_id))
+        shared_permissions = dict(WorkspaceDocumentShare.objects.filter(document__workspace_id=workspace_id, user=request.user).values_list('document_id', 'permission'))
+        can_lead = membership.role in {'owner', 'manager'}
+        payload = [{**document.as_dict(), 'permission': 'edit' if can_lead or document.created_by_id == request.user.id else shared_permissions.get(document.id, 'view')} for document in documents]
+        return JsonResponse({'documents': payload})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -191,22 +205,27 @@ def workspace_document_list(request, workspace_id):
     title = str(payload.get('title', '')).strip()[:200] or 'Untitled document'
     kind = payload.get('kind', 'document') if payload.get('kind') in {'document', 'presentation'} else 'document'
     document = WorkspaceDocument.objects.create(workspace_id=workspace_id, title=title, kind=kind, content=payload.get('content') or {}, created_by=request.user)
-    return JsonResponse({'document': document.as_dict()}, status=201)
+    return JsonResponse({'document': {**document.as_dict(), 'permission': 'edit'}}, status=201)
 
 
 @require_http_methods(['GET', 'PATCH', 'DELETE'])
 def workspace_document_detail(request, workspace_id, document_id):
-    _, error = require_workspace_member(request, workspace_id)
+    membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     document = WorkspaceDocument.objects.filter(workspace_id=workspace_id, id=document_id).first()
     if not document:
         return JsonResponse({'error': 'Document not found.'}, status=404)
+    permission = _document_permission(document, membership, request.user)
     if request.method == 'GET':
-        return JsonResponse({'document': document.as_dict()})
+        return JsonResponse({'document': {**document.as_dict(), 'permission': permission}})
     if request.method == 'DELETE':
+        if membership.role not in {'owner', 'manager'} and document.created_by_id != request.user.id:
+            return JsonResponse({'error': 'Only the document owner or a workspace leader can delete it.'}, status=403)
         document.delete()
         return JsonResponse({'status': 'deleted'})
+    if permission != 'edit':
+        return JsonResponse({'error': 'Edit access is required.'}, status=403)
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -214,9 +233,104 @@ def workspace_document_detail(request, workspace_id, document_id):
     if 'title' in payload:
         document.title = str(payload['title']).strip()[:200] or document.title
     if 'content' in payload and isinstance(payload['content'], dict):
+        if payload['content'] != document.content:
+            WorkspaceDocumentRevision.objects.create(document=document, created_by=request.user, title=document.title, content=document.content or {})
         document.content = payload['content']
     document.save(update_fields=['title', 'content', 'updated_at'])
-    return JsonResponse({'document': document.as_dict()})
+    return JsonResponse({'document': {**document.as_dict(), 'permission': permission}})
+
+
+@require_http_methods(['GET', 'POST'])
+def workspace_document_share_list(request, workspace_id, document_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    document = WorkspaceDocument.objects.filter(workspace_id=workspace_id, id=document_id).first()
+    if not document:
+        return JsonResponse({'error': 'Document not found.'}, status=404)
+    if request.method == 'GET':
+        return JsonResponse({'shares': [share.as_dict() for share in document.shares.select_related('user', 'shared_by')]})
+    if membership.role not in {'owner', 'manager'} and document.created_by_id != request.user.id:
+        return JsonResponse({'error': 'Only the document owner or a workspace leader can share it.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    user_id = payload.get('user_id')
+    permission = payload.get('permission', 'view')
+    if permission not in {'view', 'comment', 'edit'}:
+        return JsonResponse({'error': 'Permission must be view, comment, or edit.'}, status=400)
+    member = Membership.objects.filter(workspace_id=workspace_id, user_id=user_id).select_related('user').first()
+    if not member:
+        return JsonResponse({'error': 'Choose a member of this workspace.'}, status=400)
+    share, _ = WorkspaceDocumentShare.objects.update_or_create(document=document, user=member.user, defaults={'permission': permission, 'shared_by': request.user})
+    return JsonResponse({'share': share.as_dict()}, status=201)
+
+
+@require_http_methods(['DELETE'])
+def workspace_document_share_detail(request, workspace_id, document_id, share_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    document = WorkspaceDocument.objects.filter(workspace_id=workspace_id, id=document_id).first()
+    if not document:
+        return JsonResponse({'error': 'Document not found.'}, status=404)
+    if membership.role not in {'owner', 'manager'} and document.created_by_id != request.user.id:
+        return JsonResponse({'error': 'Only the document owner or a workspace leader can change sharing.'}, status=403)
+    share = document.shares.filter(id=share_id).first()
+    if not share:
+        return JsonResponse({'error': 'Share not found.'}, status=404)
+    share.delete()
+    return JsonResponse({'status': 'deleted'})
+
+
+@require_http_methods(['GET', 'POST'])
+def workspace_document_comment_list(request, workspace_id, document_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    document = WorkspaceDocument.objects.filter(workspace_id=workspace_id, id=document_id).first()
+    if not document:
+        return JsonResponse({'error': 'Document not found.'}, status=404)
+    if request.method == 'GET':
+        return JsonResponse({'comments': [comment.as_dict() for comment in document.comments.select_related('author')]})
+    if _document_permission(document, membership, request.user) not in {'comment', 'edit'}:
+        return JsonResponse({'error': 'Comment access is required.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    body = str(payload.get('body', '')).strip()
+    if not body or len(body) > 4000:
+        return JsonResponse({'error': 'Comment must be between 1 and 4,000 characters.'}, status=400)
+    parent = document.comments.filter(id=payload.get('parent_id')).first() if payload.get('parent_id') else None
+    comment = WorkspaceDocumentComment.objects.create(document=document, author=request.user, parent=parent, body=body, anchor=payload.get('anchor') if isinstance(payload.get('anchor'), dict) else {})
+    return JsonResponse({'comment': comment.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH'])
+def workspace_document_comment_detail(request, workspace_id, document_id, comment_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    comment = WorkspaceDocumentComment.objects.filter(document_id=document_id, document__workspace_id=workspace_id, id=comment_id).first()
+    if not comment:
+        return JsonResponse({'error': 'Comment not found.'}, status=404)
+    if membership.role not in {'owner', 'manager'} and comment.document.created_by_id != request.user.id and comment.author_id != request.user.id:
+        return JsonResponse({'error': 'Only the comment author, document owner, or a workspace leader can update it.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if payload.get('resolved', True):
+        from django.utils import timezone
+        comment.resolved_at = timezone.now()
+        comment.resolved_by = request.user
+    else:
+        comment.resolved_at = None
+        comment.resolved_by = None
+    comment.save(update_fields=['resolved_at', 'resolved_by'])
+    return JsonResponse({'comment': comment.as_dict()})
 
 
 @require_http_methods(['GET', 'POST'])
@@ -240,7 +354,7 @@ def workspace_file_list(request, workspace_id):
             item.cloudinary_public_id = result.get('public_id', '')
             item.save(update_fields=['cloudinary_url', 'cloudinary_public_id'])
         except Exception:
-            pass
+            logger.exception('Cloudinary upload failed for workspace file %s', item.id)
     return JsonResponse({'file': item.as_dict()}, status=201)
 
 

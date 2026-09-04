@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WebhookDelivery, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, CheckIn, ChatMessage, FollowUp, ImportRun, LookupValue, Membership, NotificationDelivery, PlanBucket, Project, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WebhookDelivery, WorkspaceWebhook, WorkShift
 
 
 @admin.register(Workspace)
@@ -43,6 +43,9 @@ admin.site.register(RiskIssue)
 admin.site.register(WorkspaceWebhook)
 admin.site.register(WebhookDelivery)
 admin.site.register(WorkspaceDocument)
+admin.site.register(WorkspaceDocumentShare)
+admin.site.register(WorkspaceDocumentComment)
+admin.site.register(WorkspaceDocumentRevision)
 admin.site.register(WorkspaceFile)
 
 

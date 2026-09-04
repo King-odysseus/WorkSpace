@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Bold, Bot, Download, FileText, HelpCircle, Italic, List, Plus, Presentation, Save, Send, Sparkles, Underline, Upload, X } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Bot, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
+import { readJsonResponse } from '../lib/workspace-format.js'
 
 const headers = id => ({ 'X-Workspace-Id': String(id) })
 const AI_PROVIDERS = [['openai', 'OpenAI'], ['claude', 'Claude'], ['kimi', 'Kimi'], ['deepseek', 'DeepSeek']]
@@ -18,23 +19,252 @@ function cleanHtml(value) {
   return doc.body.innerHTML
 }
 
-function RichEditor({ value, onChange }) {
+function RichEditor({ value, onChange, compact = false, readOnly = false }) {
   const editorRef = useRef(null)
   useEffect(() => { if (editorRef.current && editorRef.current.innerHTML !== value) editorRef.current.innerHTML = cleanHtml(value) }, [value])
   const command = (name, argument = null) => { editorRef.current?.focus(); document.execCommand(name, false, argument); onChange(editorRef.current?.innerHTML || '') }
-  return <div className="overflow-hidden rounded-xl border border-border bg-surface-secondary"><div className="flex flex-wrap gap-1 border-b border-border bg-surface px-3 py-2"><button type="button" className="rounded-lg p-2 hover:bg-surface-secondary" onClick={() => command('bold')} aria-label="Bold"><Bold size={15} /></button><button type="button" className="rounded-lg p-2 hover:bg-surface-secondary" onClick={() => command('italic')} aria-label="Italic"><Italic size={15} /></button><button type="button" className="rounded-lg p-2 hover:bg-surface-secondary" onClick={() => command('underline')} aria-label="Underline"><Underline size={15} /></button><button type="button" className="rounded-lg p-2 hover:bg-surface-secondary" onClick={() => command('insertUnorderedList')} aria-label="Bulleted list"><List size={15} /></button><select className="rounded-lg border border-border bg-surface px-2 text-xs" onChange={event => command('formatBlock', event.target.value)} defaultValue="p" aria-label="Text style"><option value="p">Paragraph</option><option value="h2">Heading</option><option value="h3">Subheading</option><option value="blockquote">Quote</option></select></div><div ref={editorRef} contentEditable suppressContentEditableWarning onInput={event => onChange(cleanHtml(event.currentTarget.innerHTML))} className="min-h-[390px] p-5 text-sm leading-7 outline-none" data-placeholder="Start writing…" /> </div>
+  const insertTable = () => {
+    editorRef.current?.focus()
+    document.execCommand('insertHTML', false, '<table><tbody><tr><td>Cell</td><td>Cell</td></tr><tr><td>Cell</td><td>Cell</td></tr></tbody></table><p><br></p>')
+    onChange(editorRef.current?.innerHTML || '')
+  }
+  const toolbarButton = (label, icon, action) => <button type="button" className="rich-toolbar-button" onMouseDown={event => event.preventDefault()} onClick={action} aria-label={label} title={label}>{icon}</button>
+  return <div className={`rich-editor ${compact ? 'is-compact' : ''}`}>
+    {!readOnly && <div className="rich-toolbar" role="toolbar" aria-label="Text formatting">
+      <div className="rich-toolbar-row">
+        <div className="rich-toolbar-group"><span>Edit</span>{toolbarButton('Undo', <Undo2 size={15} />, () => command('undo'))}{toolbarButton('Redo', <Redo2 size={15} />, () => command('redo'))}</div>
+        <div className="rich-toolbar-group rich-toolbar-font"><span>Font</span><select onChange={event => command('fontName', event.target.value)} defaultValue="Arial" aria-label="Font family"><option>Arial</option><option>Calibri</option><option>Georgia</option><option>Times New Roman</option><option>Verdana</option></select><select onChange={event => command('fontSize', event.target.value)} defaultValue="3" aria-label="Font size"><option value="1">10</option><option value="2">12</option><option value="3">14</option><option value="4">18</option><option value="5">24</option><option value="6">32</option><option value="7">48</option></select></div>
+        <div className="rich-toolbar-group"><span>Style</span>{toolbarButton('Bold', <Bold size={15} />, () => command('bold'))}{toolbarButton('Italic', <Italic size={15} />, () => command('italic'))}{toolbarButton('Underline', <Underline size={15} />, () => command('underline'))}{toolbarButton('Strikethrough', <Strikethrough size={15} />, () => command('strikeThrough'))}<label className="rich-color-control" title="Text color"><input type="color" defaultValue="#172033" onChange={event => command('foreColor', event.target.value)} /><span>A</span></label><label className="rich-color-control" title="Highlight color"><input type="color" defaultValue="#fff2a8" onChange={event => command('hiliteColor', event.target.value)} /><Highlighter size={15} /></label></div>
+      </div>
+      <div className="rich-toolbar-row">
+        <div className="rich-toolbar-group"><span>Paragraph</span><select onChange={event => command('formatBlock', event.target.value)} defaultValue="p" aria-label="Paragraph style"><option value="p">Paragraph</option><option value="h1">Title</option><option value="h2">Heading 1</option><option value="h3">Heading 2</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>{toolbarButton('Bulleted list', <List size={15} />, () => command('insertUnorderedList'))}{toolbarButton('Numbered list', <ListOrdered size={15} />, () => command('insertOrderedList'))}{toolbarButton('Decrease indent', <IndentDecrease size={15} />, () => command('outdent'))}{toolbarButton('Increase indent', <IndentIncrease size={15} />, () => command('indent'))}</div>
+        <div className="rich-toolbar-group"><span>Align</span>{toolbarButton('Align left', <AlignLeft size={15} />, () => command('justifyLeft'))}{toolbarButton('Align center', <AlignCenter size={15} />, () => command('justifyCenter'))}{toolbarButton('Align right', <AlignRight size={15} />, () => command('justifyRight'))}</div>
+        <div className="rich-toolbar-group"><span>Insert</span>{toolbarButton('Add link', <Link2 size={15} />, () => { const url = window.prompt('Link URL'); if (url) command('createLink', url) })}{toolbarButton('Insert table', <Table2 size={15} />, insertTable)}{toolbarButton('Horizontal line', <Minus size={15} />, () => command('insertHorizontalRule'))}{toolbarButton('Code block', <Code size={15} />, () => command('formatBlock', 'pre'))}{toolbarButton('Clear formatting', <RemoveFormatting size={15} />, () => command('removeFormat'))}</div>
+      </div>
+    </div>}
+    <div ref={editorRef} contentEditable={!readOnly} suppressContentEditableWarning onInput={event => onChange(cleanHtml(event.currentTarget.innerHTML))} className="rich-editor-surface" data-placeholder="Start writing..." />
+  </div>
+}
+
+function DocumentEditorSurface({ value, onChange, readOnly = false }) {
+  return <div className="document-page-wrap"><div className="document-ruler" aria-hidden="true"><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span></div><RichEditor value={value} onChange={onChange} readOnly={readOnly} /></div>
+}
+
+function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
+  const canvasRef = useRef(null)
+  const dragState = useRef(null)
+  const layout = {
+    title: { x: 7, y: 7, width: 86, height: 18 },
+    body: { x: 7, y: 29, width: 86, height: 62 },
+    ...(slide.layout || {}),
+  }
+
+  const updateLayout = (block, values) => onChange({ ...slide, layout: { ...layout, [block]: { ...layout[block], ...values } } })
+  const startDrag = (event, block) => {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragState.current = { block, startX: event.clientX, startY: event.clientY, x: layout[block].x, y: layout[block].y }
+  }
+  const moveDrag = event => {
+    const drag = dragState.current
+    const canvas = canvasRef.current
+    if (!drag || !canvas) return
+    const bounds = canvas.getBoundingClientRect()
+    const blockLayout = layout[drag.block]
+    const x = Math.max(0, Math.min(100 - blockLayout.width, drag.x + ((event.clientX - drag.startX) / bounds.width) * 100))
+    const y = Math.max(0, Math.min(100 - blockLayout.height, drag.y + ((event.clientY - drag.startY) / bounds.height) * 100))
+    updateLayout(drag.block, { x, y })
+  }
+  const finishDrag = () => { dragState.current = null }
+  const captureSize = (event, block) => {
+    if (dragState.current || !canvasRef.current) return
+    const bounds = canvasRef.current.getBoundingClientRect()
+    const elementBounds = event.currentTarget.getBoundingClientRect()
+    updateLayout(block, { width: Math.min(100 - layout[block].x, (elementBounds.width / bounds.width) * 100), height: Math.min(100 - layout[block].y, (elementBounds.height / bounds.height) * 100) })
+  }
+  const blockStyle = block => ({ left: `${layout[block].x}%`, top: `${layout[block].y}%`, width: `${layout[block].width}%`, height: `${layout[block].height}%` })
+
+  return <div className="presentation-slide" ref={canvasRef}>
+    <section className="slide-editable-block slide-title-block" style={blockStyle('title')} onPointerUp={event => captureSize(event, 'title')}>
+      {!readOnly && <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, 'title')} onPointerMove={moveDrag} onPointerUp={finishDrag}>Drag title</button>}
+      <input value={slide.title || ''} onChange={event => onChange({ ...slide, title: event.target.value })} placeholder="Slide title" readOnly={readOnly} />
+    </section>
+    <section className="slide-editable-block slide-body-block" style={blockStyle('body')} onPointerUp={event => captureSize(event, 'body')}>
+      {!readOnly && <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, 'body')} onPointerMove={moveDrag} onPointerUp={finishDrag}>Drag text</button>}
+      <RichEditor value={slide.body || ''} onChange={body => onChange({ ...slide, body })} compact readOnly={readOnly} />
+    </section>
+  </div>
 }
 
 export function FilesWorkspaceView({ workspaceId }) {
-  const [documents, setDocuments] = useState([]); const [files, setFiles] = useState([]); const [selected, setSelected] = useState(null); const [draft, setDraft] = useState(''); const [kind, setKind] = useState('document'); const [status, setStatus] = useState(''); const [busy, setBusy] = useState(false)
-  const load = () => Promise.all([fetch(`/api/workspaces/${workspaceId}/documents/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()), fetch(`/api/workspaces/${workspaceId}/files/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json())]).then(([docs, uploaded]) => { const nextDocuments = docs.documents || []; setDocuments(nextDocuments); setFiles(uploaded.files || []); const requested = localStorage.getItem('workspace-open-document-id'); const requestedDocument = nextDocuments.find(document => String(document.id) === requested); if (requestedDocument) { setSelected(requestedDocument); setKind(requestedDocument.kind); setDraft(requestedDocument.kind === 'presentation' ? (requestedDocument.content?.slides || []).map(slide => `${slide.title || 'Slide'}\n${slide.body || ''}`).join('\n---\n') : requestedDocument.content?.html || requestedDocument.content?.text || ''); localStorage.removeItem('workspace-open-document-id') } })
-  useEffect(() => { load().catch(() => setStatus('Could not load workspace files.')) }, [workspaceId])
-  const createDocument = async () => { setBusy(true); setStatus('Creating…'); try { const response = await fetch(`/api/workspaces/${workspaceId}/documents/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: kind === 'presentation' ? 'Untitled presentation' : 'Untitled document', kind, content: kind === 'presentation' ? { slides: [{ title: 'New slide', body: '' }] } : { text: '' } }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not create document.'); setDocuments(current => [data.document, ...current]); setSelected(data.document); setDraft(kind === 'presentation' ? 'New slide\n' : ''); setStatus('Ready to edit') } catch (error) { setStatus(error.message) } finally { setBusy(false) } }
-  const save = async () => { if (!selected) return; setBusy(true); const content = selected.kind === 'presentation' ? { slides: draft.split('\n---\n').map(slide => ({ title: slide.split('\n')[0] || 'Slide', body: slide.split('\n').slice(1).join('\n') })) } : { html: cleanHtml(draft), text: cleanHtml(draft).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }; try { const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: selected.title, content }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not save changes.'); setSelected(data.document); setDocuments(current => current.map(item => item.id === data.document.id ? data.document : item)); setStatus('Saved') } catch (error) { setStatus(error.message) } finally { setBusy(false) } }
-  const remove = async () => { if (!selected || !window.confirm(`Delete “${selected.title}”?`)) return; setBusy(true); try { const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'DELETE', credentials: 'include', headers: await csrf(headers(workspaceId)) }); if (!response.ok) throw new Error('Could not delete document.'); setDocuments(current => current.filter(item => item.id !== selected.id)); setSelected(null); setDraft(''); setStatus('Document deleted') } catch (error) { setStatus(error.message) } finally { setBusy(false) } }
-  const upload = async event => { const file = event.target.files?.[0]; if (!file) return; const form = new FormData(); form.append('file', file); try { const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body: form }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Upload failed'); setFiles(current => [data.file, ...current]); setStatus('File uploaded') } catch (error) { setStatus(error.message) } event.target.value = '' }
-  const openDocument = document => { setSelected(document); setKind(document.kind); setDraft(document.kind === 'presentation' ? (document.content?.slides || []).map(slide => `${slide.title || 'Slide'}\n${slide.body || ''}`).join('\n---\n') : document.content?.html || document.content?.text || '') }
-  return <section className="workspace-view"><div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow">Workspace resources</p><h2>Documents & files</h2><p className="text-sm text-text-muted">Create editable documents and presentations, or upload files for your team.</p></div><div className="flex gap-2"><select value={kind} onChange={event => setKind(event.target.value)} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"><option value="document">Document</option><option value="presentation">Presentation</option></select><button type="button" className="primary-button" onClick={createDocument} disabled={busy}><Plus size={15} /> {busy ? 'Working…' : 'New'}</button><label className="secondary-button cursor-pointer"><Upload size={15} /> Upload<input type="file" className="hidden" onChange={upload} /></label></div></div>{status && <p className="workspace-inline-status" role="status">{status}</p>}<div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"><Card className="p-5"><div className="mb-3 flex items-center gap-2"><input value={selected?.title || ''} onChange={event => setSelected(current => current ? { ...current, title: event.target.value } : current)} disabled={!selected} className="min-w-0 flex-1 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-lg font-semibold outline-none focus:border-accent" placeholder="Document title" />{selected && <><button type="button" className="primary-button" onClick={save} disabled={busy}><Save size={15} /> Save</button><button type="button" className="rounded-lg p-2 text-danger hover:bg-danger/10" onClick={remove} disabled={busy} aria-label="Delete document"><X size={17} /></button></>}</div>{selected ? selected.kind === 'presentation' ? <textarea value={draft} onChange={event => setDraft(event.target.value)} className="min-h-[430px] w-full resize-y rounded-xl border border-border bg-surface-secondary p-4 font-mono text-sm leading-6 outline-none focus:border-accent" aria-label="Presentation editor" placeholder="Slide title and body. Separate slides with ---" /> : <RichEditor value={draft} onChange={setDraft} /> : <div className="flex min-h-[430px] items-center justify-center text-sm text-text-muted">Choose a document or create a new one.</div>}</Card><div className="space-y-5"><Card className="p-4"><h3 className="mb-3">Editable content</h3>{documents.length ? documents.map(document => <button type="button" key={document.id} onClick={() => openDocument(document)} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-surface-secondary"><span className="rounded-lg bg-accent/15 p-2 text-accent">{document.kind === 'presentation' ? <Presentation size={16} /> : <FileText size={16} />}</span><span className="min-w-0 flex-1 truncate">{document.title}</span></button>) : <p className="text-sm text-text-muted">No editable documents yet.</p>}</Card><Card className="p-4"><h3 className="mb-3">Uploaded files</h3>{files.length ? files.map(file => <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-surface-secondary"><FileText size={16} className="text-text-muted" /><span className="min-w-0 flex-1 truncate">{file.original_name}</span><Download size={14} /></a>) : <p className="text-sm text-text-muted">No uploaded files yet.</p>}</Card></div></div></section>
+  const [documents, setDocuments] = useState([])
+  const [files, setFiles] = useState([])
+  const [members, setMembers] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [documentHtml, setDocumentHtml] = useState('')
+  const [slides, setSlides] = useState([])
+  const [activeSlide, setActiveSlide] = useState(0)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('workspace-files-view') || 'grid')
+  const [category, setCategory] = useState('all')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('')
+  const [dirty, setDirty] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [comments, setComments] = useState([])
+  const [shares, setShares] = useState([])
+  const [commentDraft, setCommentDraft] = useState('')
+  const [shareUserId, setShareUserId] = useState('')
+  const [sharePermission, setSharePermission] = useState('comment')
+  const draggedSlideIndex = useRef(null)
+
+  const load = useCallback(async () => {
+    const [documentResponse, fileResponse, memberResponse] = await Promise.all([
+      fetch(`/api/workspaces/${workspaceId}/documents/`, { credentials: 'include', headers: headers(workspaceId) }),
+      fetch(`/api/workspaces/${workspaceId}/files/`, { credentials: 'include', headers: headers(workspaceId) }),
+      fetch(`/api/workspaces/${workspaceId}/members/`, { credentials: 'include', headers: headers(workspaceId) }),
+    ])
+    const [documentData, fileData, memberData] = await Promise.all([
+      readJsonResponse(documentResponse, 'Documents could not be loaded.'),
+      readJsonResponse(fileResponse, 'Uploads could not be loaded.'),
+      readJsonResponse(memberResponse, 'Team members could not be loaded.'),
+    ])
+    if (!documentResponse.ok) throw new Error(documentData.error || 'Documents could not be loaded.')
+    if (!fileResponse.ok) throw new Error(fileData.error || 'Uploads could not be loaded.')
+    if (!memberResponse.ok) throw new Error(memberData.error || 'Team members could not be loaded.')
+    setDocuments(documentData.documents || [])
+    setFiles(fileData.files || [])
+    setMembers(memberData.members || [])
+  }, [workspaceId])
+
+  useEffect(() => { load().catch(() => setStatus('Could not load workspace files.')) }, [load])
+  useEffect(() => { localStorage.setItem('workspace-files-view', viewMode) }, [viewMode])
+
+  const openDocument = async document => {
+    setSelected(document)
+    setDocumentHtml(document.content?.html || document.content?.text || '')
+    setSlides(document.content?.slides?.length ? document.content.slides : [{ title: 'New slide', body: '' }])
+    setActiveSlide(0)
+    setDirty(false)
+    setStatus('Saved')
+    setCommentsOpen(false)
+    setShareOpen(false)
+    try {
+      const [commentResponse, shareResponse] = await Promise.all([
+        fetch(`/api/workspaces/${workspaceId}/documents/${document.id}/comments/`, { credentials: 'include', headers: headers(workspaceId) }),
+        fetch(`/api/workspaces/${workspaceId}/documents/${document.id}/shares/`, { credentials: 'include', headers: headers(workspaceId) }),
+      ])
+      const commentData = await readJsonResponse(commentResponse, 'Comments could not be loaded.')
+      const shareData = await readJsonResponse(shareResponse, 'Sharing details could not be loaded.')
+      if (!commentResponse.ok) throw new Error(commentData.error || 'Comments could not be loaded.')
+      if (!shareResponse.ok) throw new Error(shareData.error || 'Sharing details could not be loaded.')
+      setComments(commentData.comments || [])
+      setShares(shareData.shares || [])
+    } catch (error) { setStatus(error.message || 'Document opened, but collaboration details could not be loaded.') }
+  }
+
+  const saveDocument = useCallback(async () => {
+    if (!selected || busy) return
+    setBusy(true)
+    setStatus('Saving…')
+    const content = selected.kind === 'presentation'
+      ? { ...selected.content, slides }
+      : { ...selected.content, html: cleanHtml(documentHtml), text: cleanHtml(documentHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: selected.title, content }) })
+      const data = await readJsonResponse(response, 'Changes could not be saved.')
+      if (!response.ok) throw new Error(data.error || 'Could not save changes.')
+      setSelected(data.document)
+      setDocuments(current => current.map(item => item.id === data.document.id ? data.document : item))
+      setDirty(false)
+      setStatus('Saved')
+    } catch (error) { setStatus(error.message || 'Save failed.') } finally { setBusy(false) }
+  }, [busy, documentHtml, selected, slides, workspaceId])
+
+  useEffect(() => {
+    if (!dirty || !selected) return undefined
+    setStatus('Unsaved changes')
+    const timer = window.setTimeout(saveDocument, 1200)
+    return () => window.clearTimeout(timer)
+  }, [dirty, documentHtml, slides, selected?.title])
+
+  const createDocument = async kind => {
+    setBusy(true)
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/documents/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: kind === 'presentation' ? 'Untitled presentation' : 'Untitled document', kind, content: kind === 'presentation' ? { slides: [{ title: 'New slide', body: '' }] } : { html: '', text: '' } }) })
+      const data = await readJsonResponse(response, 'The item could not be created.')
+      if (!response.ok) throw new Error(data.error || 'Could not create item.')
+      setDocuments(current => [data.document, ...current])
+      await openDocument(data.document)
+    } catch (error) { setStatus(error.message) } finally { setBusy(false) }
+  }
+
+  const upload = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const body = new FormData(); body.append('file', file)
+    setBusy(true)
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body })
+      const data = await readJsonResponse(response, 'The file could not be uploaded.')
+      if (!response.ok) throw new Error(data.error || 'Upload failed.')
+      setFiles(current => [data.file, ...current]); setStatus('File uploaded.')
+    } catch (error) { setStatus(error.message) } finally { setBusy(false) }
+  }
+
+  const addComment = async event => {
+    event.preventDefault()
+    if (!commentDraft.trim()) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/comments/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ body: commentDraft.trim(), anchor: selected.kind === 'presentation' ? { slide: activeSlide + 1 } : {} }) })
+    const data = await readJsonResponse(response, 'The comment could not be posted.')
+    if (!response.ok) return setStatus(data.error || 'Comment could not be posted.')
+    setComments(current => [...current, data.comment]); setCommentDraft(''); setStatus('Comment posted.')
+  }
+
+  const resolveComment = async comment => {
+    const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/comments/${comment.id}/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ resolved: !comment.resolved }) })
+    const data = await readJsonResponse(response, 'The comment could not be updated.')
+    if (response.ok) setComments(current => current.map(item => item.id === comment.id ? data.comment : item))
+  }
+
+  const shareDocument = async event => {
+    event.preventDefault()
+    if (!shareUserId) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/shares/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ user_id: Number(shareUserId), permission: sharePermission }) })
+    const data = await readJsonResponse(response, 'The document could not be shared.')
+    if (!response.ok) return setStatus(data.error || 'Document could not be shared.')
+    setShares(current => [...current.filter(item => item.user_id !== data.share.user_id), data.share]); setShareUserId(''); setStatus('Shared with team member.')
+  }
+
+  const removeDocument = async () => {
+    if (!selected || !window.confirm(`Delete “${selected.title}”?`)) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'DELETE', credentials: 'include', headers: await csrf(headers(workspaceId)) })
+    if (!response.ok) return setStatus('Could not delete item.')
+    setDocuments(current => current.filter(item => item.id !== selected.id)); setSelected(null); setStatus('Item deleted.')
+  }
+
+  const items = [
+    ...documents.map(item => ({ ...item, itemType: item.kind, owner: members.find(member => member.id === item.created_by), modified: item.updated_at })),
+    ...files.map(item => ({ ...item, title: item.original_name, itemType: 'file', modified: item.created_at, owner: { first_name: item.uploaded_by } })),
+  ].filter(item => (category === 'all' || item.itemType === category) && item.title.toLowerCase().includes(query.toLowerCase()))
+
+  if (selected) {
+    const canEdit = selected.permission === 'edit'
+    const canComment = ['comment', 'edit'].includes(selected.permission)
+    const updateSlide = patch => { setSlides(current => current.map((slide, index) => index === activeSlide ? { ...slide, ...patch } : slide)); setDirty(true) }
+    return <section className="workspace-view file-editor-view">
+      <div className="file-editor-commandbar"><button type="button" className="secondary-button" onClick={() => setSelected(null)}><ChevronLeft size={15} /> Files</button><input className="file-editor-title" value={selected.title} onChange={event => { setSelected(current => ({ ...current, title: event.target.value })); setDirty(true) }} readOnly={!canEdit} /><span className={`file-save-status ${dirty ? 'is-dirty' : ''}`} role="status">{canEdit ? (status || 'Saved') : `Read only (${selected.permission || 'view'})`}</span><button type="button" className="secondary-button" onClick={() => setCommentsOpen(current => !current)}><MessageSquare size={15} /> Comments ({comments.filter(item => !item.resolved).length})</button>{canEdit && <><button type="button" className="primary-button" onClick={() => setShareOpen(current => !current)}><Share2 size={15} /> Share</button><button type="button" className="secondary-button" onClick={saveDocument} disabled={busy}><Save size={15} /> Save</button><button type="button" className="file-delete-button" onClick={removeDocument} aria-label="Delete"><Trash2 size={16} /></button></>}</div>
+      <div className={`file-editor-layout ${(commentsOpen || shareOpen) ? 'has-review-panel' : ''}`}>
+        {selected.kind === 'presentation' && <aside className="slide-rail">{canEdit && <button type="button" className="secondary-button" onClick={() => { setSlides(current => [...current, { title: `Slide ${current.length + 1}`, body: '' }]); setActiveSlide(slides.length); setDirty(true) }}><Plus size={14} /> Slide</button>}{slides.map((slide, index) => <button type="button" draggable={canEdit} className={index === activeSlide ? 'active' : ''} onClick={() => setActiveSlide(index)} onDragStart={() => { draggedSlideIndex.current = index }} onDragOver={event => { if (canEdit) event.preventDefault() }} onDrop={() => { const source = draggedSlideIndex.current; if (!canEdit || source === null || source === index) return; setSlides(current => { const reordered = [...current]; const [moved] = reordered.splice(source, 1); reordered.splice(index, 0, moved); return reordered }); setActiveSlide(index); setDirty(true); draggedSlideIndex.current = null }} key={index}><span>{index + 1}</span><strong>{slide.title || `Slide ${index + 1}`}</strong></button>)}</aside>}
+        <main className={selected.kind === 'presentation' ? 'presentation-canvas' : 'document-canvas'}>{selected.kind === 'presentation' ? <PresentationSlideEditor slide={slides[activeSlide] || { title: '', body: '' }} onChange={nextSlide => updateSlide(nextSlide)} readOnly={!canEdit} /> : <DocumentEditorSurface value={documentHtml} onChange={value => { setDocumentHtml(value); setDirty(true) }} readOnly={!canEdit} />}</main>
+        {(commentsOpen || shareOpen) && <aside className="document-review-panel">{shareOpen && <><h3>Share</h3><form onSubmit={shareDocument}><select value={shareUserId} onChange={event => setShareUserId(event.target.value)} required><option value="">Choose a team member</option>{members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select><select value={sharePermission} onChange={event => setSharePermission(event.target.value)}><option value="view">Can view</option><option value="comment">Can comment</option><option value="edit">Can edit</option></select><button className="primary-button">Share</button></form>{shares.map(share => <div className="document-share-row" key={share.id}><strong>{share.user_name}</strong><span>{share.permission}</span></div>)}</>}{commentsOpen && <><h3>Review comments</h3><div className="document-comment-list">{comments.map(comment => <article className={comment.resolved ? 'resolved' : ''} key={comment.id}><strong>{comment.author_name}</strong><span>{new Date(comment.created_at).toLocaleString()}{comment.anchor?.slide ? `, Slide ${comment.anchor.slide}` : ''}</span><p>{comment.body}</p>{canComment && <button type="button" onClick={() => resolveComment(comment)}>{comment.resolved ? 'Reopen' : 'Resolve'}</button>}</article>)}</div>{canComment ? <form onSubmit={addComment}><textarea value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Add a review comment..." /><button className="primary-button">Comment</button></form> : <p className="workspace-inline-status">View-only access does not allow comments.</p>}</>}</aside>}
+      </div>
+    </section>
+  }
+
+  return <section className="workspace-view files-browser-view"><div className="files-browser-heading"><div><p className="eyebrow">Workspace resources</p><h2>Files</h2><p>Browse documents, presentations, and uploads.</p></div><div className="files-create-actions"><button type="button" className="secondary-button" onClick={() => createDocument('document')}><FileText size={15} /> New document</button><button type="button" className="secondary-button" onClick={() => createDocument('presentation')}><Presentation size={15} /> New presentation</button><label className="primary-button"><Upload size={15} /> Upload<input type="file" hidden onChange={upload} /></label></div></div>{status && <p className="workspace-inline-status" role="status">{status}</p>}<div className="files-browser-toolbar"><div className="files-categories">{[['all', 'All'], ['document', 'Documents'], ['presentation', 'Presentations'], ['file', 'Uploads']].map(([value, label]) => <button type="button" className={category === value ? 'active' : ''} onClick={() => setCategory(value)} key={value}>{label}</button>)}</div><label className="files-search"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search files" /></label><div className="files-view-switch"><button type="button" className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')} aria-label="Thumbnail view"><Grid3X3 size={16} /></button><button type="button" className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} aria-label="Table view"><Table2 size={16} /></button></div></div>{viewMode === 'grid' ? <div className="files-thumbnail-grid">{items.map(item => <button type="button" key={`${item.itemType}-${item.id}`} onClick={() => item.itemType === 'file' ? window.open(item.url, '_blank', 'noopener') : openDocument(item)}><span className={`file-thumbnail file-thumbnail-${item.itemType}`}>{item.itemType === 'presentation' ? <Presentation size={38} /> : <FileText size={38} />}</span><strong>{item.title}</strong><small>{item.itemType === 'presentation' ? 'Presentation' : item.itemType === 'document' ? 'Document' : 'Uploaded file'} · {new Date(item.modified).toLocaleDateString()}</small></button>)}</div> : <div className="files-table-wrap"><table className="files-table"><thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Modified</th><th>Size</th></tr></thead><tbody>{items.map(item => <tr key={`${item.itemType}-${item.id}`} onClick={() => item.itemType === 'file' ? window.open(item.url, '_blank', 'noopener') : openDocument(item)}><td><span>{item.itemType === 'presentation' ? <Presentation size={17} /> : <FileText size={17} />}</span>{item.title}</td><td>{item.itemType}</td><td>{item.owner ? [item.owner.first_name, item.owner.last_name].filter(Boolean).join(' ') || item.owner.email : '-'}</td><td>{new Date(item.modified).toLocaleString()}</td><td>{item.size ? `${Math.ceil(item.size / 1024)} KB` : '-'}</td></tr>)}</tbody></table></div>}{!items.length && <div className="files-empty">No matching files.</div>}</section>
 }
 
 export function AssistantFlyout({ workspaceId, onClose }) {
@@ -43,15 +273,6 @@ export function AssistantFlyout({ workspaceId, onClose }) {
   const ask = async event => { event.preventDefault(); if (!message.trim()) return; setBusy(true); setError(''); try { const response = await fetch(`/api/workspaces/${workspaceId}/ai/chat/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ message, provider }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Assistant unavailable.'); setAnswer(result.answer); setMessage('') } catch (requestError) { setError(requestError.message) } finally { setBusy(false) } }
   const providers = data?.providers || {}; const enabled = data?.settings?.ai_enabled_providers || Object.keys(providers).filter(key => providers[key])
   return <aside className="ai-chat-window fixed bottom-5 right-4 z-[80] flex w-[min(350px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl lg:bottom-6 lg:right-6"><div className="flex items-center justify-between bg-navy px-3 py-2 text-white"><div className="flex min-w-0 items-center gap-2"><span className="rounded-lg bg-accent/20 p-1.5 text-accent"><Bot size={15} /></span><strong className="shrink-0 text-xs">AI assistant</strong></div><button type="button" className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white" onClick={onClose} aria-label="Close assistant"><X size={15} /></button></div>{(answer || error) && <div className="max-h-[210px] overflow-y-auto p-3">{answer && <div className="whitespace-pre-wrap rounded-xl rounded-bl-sm bg-surface-secondary p-3 text-xs leading-5">{answer}</div>}{error && <div className="rounded-xl bg-danger/10 p-2.5 text-xs text-danger">{error}</div>}</div>}<form onSubmit={ask} className="p-2"><div className="flex items-center gap-1.5 rounded-xl bg-surface-secondary p-1"><textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input max-h-20 min-h-8 flex-1 resize-none bg-transparent px-2 py-1.5 text-xs outline-none" placeholder="Ask anything…" /><button className="rounded-lg bg-accent p-2 text-navy disabled:opacity-40" disabled={busy || !message.trim()} aria-label="Send message"><Send size={14} /></button></div></form></aside>
-}
-
-function LegacyAISettingsPanel({ workspaceId, members, canManageMembers }) {
-  const [data, setData] = useState(null); const [helpOpen, setHelpOpen] = useState(false); const [notice, setNotice] = useState('')
-  useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(setData) }, [workspaceId])
-  if (!data) return <Card className="settings-panel p-5">Loading AI settings…</Card>
-  const settings = { ai_enabled: false, ai_user_ids: [], ai_enabled_providers: [], ai_default_provider: 'openai', ...(data.settings || {}) }; settings.ai_user_ids = settings.ai_user_ids || []; settings.ai_enabled_providers = settings.ai_enabled_providers || []; const providers = data.providers || {}; const toggle = provider => setData(current => ({ ...current, settings: { ...current.settings, ai_enabled_providers: (current.settings.ai_enabled_providers || []).includes(provider) ? current.settings.ai_enabled_providers.filter(value => value !== provider) : [...(current.settings.ai_enabled_providers || []), provider] } })); const toggleMember = id => setData(current => ({ ...current, settings: { ...current.settings, ai_user_ids: (current.settings.ai_user_ids || []).includes(id) ? current.settings.ai_user_ids.filter(value => value !== id) : [...(current.settings.ai_user_ids || []), id] } }))
-  const save = async () => { const response = await fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify(settings) }); const result = await response.json(); setNotice(response.ok ? 'AI settings saved.' : (result.error || 'Could not save settings.')); if (response.ok) setData(current => ({ ...current, settings: result.settings })) }
-  return <Card className="settings-panel p-5"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Company assistant</p><h2>AI providers & access</h2><p className="text-sm text-text-muted">Keys stay server-side. Configure them in Railway environment variables.</p></div><button type="button" className="secondary-button" onClick={() => setHelpOpen(current => !current)}><HelpCircle size={15} /> Setup help</button></div>{helpOpen && <div className="mt-4 rounded-xl bg-accent/10 p-4 text-sm leading-6"><strong>Configuration help</strong><p className="mt-1">Set <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>KIMI_API_KEY</code>, or <code>DEEPSEEK_API_KEY</code> on the server, then redeploy. API usage is billed by each provider.</p></div>}<div className="mt-5 space-y-2">{AI_PROVIDERS.map(([key, label]) => <label key={key} className="flex items-center gap-3 rounded-xl bg-surface-secondary p-3"><input type="checkbox" checked={settings.ai_enabled_providers.includes(key)} onChange={() => toggle(key)} disabled={!providers[key] || !canManageMembers} /><span className="flex-1"><strong>{label}</strong><small className="block text-text-muted">{providers[key] ? 'API key configured' : 'Add the API key in Railway first'}</small></span></label>)}</div><label className="mt-4 block text-sm">Default provider<select value={settings.ai_default_provider} onChange={event => setData(current => ({ ...current, settings: { ...current.settings, ai_default_provider: event.target.value } }))} className="mt-1 w-full rounded-lg bg-surface-secondary px-3 py-2" disabled={!canManageMembers}>{AI_PROVIDERS.map(([key, label]) => <option key={key} value={key} disabled={!providers[key]}>{label}{providers[key] ? '' : ' — key required'}</option>)}</select></label>{canManageMembers && <><label className="settings-switch mt-4"><input type="checkbox" checked={settings.ai_enabled} onChange={event => setData(current => ({ ...current, settings: { ...current.settings, ai_enabled: event.target.checked } }))} /> Enable assistant</label><div className="mt-4"><p className="text-sm font-semibold">Members with access</p>{members.map(member => <label key={member.id} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-secondary"><input type="checkbox" checked={settings.ai_user_ids.includes(member.id)} onChange={() => toggleMember(member.id)} />{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</label>)}</div><button type="button" className="primary-button mt-4" onClick={save}><Save size={15} /> Save AI settings</button></>}{notice && <p className="workspace-inline-status mt-3">{notice}</p>}</Card>
 }
 
 export function AISettingsPanel({ workspaceId, members = [], canManageMembers }) {

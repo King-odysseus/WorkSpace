@@ -75,7 +75,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     Promise.all([
       fetch(`/api/workspaces/${workspaceId}/documents/`, { credentials: 'include', headers: { 'X-Workspace-Id': String(workspaceId) } }).then(response => response.json()),
       fetch(`/api/workspaces/${workspaceId}/files/`, { credentials: 'include', headers: { 'X-Workspace-Id': String(workspaceId) } }).then(response => response.json()),
-    ]).then(([documents, files]) => { setWorkspaceDocuments(documents.documents || []); setWorkspaceFiles(files.files || []) }).catch(() => {})
+    ]).then(([documents, files]) => { setWorkspaceDocuments(documents.documents || []); setWorkspaceFiles(files.files || []) }).catch(error => console.error('Workspace resources could not be loaded', error))
   }, [workspaceId])
 
   useEffect(() => {

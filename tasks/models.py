@@ -1074,6 +1074,50 @@ class WorkspaceDocument(models.Model):
         return {'id': self.id, 'workspace_id': self.workspace_id, 'title': self.title, 'kind': self.kind, 'content': self.content or {}, 'created_by': self.created_by_id, 'updated_at': self.updated_at.isoformat(), 'created_at': self.created_at.isoformat()}
 
 
+class WorkspaceDocumentShare(models.Model):
+    PERMISSION_CHOICES = [('view', 'View'), ('comment', 'Comment'), ('edit', 'Edit')]
+    document = models.ForeignKey(WorkspaceDocument, on_delete=models.CASCADE, related_name='shares')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='shared_workspace_documents')
+    permission = models.CharField(max_length=12, choices=PERMISSION_CHOICES, default='view')
+    shared_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_document_shares_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['document', 'user'], name='unique_workspace_document_share')]
+
+    def as_dict(self):
+        return {'id': self.id, 'user_id': self.user_id, 'user_name': self.user.get_full_name() or self.user.email, 'email': self.user.email, 'permission': self.permission, 'shared_by': self.shared_by_id, 'updated_at': self.updated_at.isoformat()}
+
+
+class WorkspaceDocumentComment(models.Model):
+    document = models.ForeignKey(WorkspaceDocument, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_document_comments')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    body = models.TextField(max_length=4000)
+    anchor = models.JSONField(default=dict, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_workspace_document_comments')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def as_dict(self):
+        return {'id': self.id, 'author_id': self.author_id, 'author_name': self.author.get_full_name() or self.author.email, 'parent_id': self.parent_id, 'body': self.body, 'anchor': self.anchor or {}, 'resolved': self.resolved_at is not None, 'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None, 'created_at': self.created_at.isoformat()}
+
+
+class WorkspaceDocumentRevision(models.Model):
+    document = models.ForeignKey(WorkspaceDocument, on_delete=models.CASCADE, related_name='revisions')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_document_revisions')
+    title = models.CharField(max_length=200)
+    content = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 class WorkspaceFile(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='files')
     file = models.FileField(upload_to='workspace-files/%Y/%m/', blank=True)

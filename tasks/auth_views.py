@@ -172,3 +172,29 @@ def user_presence(request):
     profile.presence_updated_at = timezone.now()
     profile.save(update_fields=['presence', 'presence_updated_at', 'updated_at'])
     return JsonResponse({'presence': profile.presence})
+
+
+@require_http_methods(['PATCH'])
+def user_profile(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    payload, error = parse_json(request)
+    if error:
+        return error
+    first_name = str(payload.get('first_name', request.user.first_name)).strip()
+    last_name = str(payload.get('last_name', request.user.last_name)).strip()
+    email = str(payload.get('email', request.user.email)).strip().lower()
+    if len(first_name) > 150 or len(last_name) > 150:
+        return JsonResponse({'error': 'Names must be 150 characters or fewer.'}, status=400)
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({'error': 'Enter a valid email address.'}, status=400)
+    if User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
+        return JsonResponse({'error': 'That email address is already in use.'}, status=409)
+    request.user.first_name = first_name
+    request.user.last_name = last_name
+    request.user.email = email
+    request.user.username = email
+    request.user.save(update_fields=['first_name', 'last_name', 'email', 'username'])
+    return JsonResponse({'user': user_payload(request.user)})

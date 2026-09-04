@@ -17,7 +17,7 @@ async function apiRequest(url, options = {}) {
   return data
 }
 
-const formatDateTime = value => value ? new Date(value).toLocaleString() : '—'
+const formatDateTime = value => value ? new Date(value).toLocaleString() : '-'
 
 export function ScreenShareControl({ workspaceId, currentUserId }) {
   const [pending, setPending] = useState(null)
@@ -326,7 +326,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
     <WorkspaceViewHeading title="Screen sharing" subtitle="Consent-based screen capture with visible controls, restricted access, and a complete audit trail." />
     {error && <p className="auth-error" role="alert">{error}</p>}
     <Card className="screen-sharing-policy-card">
-      <div className="drawer-section-heading"><h3><ShieldCheck size={18} /> Company policy</h3><span>Version {policy?.version || '—'}</span></div>
+      <div className="drawer-section-heading"><h3><ShieldCheck size={18} /> Company policy</h3><span>Version {policy?.version || '-'}</span></div>
       {policy && !canManagePolicy && <><p className="screen-share-policy-copy">{policy.text}</p><p className="screen-share-policy-meta">{policy.enabled ? 'Enabled' : 'Disabled'} · every {policy.capture_interval_seconds} seconds · retained {policy.capture_retention_days} days</p><p className="screen-share-policy-hint">Only the workspace owner can enable or publish this policy.</p></>}
       {policy && canManagePolicy && <form onSubmit={savePolicy} className="screen-sharing-policy-form">
         <label className="screen-share-toggle"><input type="checkbox" checked={draftPolicy.enabled} onChange={event => setDraftPolicy(current => ({ ...current, enabled: event.target.checked }))} /> Enable screen-sharing requests</label>
