@@ -7,9 +7,9 @@ assessed against the integrated working tree.
 
 | Check | Result |
 | --- | --- |
-| `python manage.py check` | ✅ no issues |
-| `python manage.py test tasks` | ✅ 191/191 passing |
-| `tasks/test_quality.py` | ✅ 30 tests covering calculations, drill-down replay, HTTP permissions, reminder dedup, integrity checks, and import preview/commit |
+| `python manage.py check` | no issues |
+| `python manage.py test tasks` | 191/191 passing |
+| `tasks/test_quality.py` | 30 tests covering calculations, drill-down replay, HTTP permissions, reminder dedup, integrity checks, and import preview/commit |
 
 ## Delivered in this workstream
 
@@ -32,9 +32,9 @@ assessed against the integrated working tree.
 
 | Item | Why | Action owner |
 | --- | --- | --- |
-| Legacy `report_summary` calculation | ✅ delivery-based periods and cancelled-exclusive denominator | no action |
-| Reporting, project health, integrity, automation, and import HTTP endpoints | ✅ exposed with workspace permissions and validation | frontend may integrate against `docs/reporting-service.md` §5 |
-| Automation notification preferences | ✅ all five kinds respect `task_updates` | no action |
+| Legacy `report_summary` calculation | delivery-based periods and cancelled-exclusive denominator | no action |
+| Reporting, project health, integrity, automation, and import HTTP endpoints | exposed with workspace permissions and validation | frontend may integrate against `docs/reporting-service.md` §5 |
+| Automation notification preferences | all five kinds respect `task_updates` | no action |
 | Excel column assumptions | exact General/Lists/owner-sheet headers must be confirmed against the real workbook | provide the workbook; adjust `DEFAULT_GENERAL_COLUMNS` / `column_map` |
 | Accessibility follow-ups | focus trap, `aria-pressed` on view toggle, contrast audit | see `docs/accessibility-responsive-review.md` |
 
