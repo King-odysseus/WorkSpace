@@ -3197,3 +3197,8 @@ html[data-theme='dark'] :where(
 .chat-mode-channels .channel-row:hover { background:var(--workspace-surface-soft) !important; color:var(--workspace-text) !important; }
 .chat-mode-channels .channel-row.active { background:#eaf0ff !important; color:#1d4ed8 !important; }
 .chat-mode-channels .channel-row .channel-name { color:inherit !important; }
+.chat-mode-direct .chat-conversation-list { background:var(--workspace-surface) !important; color:var(--workspace-text) !important; padding:16px 14px !important; box-shadow:none !important; }
+.chat-mode-direct .chat-list-heading h3 { color:var(--workspace-text) !important; }
+.chat-mode-direct .direct-row { background:transparent; color:var(--workspace-text); }
+.chat-mode-direct .direct-row:hover { background:var(--workspace-surface-soft); color:var(--workspace-text); }
+.chat-mode-direct .direct-row.active { background:#eaf0ff; color:#1d4ed8; }
