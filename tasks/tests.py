@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .views import create_notification
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
@@ -1463,6 +1463,74 @@ class WorkShiftApiTests(TestCase):
         self.assertEqual(this_week['total_seconds'], 0)
         self.assertEqual(this_week['average_seconds'], 0)
 
+    def test_report_summary_time_clock_accepts_quarter_and_year(self):
+        WorkShift.objects.create(
+            workspace=self.workspace, user=self.user,
+            date=timezone.localdate(), started_at=timezone.now() - timedelta(hours=1),
+            ended_at=timezone.now(),
+        )
+        old_shift = WorkShift.objects.create(
+            workspace=self.workspace, user=self.user,
+            date=timezone.localdate().replace(year=timezone.localdate().year - 1),
+            started_at=timezone.now() - timedelta(days=400),
+            ended_at=timezone.now() - timedelta(days=400) + timedelta(hours=1),
+        )
+        self.assertFalse(old_shift.is_open)
+
+        this_year = self.client.get(f"{reverse('report-summary', args=[self.workspace.id])}?range=year").json()['summary']['time_clock']
+        self.assertEqual(this_year['shift_count'], 1)
+
+        this_quarter = self.client.get(f"{reverse('report-summary', args=[self.workspace.id])}?range=quarter").json()['summary']['time_clock']
+        self.assertEqual(this_quarter['shift_count'], 1)
+
+    def test_report_summary_time_clock_filters_by_member_and_paginates(self):
+        for index in range(3):
+            WorkShift.objects.create(
+                workspace=self.workspace, user=self.user,
+                date=timezone.localdate() - timedelta(days=index),
+                started_at=timezone.now() - timedelta(days=index, hours=1),
+                ended_at=timezone.now() - timedelta(days=index),
+            )
+        WorkShift.objects.create(
+            workspace=self.workspace, user=self.other,
+            date=timezone.localdate(), started_at=timezone.now() - timedelta(hours=1),
+            ended_at=timezone.now(),
+        )
+
+        base_url = reverse('report-summary', args=[self.workspace.id])
+        everyone = self.client.get(base_url).json()['summary']['time_clock']
+        self.assertEqual(everyone['shift_count'], 4)
+
+        mine = self.client.get(f'{base_url}?shift_user_id={self.user.id}').json()['summary']['time_clock']
+        self.assertEqual(mine['shift_count'], 3)
+        self.assertTrue(all(shift['user_name'] for shift in mine['recent']))
+        self.assertEqual(len(mine['by_member']), 1)
+        self.assertEqual(mine['by_member'][0]['user_id'], self.user.id)
+
+        page_one = self.client.get(f'{base_url}?shift_user_id={self.user.id}&shift_page=1').json()['summary']['time_clock']
+        self.assertEqual(len(page_one['recent']), 3)
+        self.assertEqual(page_one['recent_pagination']['total_count'], 3)
+        self.assertEqual(page_one['recent_pagination']['total_pages'], 1)
+
+        invalid_user = self.client.get(f'{base_url}?shift_user_id=not-a-number')
+        self.assertEqual(invalid_user.status_code, 400)
+        invalid_page = self.client.get(f'{base_url}?shift_page=not-a-number')
+        self.assertEqual(invalid_page.status_code, 400)
+
+    def test_report_summary_time_clock_pagination_defaults_to_twenty(self):
+        for index in range(25):
+            WorkShift.objects.create(
+                workspace=self.workspace, user=self.user,
+                date=timezone.localdate() - timedelta(days=index),
+                started_at=timezone.now() - timedelta(days=index, hours=1),
+                ended_at=timezone.now() - timedelta(days=index),
+            )
+        summary = self.client.get(reverse('report-summary', args=[self.workspace.id])).json()['summary']['time_clock']
+        self.assertEqual(len(summary['recent']), 20)
+        self.assertEqual(summary['recent_pagination']['page_size'], 20)
+        self.assertEqual(summary['recent_pagination']['total_count'], 25)
+        self.assertEqual(summary['recent_pagination']['total_pages'], 2)
+
 
 class TaskDependencyApiTests(TestCase):
     def setUp(self):
@@ -2201,3 +2269,54 @@ class WorkspaceAiSettingsApiTests(TestCase):
         rejected = self.patch({'provider_config': {'openai': {'base_url': 'http://internal.example.com/v1'}}})
         self.assertEqual(rejected.status_code, 400)
         self.assertIn('HTTPS', rejected.json()['error'])
+
+
+class WorkspaceDocumentCollaborationTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='document-owner@example.com', email='document-owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='document-member@example.com', email='document-member@example.com', password='secure-pass-123')
+        self.viewer = User.objects.create_user(username='document-viewer@example.com', email='document-viewer@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Document Workspace', slug='document-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        Membership.objects.create(workspace=self.workspace, user=self.viewer, role='member')
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, created_by=self.owner, title='Review plan', kind='presentation', content={'slides': [{'title': 'Start', 'body': ''}]})
+        self.detail_url = reverse('workspace-document-detail', args=[self.workspace.id, self.document.id])
+        self.share_url = reverse('workspace-document-share-list', args=[self.workspace.id, self.document.id])
+        self.comment_url = reverse('workspace-document-comment-list', args=[self.workspace.id, self.document.id])
+
+    def test_unshared_member_has_read_only_access(self):
+        self.client.force_login(self.member)
+        listing = self.client.get(reverse('workspace-document-list', args=[self.workspace.id]))
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.json()['documents'][0]['permission'], 'view')
+        update = self.client.patch(self.detail_url, data=json.dumps({'title': 'Changed'}), content_type='application/json')
+        self.assertEqual(update.status_code, 403)
+        comment = self.client.post(self.comment_url, data=json.dumps({'body': 'Not allowed'}), content_type='application/json')
+        self.assertEqual(comment.status_code, 403)
+
+    def test_comment_share_allows_comment_but_not_edit(self):
+        WorkspaceDocumentShare.objects.create(document=self.document, user=self.member, shared_by=self.owner, permission='comment')
+        self.client.force_login(self.member)
+        comment = self.client.post(self.comment_url, data=json.dumps({'body': 'Please revise slide two.', 'anchor': {'slide': 2}}), content_type='application/json')
+        self.assertEqual(comment.status_code, 201)
+        self.assertEqual(comment.json()['comment']['anchor'], {'slide': 2})
+        update = self.client.patch(self.detail_url, data=json.dumps({'title': 'Changed'}), content_type='application/json')
+        self.assertEqual(update.status_code, 403)
+
+    def test_edit_share_creates_revision_and_allows_update(self):
+        WorkspaceDocumentShare.objects.create(document=self.document, user=self.member, shared_by=self.owner, permission='edit')
+        self.client.force_login(self.member)
+        updated_content = {'slides': [{'title': 'Updated', 'body': '<p>Body</p>'}]}
+        response = self.client.patch(self.detail_url, data=json.dumps({'content': updated_content}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['document']['permission'], 'edit')
+        revision = WorkspaceDocumentRevision.objects.get(document=self.document)
+        self.assertEqual(revision.content, {'slides': [{'title': 'Start', 'body': ''}]})
+
+    def test_unrelated_member_cannot_resolve_another_members_comment(self):
+        comment = WorkspaceDocumentComment.objects.create(document=self.document, author=self.member, body='Review this.')
+        self.client.force_login(self.viewer)
+        url = reverse('workspace-document-comment-detail', args=[self.workspace.id, self.document.id, comment.id])
+        response = self.client.patch(url, data=json.dumps({'resolved': True}), content_type='application/json')
+        self.assertEqual(response.status_code, 403)

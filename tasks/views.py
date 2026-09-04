@@ -360,6 +360,13 @@ def report_summary(request, workspace_id):
         return error
     tasks = Task.objects.filter(workspace_id=workspace_id).exclude(state='archived')
     report_range = request.GET.get('range', 'all')
+    shift_user_id = request.GET.get('shift_user_id')
+    try:
+        shift_page = max(int(request.GET.get('shift_page', 1)), 1)
+    except ValueError:
+        return JsonResponse({'error': 'shift_page must be an integer.'}, status=400)
+    if shift_user_id is not None and not shift_user_id.isdigit():
+        return JsonResponse({'error': 'shift_user_id must be an integer.'}, status=400)
     today = timezone.localdate()
     from .reporting import PROGRESSABLE_STATUSES, apply_report_period
     tasks = apply_report_period(tasks, report_range, today=today)
@@ -380,7 +387,7 @@ def report_summary(request, workspace_id):
         })
     check_in_total = CheckIn.objects.filter(workspace_id=workspace_id, date=today).count()
     member_total = Membership.objects.filter(workspace_id=workspace_id).count()
-    time_clock = time_clock_summary(workspace_id, report_range, today)
+    time_clock = time_clock_summary(workspace_id, report_range, today, user_id=shift_user_id, page=shift_page)
     task_count = tasks.count()
     applicable_count = tasks.exclude(status='cancelled').count()
     return JsonResponse({'summary': {
@@ -398,13 +405,15 @@ def report_summary(request, workspace_id):
     }})
 
 
-def time_clock_summary(workspace_id, report_range, today):
+def time_clock_summary(workspace_id, report_range, today, user_id=None, page=1, page_size=20):
     """Aggregate work shifts for the Reports page over the same window the task report uses."""
+    from .reporting import named_period_start
     shifts = WorkShift.objects.filter(workspace_id=workspace_id).select_related('user')
-    if report_range == 'week':
-        shifts = shifts.filter(date__gte=today - timedelta(days=6))
-    elif report_range == 'month':
-        shifts = shifts.filter(date__gte=today.replace(day=1))
+    period_start = named_period_start(report_range, today)
+    if period_start is not None:
+        shifts = shifts.filter(date__gte=period_start)
+    if user_id is not None:
+        shifts = shifts.filter(user_id=user_id)
     now = timezone.now()
     by_member = {}
     total_seconds = 0
@@ -433,6 +442,11 @@ def time_clock_summary(workspace_id, report_range, today):
     for entry in members:
         entry['day_count'] = len(entry.pop('days'))
     shift_total = sum(entry['shift_count'] for entry in members)
+    paginator = Paginator(shifts, page_size)
+    try:
+        recent_page = paginator.page(page)
+    except EmptyPage:
+        recent_page = paginator.page(paginator.num_pages)
     return {
         'total_seconds': total_seconds,
         'break_seconds': total_break_seconds,
@@ -440,7 +454,13 @@ def time_clock_summary(workspace_id, report_range, today):
         'open_shifts': open_count,
         'average_seconds': round(total_seconds / shift_total) if shift_total else 0,
         'by_member': members,
-        'recent': [shift.as_dict() for shift in shifts[:12]],
+        'recent': [shift.as_dict() for shift in recent_page.object_list],
+        'recent_pagination': {
+            'page': recent_page.number,
+            'page_size': page_size,
+            'total_count': paginator.count,
+            'total_pages': paginator.num_pages,
+        },
     }
 
 

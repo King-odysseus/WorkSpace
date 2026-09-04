@@ -150,6 +150,20 @@ def apply_task_filter(queryset, task_filter, today=None, due_soon_days=None, sta
     return queryset
 
 
+def named_period_start(period, today):
+    """Return the first date of a named reporting period ('week'/'month'/'quarter'/'year'), or None."""
+    if period == 'week':
+        return today - timedelta(days=6)
+    if period == 'month':
+        return today.replace(day=1)
+    if period == 'quarter':
+        quarter_start_month = (today.month - 1) // 3 * 3 + 1
+        return today.replace(month=quarter_start_month, day=1)
+    if period == 'year':
+        return today.replace(month=1, day=1)
+    return None
+
+
 def apply_report_period(queryset, period, today=None, start=None, end=None):
     """Constrain a queryset to a reporting period.
 
@@ -158,18 +172,16 @@ def apply_report_period(queryset, period, today=None, start=None, end=None):
       - an uncompleted task belongs to the period its due_date falls in.
 
     period: 'all' | 'week' (last 7 days) | 'month' (current calendar month) |
+            'quarter' (current calendar quarter) | 'year' (current calendar year) |
             'custom' (explicit start/end).
     """
     today = today or timezone.localdate()
     if period in (None, 'all'):
         return queryset
 
-    if period == 'week':
-        start = today - timedelta(days=6)
-        end = today
-    elif period == 'month':
-        start = today.replace(day=1)
-        end = today
+    named_start = named_period_start(period, today)
+    if named_start is not None:
+        start, end = named_start, today
     elif period == 'custom':
         if start is None or end is None:
             return queryset
