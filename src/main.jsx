@@ -1144,6 +1144,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   const [calendarView, setCalendarView] = useState('week')
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [calendarFilter, setCalendarFilter] = useState('all')
+  const [calendarTaskScope, setCalendarTaskScope] = useState('all')
   const [checkInDate, setCheckInDate] = useState(today)
   const [checkInLoading, setCheckInLoading] = useState(false)
   const [checkInError, setCheckInError] = useState('')
@@ -1653,6 +1654,8 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
 
   if (active === 'Calendar') {
     const visibleCalendarEvents = localData.events.filter(event => calendarFilter === 'all' || event.event_type === calendarFilter)
+    const calendarVisibleTasks = tasks.filter(task => task.due_date && task.state !== 'archived' && (calendarTaskScope === 'all' || (calendarTaskScope === 'operations' ? !task.project_id : String(task.project_id) === String(calendarTaskScope))))
+    const upcomingTaskDeadlines = calendarVisibleTasks.filter(task => task.due_date >= today).sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 8)
     const upcomingVisibleEvents = visibleCalendarEvents.filter(event => new Date(event.start_at) >= new Date()).sort((a, b) => new Date(a.start_at) - new Date(b.start_at)).slice(0, 8)
     const agendaStart = new Date(calendarDate)
     agendaStart.setHours(0, 0, 0, 0)
@@ -1684,7 +1687,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
                 </TabsList>
               </Tabs>
             </div>
-            <div className="calendar-filter-row"><label>Show<select value={calendarFilter} onChange={event => setCalendarFilter(event.target.value)} aria-label="Filter calendar events"><option value="all">All events</option><option value="meeting">Meetings</option><option value="focus">Focus time</option><option value="deadline">Deadlines</option><option value="reminder">Reminders</option></select></label>{calendarFilter !== 'all' && <Button type="button" variant="ghost" size="sm" onClick={() => setCalendarFilter('all')}>Clear filter</Button>}</div>
+            <div className="calendar-filter-row"><label>Show<select value={calendarFilter} onChange={event => setCalendarFilter(event.target.value)} aria-label="Filter calendar events"><option value="all">All events</option><option value="meeting">Meetings</option><option value="focus">Focus time</option><option value="deadline">Deadlines</option><option value="reminder">Reminders</option></select></label><label>Work<select value={calendarTaskScope} onChange={event => setCalendarTaskScope(event.target.value)} aria-label="Filter task deadlines"><option value="all">All work</option><option value="operations">Operations</option>{localData.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>{(calendarFilter !== 'all' || calendarTaskScope !== 'all') && <Button type="button" variant="ghost" size="sm" onClick={() => { setCalendarFilter('all'); setCalendarTaskScope('all') }}>Clear filters</Button>}</div>
           </CardHeader>
           <CardContent className={calendarView === 'agenda' ? 'calendar-agenda px-5' : (calendarView === 'day' || calendarView === 'week' ? 'calendar-time-content px-0' : 'calendar-grid px-0')}>
             {calendarView === 'agenda' ? (agendaEvents.length ? agendaEvents.map(event => <button type="button" className={`agenda-event-row event-type-${event.event_type || 'meeting'}`} key={event.id} onClick={() => setSelectedEvent(event)}><time><strong>{formatCalendarDate(new Date(event.start_at), { weekday: 'short', month: 'short', day: 'numeric' })}</strong><span>{formatCalendarDate(new Date(event.start_at), { hour: 'numeric', minute: '2-digit' })}</span></time><div><strong>{event.title}</strong><span>{event.event_type || 'Event'} · {formatCalendarDate(new Date(event.end_at || event.start_at), { hour: 'numeric', minute: '2-digit' })}</span></div><ArrowUpRight size={15} /></button>) : <EmptyState text="No upcoming events match this filter." />) : (calendarView === 'day' || calendarView === 'week' ? timeGrid : calendarDays.map(day => <div className={`calendar-day${toDateKey(day) === today ? ' is-today' : ''}`} key={day.toISOString()}>
@@ -1696,6 +1699,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
         <Card className="workspace-side-card py-5 gap-4">
           <div className="calendar-side-heading"><h3>Upcoming</h3><span className="calendar-export-links"><a className="calendar-export" href={`/api/workspaces/${workspaceId}/calendar.ics`} download>Export ICS</a><button type="button" className="calendar-export" onClick={() => onNavigate('Settings')} title="Get a live subscribe link for Outlook or Google Calendar in Settings > Integrations">Subscribe</button></span></div>
           {upcomingVisibleEvents.length ? upcomingVisibleEvents.map(event => <div className={`compact-row event-type-row-${event.event_type || 'meeting'}`} key={event.id}><CalendarDays size={15} /><div><strong>{event.title}</strong><span>{formatCalendarDate(new Date(event.start_at), { dateStyle: 'medium', timeStyle: 'short' })} · {event.event_type || 'event'}</span><a className="calendar-google-link" href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">Add to Google Calendar</a></div><button type="button" className="inline-edit" onClick={() => setSelectedEvent(event)} aria-label={`View ${event.title}`}>View</button>{(canManageMembers || event.created_by === currentUserId) && <button type="button" className="inline-delete" onClick={() => deleteCalendarEvent(event.id)} aria-label={`Delete ${event.title}`}><X size={14} /></button>}</div>) : <EmptyState text="No upcoming events match this filter." />}
+          <div className="calendar-side-section"><div className="calendar-side-heading"><h3>Task deadlines</h3><span>{upcomingTaskDeadlines.length}</span></div>{upcomingTaskDeadlines.length ? upcomingTaskDeadlines.map(task => <button type="button" className="calendar-task-deadline" key={`calendar-task-${task.id}`} onClick={() => onOpenTask(task)}><CalendarDays size={15} /><span><strong>{task.title}</strong><small>{task.due_date}{task.tag && task.tag !== 'General' ? ` · ${task.tag}` : ''}</small></span></button>) : <EmptyState text="No upcoming task deadlines." />}</div>
         </Card>
       </div>
       {composerOpen && <WorkspaceComposer type="calendar" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} />}
