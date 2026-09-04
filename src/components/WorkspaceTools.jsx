@@ -123,6 +123,11 @@ function FileDeleteDialog({ target, onCancel, onConfirm }) {
   return <div className="modal-backdrop" onMouseDown={onCancel}><form className="modal file-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="file-delete-title" onSubmit={event => { event.preventDefault(); onConfirm() }} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Files</p><h2 id="file-delete-title">Delete this item?</h2></div><button type="button" className="close-button" onClick={onCancel} aria-label="Close delete dialog"><X size={18} /></button></div><p className="file-delete-copy"><strong>{name}</strong> will be removed from the workspace. This action cannot be undone.</p><div className="file-delete-actions"><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button><button type="submit" className="file-delete-confirm">Delete</button></div></form></div>
 }
 
+function FileRestoreDialog({ target, onCancel, onConfirm }) {
+  if (!target) return null
+  return <div className="modal-backdrop" onMouseDown={onCancel}><form className="modal file-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="file-restore-title" onSubmit={event => { event.preventDefault(); onConfirm() }} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Files</p><h2 id="file-restore-title">Restore this version?</h2></div><button type="button" className="close-button" onClick={onCancel} aria-label="Close restore dialog"><X size={18} /></button></div><p className="file-delete-copy">The version from {new Date(target.created_at).toLocaleString()} will become the current document. The current version remains in history.</p><div className="file-delete-actions"><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button><button type="submit" className="primary-button">Restore</button></div></form></div>
+}
+
 function PresentationToolbar({ readOnly, onAddTextBox, onAddColorBox, onAddImage, onAddTitle, onAddIcon, onResizeSlide }) {
   const format = command => { document.execCommand(command, false, null) }
   const button = (label, command) => <button type="button" className="presentation-tool-button" onMouseDown={event => event.preventDefault()} onClick={() => format(command)} disabled={readOnly}>{label}</button>
@@ -254,6 +259,7 @@ export function FilesWorkspaceView({ workspaceId }) {
   const [shareUserId, setShareUserId] = useState('')
   const [sharePermission, setSharePermission] = useState('comment')
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [restoreTarget, setRestoreTarget] = useState(null)
   const draggedSlideIndex = useRef(null)
 
   const load = useCallback(async () => {
@@ -386,7 +392,12 @@ export function FilesWorkspaceView({ workspaceId }) {
   }
 
   const restoreRevision = async revision => {
-    if (!window.confirm(`Restore the version from ${new Date(revision.created_at).toLocaleString()}? The current version is kept in history.`)) return
+    setRestoreTarget(revision)
+  }
+  const confirmRestoreRevision = async () => {
+    const revision = restoreTarget
+    setRestoreTarget(null)
+    if (!revision) return
     const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/revisions/${revision.id}/restore/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)) })
     const data = await readJsonResponse(response, 'The version could not be restored.')
     if (!response.ok) return setStatus(data.error || 'Could not restore that version.')
@@ -466,7 +477,7 @@ export function FilesWorkspaceView({ workspaceId }) {
     const canEdit = selected.permission === 'edit'
     const canComment = ['comment', 'edit'].includes(selected.permission)
     const updateSlide = patch => { setSlides(current => current.map((slide, index) => index === activeSlide ? { ...slide, ...patch } : slide)); setDirty(true) }
-    return <section className="workspace-view file-editor-view">{deleteTarget && <FileDeleteDialog target={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={() => confirmDelete().catch(error => setStatus(error.message || 'Delete failed.'))} />}
+    return <section className="workspace-view file-editor-view">{deleteTarget && <FileDeleteDialog target={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={() => confirmDelete().catch(error => setStatus(error.message || 'Delete failed.'))} />}{restoreTarget && <FileRestoreDialog target={restoreTarget} onCancel={() => setRestoreTarget(null)} onConfirm={() => confirmRestoreRevision().catch(error => setStatus(error.message || 'Restore failed.'))} />}
       <div className="file-editor-commandbar"><button type="button" className="secondary-button" onClick={() => setSelected(null)}><ChevronLeft size={15} /> Files</button><input className="file-editor-title" value={selected.title} onChange={event => { setSelected(current => ({ ...current, title: event.target.value })); setDirty(true) }} readOnly={!canEdit} /><span className={`file-save-status ${dirty ? 'is-dirty' : ''}`} role="status">{canEdit ? (status || 'Saved') : `Read only (${selected.permission || 'view'})`}</span><button type="button" className="secondary-button" onClick={() => setCommentsOpen(current => !current)}><MessageSquare size={15} /> Comments ({comments.filter(item => !item.resolved).length})</button><button type="button" className="secondary-button" onClick={() => openHistory().catch(() => setStatus('Version history could not be loaded.'))}><History size={15} /> History</button>{canEdit && <><button type="button" className="primary-button" onClick={() => setShareOpen(current => !current)}><Share2 size={15} /> Share</button><button type="button" className="secondary-button" onClick={saveDocument} disabled={busy}><Save size={15} /> Save</button><button type="button" className="file-delete-button" onClick={removeDocument} aria-label="Delete"><Trash2 size={16} /></button></>}</div>
       {conflict && <div className="document-conflict-banner" role="alert"><strong>This document changed while you were editing.</strong><span>{conflict.title} was saved by someone else. Autosave is paused so your work is not lost.</span><button type="button" className="secondary-button" onClick={() => discardConflict().catch(() => setStatus('Could not reload the document.'))}>Discard mine and reload</button><button type="button" className="primary-button" onClick={overwriteConflict}>Keep mine and overwrite</button></div>}
       <div className={`file-editor-layout ${(commentsOpen || shareOpen || historyOpen) ? 'has-review-panel' : ''}`}>
