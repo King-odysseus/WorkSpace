@@ -109,8 +109,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   const submitChannelMessage = async event => {
     event.preventDefault()
-    const messageText = draft.trim()
-    if (!messageText || submitting) return
+    const hasAttachments = sharedDocumentIds.length > 0 || sharedFileIds.length > 0
+    const messageText = draft.trim() || (hasAttachments ? 'Shared an attachment' : '')
+    if (!messageText || submitting || uploadingFile) return
     setSubmitting(true)
     setError('')
     try {
@@ -135,8 +136,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   const submitDirectMessage = async event => {
     event.preventDefault()
-    const messageText = draft.trim()
-    if (!selectedConversation || !messageText || submitting) return
+    const hasAttachments = sharedDocumentIds.length > 0 || sharedFileIds.length > 0
+    const messageText = draft.trim() || (hasAttachments ? 'Shared an attachment' : '')
+    if (!selectedConversation || !messageText || submitting || uploadingFile) return
     setSubmitting(true)
     setError('')
     try {
@@ -255,7 +257,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       if (!response.ok) throw new Error(payload.error || 'File could not be uploaded.')
       setWorkspaceFiles(current => [payload.file, ...current.filter(item => item.id !== payload.file.id)])
       setSharedFileIds(current => [...new Set([...current, Number(payload.file.id)])])
-      setShareOpen(true)
+      setShareOpen(false)
       window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `${file.name} uploaded and attached.` }))
     } catch (uploadError) {
       setError(uploadError.message)
@@ -274,13 +276,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         {(mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
           {replyTo && mode === 'channels' && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
           {shareOpen && <div className="chat-share-picker"><label>Share document<select value="" onChange={event => { if (event.target.value) setSharedDocumentIds(current => [...new Set([...current, Number(event.target.value)])]) }}><option value="">Choose a document…</option>{workspaceDocuments.map(document => <option key={document.id} value={document.id}>{document.title}</option>)}</select></label><label>Share uploaded file<select value="" onChange={event => { if (event.target.value) setSharedFileIds(current => [...new Set([...current, Number(event.target.value)])]) }}><option value="">Choose a file…</option>{workspaceFiles.map(file => <option key={file.id} value={file.id}>{file.original_name}</option>)}</select></label>{(sharedDocumentIds.length || sharedFileIds.length) > 0 && <p className="text-xs text-text-muted">{sharedDocumentIds.length + sharedFileIds.length} item(s) attached</p>}</div>}
+          {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
           {emojiOpen && <EmojiPicker onSelect={insertEmoji} />}
           <div>
             <textarea ref={messageInputRef} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
             <button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} onClick={() => { setEmojiOpen(current => !current); setShareOpen(false) }} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button>
             <label className="secondary-button chat-upload-button" aria-label="Upload and attach a file"><Paperclip size={15} /> {uploadingFile ? 'Uploading...' : 'Attach file'}<input type="file" hidden onChange={uploadChatFile} disabled={uploadingFile} /></label>
-            <button type="button" className="secondary-button" onClick={() => { setShareOpen(current => !current); setEmojiOpen(false) }} aria-label="Share a file or document">{shareOpen ? 'Close share' : 'Share'}</button>
-            <button type="submit" className="primary-button" disabled={submitting || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
+            <button type="button" className="secondary-button" onClick={() => { setShareOpen(current => !current); setEmojiOpen(false) }} aria-label="Choose an existing file or document">{shareOpen ? 'Close library' : 'Choose existing'}</button>
+            <button type="submit" className="primary-button" disabled={submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
           </div>
           {error && <p className="auth-error" role="alert">{error}</p>}
         </form>}
