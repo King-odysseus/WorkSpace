@@ -2,7 +2,7 @@
 // "create a record" flow (events, projects, check-ins, chat, follow-ups, invites).
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, Download, FileText, Hash, MessageSquare, Plus, Search, Smile, Users, X } from 'lucide-react'
+import { ArrowUpRight, Download, FileText, Hash, MessageSquare, Paperclip, Plus, Search, Smile, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import { Card } from './ui/card.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
@@ -54,6 +54,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [workspaceFiles, setWorkspaceFiles] = useState([])
   const [sharedDocumentIds, setSharedDocumentIds] = useState([])
   const [sharedFileIds, setSharedFileIds] = useState([])
+  const [uploadingFile, setUploadingFile] = useState(false)
   const [channelForm, setChannelForm] = useState({ name: '', description: '', is_private: false, member_ids: [] })
   const [directMemberIds, setDirectMemberIds] = useState([])
   const feedEndRef = useRef(null)
@@ -240,6 +241,29 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     <div className="chat-message-body"><div className="chat-message-meta"><strong>{message.author_name}</strong><span>{formatRelativeActivityTime(message.created_at)}</span></div><p>{renderMessageText(message.message)}</p>{(message.shared_documents || []).map(document => <button type="button" className="chat-shared-card" key={`doc-${document.id}`} onClick={() => { localStorage.setItem('workspace-open-document-id', String(document.id)); onNavigate?.('Files') }}><FileText size={16} /><span><strong>{document.title}</strong><small>Open in document editor</small></span><ArrowUpRight size={14} /></button>)}{(message.shared_files || []).map(file => <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>View shared file</small></span><Download size={14} /></a>)}{mode === 'channels' && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div>
   </div>
 
+  const uploadChatFile = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || uploadingFile) return
+    setUploadingFile(true)
+    setError('')
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'File could not be uploaded.')
+      setWorkspaceFiles(current => [payload.file, ...current.filter(item => item.id !== payload.file.id)])
+      setSharedFileIds(current => [...new Set([...current, Number(payload.file.id)])])
+      setShareOpen(true)
+      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `${file.name} uploaded and attached.` }))
+    } catch (uploadError) {
+      setError(uploadError.message)
+    } finally {
+      setUploadingFile(false)
+    }
+  }
+
   return <section className={`workspace-view chat-workspace-view chat-mode-${mode}`}>
     <WorkspaceViewHeading title={mode === 'channels' ? 'Channels' : 'Chats'} subtitle={mode === 'channels' ? 'Shared rooms for workspace topics, teams, and projects.' : 'Private one-to-one and group conversations.'} />
     <div className="chat-toolbar"><label className="chat-search"><Search size={15} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={mode === 'channels' ? `Search #${selectedChannel}` : 'Search this chat'} aria-label="Search messages" /></label><button type="button" className="primary-button chat-create-button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }}><Plus size={15} /> {mode === 'channels' ? 'Create channel' : 'New chat'}</button></div>
@@ -254,6 +278,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           <div>
             <textarea ref={messageInputRef} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
             <button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} onClick={() => { setEmojiOpen(current => !current); setShareOpen(false) }} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button>
+            <label className="secondary-button chat-upload-button" aria-label="Upload and attach a file"><Paperclip size={15} /> {uploadingFile ? 'Uploading...' : 'Attach file'}<input type="file" hidden onChange={uploadChatFile} disabled={uploadingFile} /></label>
             <button type="button" className="secondary-button" onClick={() => { setShareOpen(current => !current); setEmojiOpen(false) }} aria-label="Share a file or document">{shareOpen ? 'Close share' : 'Share'}</button>
             <button type="submit" className="primary-button" disabled={submitting || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
           </div>

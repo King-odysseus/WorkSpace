@@ -3237,6 +3237,8 @@ html[data-theme='dark'] :where(
 .chat-mode-direct .direct-row { background:transparent; color:var(--workspace-text); }
 .chat-mode-direct .direct-row:hover { background:var(--workspace-surface-soft); color:var(--workspace-text); }
 .chat-mode-direct .direct-row.active { background:#eaf0ff; color:#1d4ed8; }
+.chat-upload-button { position:relative; cursor:pointer; }
+.chat-upload-button input { display:none; }
 
 .calendar-side-section { display:grid; gap:8px; margin-top:8px; padding-top:14px; border-top:1px solid var(--workspace-border); }
 .calendar-side-section .calendar-side-heading { margin-bottom:0; }
