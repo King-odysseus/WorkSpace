@@ -1,4 +1,5 @@
 from django.db import models
+import logging
 import uuid
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -7,6 +8,8 @@ from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.conf import settings
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 def private_screen_capture_storage():
@@ -1104,7 +1107,9 @@ def delete_screen_capture_file(sender, instance, **kwargs):
     try:
         instance.image.delete(save=False)
     except (OSError, ValueError):
-        pass
+        # The row is already gone; a stranded file must not abort the delete, but it
+        # is an operational leak worth surfacing rather than swallowing.
+        logger.warning('Screen capture file could not be removed for %s', instance.id, exc_info=True)
 
 
 class WorkspaceDocument(models.Model):

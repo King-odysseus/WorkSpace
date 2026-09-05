@@ -2461,11 +2461,16 @@ def chat_channel_list(request, workspace_id):
         return error
     ensure_workspace_channels(workspace_id, request.user)
     if request.method == 'GET':
-        channels = accessible_chat_channels(workspace_id, request.user)
+        channels = list(accessible_chat_channels(workspace_id, request.user))
+        # One grouped count for every channel, rather than a COUNT per channel in the loop.
+        counts = dict(
+            ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=[channel.name for channel in channels])
+            .values_list('channel').annotate(total=Count('id'))
+        )
         payload = []
         for channel in channels:
             item = channel.as_dict()
-            item['message_count'] = ChatMessage.objects.filter(workspace_id=workspace_id, channel=channel.name).count()
+            item['message_count'] = counts.get(channel.name, 0)
             payload.append(item)
         return JsonResponse({'channels': payload})
     try:
