@@ -3259,6 +3259,10 @@ html[data-theme='dark'] :where(
 .calendar-summary-badge { display:inline-flex; align-items:center; min-height:28px; padding:0 10px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font-size:11px; font-weight:700; }
 .close-button:hover, .sidebar-toggle:hover, .help-button:hover { color:var(--workspace-on-accent) !important; }
 .rich-toolbar-button.is-active, .spreadsheet-tabs button.active, .spreadsheet-scroll th.active { color:var(--workspace-on-accent) !important; }
+/* The default shared Button changes from navy to bronze on hover. Keep its
+   foreground dark enough for that lighter background on every page. */
+button[data-slot='button'].bg-primary:hover,
+button[data-slot='button'][class*='bg-primary']:hover { color:var(--workspace-on-accent) !important; }
 @media (max-width:600px) {
   .calendar-toolbar { grid-template-columns:1fr; grid-template-areas:"title" "actions" "filters" "summary"; gap:12px; }
   .calendar-toolbar-actions { justify-content:flex-start; }
