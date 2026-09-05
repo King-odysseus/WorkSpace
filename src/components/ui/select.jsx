@@ -11,6 +11,19 @@ function SelectValue(props) {
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
+// Preserve the existing controlled form handlers while rendering the app menu.
+function AppSelect({ children, value, onChange, name, disabled, required, className, ...props }) {
+  const options = React.Children.toArray(children).filter(React.isValidElement)
+  const emptyLabel = options.find(option => String(option.props.value ?? '') === '')?.props.children
+  return <Select name={name} value={String(value ?? '')} disabled={disabled} required={required}
+    onValueChange={next => { const target = { name, value: next === '__empty_option__' ? '' : next }; onChange?.({ target, currentTarget: target }) }}>
+    <SelectTrigger {...props} className={cn('app-select-trigger', className)}><SelectValue placeholder={emptyLabel || 'Select an option'} /></SelectTrigger>
+    <SelectContent onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
+      {options.map(option => <SelectItem key={String(option.props.value)} value={String(option.props.value ?? '') || '__empty_option__'} disabled={option.props.disabled}>{option.props.children}</SelectItem>)}
+    </SelectContent>
+  </Select>
+}
+
 function SelectTrigger({ className, children, size = 'default', ...props }) {
   return (
     <SelectPrimitive.Trigger
@@ -70,4 +83,4 @@ function SelectItem({ className, children, ...props }) {
   )
 }
 
-export { Select, SelectValue, SelectTrigger, SelectContent, SelectItem }
+export { Select, SelectValue, SelectTrigger, SelectContent, SelectItem, AppSelect }
