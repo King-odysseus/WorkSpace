@@ -3243,6 +3243,7 @@ html[data-theme='dark'] :where(
 .chat-pending-attachments > span { display:inline-flex; align-items:center; gap:6px; max-width:260px; padding:6px 8px; border:1px solid var(--workspace-border); border-radius:8px; background:var(--workspace-surface-soft); color:var(--workspace-text); font-size:11px; font-weight:700; }
 .chat-pending-attachments > span > button { display:grid; place-items:center; flex:0 0 20px; width:20px; height:20px; margin-left:2px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--workspace-text-soft); cursor:pointer; }
 .chat-pending-attachments > span > button:hover { background:var(--workspace-surface); color:#b42318; }
+.chat-shared-card-disabled { cursor:default; opacity:.78; }
 
 .calendar-side-section { display:grid; gap:8px; margin-top:8px; padding-top:14px; border-top:1px solid var(--workspace-border); }
 .calendar-side-section .calendar-side-heading { margin-bottom:0; }

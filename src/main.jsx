@@ -28,7 +28,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import Avatar from './components/Avatar.jsx'
 import { Activity, AuthScreen } from './components/AuthScreen.jsx'
 import {
-  ClockInCard, MyTasksView, ProjectProgress, ProjectRiskIssuePanel,
+  ClockInCard, MyTasksView, ProjectCostBudgetPanel, ProjectProgress, ProjectRiskIssuePanel,
   ProjectStakeholderResourcePanel, TeamBoardView, TodayDashboard,
 } from './components/BoardViews.jsx'
 import { ChatWorkspaceView, WorkspaceComposer } from './components/ChatViews.jsx'
@@ -53,7 +53,7 @@ function App() {
   const todayLabel = new Intl.DateTimeFormat('en-GB', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${today}T12:00:00`))
   // Supports PWA shortcuts (manifest.webmanifest) and any other deep link that
   // wants to land on a specific view, e.g. /?view=My+tasks.
-  const [active, setActive] = useState(() => new URLSearchParams(window.location.search).get('view') || 'Today')
+  const [active, setActive] = useState(() => { const requested = new URLSearchParams(window.location.search).get('view') || 'Today'; return ['Files', 'Import data'].includes(requested) ? 'Today' : requested })
   const [tasks, setTasks] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [confirmState, setConfirmState] = useState(null)
@@ -706,9 +706,7 @@ function App() {
     {
       heading: 'Resources',
       items: [
-        { label: 'Files', icon: FileText },
         { label: 'Screen sharing', icon: MonitorUp },
-        { label: 'Import data', icon: FileText },
         { label: 'Help', icon: CircleHelp },
         { label: 'Legal', icon: FileText },
       ],
@@ -1456,6 +1454,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status }) }), 'Project status could not be saved.')
     if (!responseData) return
     setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === project.id ? responseData.project : item) }))
+    toast.success(`${project.name} moved to ${status.charAt(0).toUpperCase() + status.slice(1)}.`)
     onRefresh()
   }
   const deleteProject = async project => {
@@ -1463,6 +1462,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Project could not be deleted.')
     if (!responseData) return
     setLocalData(current => ({ ...current, projects: current.projects.filter(item => item.id !== project.id) }))
+    toast.success(`${project.name} deleted.`)
     onRefresh()
   }
   const updateMemberRole = async (member, role) => {
@@ -1646,9 +1646,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   if (active === 'Screen sharing') {
     return <ScreenSharingView workspaceId={workspaceId} members={localData.members} currentUserId={currentUserId} role={currentWorkspace?.role} />
   }
-  if (active === 'Import data') {
-    return <ImportView workspaceId={workspaceId} role={currentWorkspace?.role} />
-  }
+  if (active === 'Import data') return null
   if (active === 'Help') return <HelpView onNavigate={onNavigate} />
   if (active === 'Legal') return <LegalView />
 
@@ -1725,14 +1723,14 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     })
     const visibleProjects = withStats.filter(project => (!projectQuery.trim() || `${project.name} ${project.description}`.toLowerCase().includes(projectQuery.trim().toLowerCase())) && (projectStatusFilter === 'all' || project.status === projectStatusFilter) && (projectHealthFilter === 'all' || project.health === projectHealthFilter)).sort((a, b) => projectSort === 'name' ? a.name.localeCompare(b.name) : projectSort === 'progress' ? b.completion - a.completion : projectSort === 'updated' ? new Date(b.updated_at || 0) - new Date(a.updated_at || 0) : (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
     const summary = { active: withStats.filter(project => project.status === 'active').length, risk: withStats.filter(project => ['at-risk', 'off-track'].includes(project.health)).length, overdue: withStats.filter(project => project.status !== 'completed' && project.due_date && project.due_date < today).length, completed: withStats.filter(project => project.status === 'completed').length }
-    if (selectedProjectWorkspace) return <section className="workspace-view project-detail-view"><button type="button" className="text-button project-back-button" onClick={() => setSelectedProjectWorkspace(null)}>← Back to projects</button><WorkspaceViewHeading title={selectedProjectWorkspace.name} subtitle={selectedProjectWorkspace.description || 'Project workspace and delivery controls.'} action={canManageMembers ? 'Edit project' : undefined} onAction={() => setSelectedProject(selectedProjectWorkspace)} /><div className="project-detail-links"><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('planner:project', { detail: String(selectedProjectWorkspace.id) })); onNavigate('Planner') }}><strong>Planner</strong><span>Open tasks for this project</span></button><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('project-register:tab', { detail: 'risk' })); document.getElementById('project-risk-register')?.scrollIntoView({ behavior: 'smooth' }) }}><strong>Risk register</strong><span>Track threats and mitigations</span></button><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('project-register:tab', { detail: 'issue' })); document.getElementById('project-risk-register')?.scrollIntoView({ behavior: 'smooth' }) }}><strong>Issue log</strong><span>Track problems to resolution</span></button></div><div id="project-risk-register"><ProjectRiskIssuePanel projects={[selectedProjectWorkspace]} workspaceId={workspaceId} /></div><ProjectStakeholderResourcePanel project={selectedProjectWorkspace} workspaceId={workspaceId} canManage={canManageMembers} />{selectedProject && <ProjectEditDrawer project={selectedProject} workspaceId={workspaceId} onClose={() => setSelectedProject(null)} onUpdated={updatedProject => { setSelectedProjectWorkspace(updatedProject); setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === updatedProject.id ? updatedProject : item) })); onRefresh(); setSelectedProject(null) }} />}</section>
+    if (selectedProjectWorkspace) return <section className="workspace-view project-detail-view"><button type="button" className="text-button project-back-button" onClick={() => setSelectedProjectWorkspace(null)}>← Back to projects</button><WorkspaceViewHeading title={selectedProjectWorkspace.name} subtitle={selectedProjectWorkspace.description || 'Project workspace and delivery controls.'} action={canManageMembers ? 'Edit project' : undefined} onAction={() => setSelectedProject(selectedProjectWorkspace)} /><div className="project-detail-links"><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('planner:project', { detail: String(selectedProjectWorkspace.id) })); onNavigate('Planner') }}><strong>Planner</strong><span>Open tasks for this project</span></button><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('project-register:tab', { detail: 'risk' })); document.getElementById('project-risk-register')?.scrollIntoView({ behavior: 'smooth' }) }}><strong>Risk register</strong><span>Track threats and mitigations</span></button><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('project-register:tab', { detail: 'issue' })); document.getElementById('project-risk-register')?.scrollIntoView({ behavior: 'smooth' }) }}><strong>Issue log</strong><span>Track problems to resolution</span></button></div><div id="project-risk-register"><ProjectRiskIssuePanel projects={[selectedProjectWorkspace]} workspaceId={workspaceId} /></div><ProjectStakeholderResourcePanel project={selectedProjectWorkspace} workspaceId={workspaceId} canManage={canManageMembers} /><ProjectCostBudgetPanel project={selectedProjectWorkspace} workspaceId={workspaceId} canManage={canManageMembers} onProjectUpdated={updatedProject => { setSelectedProjectWorkspace(updatedProject); setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === updatedProject.id ? updatedProject : item) })); onRefresh() }} />{selectedProject &&<ProjectEditDrawer project={selectedProject} workspaceId={workspaceId} onClose={() => setSelectedProject(null)} onUpdated={updatedProject => { setSelectedProjectWorkspace(updatedProject); setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === updatedProject.id ? updatedProject : item) })); onRefresh(); setSelectedProject(null) }} />}</section>
     return <section className="workspace-view projects-view"><WorkspaceViewHeading title={title} subtitle={subtitle} action={canManageMembers ? 'New project' : undefined} onAction={() => openComposer('project')} />
       <div className="project-summary"><div><strong>{summary.active}</strong><span>Active</span></div><div className="is-warning"><strong>{summary.risk}</strong><span>At risk</span></div><div className="is-danger"><strong>{summary.overdue}</strong><span>Overdue</span></div><div><strong>{summary.completed}</strong><span>Completed</span></div></div>
       <div className="project-toolbar"><label className="project-search"><Search size={15} /><input value={projectQuery} onChange={event => setProjectQuery(event.target.value)} placeholder="Search projects" aria-label="Search projects" /></label><select value={projectStatusFilter} onChange={event => setProjectStatusFilter(event.target.value)} aria-label="Filter projects by status"><option value="all">All statuses</option><option value="planning">Planning</option><option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option></select><select value={projectHealthFilter} onChange={event => setProjectHealthFilter(event.target.value)} aria-label="Filter projects by health"><option value="all">All health</option><option value="on-track">On track</option><option value="at-risk">At risk</option><option value="off-track">Off track</option><option value="completed">Completed</option></select><select value={projectSort} onChange={event => setProjectSort(event.target.value)} aria-label="Sort projects"><option value="due">Due date</option><option value="progress">Progress</option><option value="updated">Recently updated</option><option value="name">Name</option></select><span>{visibleProjects.length} of {withStats.length} projects</span></div>
       <div className="project-grid">{visibleProjects.length ? visibleProjects.map(project => <Card className={`project-card project-health-${project.health} px-5`} key={project.id}><div className="project-card-top"><span className="project-icon"><Target size={17} /></span><span className={`project-health ${project.health}`}>{project.health.replace('-', ' ')}</span><select className={`project-status ${project.status}`} value={project.status} onChange={event => updateProjectStatus(project, event.target.value)} disabled={!canManageMembers} aria-label={`Change status for ${project.name}`}><option value="planning">Planning</option><option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option></select>{canManageMembers && <><Button type="button" variant="ghost" size="icon-sm" onClick={() => setSelectedProject(project)} aria-label={`Edit ${project.name}`}><MoreHorizontal size={14} /></Button><Button type="button" variant="ghost" size="icon-sm" onClick={() => deleteProject(project)} aria-label={`Delete ${project.name}`}><X size={14} /></Button></>}</div><h3>{project.name}</h3><p>{project.description || 'No project description yet.'}</p><ProjectProgress project={project} tasks={tasks} /><div className="project-task-stats"><span>{project.taskCount - project.completed} open</span><span className={project.blocked ? 'risk' : ''}>{project.blocked} blocked</span><span className={project.overdue ? 'danger' : ''}>{project.overdue} overdue</span></div><div className="project-footer"><div><span>{project.due_date ? `Due ${project.due_date}` : 'No due date'}</span>{project.updated_at && <small>Updated {formatRelativeActivityTime(project.updated_at)}</small>}</div><button type="button" className="project-task-link" onClick={() => { onSearchChange(project.name); onNavigate('Planner') }} aria-label={`View tasks for ${project.name}`}>View tasks <ArrowUpRight size={15} /></button></div></Card>) : <EmptyState text={localData.projects.length ? 'No projects match these filters.' : 'No projects have been created yet.'} />}</div><ProjectRiskIssuePanel projects={localData.projects} workspaceId={workspaceId} />{composerOpen && <WorkspaceComposer type="project" form={form} setForm={setForm} error={composerError} submitting={submitting} onClose={() => setComposerOpen(false)} onSubmit={submitComposer} projectTemplates={localData.projectTemplates || []} />}{selectedProject && <ProjectEditDrawer project={selectedProject} workspaceId={workspaceId} onClose={() => setSelectedProject(null)} onUpdated={updatedProject => { setLocalData(current => ({ ...current, projects: current.projects.map(item => item.id === updatedProject.id ? updatedProject : item) })); onRefresh(); setSelectedProject(null) }} />}</section>
   }
 
-  if (active === 'Files') return <FilesWorkspaceView workspaceId={workspaceId} canManageMembers={canManageMembers} />
+  if (active === 'Files') return null
 
   if (active === 'Channels' || active === 'Chats') {
     return <ChatWorkspaceView viewType={active === 'Channels' ? 'channels' : 'direct'} data={localData} workspaceId={workspaceId} currentUserId={currentUserId} onRefresh={onRefresh} onError={onActionError} onConfirm={onConfirm} onNavigate={onNavigate} />
