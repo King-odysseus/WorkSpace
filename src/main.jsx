@@ -9,7 +9,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 }
 
 import { AppSelect } from './components/ui/select.jsx'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Brush, Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ClipboardList,
@@ -27,7 +27,7 @@ import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx'
 import { Popover, PopoverTrigger, PopoverContent } from './components/ui/popover.jsx'
 import PlannerBoard from './components/PlannerBoard.jsx'
 import WorkScopeSelector, { taskMatchesScope } from './components/WorkScopeSelector.jsx'
-import { AssistantFlyout, AISettingsPanel, FilesWorkspaceView } from './components/WorkspaceTools.jsx'
+const AssistantFlyout = lazy(() => import('./components/WorkspaceTools.jsx').then(module => ({ default: module.AssistantFlyout })))
 import { Calendar as DatePicker } from './components/ui/calendar.jsx'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -42,11 +42,13 @@ import {
   ClockInCard, MyTasksView, ProjectCostBudgetPanel, ProjectProgress, ProjectRiskIssuePanel,
   ProjectStakeholderResourcePanel, TeamBoardView, TodayDashboard,
 } from './components/BoardViews.jsx'
-import { ChatWorkspaceView, WorkspaceComposer } from './components/ChatViews.jsx'
+import { WorkspaceComposer } from './components/WorkspaceComposer.jsx'
+const ChatWorkspaceView = lazy(() => import('./components/ChatViews.jsx').then(module => ({ default: module.ChatWorkspaceView })))
 import { CalendarEventEditDialog, CheckInEditDialog, FollowUpEditDialog, ProjectEditDrawer } from './components/RecordDialogs.jsx'
 import { TaskCard, TaskDetailDrawer } from './components/TaskViews.jsx'
 import SettingsView from './components/SettingsView.jsx'
-import ScreenSharingView, { ScreenShareControl } from './components/ScreenSharing.jsx'
+const ScreenSharingView = lazy(() => import('./components/ScreenSharing.jsx'))
+const ScreenShareControl = lazy(() => import('./components/ScreenSharing.jsx').then(module => ({ default: module.ScreenShareControl })))
 import ImportView from './components/ImportView.jsx'
 import { CookieConsent, HelpView, LegalView } from './components/StaticViews.jsx'
 import {
@@ -781,8 +783,8 @@ function App() {
       }}
     />
     <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
-    <ScreenShareControl workspaceId={workspaceId} currentUserId={session.user.id} />
-    {aiFlyoutOpen && <AssistantFlyout workspaceId={activeWorkspaceId} onClose={() => setAiFlyoutOpen(false)} />}
+    <Suspense fallback={null}><ScreenShareControl workspaceId={workspaceId} currentUserId={session.user.id} /></Suspense>
+    {aiFlyoutOpen && <Suspense fallback={null}><AssistantFlyout workspaceId={activeWorkspaceId} onClose={() => setAiFlyoutOpen(false)} /></Suspense>}
     <a className="skip-link" href="#main-content">Skip to main content</a>
 
     {/* ── Mobile overlay - stays mounted and fades in step with the drawer's
@@ -1693,7 +1695,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     return <SettingsView theme={theme} onSetTheme={onSetTheme || onToggleTheme} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={onToggleSidebar} currentWorkspace={currentWorkspace} currentUserName={currentUserName} currentUserEmail={currentUserEmail} currentUserId={currentUserId} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} onProfileUpdated={onProfileUpdated} canManageMembers={canManageMembers} members={localData.members} notifications={localData.notifications} workspaceId={workspaceId} taskTemplates={localData.taskTemplates || []} projectTemplates={localData.projectTemplates || []} projects={localData.projects} onRefresh={onRefresh} />
   }
   if (active === 'Screen sharing') {
-    return <ScreenSharingView workspaceId={workspaceId} members={localData.members} currentUserId={currentUserId} role={currentWorkspace?.role} />
+    return <Suspense fallback={null}><ScreenSharingView workspaceId={workspaceId} members={localData.members} currentUserId={currentUserId} role={currentWorkspace?.role} /></Suspense>
   }
   if (active === 'Import data') return null
   if (active === 'Help') return <HelpView onNavigate={onNavigate} />
@@ -1782,7 +1784,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   if (active === 'Files') return null
 
   if (active === 'Channels' || active === 'Chats') {
-    return <ChatWorkspaceView viewType={active === 'Channels' ? 'channels' : 'direct'} data={localData} workspaceId={workspaceId} currentUserId={currentUserId} onRefresh={onRefresh} onError={onActionError} onConfirm={onConfirm} onNavigate={onNavigate} />
+    return <Suspense fallback={null}><ChatWorkspaceView viewType={active === 'Channels' ? 'channels' : 'direct'} data={localData} workspaceId={workspaceId} currentUserId={currentUserId} onRefresh={onRefresh} onError={onActionError} onConfirm={onConfirm} onNavigate={onNavigate} /></Suspense>
   }
 
   if (active === 'Follow-up') {
