@@ -41,6 +41,32 @@ docker compose up --build
 
 The web application will be available at `http://localhost:8080`. The compose setup keeps PostgreSQL data and uploaded task attachments in named volumes, serves authorized attachment downloads through the Django API, proxies `/api/` requests through Nginx to Django, accepts task uploads up to 10 MB, runs a reminder, webhook, and screenshot-retention worker every 60 seconds, and waits for the API health check before starting the web dependency.
 
+## Optional integrations
+
+These are all off by default - the app works exactly as before when none of the related variables are set.
+
+- **Transactional email (Brevo)**: set `BREVO_SMTP_LOGIN` and `BREVO_SMTP_PASSWORD` (from Brevo > SMTP & API > SMTP) to send workspace invitation emails and task/calendar reminder emails. Without them, mail is printed to the console instead of sent. Also set `WORKSPACE_DEFAULT_FROM_EMAIL` and `WORKSPACE_FRONTEND_BASE_URL` (used to build the accept-invite link in the email).
+- **Google Sign-In**: create an OAuth web client at [Google Cloud Console](https://console.cloud.google.com/apis/credentials), then set `GOOGLE_OAUTH_CLIENT_ID` (backend) and `VITE_GOOGLE_CLIENT_ID` (same value, frontend build) to show the "Sign in with Google" button.
+- **Push notifications**: generate a keypair with `vapid --gen` (installed by `pywebpush`), then set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (backend) plus `VITE_VAPID_PUBLIC_KEY` (same public key, frontend build) and `VAPID_CLAIM_EMAIL`. Users then opt in from Settings > Notifications > "Push notifications" to get alerts even when the app/PWA is closed.
+
+See `.env.example` for the full variable list.
+
+## Security defaults
+
+- **Login lockout**: repeated failed sign-ins are throttled by django-axes, keyed on IP
+  address *and* username together, so one attacker cannot lock every account from a single
+  address and a shared office IP does not lock out the whole team. Tune with
+  `WORKSPACE_LOGIN_FAILURE_LIMIT` (default 5) and `WORKSPACE_LOGIN_COOLOFF_MINUTES`
+  (default 15). A successful sign-in clears the counter. Axes is disabled while the test
+  suite runs, because Django's test client authenticates without a request object; the
+  tests that cover lockout re-enable it explicitly.
+- **Session lifetime**: `WORKSPACE_SESSION_COOKIE_AGE` (default 7 days), measured from
+  sign-in. The expiry is deliberately not rolled forward per request, because that writes
+  the session on every request and the pulse endpoint is polled every 15 seconds per tab.
+- **Rich text**: document and presentation HTML is sanitized with DOMPurify plus an app
+  URL policy (`safeUrl`) that allows http(s), mailto, tel, relative links and base64 images
+  only, and marks every link `noopener noreferrer`.
+
 ## Deploying to Railway
 
 `railway.json` and `Dockerfile.railway` build the frontend and the Django API into one container - Django serves the built React app itself (via WhiteNoise) alongside `/api/`, so there's a single Railway service and no nginx or private networking to configure. `Dockerfile.api` / `Dockerfile.web` / `docker-compose.yml` are untouched and still work for a split frontend+nginx deployment elsewhere.
@@ -61,6 +87,7 @@ Migrations run automatically on each deploy (`python manage.py migrate --noinput
 ## Verification
 
 ```powershell
+npm test
 npm run build
 python manage.py test tasks
 python manage.py check
@@ -69,6 +96,12 @@ python manage.py deliver_webhooks
 python manage.py run_automation
 python manage.py purge_screen_captures
 ```
+
+Frontend tests run on Vitest with React Testing Library (`npm test`, or `npm run test:watch`
+while developing). They use happy-dom rather than jsdom, because jsdom's dependency chain
+requires `require(esm)` support that Node 20.17 does not have. One consequence worth
+knowing: happy-dom does not implicitly submit a form when its submit button is clicked, so
+tests covering an `onSubmit` handler should dispatch `fireEvent.submit(form)` instead.
 
 The consent, access, lifecycle, and frontend integration contract for screen sharing is in [`docs/screen-sharing-api-contract.md`](docs/screen-sharing-api-contract.md). A policy template for company review is in [`docs/screen-sharing-company-policy.md`](docs/screen-sharing-company-policy.md).
 

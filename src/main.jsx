@@ -104,6 +104,8 @@ function App() {
   const [inviteError, setInviteError] = useState('')
   const [inviteSubmitting, setInviteSubmitting] = useState(false)
   const [aiFlyoutOpen, setAiFlyoutOpen] = useState(false)
+  const [inviteId, setInviteId] = useState(() => new URLSearchParams(window.location.search).get('invite'))
+  const [inviteInfo, setInviteInfo] = useState(null)
 
   useEffect(() => {
     // Tidy up a ?view= deep link (PWA shortcut, bookmark) once it has been applied
@@ -112,6 +114,41 @@ function App() {
       window.history.replaceState(null, '', window.location.pathname)
     }
   }, [])
+
+  useEffect(() => {
+    if (!inviteId) return
+    fetch(`/api/invitations/${inviteId}/`, { credentials: 'include' })
+      .then(response => response.ok ? response.json() : Promise.reject())
+      .then(data => setInviteInfo(data.invitation))
+      .catch(() => setInviteId(null))
+  }, [inviteId])
+
+  const clearInviteFromUrl = () => {
+    const params = new URLSearchParams(window.location.search)
+    params.delete('invite')
+    window.history.replaceState(null, '', params.toString() ? `${window.location.pathname}?${params}` : window.location.pathname)
+  }
+
+  const handleAuthenticated = async user => {
+    setSession({ loading: false, user, error: '' })
+    if (!inviteId) return
+    try {
+      const response = await fetch(`/api/invitations/${inviteId}/accept/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+      const data = await readJsonResponse(response, 'Invitation could not be accepted.')
+      if (response.ok) {
+        toast.success(`Joined ${data.workspace.name}.`)
+        setSession(current => ({ ...current, user: { ...current.user, workspaces: [...current.user.workspaces.filter(workspace => workspace.id !== data.workspace.id), { ...data.workspace, role: data.membership.role }] } }))
+      } else {
+        toast.error(data.error || 'Invitation could not be accepted.')
+      }
+    } catch {
+      toast.error('Invitation could not be accepted.')
+    } finally {
+      setInviteId(null)
+      setInviteInfo(null)
+      clearInviteFromUrl()
+    }
+  }
 
   useEffect(() => {
     const resolvedTheme = theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
@@ -351,7 +388,7 @@ function App() {
     })
   }, [tasks, selectedFilter, searchQuery, today])
   if (session.loading) return <BrandedStatusScreen loading />
-  if (!session.user) return <AuthScreen theme={theme} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onAuthenticated={user => setSession({ loading: false, user, error: '' })} connectionError={session.error} />
+  if (!session.user) return <AuthScreen theme={theme} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onAuthenticated={handleAuthenticated} connectionError={session.error} inviteInfo={inviteInfo} />
   const mapApiTask = apiTask => mapTaskFromApi(apiTask, {
     today,
     workspaceRole: session.user.workspaces.find(workspace => workspace.id === activeWorkspaceId)?.role,
@@ -368,7 +405,7 @@ function App() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') },
         body: JSON.stringify({ status: nextStatus }),
       })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, `Task update returned ${response.status}`)
       if (!response.ok) throw new Error(responseData.error || `Task update returned ${response.status}`)
       if (responseData.next_task) setTasks(current => current.some(task => task.id === responseData.next_task.id) ? current : [...current, mapApiTask(responseData.next_task)])
       toast.success(`${previousTask?.title || 'Task'} ${nextStatus === 'done' ? 'completed' : 'reopened'}.`)
@@ -424,7 +461,7 @@ function App() {
     try {
       const apiStatus = status === 'in progress' ? 'in_progress' : status
       const response = await fetch(`/api/tasks/${id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') }, body: JSON.stringify({ status: apiStatus }) })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, `Task update returned ${response.status}`)
       if (!response.ok) throw new Error(responseData.error || `Task update returned ${response.status}`)
       if (responseData.next_task) setTasks(current => current.some(task => task.id === responseData.next_task.id) ? current : [...current, mapApiTask(responseData.next_task)])
       toast.success(`${previousTask?.title || 'Task'} moved to ${status === 'in progress' ? 'In progress' : status === 'todo' ? 'To do' : status.charAt(0).toUpperCase() + status.slice(1)}.`)
@@ -456,7 +493,7 @@ function App() {
     setTasks(current => current.map(task => placements.has(task.id) ? { ...task, ...placements.get(task.id) } : task))
     try {
       const response = await fetch(`/api/workspaces/${activeWorkspaceId}/tasks/reorder/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId || '') }, body: JSON.stringify({ columns }) })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Task order could not be saved.')
       if (!response.ok) throw new Error(responseData.error || 'Task order could not be saved.')
       setWorkspaceNotice('Planner order saved.')
       return responseData.tasks
@@ -526,7 +563,7 @@ function App() {
     setInviteSubmitting(true)
     try {
       const response = await fetch(`/api/workspaces/${activeWorkspaceId}/invitations/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(activeWorkspaceId) }, body: JSON.stringify({ email: inviteForm.email, role: inviteForm.role }) })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Invitation could not be sent.')
       if (!response.ok) throw new Error(responseData.error || 'Invitation could not be sent.')
       setWorkspaceData(current => ({ ...current, invitations: [...current.invitations, responseData.invitation] }))
       setWorkspaceReload(current => current + 1)
@@ -548,7 +585,7 @@ function App() {
     setWorkspaceError('')
     try {
       const response = await fetch(`/api/invitations/${invitation.id}/accept/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Invitation could not be accepted.')
       if (!response.ok) throw new Error(responseData.error || 'Invitation could not be accepted.')
       const sessionResponse = await fetch('/api/auth/me/', { credentials: 'include' })
       const sessionData = await sessionResponse.json()
@@ -1272,7 +1309,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     const payloads = { calendar: { title: form.title, description: form.description, start_at: form.start_at, end_at: form.end_at, event_type: form.event_type, reminder_minutes: Number(form.reminder_minutes) }, project: { name: form.name, description: form.description, due_date: form.due_date || null }, checkin: { date: form.date, completed: form.completed, next_steps: form.next_steps, blockers: form.blockers }, chat: { channel: form.channel, message: form.message, parent_id: replyTo?.id || null }, followup: { note: form.note, due_date: form.due_date || null, assigned_to: form.assigned_to || null, task_id: form.task_id || null }, invite: { email: form.email, role: form.role } }
     try {
       const response = await fetch(endpoints[composerType], { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify(payloads[composerType]) })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Unable to save this update.')
       if (!response.ok) throw new Error(responseData.error || 'Unable to save this update.')
       const collections = { calendar: ['events', 'event'], project: ['projects', 'project'], checkin: ['checkIns', 'check_in'], chat: ['messages', 'message'], followup: ['followUps', 'follow_up'], invite: ['invitations', 'invitation'] }
       const [collection, itemKey] = collections[composerType]
@@ -1291,7 +1328,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   const runAction = async (operation, fallbackMessage) => {
     try {
       const response = await operation()
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, fallbackMessage)
       if (!response.ok) throw new Error(responseData.error || fallbackMessage)
       return responseData
     } catch (error) {
@@ -1338,7 +1375,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     setBucketSubmitting(true)
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify({ name }) })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Bucket could not be created.')
       if (!response.ok) throw new Error(responseData.error || 'Bucket could not be created.')
       setLocalData(current => ({ ...current, buckets: current.buckets.some(bucket => bucket.id === responseData.bucket.id) ? current.buckets : [...current.buckets, responseData.bucket] }))
       setNewBucketName('')
@@ -1364,7 +1401,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     setWorkstreamSubmitting(true)
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/lookup-values/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify({ kind: 'workstream', name, project_id: null }) })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Workstream could not be created.')
       if (!response.ok) throw new Error(responseData.error || 'Workstream could not be created.')
       setLocalData(current => ({ ...current, lookupValues: (current.lookupValues || []).some(value => value.id === responseData.lookup_value.id) ? current.lookupValues : [...(current.lookupValues || []), responseData.lookup_value] }))
       setNewWorkstreamName('')
@@ -1382,7 +1419,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     setBucketError('')
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/${bucket.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-      const data = await response.json()
+      const data = await readJsonResponse(response, 'Bucket could not be archived.')
       if (!response.ok) throw new Error(data.error || 'Bucket could not be archived.')
       setLocalData(current => ({ ...current, buckets: current.buckets.filter(item => item.id !== bucket.id) }))
       window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `${bucket.name} archived.` }))
@@ -1397,7 +1434,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     setWorkstreamError('')
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/lookup-values/${value.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-      const data = await response.json()
+      const data = await readJsonResponse(response, 'Workstream could not be archived.')
       if (!response.ok) throw new Error(data.error || 'Workstream could not be archived.')
       setLocalData(current => ({ ...current, lookupValues: (current.lookupValues || []).filter(item => item.id !== value.id) }))
       window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `${value.name} archived.` }))
@@ -1422,7 +1459,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     setLocalData(current => ({ ...current, buckets: nextBuckets }))
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/reorder/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify({ bucket_ids: ids }) })
-      const responseData = await response.json()
+      const responseData = await readJsonResponse(response, 'Bucket order could not be saved.')
       if (!response.ok) throw new Error(responseData.error || 'Bucket order could not be saved.')
       setLocalData(current => ({ ...current, buckets: responseData.buckets }))
       window.dispatchEvent(new CustomEvent('workspace:notice', { detail: 'Bucket order saved.' }))
@@ -1529,7 +1566,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
       setBucketError('')
       try {
         const response = await fetch(`/api/workspaces/${workspaceId}/saved-views/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ name, filter: plannerFilter, search: searchQuery, project_scope: plannerProjectFilter }) })
-        const responseData = await response.json()
+        const responseData = await readJsonResponse(response, 'Saved view could not be created.')
         if (!response.ok) return setBucketError(responseData.error || 'Saved view could not be created.')
         setSavedViews(current => [...current.filter(view => view.name !== name), responseData.saved_view])
         setSavedViewName('')

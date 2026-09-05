@@ -286,26 +286,28 @@ function ProjectStakeholderResourcePanel({ project, workspaceId, canManage }) {
     if (!resourceForm.name.trim()) return
     const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/resources/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify(resourceForm) })
     const data = await response.json()
-    if (!response.ok) return setError(data.error || 'Resource could not be added.')
+    if (!response.ok) { setError(data.error || 'Resource could not be added.'); return toast.error(data.error || 'Resource could not be added.') }
     setResources(current => [...current, data.resource])
     setResourceForm({ name: '', resource_type: 'person', availability: '', notes: '' })
+    toast.success(`${data.resource.name} added.`)
   }
   const addStakeholder = async event => {
     event.preventDefault()
     if (!stakeholderForm.name.trim()) return
     const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/stakeholders/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify(stakeholderForm) })
     const data = await response.json()
-    if (!response.ok) return setError(data.error || 'Stakeholder could not be added.')
+    if (!response.ok) { setError(data.error || 'Stakeholder could not be added.'); return toast.error(data.error || 'Stakeholder could not be added.') }
     setStakeholders(current => [...current, data.stakeholder])
     setStakeholderForm({ name: '', role: '', email: '', influence: 'medium', interest: 'medium', notes: '' })
+    toast.success(`${data.stakeholder.name} added.`)
   }
   const archiveResource = async resource => {
     const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/resources/${resource.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-    if (response.ok) setResources(current => current.filter(item => item.id !== resource.id))
+    if (response.ok) { setResources(current => current.filter(item => item.id !== resource.id)); toast.success(`${resource.name} archived.`) } else { toast.error('Resource could not be archived.') }
   }
   const archiveStakeholder = async stakeholder => {
     const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/stakeholders/${stakeholder.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-    if (response.ok) setStakeholders(current => current.filter(item => item.id !== stakeholder.id))
+    if (response.ok) { setStakeholders(current => current.filter(item => item.id !== stakeholder.id)); toast.success(`${stakeholder.name} archived.`) } else { toast.error('Stakeholder could not be archived.') }
   }
   return <section className="project-stakeholder-resource">
     <div className="project-risk-issues-heading"><div><p className="eyebrow">Project delivery</p><h2>Resources & stakeholders</h2><p>Track who is involved and what is available for delivery.</p></div></div>
@@ -321,6 +323,84 @@ function ProjectStakeholderResourcePanel({ project, workspaceId, canManage }) {
         <div className="drawer-section-heading"><h3>Stakeholders</h3><span>{stakeholders.length}</span></div>
         {canManage && <form className="project-resource-form" onSubmit={addStakeholder}><label>Name<input value={stakeholderForm.name} onChange={event => setStakeholderForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. Finance Director" required /></label><label>Role<input value={stakeholderForm.role} onChange={event => setStakeholderForm(current => ({ ...current, role: event.target.value }))} placeholder="Approver" /></label><label>Email<input value={stakeholderForm.email} onChange={event => setStakeholderForm(current => ({ ...current, email: event.target.value }))} placeholder="person@company.com" /></label><div className="modal-grid"><label>Influence<select value={stakeholderForm.influence} onChange={event => setStakeholderForm(current => ({ ...current, influence: event.target.value }))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><label>Interest<select value={stakeholderForm.interest} onChange={event => setStakeholderForm(current => ({ ...current, interest: event.target.value }))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label></div><button className="secondary-button" type="submit"><Plus size={15} /> Add stakeholder</button></form>}
         <div className="project-stakeholder-list">{stakeholders.map(stakeholder => <div className="project-stakeholder-row" key={stakeholder.id}><div><strong>{stakeholder.name}</strong><span>{stakeholder.role || 'No role'} · {stakeholder.email || 'No email'} · Influence {stakeholder.influence} · Interest {stakeholder.interest}</span></div>{canManage && <button type="button" className="inline-delete" onClick={() => archiveStakeholder(stakeholder)} aria-label={`Archive ${stakeholder.name}`}><X size={14} /></button>}</div>)}</div>
+      </Card>
+    </div>
+  </section>
+}
+function ProjectCostBudgetPanel({ project, workspaceId, canManage, onProjectUpdated }) {
+  const [expenses, setExpenses] = useState([])
+  const [expenseForm, setExpenseForm] = useState({ name: '', category: 'other', amount: '', incurred_on: '', notes: '' })
+  const [budgetForm, setBudgetForm] = useState({ budget_amount: project.budget_amount || '', budget_currency: project.budget_currency || 'USD' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const load = async () => {
+    if (!workspaceId || !project?.id) return
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/expenses/`, { credentials: 'include' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Project expenses could not be loaded.')
+      setExpenses(data.expenses || [])
+    } catch (loadError) {
+      setError(loadError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(() => { load() }, [workspaceId, project?.id])
+  useEffect(() => { setBudgetForm({ budget_amount: project.budget_amount || '', budget_currency: project.budget_currency || 'USD' }) }, [project.budget_amount, project.budget_currency])
+  const formatMoney = amount => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency: budgetForm.budget_currency || 'USD' }).format(Number(amount) || 0)
+    } catch {
+      return `${amount}`
+    }
+  }
+  const totalSpent = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
+  const budgetAmount = project.budget_amount ? Number(project.budget_amount) : null
+  const remaining = budgetAmount === null ? null : budgetAmount - totalSpent
+  const saveBudget = async event => {
+    event.preventDefault()
+    const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ budget_amount: budgetForm.budget_amount === '' ? null : budgetForm.budget_amount, budget_currency: budgetForm.budget_currency }) })
+    const data = await response.json()
+    if (!response.ok) { setError(data.error || 'Budget could not be saved.'); return toast.error(data.error || 'Budget could not be saved.') }
+    onProjectUpdated?.(data.project)
+    toast.success('Budget saved.')
+  }
+  const addExpense = async event => {
+    event.preventDefault()
+    if (!expenseForm.name.trim() || !expenseForm.amount) return
+    const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/expenses/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ ...expenseForm, incurred_on: expenseForm.incurred_on || null }) })
+    const data = await response.json()
+    if (!response.ok) { setError(data.error || 'Expense could not be added.'); return toast.error(data.error || 'Expense could not be added.') }
+    setExpenses(current => [data.expense, ...current])
+    setExpenseForm({ name: '', category: 'other', amount: '', incurred_on: '', notes: '' })
+    toast.success(`${data.expense.name} added.`)
+  }
+  const archiveExpense = async expense => {
+    const response = await fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/expenses/${expense.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+    if (response.ok) { setExpenses(current => current.filter(item => item.id !== expense.id)); toast.success(`${expense.name} archived.`) } else { toast.error('Expense could not be archived.') }
+  }
+  return <section className="project-stakeholder-resource">
+    <div className="project-risk-issues-heading"><div><p className="eyebrow">Project delivery</p><h2>Cost & budget</h2><p>Track spend against the approved budget.</p></div></div>
+    {loading && <p className="workspace-inline-status" role="status">Loading budget data...</p>}
+    {error && <p className="auth-error" role="alert">{error}</p>}
+    <div className="project-summary">
+      <div><strong>{budgetAmount === null ? 'Not set' : formatMoney(budgetAmount)}</strong><span>Budget</span></div>
+      <div><strong>{formatMoney(totalSpent)}</strong><span>Spent</span></div>
+      <div className={remaining !== null && remaining < 0 ? 'is-danger' : ''}><strong>{remaining === null ? 'n/a' : formatMoney(remaining)}</strong><span>{remaining !== null && remaining < 0 ? 'Over budget' : 'Remaining'}</span></div>
+      <div><strong>{budgetAmount ? `${Math.min(Math.round((totalSpent / budgetAmount) * 100), 999)}%` : 'n/a'}</strong><span>Used</span></div>
+    </div>
+    <div className="project-stakeholder-resource-grid">
+      <Card className="project-stakeholder-card">
+        <div className="drawer-section-heading"><h3>Budget target</h3></div>
+        {canManage ? <form className="project-resource-form" onSubmit={saveBudget}><label>Amount<input type="number" min="0" step="0.01" value={budgetForm.budget_amount} onChange={event => setBudgetForm(current => ({ ...current, budget_amount: event.target.value }))} placeholder="e.g. 50000" /></label><label>Currency<select value={budgetForm.budget_currency} onChange={event => setBudgetForm(current => ({ ...current, budget_currency: event.target.value }))}><option value="USD">US Dollar ($)</option><option value="GBP">British Pound (£)</option><option value="NGN">Nigerian Naira (₦)</option><option value="KES">Kenyan Shilling (KSh)</option></select></label><button className="secondary-button" type="submit">Save budget</button></form> : <p className="today-muted">Only managers can set the budget target.</p>}
+      </Card>
+      <Card className="project-stakeholder-card">
+        <div className="drawer-section-heading"><h3>Expenses</h3><span>{expenses.length}</span></div>
+        {canManage && <form className="project-resource-form" onSubmit={addExpense}><label>Name<input value={expenseForm.name} onChange={event => setExpenseForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. Design contractor" required /></label><label>Category<select value={expenseForm.category} onChange={event => setExpenseForm(current => ({ ...current, category: event.target.value }))}><option value="labor">Labor</option><option value="materials">Materials</option><option value="software">Software</option><option value="travel">Travel</option><option value="other">Other</option></select></label><label>Amount<input type="number" min="0" step="0.01" value={expenseForm.amount} onChange={event => setExpenseForm(current => ({ ...current, amount: event.target.value }))} placeholder="e.g. 1200" required /></label><label>Date<input type="date" value={expenseForm.incurred_on} onChange={event => setExpenseForm(current => ({ ...current, incurred_on: event.target.value }))} /></label><button className="secondary-button" type="submit"><Plus size={15} /> Add expense</button></form>}
+        <div className="project-stakeholder-list">{expenses.map(expense => <div className="project-stakeholder-row" key={expense.id}><div><strong>{expense.name}</strong><span>{expense.category} · {formatMoney(expense.amount)}{expense.incurred_on ? ` · ${expense.incurred_on}` : ''}</span></div>{canManage && <button type="button" className="inline-delete" onClick={() => archiveExpense(expense)} aria-label={`Archive ${expense.name}`}><X size={14} /></button>}</div>)}</div>
       </Card>
     </div>
   </section>
@@ -352,4 +432,4 @@ function TodayDashboard({ today, todayLabel, currentUserName, currentUserId, cur
   </section>
 }
 
-export { TeamBoardView, MyTasksView, ProjectProgress, ProjectRiskIssuePanel, ClockInCard, ProjectStakeholderResourcePanel, TodayDashboard }
+export { TeamBoardView, MyTasksView, ProjectProgress, ProjectRiskIssuePanel, ClockInCard, ProjectStakeholderResourcePanel, ProjectCostBudgetPanel, TodayDashboard }

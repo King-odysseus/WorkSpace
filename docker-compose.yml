@@ -31,6 +31,19 @@ services:
       WORKSPACE_DB_PASSWORD: ${WORKSPACE_DB_PASSWORD:?Set WORKSPACE_DB_PASSWORD before starting compose}
       WORKSPACE_DB_HOST: database
       WORKSPACE_DB_PORT: 5432
+      BREVO_SMTP_HOST: ${BREVO_SMTP_HOST:-smtp-relay.brevo.com}
+      BREVO_SMTP_PORT: ${BREVO_SMTP_PORT:-587}
+      BREVO_SMTP_LOGIN: ${BREVO_SMTP_LOGIN:-}
+      BREVO_SMTP_PASSWORD: ${BREVO_SMTP_PASSWORD:-}
+      WORKSPACE_DEFAULT_FROM_EMAIL: ${WORKSPACE_DEFAULT_FROM_EMAIL:-}
+      WORKSPACE_FRONTEND_BASE_URL: ${WORKSPACE_FRONTEND_BASE_URL:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      WORKSPACE_SESSION_COOKIE_AGE: ${WORKSPACE_SESSION_COOKIE_AGE:-604800}
+      WORKSPACE_LOGIN_FAILURE_LIMIT: ${WORKSPACE_LOGIN_FAILURE_LIMIT:-5}
+      WORKSPACE_LOGIN_COOLOFF_MINUTES: ${WORKSPACE_LOGIN_COOLOFF_MINUTES:-15}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL:-}
     volumes:
       - workspace-media:/app/media
     healthcheck:
@@ -57,6 +70,15 @@ services:
       WORKSPACE_DB_PASSWORD: ${WORKSPACE_DB_PASSWORD:?Set WORKSPACE_DB_PASSWORD before starting compose}
       WORKSPACE_DB_HOST: database
       WORKSPACE_DB_PORT: 5432
+      BREVO_SMTP_HOST: ${BREVO_SMTP_HOST:-smtp-relay.brevo.com}
+      BREVO_SMTP_PORT: ${BREVO_SMTP_PORT:-587}
+      BREVO_SMTP_LOGIN: ${BREVO_SMTP_LOGIN:-}
+      BREVO_SMTP_PASSWORD: ${BREVO_SMTP_PASSWORD:-}
+      WORKSPACE_DEFAULT_FROM_EMAIL: ${WORKSPACE_DEFAULT_FROM_EMAIL:-}
+      WORKSPACE_FRONTEND_BASE_URL: ${WORKSPACE_FRONTEND_BASE_URL:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL:-}
     command: ["sh", "-c", "while true; do python manage.py deliver_calendar_reminders; python manage.py deliver_webhooks; python manage.py run_automation; python manage.py purge_screen_captures; sleep 60; done"]
     depends_on:
       api:
@@ -66,6 +88,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+        VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
     ports:
       - "${WORKSPACE_WEB_PORT:-8080}:80"
     healthcheck:

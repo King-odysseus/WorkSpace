@@ -1,6 +1,8 @@
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 import os
+import sys
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -47,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'axes',
     'tasks',
 ]
 
@@ -59,6 +62,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Must come last: it turns the PermissionDenied that AxesStandaloneBackend
+    # raises for a locked-out login into the configured lockout response.
+    'axes.middleware.AxesMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -148,6 +154,66 @@ frontend_dist = BASE_DIR / 'dist'
 if not DEBUG and frontend_dist.is_dir():
     WHITENOISE_ROOT = frontend_dist
     WHITENOISE_INDEX_FILE = True
+
+# Brute-force protection for the login endpoint. AxesStandaloneBackend must sit
+# first so a locked-out attempt is refused before any password is checked; the
+# ModelBackend behind it stays the only thing that actually authenticates.
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+# Lock on the IP and username together, so one attacker cannot lock every account
+# from a single address, and a shared office IP does not lock out the whole team.
+AXES_LOCKOUT_PARAMETERS = [['ip_address', 'username']]
+AXES_FAILURE_LIMIT = int(os.environ.get('WORKSPACE_LOGIN_FAILURE_LIMIT', 5))
+AXES_COOLOFF_TIME = timedelta(minutes=int(os.environ.get('WORKSPACE_LOGIN_COOLOFF_MINUTES', 15)))
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = None
+AXES_VERBOSE = False
+# Django's test client calls authenticate() without a request, which the axes
+# backend rejects outright, so the suite runs with axes off and the tests that
+# cover lockout turn it back on with override_settings(AXES_ENABLED=True).
+AXES_ENABLED = os.environ.get('WORKSPACE_AXES_ENABLED', 'true').lower() == 'true' and 'test' not in sys.argv
+
+# Session lifetime. Django's default is two weeks, which is longer than a team
+# operations tool needs, so this halves it. Deliberately NOT paired with
+# SESSION_SAVE_EVERY_REQUEST: rolling the expiry forward would write the session
+# on every request, and the pulse endpoint is polled every 15 seconds by every
+# open tab, so that turns a read-only probe into a write. The trade is that the
+# week runs from sign-in rather than from last activity.
+SESSION_COOKIE_AGE = int(os.environ.get('WORKSPACE_SESSION_COOKIE_AGE', 7 * 24 * 60 * 60))
+
+# Transactional email (invitations, task/calendar reminders) via Brevo's SMTP relay.
+# Falls back to the console backend (prints instead of sending) whenever credentials
+# are not configured, so local dev and CI never attempt a real network send.
+BREVO_SMTP_LOGIN = os.environ.get('BREVO_SMTP_LOGIN', '').strip()
+BREVO_SMTP_PASSWORD = os.environ.get('BREVO_SMTP_PASSWORD', '').strip()
+if BREVO_SMTP_LOGIN and BREVO_SMTP_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.environ.get('BREVO_SMTP_HOST', 'smtp-relay.brevo.com')
+    EMAIL_PORT = int(os.environ.get('BREVO_SMTP_PORT', '587'))
+    EMAIL_HOST_USER = BREVO_SMTP_LOGIN
+    EMAIL_HOST_PASSWORD = BREVO_SMTP_PASSWORD
+    EMAIL_USE_TLS = True
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_SENDING_CONFIGURED = bool(BREVO_SMTP_LOGIN and BREVO_SMTP_PASSWORD)
+DEFAULT_FROM_EMAIL = os.environ.get('WORKSPACE_DEFAULT_FROM_EMAIL', 'WorkSpace <no-reply@workspace.app>')
+
+# Base URL of the deployed frontend, used to build links inside emails (invitations, etc).
+FRONTEND_BASE_URL = os.environ.get('WORKSPACE_FRONTEND_BASE_URL', 'http://localhost:5173').rstrip('/')
+
+# Google Sign-In: the OAuth web client ID from Google Cloud Console. The frontend needs
+# the same value (as VITE_GOOGLE_CLIENT_ID) to render the button; this copy is what the
+# backend checks the ID token's audience against.
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '').strip()
+
+# Web push (browser notification bubbles even when the app/PWA is closed). Generate a
+# keypair once with `vapid --gen` (installed by pywebpush) and keep the private key secret.
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '').strip()
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '').strip()
+VAPID_CLAIM_EMAIL = os.environ.get('VAPID_CLAIM_EMAIL', 'admin@workspace.app').strip()
+WEB_PUSH_CONFIGURED = bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get('WORKSPACE_SECURE_SSL_REDIRECT', 'false').lower() == 'true'

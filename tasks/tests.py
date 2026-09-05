@@ -6,6 +6,8 @@ from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
+from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -16,7 +18,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, RiskIssue, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .views import create_notification
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
@@ -326,6 +328,54 @@ class TaskApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual([bucket['id'] for bucket in response.json()['buckets']], [second.id, first.id])
+
+    def test_owner_can_rename_a_plan_bucket(self):
+        bucket = PlanBucket.objects.create(workspace=self.workspace, name='Later', position=1)
+        response = self.client.patch(
+            reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]),
+            data=json.dumps({'name': 'Next up'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['bucket']['name'], 'Next up')
+        bucket.refresh_from_db()
+        self.assertEqual(bucket.name, 'Next up')
+
+    def test_owner_can_archive_a_plan_bucket(self):
+        bucket = PlanBucket.objects.create(workspace=self.workspace, name='Retired', position=1)
+        response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['archived'], bucket.id)
+        bucket.refresh_from_db()
+        self.assertFalse(bucket.is_active)
+        self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='bucket_archived').count(), 1)
+
+    def test_plan_bucket_detail_rejects_unsupported_methods(self):
+        # Guards the stacked-decorator regression that made PATCH and DELETE
+        # unreachable: only the two documented methods may be accepted.
+        bucket = PlanBucket.objects.create(workspace=self.workspace, name='Guarded', position=1)
+        url = reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id])
+        self.assertEqual(self.client.get(url).status_code, 405)
+        self.assertEqual(self.client.post(url).status_code, 405)
+
+    def test_collection_endpoints_reject_unsupported_methods(self):
+        # These two accepted any verb and fell through to their create branch,
+        # so a DELETE or PUT silently created a record.
+        template_response = self.client.delete(
+            reverse('task-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'X', 'title': 'Y'}),
+            content_type='application/json',
+        )
+        self.assertEqual(template_response.status_code, 405)
+        self.assertEqual(TaskTemplate.objects.count(), 0)
+
+        saved_view_response = self.client.put(
+            reverse('saved-view-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'X'}),
+            content_type='application/json',
+        )
+        self.assertEqual(saved_view_response.status_code, 405)
+        self.assertEqual(SavedView.objects.count(), 0)
 
     def test_task_positions_can_be_reordered_and_moved_between_buckets(self):
         first = Task.objects.create(workspace=self.workspace, title='First', bucket='Backlog', position=0)
@@ -794,6 +844,8 @@ class TaskApiTests(TestCase):
         first_response = self.client.get(reverse('calendar-event-list', args=[self.workspace.id]))
         self.assertEqual(first_response.status_code, 200)
         self.assertEqual(WorkspaceNotification.objects.filter(kind='calendar_reminder', recipient=self.user).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user.email])
         event.refresh_from_db()
         self.assertIsNotNone(event.reminder_sent_at)
         self.client.get(reverse('calendar-event-list', args=[self.workspace.id]))
@@ -981,6 +1033,14 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         invitation = WorkspaceInvitation.objects.get()
         self.assertEqual(invitation.email, 'new-member@example.com')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['new-member@example.com'])
+        self.assertIn(str(invitation.id), mail.outbox[0].body)
+
+        public_lookup = self.client.get(reverse('invitation-public-detail', args=[invitation.id]))
+        self.assertEqual(public_lookup.status_code, 200)
+        self.assertEqual(public_lookup.json()['invitation']['email'], 'new-member@example.com')
+        self.assertEqual(public_lookup.json()['invitation']['workspace_name'], self.workspace.name)
 
     def test_regular_member_cannot_create_a_workspace_invitation(self):
         member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
@@ -1058,6 +1118,56 @@ class TaskApiTests(TestCase):
         self.assertEqual(update.json()['project']['status'], 'active')
         delete = self.client.delete(reverse('project-detail', args=[self.workspace.id, project.id]))
         self.assertEqual(delete.status_code, 200)
+
+    def test_project_budget_and_expenses(self):
+        project = Project.objects.create(workspace=self.workspace, name='Rebrand')
+        budget_update = self.client.patch(
+            reverse('project-detail', args=[self.workspace.id, project.id]),
+            data=json.dumps({'budget_amount': '5000.00', 'budget_currency': 'usd'}),
+            content_type='application/json',
+        )
+        self.assertEqual(budget_update.status_code, 200)
+        self.assertEqual(budget_update.json()['project']['budget_amount'], '5000.00')
+        self.assertEqual(budget_update.json()['project']['budget_currency'], 'USD')
+
+        invalid_budget = self.client.patch(
+            reverse('project-detail', args=[self.workspace.id, project.id]),
+            data=json.dumps({'budget_amount': '-10'}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid_budget.status_code, 400)
+
+        invalid_currency = self.client.patch(
+            reverse('project-detail', args=[self.workspace.id, project.id]),
+            data=json.dumps({'budget_currency': 'EUR'}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid_currency.status_code, 400)
+
+        create_expense = self.client.post(
+            reverse('project-expense-list', args=[self.workspace.id, project.id]),
+            data=json.dumps({'name': 'Design contractor', 'category': 'labor', 'amount': '1200.50', 'incurred_on': '2026-09-01'}),
+            content_type='application/json',
+        )
+        self.assertEqual(create_expense.status_code, 201)
+        expense_id = create_expense.json()['expense']['id']
+
+        list_expenses = self.client.get(reverse('project-expense-list', args=[self.workspace.id, project.id]))
+        self.assertEqual(list_expenses.status_code, 200)
+        self.assertEqual(len(list_expenses.json()['expenses']), 1)
+        self.assertEqual(list_expenses.json()['expenses'][0]['amount'], '1200.50')
+
+        update_expense = self.client.patch(
+            reverse('project-expense-detail', args=[self.workspace.id, project.id, expense_id]),
+            data=json.dumps({'amount': '1500.00'}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_expense.status_code, 200)
+        self.assertEqual(update_expense.json()['expense']['amount'], '1500.00')
+
+        delete_expense = self.client.delete(reverse('project-expense-detail', args=[self.workspace.id, project.id, expense_id]))
+        self.assertEqual(delete_expense.status_code, 200)
+        self.assertEqual(self.client.get(reverse('project-expense-list', args=[self.workspace.id, project.id])).json()['expenses'], [])
 
     def test_owner_can_create_project_with_due_date(self):
         response = self.client.post(
@@ -1240,6 +1350,55 @@ class ExecutionFoundationApiTests(TestCase):
         self.assertEqual(allowed.status_code, 200)
 
 
+class ProjectScopeIsolationTests(TestCase):
+    """A workspace leader must not reach another workspace's project records.
+
+    The permission check only ever proves the caller leads the workspace named in
+    the URL, so every nested lookup has to be tied back to that same workspace.
+    """
+
+    def setUp(self):
+        self.outsider = User.objects.create_user(username='outsider@example.com', email='outsider@example.com', password='secure-pass-123')
+        self.outsider_workspace = Workspace.objects.create(name='Outsider', slug='outsider')
+        Membership.objects.create(workspace=self.outsider_workspace, user=self.outsider, role='owner')
+
+        owner = User.objects.create_user(username='holder@example.com', email='holder@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Holder', slug='holder')
+        Membership.objects.create(workspace=self.workspace, user=owner, role='owner')
+        self.project = Project.objects.create(workspace=self.workspace, name='Confidential')
+        self.resource = ProjectResource.objects.create(project=self.project, name='Budget sheet', resource_type='person')
+        self.stakeholder = ProjectStakeholder.objects.create(project=self.project, name='Client contact')
+        self.expense = ProjectExpense.objects.create(project=self.project, name='Retainer', amount='999.00', category='other')
+
+        self.client.login(username='outsider@example.com', password='secure-pass-123')
+
+    def test_leader_cannot_archive_another_workspaces_project_records(self):
+        # Their own workspace id (which they do lead) paired with the other
+        # workspace's project and record ids.
+        cases = [
+            ('project-resource-detail', self.resource, ProjectResource),
+            ('project-stakeholder-detail', self.stakeholder, ProjectStakeholder),
+            ('project-expense-detail', self.expense, ProjectExpense),
+        ]
+        for route, record, model in cases:
+            with self.subTest(route=route):
+                response = self.client.delete(
+                    reverse(route, args=[self.outsider_workspace.id, self.project.id, record.id])
+                )
+                self.assertEqual(response.status_code, 404)
+                self.assertTrue(model.objects.get(id=record.id).is_active)
+
+    def test_non_member_cannot_tell_an_existing_project_from_a_missing_one(self):
+        # Both answers must be 403; a 404 for one and 403 for the other would
+        # reveal which project ids exist in a workspace the caller cannot see.
+        for route in ('project-resource-list', 'project-stakeholder-list', 'project-expense-list'):
+            with self.subTest(route=route):
+                existing = self.client.get(reverse(route, args=[self.workspace.id, self.project.id]))
+                missing = self.client.get(reverse(route, args=[self.workspace.id, 99999]))
+                self.assertEqual(existing.status_code, 403)
+                self.assertEqual(missing.status_code, 403)
+
+
 class AuthenticationApiTests(TestCase):
     def test_authenticated_user_can_discover_pending_invitations_for_their_email(self):
         owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
@@ -1311,6 +1470,98 @@ class AuthenticationApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()['authenticated'])
         self.assertFalse(self.client.get(reverse('auth-me')).json()['authenticated'])
+
+    @override_settings(AXES_ENABLED=True)
+    def test_repeated_failures_lock_the_account_out(self):
+        User.objects.create_user(username='target@example.com', email='target@example.com', password='secure-pass-123')
+        url = reverse('auth-login')
+        attempt = lambda password: self.client.post(
+            url, data=json.dumps({'email': 'target@example.com', 'password': password}), content_type='application/json',
+        )
+
+        # django-axes permits AXES_FAILURE_LIMIT - 1 failures and locks on the
+        # attempt that would reach the limit, so the last one here is already
+        # refused rather than merely rejected as a bad password.
+        for _ in range(settings.AXES_FAILURE_LIMIT - 1):
+            self.assertEqual(attempt('wrong-password').status_code, 401)
+        self.assertEqual(attempt('wrong-password').status_code, 429)
+
+        # Once locked, no password is checked at all - even the correct one.
+        locked = attempt('secure-pass-123')
+        self.assertEqual(locked.status_code, 429)
+        self.assertIn('Too many failed sign-in attempts', locked.json()['error'])
+
+    @override_settings(AXES_ENABLED=True)
+    def test_a_successful_sign_in_clears_earlier_failures(self):
+        User.objects.create_user(username='recover@example.com', email='recover@example.com', password='secure-pass-123')
+        url = reverse('auth-login')
+        attempt = lambda password: self.client.post(
+            url, data=json.dumps({'email': 'recover@example.com', 'password': password}), content_type='application/json',
+        )
+
+        for _ in range(settings.AXES_FAILURE_LIMIT - 2):
+            self.assertEqual(attempt('wrong-password').status_code, 401)
+        self.assertEqual(attempt('secure-pass-123').status_code, 200)
+
+        # AXES_RESET_ON_SUCCESS zeroes the counter, so someone who mistypes once
+        # more after signing in successfully is not immediately locked out.
+        self.assertEqual(attempt('wrong-password').status_code, 401)
+        self.assertEqual(attempt('secure-pass-123').status_code, 200)
+
+    def test_google_sign_in_is_disabled_without_a_client_id(self):
+        response = self.client.post(reverse('auth-google'), data=json.dumps({'credential': 'anything'}), content_type='application/json')
+        self.assertEqual(response.status_code, 503)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID='test-client-id')
+    def test_google_sign_in_creates_a_new_user_and_workspace(self):
+        token_info = {'aud': 'test-client-id', 'email': 'googler@example.com', 'email_verified': 'true', 'given_name': 'Gina'}
+        with mock.patch('tasks.auth_views.urllib.request.urlopen') as urlopen:
+            urlopen.return_value.__enter__.return_value.read.return_value = json.dumps(token_info).encode()
+            response = self.client.post(
+                reverse('auth-google'),
+                data=json.dumps({'credential': 'a-valid-looking-token', 'workspace_name': 'Gina Co'}),
+                content_type='application/json',
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['authenticated'])
+        user = User.objects.get(email='googler@example.com')
+        self.assertEqual(user.first_name, 'Gina')
+        self.assertTrue(Membership.objects.filter(user=user, role='owner').exists())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID='test-client-id')
+    def test_google_sign_in_rejects_mismatched_audience(self):
+        with mock.patch('tasks.auth_views.urllib.request.urlopen') as urlopen:
+            urlopen.return_value.__enter__.return_value.read.return_value = json.dumps({'aud': 'someone-else', 'email': 'x@example.com', 'email_verified': 'true'}).encode()
+            response = self.client.post(reverse('auth-google'), data=json.dumps({'credential': 'token'}), content_type='application/json')
+        self.assertEqual(response.status_code, 401)
+
+    def test_push_public_key_reports_unconfigured_by_default(self):
+        response = self.client.get(reverse('push-public-key'))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['configured'])
+
+    def test_push_subscription_requires_authentication(self):
+        response = self.client.post(reverse('push-subscription-list'), data=json.dumps({'endpoint': 'https://push.example.com/x'}), content_type='application/json')
+        self.assertEqual(response.status_code, 401)
+
+    def test_push_subscription_create_and_delete(self):
+        user = User.objects.create_user(username='pusher@example.com', email='pusher@example.com', password='secure-pass-123')
+        self.client.login(username=user.username, password='secure-pass-123')
+        create_response = self.client.post(
+            reverse('push-subscription-list'),
+            data=json.dumps({'endpoint': 'https://push.example.com/abc', 'keys': {'p256dh': 'key1', 'auth': 'key2'}}),
+            content_type='application/json',
+        )
+        self.assertEqual(create_response.status_code, 201)
+        self.assertTrue(PushSubscription.objects.filter(user=user, endpoint='https://push.example.com/abc').exists())
+
+        delete_response = self.client.delete(
+            reverse('push-subscription-list'),
+            data=json.dumps({'endpoint': 'https://push.example.com/abc'}),
+            content_type='application/json',
+        )
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertFalse(PushSubscription.objects.filter(user=user, endpoint='https://push.example.com/abc').exists())
 
 
 class WorkShiftApiTests(TestCase):
@@ -2384,6 +2635,23 @@ class WorkspaceDocumentHardeningTests(TestCase):
         self.assertEqual(restore.status_code, 200)
         self.document.refresh_from_db()
         self.assertIn('start', self.document.content['html'])
+
+    def test_spreadsheet_cell_styles_keep_only_known_properties(self):
+        sheet = WorkspaceDocument.objects.create(
+            workspace=self.workspace, created_by=self.owner, title='Budget', kind='spreadsheet',
+            content={'sheets': [{'name': 'Sheet 1', 'rows': [['1']]}]})
+        url = reverse('workspace-document-detail', args=[self.workspace.id, sheet.id])
+        payload = {'content': {'sheets': [{
+            'name': 'Sheet 1',
+            'rows': [['1', '=SUM(A1:A1)']],
+            'cell_styles': {'0:0': {'fontWeight': 'bold', 'backgroundImage': 'url(https://tracker.example/pixel.png)', 'color': 'expression(alert(1))'}},
+        }]}}
+        response = self.client.patch(url, data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        sheet.refresh_from_db()
+        stored = sheet.content['sheets'][0]
+        self.assertEqual(stored['cell_styles']['0:0'], {'fontWeight': 'bold'})
+        self.assertEqual(stored['rows'], [['1', '=SUM(A1:A1)']])
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())

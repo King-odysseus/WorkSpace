@@ -14,7 +14,7 @@
 //
 // CACHE_VERSION must be bumped whenever this file's caching *behaviour* changes,
 // so returning visitors pick up the new logic instead of an old worker's cache.
-const CACHE_VERSION = 'workspace-v2'
+const CACHE_VERSION = 'workspace-v3'
 const SHELL_URL = '/'
 
 // There's no build-time precache manifest here (no vite-plugin-pwa), so the
@@ -73,4 +73,24 @@ self.addEventListener('fetch', event => {
       }))
     )
   }
+})
+
+// Web push: shows a native notification bubble even when the app/PWA is fully
+// closed. The payload is a small JSON object set by tasks/push.py.
+self.addEventListener('push', event => {
+  let data = { title: 'WorkSpace', body: '' }
+  try { data = { ...data, ...event.data.json() } } catch { /* use default */ }
+  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/icon-192.png', data: { url: data.url || '/' } }))
+})
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close()
+  const targetUrl = event.notification.data?.url || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      const existing = clients.find(client => 'focus' in client)
+      if (existing) return existing.focus()
+      return self.clients.openWindow(targetUrl)
+    })
+  )
 })

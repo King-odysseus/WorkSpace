@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import DOMPurify from 'dompurify'
 import { AlignCenter, AlignLeft, AlignRight, Bold, Bot, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { readJsonResponse } from '../lib/workspace-format.js'
+import { FORMULA_ERRORS, columnLabel, evaluateSheet } from '../lib/spreadsheet-formulas.js'
 
 const headers = id => ({ 'X-Workspace-Id': String(id) })
 const AI_PROVIDERS = [['openai', 'OpenAI'], ['claude', 'Claude'], ['kimi', 'Kimi'], ['deepseek', 'DeepSeek']]
@@ -26,23 +28,35 @@ export function safeUrl(value) {
   return SAFE_DATA_IMAGE.test(candidate) || SAFE_URL.test(candidate) ? candidate : ''
 }
 
-function cleanHtml(value) {
-  if (typeof window === 'undefined') return value || ''
-  const doc = new DOMParser().parseFromString(value || '', 'text/html')
-  doc.querySelectorAll('script,style,iframe,object,embed,noscript,svg,math').forEach(node => node.remove())
-  doc.querySelectorAll('*').forEach(node => [...node.attributes].forEach(attribute => { if (attribute.name.toLowerCase().startsWith('on')) node.removeAttribute(attribute.name) }))
-  doc.querySelectorAll('[href],[src]').forEach(node => ['href', 'src'].forEach(attribute => {
-    if (!node.hasAttribute(attribute)) return
+// DOMPurify does the tag/attribute filtering (including the mutation-XSS cases a
+// hand-written pass tends to miss). The hook keeps this app's own two rules on
+// top of it: URLs must satisfy safeUrl, and links never get to reach back into
+// the opening page.
+DOMPurify.addHook('afterSanitizeAttributes', node => {
+  for (const attribute of ['href', 'src']) {
+    if (!node.hasAttribute(attribute)) continue
     const url = safeUrl(node.getAttribute(attribute))
     if (url) node.setAttribute(attribute, url)
     else node.removeAttribute(attribute)
-  }))
-  doc.querySelectorAll('a[href]').forEach(node => node.setAttribute('rel', 'noopener noreferrer'))
-  return doc.body.innerHTML
+  }
+  if (node.tagName === 'A' && node.hasAttribute('href')) node.setAttribute('rel', 'noopener noreferrer')
+})
+
+export function cleanHtml(value) {
+  if (typeof window === 'undefined') return value || ''
+  // USE_PROFILES html keeps the editor's formatting markup while excluding the
+  // SVG and MathML grammars the previous implementation stripped by hand.
+  return DOMPurify.sanitize(value || '', { USE_PROFILES: { html: true } })
 }
+
+// Commands whose on/off state the toolbar reflects. execCommand is the engine
+// underneath, so queryCommandState is what it can be asked.
+const TOGGLE_COMMANDS = ['bold', 'italic', 'underline', 'strikeThrough', 'insertUnorderedList', 'insertOrderedList', 'justifyLeft', 'justifyCenter', 'justifyRight']
 
 function RichEditor({ value, onChange, compact = false, readOnly = false, hideToolbar = false }) {
   const editorRef = useRef(null)
+  const [activeFormats, setActiveFormats] = useState({})
+  const [inTable, setInTable] = useState(false)
   // What we last handed to onChange. cleanHtml normalizes markup, so the value
   // coming back from the parent rarely matches innerHTML byte for byte; without
   // this guard the effect rewrites the DOM mid-keystroke and the caret jumps to
@@ -53,12 +67,75 @@ function RichEditor({ value, onChange, compact = false, readOnly = false, hideTo
     if (!editorRef.current || value === lastEmitted.current) return
     if (editorRef.current.innerHTML !== value) editorRef.current.innerHTML = cleanHtml(value)
   }, [value])
-  const command = (name, argument = null) => { editorRef.current?.focus(); document.execCommand(name, false, argument); emit(editorRef.current?.innerHTML || '') }
+
+  const selectionInEditor = () => {
+    const node = window.getSelection()?.anchorNode
+    return Boolean(node && editorRef.current?.contains(node))
+  }
+  // Reading the state on every selection change is what lets the toolbar show
+  // bold as pressed when the caret sits inside bold text, rather than being a
+  // row of buttons that never look any different.
+  const refreshState = useCallback(() => {
+    if (readOnly || hideToolbar || !selectionInEditor()) return
+    const next = {}
+    TOGGLE_COMMANDS.forEach(command => { try { next[command] = document.queryCommandState(command) } catch { next[command] = false } })
+    setActiveFormats(next)
+    const node = window.getSelection()?.anchorNode
+    const element = node?.nodeType === 1 ? node : node?.parentElement
+    setInTable(Boolean(element?.closest('table')))
+  }, [readOnly, hideToolbar])
+  useEffect(() => {
+    if (readOnly || hideToolbar) return undefined
+    document.addEventListener('selectionchange', refreshState)
+    return () => document.removeEventListener('selectionchange', refreshState)
+  }, [refreshState, readOnly, hideToolbar])
+
+  const command = (name, argument = null) => {
+    editorRef.current?.focus()
+    document.execCommand(name, false, argument)
+    emit(editorRef.current?.innerHTML || '')
+    refreshState()
+  }
   const insertTable = () => {
     editorRef.current?.focus()
     document.execCommand('insertHTML', false, '<table><tbody><tr><td>Cell</td><td>Cell</td></tr><tr><td>Cell</td><td>Cell</td></tr></tbody></table><p><br></p>')
     emit(editorRef.current?.innerHTML || '')
   }
+
+  // Tables used to be a fixed 2x2 that could never grow. These walk the DOM
+  // from the caret instead, because execCommand has no table commands at all.
+  const currentCell = () => {
+    const node = window.getSelection()?.anchorNode
+    if (!node || !editorRef.current?.contains(node)) return null
+    const element = node.nodeType === 1 ? node : node.parentElement
+    return element?.closest('td,th') || null
+  }
+  const editTable = mutate => {
+    const cell = currentCell()
+    if (!cell) return
+    const row = cell.closest('tr')
+    const table = cell.closest('table')
+    if (!row || !table) return
+    mutate({ cell, row, table, index: [...row.children].indexOf(cell) })
+    emit(cleanHtml(editorRef.current?.innerHTML || ''))
+  }
+  const addTableRow = () => editTable(({ row }) => {
+    const fresh = row.cloneNode(true)
+    ;[...fresh.children].forEach(node => { node.textContent = '' })
+    row.after(fresh)
+  })
+  const addTableColumn = () => editTable(({ table, index }) => {
+    [...table.rows].forEach(tableRow => {
+      const fresh = document.createElement(tableRow.cells[index]?.tagName?.toLowerCase() === 'th' ? 'th' : 'td')
+      tableRow.cells[index] ? tableRow.cells[index].after(fresh) : tableRow.append(fresh)
+    })
+  })
+  const deleteTableRow = () => editTable(({ row, table }) => { if (table.rows.length > 1) row.remove(); else table.remove() })
+  const deleteTableColumn = () => editTable(({ table, index }) => {
+    if (table.rows[0]?.cells.length <= 1) { table.remove(); return }
+    [...table.rows].forEach(tableRow => tableRow.cells[index]?.remove())
+  })
+
   const addLink = () => {
     const entered = window.prompt('Link URL')
     if (entered === null) return
@@ -66,21 +143,40 @@ function RichEditor({ value, onChange, compact = false, readOnly = false, hideTo
     if (url) command('createLink', url)
     else window.alert('Links must start with http://, https://, mailto:, tel:, or /.')
   }
-  const toolbarButton = (label, icon, action) => <button type="button" className="rich-toolbar-button" onMouseDown={event => event.preventDefault()} onClick={action} aria-label={label} title={label}>{icon}</button>
+  const toolbarButton = (label, icon, action, commandName = null) => {
+    const pressed = commandName ? Boolean(activeFormats[commandName]) : undefined
+    return <button type="button" className={`rich-toolbar-button${pressed ? ' is-active' : ''}`} onMouseDown={event => event.preventDefault()} onClick={action} aria-label={label} aria-pressed={pressed} title={label}>{icon}</button>
+  }
+  // Counted off the value rather than the DOM so it stays right after an undo
+  // or a version restore, both of which replace the content wholesale.
+  const wordCount = useMemo(() => {
+    const text = (value || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+    return { words: text ? text.split(/\s+/).length : 0, characters: text.length }
+  }, [value])
+
   return <div className={`rich-editor ${compact ? 'is-compact' : ''}`}>
     {!readOnly && !hideToolbar && <div className="rich-toolbar" role="toolbar" aria-label="Text formatting">
       <div className="rich-toolbar-row">
         <div className="rich-toolbar-group"><span>Edit</span>{toolbarButton('Undo', <Undo2 size={15} />, () => command('undo'))}{toolbarButton('Redo', <Redo2 size={15} />, () => command('redo'))}</div>
         <div className="rich-toolbar-group rich-toolbar-font"><span>Font</span><select onChange={event => command('fontName', event.target.value)} defaultValue="Arial" aria-label="Font family"><option>Arial</option><option>Calibri</option><option>Georgia</option><option>Times New Roman</option><option>Verdana</option></select><select onChange={event => command('fontSize', event.target.value)} defaultValue="3" aria-label="Font size"><option value="1">10</option><option value="2">12</option><option value="3">14</option><option value="4">18</option><option value="5">24</option><option value="6">32</option><option value="7">48</option></select></div>
-        <div className="rich-toolbar-group"><span>Style</span>{toolbarButton('Bold', <Bold size={15} />, () => command('bold'))}{toolbarButton('Italic', <Italic size={15} />, () => command('italic'))}{toolbarButton('Underline', <Underline size={15} />, () => command('underline'))}{toolbarButton('Strikethrough', <Strikethrough size={15} />, () => command('strikeThrough'))}<label className="rich-color-control" title="Text color"><input type="color" defaultValue="#172033" onChange={event => command('foreColor', event.target.value)} /><span>A</span></label><label className="rich-color-control" title="Highlight color"><input type="color" defaultValue="#fff2a8" onChange={event => command('hiliteColor', event.target.value)} /><Highlighter size={15} /></label></div>
+        <div className="rich-toolbar-group"><span>Style</span>{toolbarButton('Bold', <Bold size={15} />, () => command('bold'), 'bold')}{toolbarButton('Italic', <Italic size={15} />, () => command('italic'), 'italic')}{toolbarButton('Underline', <Underline size={15} />, () => command('underline'), 'underline')}{toolbarButton('Strikethrough', <Strikethrough size={15} />, () => command('strikeThrough'), 'strikeThrough')}<label className="rich-color-control" title="Text color"><input type="color" defaultValue="#172033" onChange={event => command('foreColor', event.target.value)} /><span>A</span></label><label className="rich-color-control" title="Highlight color"><input type="color" defaultValue="#fff2a8" onChange={event => command('hiliteColor', event.target.value)} /><Highlighter size={15} /></label></div>
       </div>
       <div className="rich-toolbar-row">
-        <div className="rich-toolbar-group"><span>Paragraph</span><select onChange={event => command('formatBlock', event.target.value)} defaultValue="p" aria-label="Paragraph style"><option value="p">Paragraph</option><option value="h1">Title</option><option value="h2">Heading 1</option><option value="h3">Heading 2</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>{toolbarButton('Bulleted list', <List size={15} />, () => command('insertUnorderedList'))}{toolbarButton('Numbered list', <ListOrdered size={15} />, () => command('insertOrderedList'))}{toolbarButton('Decrease indent', <IndentDecrease size={15} />, () => command('outdent'))}{toolbarButton('Increase indent', <IndentIncrease size={15} />, () => command('indent'))}</div>
-        <div className="rich-toolbar-group"><span>Align</span>{toolbarButton('Align left', <AlignLeft size={15} />, () => command('justifyLeft'))}{toolbarButton('Align center', <AlignCenter size={15} />, () => command('justifyCenter'))}{toolbarButton('Align right', <AlignRight size={15} />, () => command('justifyRight'))}</div>
+        <div className="rich-toolbar-group"><span>Paragraph</span><select onChange={event => command('formatBlock', event.target.value)} defaultValue="p" aria-label="Paragraph style"><option value="p">Paragraph</option><option value="h1">Title</option><option value="h2">Heading 1</option><option value="h3">Heading 2</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>{toolbarButton('Bulleted list', <List size={15} />, () => command('insertUnorderedList'), 'insertUnorderedList')}{toolbarButton('Numbered list', <ListOrdered size={15} />, () => command('insertOrderedList'), 'insertOrderedList')}{toolbarButton('Decrease indent', <IndentDecrease size={15} />, () => command('outdent'))}{toolbarButton('Increase indent', <IndentIncrease size={15} />, () => command('indent'))}</div>
+        <div className="rich-toolbar-group"><span>Align</span>{toolbarButton('Align left', <AlignLeft size={15} />, () => command('justifyLeft'), 'justifyLeft')}{toolbarButton('Align center', <AlignCenter size={15} />, () => command('justifyCenter'), 'justifyCenter')}{toolbarButton('Align right', <AlignRight size={15} />, () => command('justifyRight'), 'justifyRight')}</div>
         <div className="rich-toolbar-group"><span>Insert</span>{toolbarButton('Add link', <Link2 size={15} />, addLink)}{toolbarButton('Insert table', <Table2 size={15} />, insertTable)}{toolbarButton('Horizontal line', <Minus size={15} />, () => command('insertHorizontalRule'))}{toolbarButton('Code block', <Code size={15} />, () => command('formatBlock', 'pre'))}{toolbarButton('Clear formatting', <RemoveFormatting size={15} />, () => command('removeFormat'))}</div>
       </div>
+      {inTable && <div className="rich-toolbar-row rich-table-row">
+        <div className="rich-toolbar-group"><span>Table</span>
+          <button type="button" className="rich-toolbar-text-button" onMouseDown={event => event.preventDefault()} onClick={addTableRow}>Add row</button>
+          <button type="button" className="rich-toolbar-text-button" onMouseDown={event => event.preventDefault()} onClick={addTableColumn}>Add column</button>
+          <button type="button" className="rich-toolbar-text-button" onMouseDown={event => event.preventDefault()} onClick={deleteTableRow}>Delete row</button>
+          <button type="button" className="rich-toolbar-text-button" onMouseDown={event => event.preventDefault()} onClick={deleteTableColumn}>Delete column</button>
+        </div>
+      </div>}
     </div>}
-    <div ref={editorRef} contentEditable={!readOnly} suppressContentEditableWarning onInput={event => emit(cleanHtml(event.currentTarget.innerHTML))} className="rich-editor-surface" data-placeholder="Start writing..." />
+    <div ref={editorRef} contentEditable={!readOnly} suppressContentEditableWarning onInput={event => emit(cleanHtml(event.currentTarget.innerHTML))} onKeyUp={refreshState} onMouseUp={refreshState} className="rich-editor-surface" role="textbox" aria-multiline="true" aria-label="Document body" aria-readonly={readOnly || undefined} data-placeholder="Start writing..." />
+    {!readOnly && !hideToolbar && <div className="rich-editor-statusbar"><span>{wordCount.words} {wordCount.words === 1 ? 'word' : 'words'}</span><span>{wordCount.characters} characters</span></div>}
   </div>
 }
 
@@ -88,33 +184,156 @@ function DocumentEditorSurface({ value, onChange, readOnly = false }) {
   return <div className="document-page-wrap"><div className="document-ruler" aria-hidden="true"><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span></div><RichEditor value={value} onChange={onChange} readOnly={readOnly} /></div>
 }
 
-function spreadsheetDisplayValue(value, rows) {
-  if (typeof value !== 'string' || !value.startsWith('=')) return value || ''
-  const match = value.match(/^=(SUM|AVERAGE)\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)$/i)
-  if (!match || match[2] !== match[4]) return value
-  const column = match[2].toUpperCase().charCodeAt(0) - 65
-  const start = Number(match[3]) - 1
-  const end = Number(match[5]) - 1
-  const numbers = rows.slice(start, end + 1).map(row => Number(row[column])).filter(Number.isFinite)
-  if (!numbers.length) return '0'
-  const total = numbers.reduce((sum, number) => sum + number, 0)
-  return String(match[1].toUpperCase() === 'AVERAGE' ? total / numbers.length : total)
+// Cell styles are stored as free-form JSON and handed straight to React's style
+// prop, so only properties we know are safe to render are let through.
+const CELL_STYLE_KEYS = ['fontWeight', 'fontStyle', 'textDecoration', 'color', 'backgroundColor', 'textAlign']
+
+function cellStyle(stored) {
+  if (!stored || typeof stored !== 'object') return undefined
+  const style = {}
+  // Sheets saved before styles were keyed by CSS property used {bold: true}.
+  if (stored.bold === true) style.fontWeight = 'bold'
+  CELL_STYLE_KEYS.forEach(key => { if (typeof stored[key] === 'string') style[key] = stored[key] })
+  return Object.keys(style).length ? style : undefined
 }
 
 function SpreadsheetEditor({ value, onChange, readOnly = false, workspaceId, documentId, onImport }) {
   const sheets = value?.sheets?.length ? value.sheets : [{ name: 'Sheet 1', rows: [['', '', ''], ['', '', ''], ['', '', '']] }]
   const [activeSheet, setActiveSheet] = useState(0)
   const [selectedCell, setSelectedCell] = useState({ row: 0, column: 0 })
-  const sheet = sheets[Math.min(activeSheet, sheets.length - 1)]
-  const updateCell = (rowIndex, columnIndex, cellValue) => onChange({ sheets: sheets.map((item, index) => index === activeSheet ? { ...item, rows: item.rows.map((row, r) => r === rowIndex ? row.map((cell, c) => c === columnIndex ? cellValue : cell) : row) } : item) })
-  const addRow = () => onChange({ sheets: sheets.map((item, index) => index === activeSheet ? { ...item, rows: [...item.rows, Array(item.rows[0]?.length || 3).fill('')] } : item) })
-  const addColumn = () => onChange({ sheets: sheets.map((item, index) => index === activeSheet ? { ...item, rows: item.rows.map(row => [...row, '']) } : item) })
-  const addSheet = () => { const next = [...sheets, { name: `Sheet ${sheets.length + 1}`, rows: [['', '', ''], ['', '', ''], ['', '', '']] }]; onChange({ sheets: next }); setActiveSheet(next.length - 1) }
-  const toggleCellStyle = (key, style) => onChange({ sheets: sheets.map((item, index) => index === activeSheet ? { ...item, cell_styles: { ...(item.cell_styles || {}), [key]: { ...(item.cell_styles?.[key] || {}), ...style } } } : item) })
-  const exportCsv = () => { const csv = sheet.rows.map(row => row.map(cell => `"${String(cell || '').replaceAll('"', '""')}"`).join(',')).join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `${sheet.name}.csv`; link.click(); URL.revokeObjectURL(url) }
+  const [renaming, setRenaming] = useState(false)
+  const cellRefs = useRef(new Map())
+  const sheetIndex = Math.min(activeSheet, sheets.length - 1)
+  const sheet = sheets[sheetIndex]
+  const columnCount = sheet.rows.reduce((widest, row) => Math.max(widest, row.length), 0)
+  // One pass over the sheet per change rather than one evaluation per cell per
+  // render, which is what the old per-cell helper cost.
+  const evaluated = useMemo(() => evaluateSheet(sheet.rows), [sheet.rows])
+  const selectedRaw = sheet.rows[selectedCell.row]?.[selectedCell.column] ?? ''
+
+  const patchSheet = patch => onChange({ ...value, sheets: sheets.map((item, index) => index === sheetIndex ? { ...item, ...(typeof patch === 'function' ? patch(item) : patch) } : item) })
+  const updateCell = (rowIndex, columnIndex, cellValue) => patchSheet(item => ({ rows: item.rows.map((row, r) => r === rowIndex ? row.map((cell, c) => c === columnIndex ? cellValue : cell) : row) }))
+  const addRow = () => patchSheet(item => ({ rows: [...item.rows, Array(columnCount || 3).fill('')] }))
+  const addColumn = () => patchSheet(item => ({ rows: item.rows.map(row => [...row, '']) }))
+  const deleteRow = () => {
+    if (sheet.rows.length <= 1) return
+    patchSheet(item => ({ rows: item.rows.filter((row, index) => index !== selectedCell.row) }))
+    setSelectedCell(current => ({ ...current, row: Math.max(0, Math.min(current.row, sheet.rows.length - 2)) }))
+  }
+  const deleteColumn = () => {
+    if (columnCount <= 1) return
+    patchSheet(item => ({ rows: item.rows.map(row => row.filter((cell, index) => index !== selectedCell.column)) }))
+    setSelectedCell(current => ({ ...current, column: Math.max(0, Math.min(current.column, columnCount - 2)) }))
+  }
+  const addSheet = () => { const next = [...sheets, { name: `Sheet ${sheets.length + 1}`, rows: [['', '', ''], ['', '', ''], ['', '', '']] }]; onChange({ ...value, sheets: next }); setActiveSheet(next.length - 1); setSelectedCell({ row: 0, column: 0 }) }
+  const deleteSheet = () => {
+    if (sheets.length <= 1) return
+    onChange({ ...value, sheets: sheets.filter((item, index) => index !== sheetIndex) })
+    setActiveSheet(Math.max(0, sheetIndex - 1))
+    setSelectedCell({ row: 0, column: 0 })
+  }
+  const renameSheet = name => patchSheet({ name: name.slice(0, 60) || 'Sheet' })
+  const toggleCellStyle = (property, on, off = '') => {
+    const key = `${selectedCell.row}:${selectedCell.column}`
+    patchSheet(item => {
+      const current = cellStyle(item.cell_styles?.[key]) || {}
+      return { cell_styles: { ...(item.cell_styles || {}), [key]: { ...current, [property]: current[property] === on ? off : on } } }
+    })
+  }
+  const setCellStyle = (property, styleValue) => {
+    const key = `${selectedCell.row}:${selectedCell.column}`
+    patchSheet(item => ({ cell_styles: { ...(item.cell_styles || {}), [key]: { ...(cellStyle(item.cell_styles?.[key]) || {}), [property]: styleValue } } }))
+  }
+
+  const focusCell = (row, column) => {
+    if (row < 0 || column < 0 || row >= sheet.rows.length || column >= columnCount) return
+    setSelectedCell({ row, column })
+    const input = cellRefs.current.get(`${row}:${column}`)
+    if (input) { input.focus(); input.select() }
+  }
+  // Arrow keys move between cells the way a spreadsheet does. Left and right
+  // only move when the caret is already at the edge of the text, so they still
+  // work for editing the cell you are in.
+  const handleKeyDown = (event, row, column) => {
+    const input = event.currentTarget
+    const atStart = input.selectionStart === 0 && input.selectionEnd === 0
+    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length
+    if (event.key === 'ArrowUp') { event.preventDefault(); focusCell(row - 1, column) }
+    else if (event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); focusCell(row + 1, column) }
+    else if (event.key === 'ArrowLeft' && atStart) { event.preventDefault(); focusCell(row, column - 1) }
+    else if (event.key === 'ArrowRight' && atEnd) { event.preventDefault(); focusCell(row, column + 1) }
+  }
+
+  const exportCsv = () => { const csv = evaluated.map(row => row.map(cell => `"${String(cell || '').replaceAll('"', '""')}"`).join(',')).join('\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `${sheet.name}.csv`; link.click(); URL.revokeObjectURL(url) }
   const exportXlsx = async () => { const response = await fetch(`/api/workspaces/${workspaceId}/documents/${documentId}/export/`, { credentials: 'include', headers: headers(workspaceId) }); if (!response.ok) throw new Error('Spreadsheet export failed.'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = 'spreadsheet.xlsx'; link.click(); URL.revokeObjectURL(url) }
   const importFile = async event => { const file = event.target.files?.[0]; event.target.value = ''; if (!file || !workspaceId) return; const form = new FormData(); form.append('file', file); const response = await fetch(`/api/workspaces/${workspaceId}/spreadsheets/import/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body: form }); const data = await readJsonResponse(response, 'Spreadsheet import failed.'); if (!response.ok) throw new Error(data.error || 'Spreadsheet import failed.'); onImport(data) }
-  return <div className="spreadsheet-editor"><div className="spreadsheet-tabs">{sheets.map((item, index) => <button type="button" className={index === activeSheet ? "active" : ""} onClick={() => setActiveSheet(index)} key={item.name + index}>{item.name}</button>)}</div><div className="spreadsheet-toolbar"><strong>{sheet.name}</strong><button type="button" className="secondary-button" onClick={addSheet} disabled={readOnly}>Add sheet</button><button type="button" className="secondary-button" onClick={addRow} disabled={readOnly}>Add row</button><button type="button" className="secondary-button" onClick={addColumn} disabled={readOnly}>Add column</button><button type="button" className="secondary-button" onClick={() => toggleCellStyle(selectedCell.row + ":" + selectedCell.column, { bold: true })} disabled={readOnly}>Bold cell</button><button type="button" className="secondary-button" onClick={exportCsv}>Export CSV</button><button type="button" className="secondary-button" onClick={() => exportXlsx().catch(error => console.error('Spreadsheet export failed', error))}>Export XLSX</button><label className="secondary-button">Import CSV/XLSX<input type="file" accept=".csv,.xlsx" hidden onChange={event => importFile(event).catch(error => console.error('Spreadsheet import failed', error))} /></label><span>Enter formulas such as =SUM(A1:A3)</span></div><div className="spreadsheet-scroll"><table><tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex}><th>{rowIndex + 1}</th>{row.map((cell, columnIndex) => <td key={columnIndex} style={sheet.cell_styles?.[rowIndex + ':' + columnIndex]}><input value={cell || ''} onFocus={() => setSelectedCell({ row: rowIndex, column: columnIndex })} onChange={event => updateCell(rowIndex, columnIndex, event.target.value)} readOnly={readOnly} aria-label={`Row ${rowIndex + 1}, column ${columnIndex + 1}`} />{typeof cell === 'string' && cell.startsWith('=') && <small className="spreadsheet-formula-result">{spreadsheetDisplayValue(cell, sheet.rows)}</small>}</td>)}</tr>)}</tbody></table></div></div>
+
+  return <div className="spreadsheet-editor">
+    <div className="spreadsheet-tabs">
+      {sheets.map((item, index) => <button type="button" className={index === sheetIndex ? 'active' : ''} onClick={() => { setActiveSheet(index); setSelectedCell({ row: 0, column: 0 }) }} key={item.name + index}>{item.name}</button>)}
+      {!readOnly && <button type="button" className="spreadsheet-tab-add" onClick={addSheet} aria-label="Add sheet" title="Add sheet"><Plus size={13} /></button>}
+    </div>
+    <div className="spreadsheet-formula-bar">
+      <span className="spreadsheet-cell-name">{columnLabel(selectedCell.column)}{selectedCell.row + 1}</span>
+      <input
+        className="spreadsheet-formula-input"
+        value={selectedRaw}
+        onChange={event => updateCell(selectedCell.row, selectedCell.column, event.target.value)}
+        placeholder="Value, or a formula such as =SUM(A1:A3)"
+        readOnly={readOnly}
+        aria-label="Formula bar"
+      />
+    </div>
+    <div className="spreadsheet-toolbar">
+      {renaming && !readOnly
+        ? <input className="spreadsheet-name-input" value={sheet.name} autoFocus onChange={event => renameSheet(event.target.value)} onBlur={() => setRenaming(false)} onKeyDown={event => { if (event.key === 'Enter' || event.key === 'Escape') setRenaming(false) }} aria-label="Sheet name" />
+        : <button type="button" className="spreadsheet-name-button" onClick={() => setRenaming(true)} disabled={readOnly} title="Rename sheet">{sheet.name}</button>}
+      <button type="button" className="secondary-button" onClick={addRow} disabled={readOnly}>Add row</button>
+      <button type="button" className="secondary-button" onClick={addColumn} disabled={readOnly}>Add column</button>
+      <button type="button" className="secondary-button" onClick={deleteRow} disabled={readOnly || sheet.rows.length <= 1}>Delete row {selectedCell.row + 1}</button>
+      <button type="button" className="secondary-button" onClick={deleteColumn} disabled={readOnly || columnCount <= 1}>Delete column {columnLabel(selectedCell.column)}</button>
+      <button type="button" className="secondary-button" onClick={() => toggleCellStyle('fontWeight', 'bold', 'normal')} disabled={readOnly} title="Bold selected cell"><Bold size={14} /></button>
+      <button type="button" className="secondary-button" onClick={() => toggleCellStyle('fontStyle', 'italic', 'normal')} disabled={readOnly} title="Italic selected cell"><Italic size={14} /></button>
+      {['left', 'center', 'right'].map(align => <button type="button" className="secondary-button" key={align} onClick={() => setCellStyle('textAlign', align)} disabled={readOnly} title={`Align ${align}`}>{align === 'left' ? <AlignLeft size={14} /> : align === 'center' ? <AlignCenter size={14} /> : <AlignRight size={14} />}</button>)}
+      <label className="rich-color-control" title="Cell text color"><input type="color" defaultValue="#172033" onChange={event => setCellStyle('color', event.target.value)} disabled={readOnly} /><span>A</span></label>
+      <button type="button" className="secondary-button" onClick={deleteSheet} disabled={readOnly || sheets.length <= 1}>Delete sheet</button>
+      <button type="button" className="secondary-button" onClick={exportCsv}>Export CSV</button>
+      <button type="button" className="secondary-button" onClick={() => exportXlsx().catch(error => console.error('Spreadsheet export failed', error))}>Export XLSX</button>
+      <label className="secondary-button">Import CSV/XLSX<input type="file" accept=".csv,.xlsx" hidden onChange={event => importFile(event).catch(error => console.error('Spreadsheet import failed', error))} /></label>
+    </div>
+    <div className="spreadsheet-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th className="spreadsheet-corner" aria-label="Sheet" />
+            {Array.from({ length: columnCount }, (unused, index) => <th key={index} className={index === selectedCell.column ? 'active' : ''} scope="col">{columnLabel(index)}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {sheet.rows.map((row, rowIndex) => <tr key={rowIndex}>
+            <th className={rowIndex === selectedCell.row ? 'active' : ''} scope="row">{rowIndex + 1}</th>
+            {Array.from({ length: columnCount }, (unused, columnIndex) => {
+              const raw = row[columnIndex] ?? ''
+              const isFormula = typeof raw === 'string' && raw.startsWith('=')
+              const selected = rowIndex === selectedCell.row && columnIndex === selectedCell.column
+              return <td key={columnIndex} className={selected ? 'selected' : ''} style={cellStyle(sheet.cell_styles?.[`${rowIndex}:${columnIndex}`])}>
+                <input
+                  ref={node => { if (node) cellRefs.current.set(`${rowIndex}:${columnIndex}`, node); else cellRefs.current.delete(`${rowIndex}:${columnIndex}`) }}
+                  value={raw}
+                  onFocus={() => setSelectedCell({ row: rowIndex, column: columnIndex })}
+                  onChange={event => updateCell(rowIndex, columnIndex, event.target.value)}
+                  onKeyDown={event => handleKeyDown(event, rowIndex, columnIndex)}
+                  readOnly={readOnly}
+                  aria-label={`${columnLabel(columnIndex)}${rowIndex + 1}`}
+                />
+                {isFormula && <small className={FORMULA_ERRORS.includes(evaluated[rowIndex]?.[columnIndex]) ? 'spreadsheet-formula-result is-error' : 'spreadsheet-formula-result'}>{evaluated[rowIndex]?.[columnIndex]}</small>}
+              </td>
+            })}
+          </tr>)}
+        </tbody>
+      </table>
+    </div>
+  </div>
 }
 
 function FileDeleteDialog({ target, onCancel, onConfirm }) {
@@ -128,10 +347,27 @@ function FileRestoreDialog({ target, onCancel, onConfirm }) {
   return <div className="modal-backdrop" onMouseDown={onCancel}><form className="modal file-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="file-restore-title" onSubmit={event => { event.preventDefault(); onConfirm() }} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Files</p><h2 id="file-restore-title">Restore this version?</h2></div><button type="button" className="close-button" onClick={onCancel} aria-label="Close restore dialog"><X size={18} /></button></div><p className="file-delete-copy">The version from {new Date(target.created_at).toLocaleString()} will become the current document. The current version remains in history.</p><div className="file-delete-actions"><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button><button type="submit" className="primary-button">Restore</button></div></form></div>
 }
 
-function PresentationToolbar({ readOnly, onAddTextBox, onAddColorBox, onAddImage, onAddTitle, onAddIcon, onResizeSlide }) {
+function PresentationToolbar({ readOnly, selectedBlock, onAddTextBox, onAddColorBox, onAddImage, onUploadImage, onAddIcon, onAddTitle, onResizeSlide, onBringForward, onSendBackward, onDeleteBlock }) {
   const format = command => { document.execCommand(command, false, null) }
   const button = (label, command) => <button type="button" className="presentation-tool-button" onMouseDown={event => event.preventDefault()} onClick={() => format(command)} disabled={readOnly}>{label}</button>
-  return <div className="presentation-toolbar" role="toolbar" aria-label="Presentation tools"><span className="presentation-toolbar-label">Slide tools</span><button type="button" className="presentation-tool-button presentation-add-text" onClick={onAddTextBox} disabled={readOnly}>Add text box</button><button type="button" className="presentation-tool-button" onClick={onAddTitle} disabled={readOnly}>Add title</button><button type="button" className="presentation-tool-button" onClick={onAddColorBox} disabled={readOnly}>Color box</button><button type="button" className="presentation-tool-button" onClick={onAddImage} disabled={readOnly}>Add image</button><button type="button" className="presentation-tool-button" onClick={onAddIcon} disabled={readOnly}>Add icon</button><button type="button" className="presentation-tool-button" onClick={onResizeSlide} disabled={readOnly}>Resize slide</button>{button('Bold', 'bold')}{button('Italic', 'italic')}{button('Underline', 'underline')}{button('Bullets', 'insertUnorderedList')}{button('Align left', 'justifyLeft')}{button('Center', 'justifyCenter')}{button('Align right', 'justifyRight')}</div>
+  // Ordering and deletion act on whichever element was last clicked, so they
+  // stay disabled until there is something for them to act on.
+  const hasSelection = Boolean(selectedBlock)
+  return <div className="presentation-toolbar" role="toolbar" aria-label="Presentation tools">
+    <span className="presentation-toolbar-label">Slide tools</span>
+    <button type="button" className="presentation-tool-button presentation-add-text" onClick={onAddTextBox} disabled={readOnly}>Add text box</button>
+    <button type="button" className="presentation-tool-button" onClick={onAddTitle} disabled={readOnly}>Add title</button>
+    <button type="button" className="presentation-tool-button" onClick={onAddColorBox} disabled={readOnly}>Color box</button>
+    <label className={`presentation-tool-button ${readOnly ? 'is-disabled' : ''}`} title="Upload an image from this computer">Upload image<input type="file" accept="image/*" hidden disabled={readOnly} onChange={onUploadImage} /></label>
+    <button type="button" className="presentation-tool-button" onClick={onAddImage} disabled={readOnly}>Image by link</button>
+    <button type="button" className="presentation-tool-button" onClick={onAddIcon} disabled={readOnly}>Add icon</button>
+    <button type="button" className="presentation-tool-button" onClick={onResizeSlide} disabled={readOnly}>Resize slide</button>
+    {button('Bold', 'bold')}{button('Italic', 'italic')}{button('Underline', 'underline')}{button('Bullets', 'insertUnorderedList')}
+    {button('Align left', 'justifyLeft')}{button('Center', 'justifyCenter')}{button('Align right', 'justifyRight')}
+    <button type="button" className="presentation-tool-button" onClick={onBringForward} disabled={readOnly || !hasSelection} title="Bring the selected element in front of the others">Bring forward</button>
+    <button type="button" className="presentation-tool-button" onClick={onSendBackward} disabled={readOnly || !hasSelection} title="Send the selected element behind the others">Send back</button>
+    <button type="button" className="presentation-tool-button" onClick={onDeleteBlock} disabled={readOnly || !hasSelection} title="Delete the selected element">Delete element</button>
+  </div>
 }
 
 function promptForImage(label) {
@@ -146,9 +382,14 @@ function promptForImage(label) {
 // because those two live in slide.layout rather than in a collection.
 const SLIDE_COLLECTIONS = { text: 'text_boxes', color: 'color_boxes', image: 'images', icon: 'icons' }
 
-function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
+// Base stacking order when an element has never been reordered, so freshly
+// added elements land above the built-in title and body rather than behind them.
+const BASE_LAYER = { title: 2, body: 1, color: 3, image: 4, icon: 5, text: 6 }
+
+function PresentationSlideEditor({ slide, onChange, readOnly = false, workspaceId, onStatus }) {
   const canvasRef = useRef(null)
   const dragState = useRef(null)
+  const [selectedBlock, setSelectedBlock] = useState(null)
   const layout = {
     title: { x: 7, y: 7, width: 86, height: 18 },
     body: { x: 7, y: 29, width: 86, height: 62 },
@@ -157,7 +398,6 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
   const textBoxes = slide.text_boxes || []
   const colorBoxes = slide.color_boxes || []
   const images = slide.images || []
-
   const icons = slide.icons || []
   // Every placed element is addressed as "<prefix>-<index>" so one set of drag,
   // resize, and delete handlers covers text boxes, color boxes, images, and
@@ -181,10 +421,25 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
     if (!collection) return
     const index = Number(block.split('-')[1])
     onChange({ ...slide, [collection]: (slide[collection] || []).filter((item, itemIndex) => itemIndex !== index) })
+    setSelectedBlock(null)
   }
+
+  const layerOf = (block, item) => Number.isFinite(item?.z) ? item.z : BASE_LAYER[block.split('-')[0]] || 1
+  const allLayers = () => [
+    layerOf('title', layout.title), layerOf('body', layout.body),
+    ...textBoxes.map(item => layerOf('text', item)), ...colorBoxes.map(item => layerOf('color', item)),
+    ...images.map(item => layerOf('image', item)), ...icons.map(item => layerOf('icon', item)),
+  ]
+  const restack = direction => {
+    if (!selectedBlock) return
+    const layers = allLayers()
+    updateLayout(selectedBlock, { z: direction > 0 ? Math.max(...layers) + 1 : Math.min(...layers) - 1 })
+  }
+
   const startDrag = (event, block) => {
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
+    setSelectedBlock(block)
     const blockLayout = blockLayoutFor(block)
     dragState.current = { block, startX: event.clientX, startY: event.clientY, x: blockLayout.x, y: blockLayout.y }
   }
@@ -206,30 +461,128 @@ function PresentationSlideEditor({ slide, onChange, readOnly = false }) {
     const blockLayout = blockLayoutFor(block)
     updateLayout(block, { width: Math.min(100 - blockLayout.x, (elementBounds.width / bounds.width) * 100), height: Math.min(100 - blockLayout.y, (elementBounds.height / bounds.height) * 100) })
   }
-  const blockStyle = block => ({ left: `${layout[block].x}%`, top: `${layout[block].y}%`, width: `${layout[block].width}%`, height: `${layout[block].height}%` })
+
+  // Arrow keys nudge the selected element. Typing inside a text box must not
+  // move it, so anything originating in a field or editable surface is ignored -
+  // which still leaves the drag handle, a plain button, as the way to select an
+  // element and then position it from the keyboard.
+  const handleCanvasKeyDown = event => {
+    if (readOnly || !selectedBlock) return
+    const target = event.target
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+    if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); removeBlock(selectedBlock); return }
+    const step = event.shiftKey ? 0.25 : 1
+    const moves = { ArrowUp: [0, -step], ArrowDown: [0, step], ArrowLeft: [-step, 0], ArrowRight: [step, 0] }
+    const move = moves[event.key]
+    if (!move) return
+    event.preventDefault()
+    const blockLayout = blockLayoutFor(selectedBlock)
+    if (!blockLayout) return
+    updateLayout(selectedBlock, {
+      x: Math.max(0, Math.min(100 - blockLayout.width, blockLayout.x + move[0])),
+      y: Math.max(0, Math.min(100 - blockLayout.height, blockLayout.y + move[1])),
+    })
+  }
+
+  const blockStyle = block => ({ left: `${layout[block].x}%`, top: `${layout[block].y}%`, width: `${layout[block].width}%`, height: `${layout[block].height}%`, zIndex: layerOf(block, layout[block]) })
+  const placedStyle = (block, item, extra = {}) => ({ left: `${item.x}%`, top: `${item.y}%`, width: `${item.width}%`, height: `${item.height}%`, zIndex: layerOf(block, item), ...extra })
+  const blockClass = (block, base) => `${base}${selectedBlock === block ? ' is-selected' : ''}`
   const dragHandle = (block, label) => <button type="button" className="slide-drag-handle" onPointerDown={event => startDrag(event, block)} onPointerMove={moveDrag} onPointerUp={finishDrag} disabled={readOnly}>{label}</button>
   const blockControls = (block, label) => readOnly ? null : <>{dragHandle(block, label)}<button type="button" className="slide-delete-handle" onClick={() => removeBlock(block)} aria-label={`Delete ${label.replace('Drag ', '')}`} title="Delete"><X size={12} /></button></>
 
   const addTextBox = () => onChange({ ...slide, text_boxes: [...textBoxes, { id: `text-${Date.now()}`, text: 'New text box', x: 12, y: 18 + (textBoxes.length * 8) % 60, width: 34, height: 16 }] })
   const addTitle = () => onChange({ ...slide, text_boxes: [...textBoxes, { id: `title-${Date.now()}`, text: 'New title', x: 12, y: 8, width: 60, height: 14 }] })
   const addColorBox = () => onChange({ ...slide, color_boxes: [...colorBoxes, { id: `color-${Date.now()}`, x: 50, y: 20 + (colorBoxes.length * 8) % 60, width: 22, height: 18, color: '#dbeafe' }] })
-  const addImage = () => { const url = promptForImage('Image URL'); if (url) onChange({ ...slide, images: [...images, { id: `image-${Date.now()}`, url, x: 42, y: 20, width: 28, height: 28 }] }) }
+  const addImageFromUrl = url => onChange({ ...slide, images: [...images, { id: `image-${Date.now()}`, url, x: 42, y: 20, width: 28, height: 28 }] })
+  const addImage = () => { const url = promptForImage('Image URL'); if (url) addImageFromUrl(url) }
   const addIcon = () => { const url = promptForImage('Icon image URL'); if (url) onChange({ ...slide, icons: [...icons, { id: `icon-${Date.now()}`, url, x: 75, y: 10, width: 10, height: 10 }] }) }
+  // Slides used to accept images only as a pasted link. Uploads go through the
+  // workspace file store the rest of the app already uses, so the picture is
+  // kept with the workspace instead of depending on somebody else's server.
+  const uploadImage = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !workspaceId) return
+    onStatus?.('Uploading image…')
+    const form = new FormData()
+    form.append('file', file)
+    const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body: form })
+    const data = await readJsonResponse(response, 'The image could not be uploaded.')
+    if (!response.ok || !data.file?.url) throw new Error(data.error || 'The image could not be uploaded.')
+    addImageFromUrl(data.file.url)
+    onStatus?.('Image added to the slide.')
+  }
   const resizeSlide = () => onChange({ ...slide, aspect_ratio: slide.aspect_ratio === '4/3' ? '16/9' : '4/3' })
-  return <div className="presentation-slide-shell"><PresentationToolbar readOnly={readOnly} onAddTextBox={addTextBox} onAddTitle={addTitle} onAddColorBox={addColorBox} onAddImage={addImage} onAddIcon={addIcon} onResizeSlide={resizeSlide} /><div className="presentation-slide" style={{ aspectRatio: slide.aspect_ratio || '16/9' }} ref={canvasRef}>
-    <section className="slide-editable-block slide-title-block" style={blockStyle('title')} onPointerUp={event => captureSize(event, 'title')}>
-      {!readOnly && dragHandle('title', 'Drag title')}
-      <input value={slide.title || ''} onChange={event => onChange({ ...slide, title: event.target.value })} placeholder="Slide title" readOnly={readOnly} />
-    </section>
-    <section className="slide-editable-block slide-body-block" style={blockStyle('body')} onPointerUp={event => captureSize(event, 'body')}>
-      {!readOnly && dragHandle('body', 'Drag text')}
-      <RichEditor value={slide.body || ''} onChange={body => onChange({ ...slide, body })} compact hideToolbar readOnly={readOnly} />
-    </section>
-    {textBoxes.map((box, index) => <section key={box.id || index} className="slide-editable-block slide-text-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%` }} onPointerUp={event => captureSize(event, `text-${index}`)}>{blockControls(`text-${index}`, 'Drag text')}<RichEditor value={box.text || ''} onChange={text => onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item) })} compact hideToolbar readOnly={readOnly} /></section>)}
-    {colorBoxes.map((box, index) => <section key={box.id || index} className="slide-editable-block slide-color-box" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, background: box.color }} onPointerUp={event => captureSize(event, `color-${index}`)}>{blockControls(`color-${index}`, 'Drag box')}{!readOnly && <input type="color" className="slide-color-input" value={box.color || '#dbeafe'} onChange={event => updateLayout(`color-${index}`, { color: event.target.value })} aria-label="Box color" />}</section>)}
-    {images.map((image, index) => <section key={image.id || index} className="slide-editable-block slide-image-box" style={{ left: `${image.x}%`, top: `${image.y}%`, width: `${image.width}%`, height: `${image.height}%` }} onPointerUp={event => captureSize(event, `image-${index}`)}>{blockControls(`image-${index}`, 'Drag image')}<img src={image.url} alt={image.alt || ''} /></section>)}
-    {icons.map((icon, index) => <section key={icon.id || index} className="slide-editable-block slide-icon-box" style={{ left: `${icon.x}%`, top: `${icon.y}%`, width: `${icon.width}%`, height: `${icon.height}%` }} onPointerUp={event => captureSize(event, `icon-${index}`)}>{blockControls(`icon-${index}`, 'Drag icon')}<img src={icon.url} alt="" /></section>)}
-  </div></div>
+
+  return <div className="presentation-slide-shell">
+    <PresentationToolbar
+      readOnly={readOnly}
+      selectedBlock={selectedBlock}
+      onAddTextBox={addTextBox}
+      onAddTitle={addTitle}
+      onAddColorBox={addColorBox}
+      onAddImage={addImage}
+      onUploadImage={event => uploadImage(event).catch(error => onStatus?.(error.message || 'The image could not be uploaded.'))}
+      onAddIcon={addIcon}
+      onResizeSlide={resizeSlide}
+      onBringForward={() => restack(1)}
+      onSendBackward={() => restack(-1)}
+      onDeleteBlock={() => selectedBlock && removeBlock(selectedBlock)}
+    />
+    <div className="presentation-slide" style={{ aspectRatio: slide.aspect_ratio || '16/9' }} ref={canvasRef} onKeyDown={handleCanvasKeyDown}>
+      <section className={blockClass('title', 'slide-editable-block slide-title-block')} style={blockStyle('title')} onPointerDown={() => setSelectedBlock('title')} onPointerUp={event => captureSize(event, 'title')}>
+        {!readOnly && dragHandle('title', 'Drag title')}
+        <input value={slide.title || ''} onChange={event => onChange({ ...slide, title: event.target.value })} placeholder="Slide title" readOnly={readOnly} />
+      </section>
+      <section className={blockClass('body', 'slide-editable-block slide-body-block')} style={blockStyle('body')} onPointerDown={() => setSelectedBlock('body')} onPointerUp={event => captureSize(event, 'body')}>
+        {!readOnly && dragHandle('body', 'Drag text')}
+        <RichEditor value={slide.body || ''} onChange={body => onChange({ ...slide, body })} compact hideToolbar readOnly={readOnly} />
+      </section>
+      {textBoxes.map((box, index) => <section key={box.id || index} className={blockClass(`text-${index}`, 'slide-editable-block slide-text-box')} style={placedStyle(`text-${index}`, box)} onPointerDown={() => setSelectedBlock(`text-${index}`)} onPointerUp={event => captureSize(event, `text-${index}`)}>{blockControls(`text-${index}`, 'Drag text')}<RichEditor value={box.text || ''} onChange={text => onChange({ ...slide, text_boxes: textBoxes.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item) })} compact hideToolbar readOnly={readOnly} /></section>)}
+      {colorBoxes.map((box, index) => <section key={box.id || index} className={blockClass(`color-${index}`, 'slide-editable-block slide-color-box')} style={placedStyle(`color-${index}`, box, { background: box.color })} onPointerDown={() => setSelectedBlock(`color-${index}`)} onPointerUp={event => captureSize(event, `color-${index}`)}>{blockControls(`color-${index}`, 'Drag box')}{!readOnly && <input type="color" className="slide-color-input" value={box.color || '#dbeafe'} onChange={event => updateLayout(`color-${index}`, { color: event.target.value })} aria-label="Box color" />}</section>)}
+      {images.map((image, index) => <section key={image.id || index} className={blockClass(`image-${index}`, 'slide-editable-block slide-image-box')} style={placedStyle(`image-${index}`, image)} onPointerDown={() => setSelectedBlock(`image-${index}`)} onPointerUp={event => captureSize(event, `image-${index}`)}>{blockControls(`image-${index}`, 'Drag image')}<img src={image.url} alt={image.alt || ''} /></section>)}
+      {icons.map((icon, index) => <section key={icon.id || index} className={blockClass(`icon-${index}`, 'slide-editable-block slide-icon-box')} style={placedStyle(`icon-${index}`, icon)} onPointerDown={() => setSelectedBlock(`icon-${index}`)} onPointerUp={event => captureSize(event, `icon-${index}`)}>{blockControls(`icon-${index}`, 'Drag icon')}<img src={icon.url} alt="" /></section>)}
+    </div>
+  </div>
+}
+
+// Full-screen playback. The editor chrome - handles, colour pickers, toolbars -
+// is all absent here, so what a reader sees is only the slide itself.
+function PresentationPlayer({ slides, startIndex = 0, onClose }) {
+  const [index, setIndex] = useState(startIndex)
+  const shellRef = useRef(null)
+  const slide = slides[Math.min(index, slides.length - 1)] || { title: '', body: '' }
+  const layout = { title: { x: 7, y: 7, width: 86, height: 18 }, body: { x: 7, y: 29, width: 86, height: 62 }, ...(slide.layout || {}) }
+  const layerOf = (prefix, item) => Number.isFinite(item?.z) ? item.z : BASE_LAYER[prefix] || 1
+  const placed = (prefix, item, extra = {}) => ({ left: `${item.x}%`, top: `${item.y}%`, width: `${item.width}%`, height: `${item.height}%`, zIndex: layerOf(prefix, item), ...extra })
+
+  useEffect(() => { shellRef.current?.focus() }, [])
+  useEffect(() => {
+    const onKey = event => {
+      if (event.key === 'Escape') onClose()
+      else if (['ArrowRight', 'ArrowDown', ' ', 'PageDown'].includes(event.key)) { event.preventDefault(); setIndex(current => Math.min(slides.length - 1, current + 1)) }
+      else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(event.key)) { event.preventDefault(); setIndex(current => Math.max(0, current - 1)) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [slides.length, onClose])
+
+  return <div className="presentation-player" role="dialog" aria-modal="true" aria-label="Presentation" ref={shellRef} tabIndex={-1}>
+    <div className="presentation-player-stage" style={{ aspectRatio: slide.aspect_ratio || '16/9' }}>
+      <section className="player-block" style={placed('title', layout.title)}><h2>{slide.title || ''}</h2></section>
+      <section className="player-block" style={placed('body', layout.body)}><div dangerouslySetInnerHTML={{ __html: cleanHtml(slide.body || '') }} /></section>
+      {(slide.color_boxes || []).map((box, i) => <section key={box.id || i} className="player-block" style={placed('color', box, { background: box.color })} />)}
+      {(slide.text_boxes || []).map((box, i) => <section key={box.id || i} className="player-block" style={placed('text', box)}><div dangerouslySetInnerHTML={{ __html: cleanHtml(box.text || '') }} /></section>)}
+      {(slide.images || []).map((image, i) => <section key={image.id || i} className="player-block" style={placed('image', image)}><img src={image.url} alt={image.alt || ''} /></section>)}
+      {(slide.icons || []).map((icon, i) => <section key={icon.id || i} className="player-block" style={placed('icon', icon)}><img src={icon.url} alt="" /></section>)}
+    </div>
+    <div className="presentation-player-bar">
+      <button type="button" onClick={() => setIndex(current => Math.max(0, current - 1))} disabled={index === 0}>Previous</button>
+      <span>{Math.min(index, slides.length - 1) + 1} / {slides.length}</span>
+      <button type="button" onClick={() => setIndex(current => Math.min(slides.length - 1, current + 1))} disabled={index >= slides.length - 1}>Next</button>
+      <button type="button" className="presentation-player-close" onClick={onClose}>Exit</button>
+    </div>
+  </div>
 }
 
 export function FilesWorkspaceView({ workspaceId }) {
@@ -255,6 +608,7 @@ export function FilesWorkspaceView({ workspaceId }) {
   const [dragActive, setDragActive] = useState(false)
   const [conflict, setConflict] = useState(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [presenting, setPresenting] = useState(false)
   const [revisions, setRevisions] = useState([])
   const [shareUserId, setShareUserId] = useState('')
   const [sharePermission, setSharePermission] = useState('comment')
@@ -477,14 +831,23 @@ export function FilesWorkspaceView({ workspaceId }) {
     const canEdit = selected.permission === 'edit'
     const canComment = ['comment', 'edit'].includes(selected.permission)
     const updateSlide = patch => { setSlides(current => current.map((slide, index) => index === activeSlide ? { ...slide, ...patch } : slide)); setDirty(true) }
+    const duplicateSlide = index => { setSlides(current => [...current.slice(0, index + 1), { ...structuredClone(current[index]), title: `${current[index].title || `Slide ${index + 1}`} copy` }, ...current.slice(index + 1)]); setActiveSlide(index + 1); setDirty(true) }
+    // A deck always keeps one slide, so removing the last one empties it rather
+    // than leaving the editor with nothing to render.
+    const deleteSlide = index => {
+      setSlides(current => current.length <= 1 ? [{ title: 'New slide', body: '' }] : current.filter((slide, slideIndex) => slideIndex !== index))
+      setActiveSlide(current => Math.max(0, current > index ? current - 1 : Math.min(current, slides.length - 2)))
+      setDirty(true)
+    }
     return <section className="workspace-view file-editor-view">{deleteTarget && <FileDeleteDialog target={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={() => confirmDelete().catch(error => setStatus(error.message || 'Delete failed.'))} />}{restoreTarget && <FileRestoreDialog target={restoreTarget} onCancel={() => setRestoreTarget(null)} onConfirm={() => confirmRestoreRevision().catch(error => setStatus(error.message || 'Restore failed.'))} />}
-      <div className="file-editor-commandbar"><button type="button" className="secondary-button" onClick={() => setSelected(null)}><ChevronLeft size={15} /> Files</button><input className="file-editor-title" value={selected.title} onChange={event => { setSelected(current => ({ ...current, title: event.target.value })); setDirty(true) }} readOnly={!canEdit} /><span className={`file-save-status ${dirty ? 'is-dirty' : ''}`} role="status">{canEdit ? (status || 'Saved') : `Read only (${selected.permission || 'view'})`}</span><button type="button" className="secondary-button" onClick={() => setCommentsOpen(current => !current)}><MessageSquare size={15} /> Comments ({comments.filter(item => !item.resolved).length})</button><button type="button" className="secondary-button" onClick={() => openHistory().catch(() => setStatus('Version history could not be loaded.'))}><History size={15} /> History</button>{canEdit && <><button type="button" className="primary-button" onClick={() => setShareOpen(current => !current)}><Share2 size={15} /> Share</button><button type="button" className="secondary-button" onClick={saveDocument} disabled={busy}><Save size={15} /> Save</button><button type="button" className="file-delete-button" onClick={removeDocument} aria-label="Delete"><Trash2 size={16} /></button></>}</div>
+      <div className="file-editor-commandbar"><button type="button" className="secondary-button" onClick={() => setSelected(null)}><ChevronLeft size={15} /> Files</button><input className="file-editor-title" value={selected.title} onChange={event => { setSelected(current => ({ ...current, title: event.target.value })); setDirty(true) }} readOnly={!canEdit} /><span className={`file-save-status ${dirty ? 'is-dirty' : ''}`} role="status">{canEdit ? (status || 'Saved') : `Read only (${selected.permission || 'view'})`}</span><button type="button" className="secondary-button" onClick={() => setCommentsOpen(current => !current)}><MessageSquare size={15} /> Comments ({comments.filter(item => !item.resolved).length})</button><button type="button" className="secondary-button" onClick={() => openHistory().catch(() => setStatus('Version history could not be loaded.'))}><History size={15} /> History</button>{selected.kind === 'presentation' && <button type="button" className="secondary-button" onClick={() => setPresenting(true)}><Presentation size={15} /> Present</button>}{canEdit && <><button type="button" className="primary-button" onClick={() => setShareOpen(current => !current)}><Share2 size={15} /> Share</button><button type="button" className="secondary-button" onClick={saveDocument} disabled={busy}><Save size={15} /> Save</button><button type="button" className="file-delete-button" onClick={removeDocument} aria-label="Delete"><Trash2 size={16} /></button></>}</div>
       {conflict && <div className="document-conflict-banner" role="alert"><strong>This document changed while you were editing.</strong><span>{conflict.title} was saved by someone else. Autosave is paused so your work is not lost.</span><button type="button" className="secondary-button" onClick={() => discardConflict().catch(() => setStatus('Could not reload the document.'))}>Discard mine and reload</button><button type="button" className="primary-button" onClick={overwriteConflict}>Keep mine and overwrite</button></div>}
       <div className={`file-editor-layout ${(commentsOpen || shareOpen || historyOpen) ? 'has-review-panel' : ''}`}>
-        {selected.kind === 'presentation' && <aside className="slide-rail">{canEdit && <button type="button" className="secondary-button" onClick={() => { setSlides(current => [...current, { title: `Slide ${current.length + 1}`, body: '' }]); setActiveSlide(slides.length); setDirty(true) }}><Plus size={14} /> Slide</button>}{slides.map((slide, index) => <button type="button" draggable={canEdit} className={index === activeSlide ? 'active' : ''} onClick={() => setActiveSlide(index)} onDragStart={() => { draggedSlideIndex.current = index }} onDragOver={event => { if (canEdit) event.preventDefault() }} onDrop={() => { const source = draggedSlideIndex.current; if (!canEdit || source === null || source === index) return; setSlides(current => { const reordered = [...current]; const [moved] = reordered.splice(source, 1); reordered.splice(index, 0, moved); return reordered }); setActiveSlide(index); setDirty(true); draggedSlideIndex.current = null }} key={index}><span>{index + 1}</span><strong>{slide.title || `Slide ${index + 1}`}</strong></button>)}</aside>}
-        <main className={selected.kind === 'presentation' ? 'presentation-canvas' : selected.kind === 'spreadsheet' ? 'spreadsheet-canvas' : 'document-canvas'}>{selected.kind === 'presentation' ? <PresentationSlideEditor slide={slides[activeSlide] || { title: '', body: '' }} onChange={nextSlide => updateSlide(nextSlide)} readOnly={!canEdit} /> : selected.kind === 'spreadsheet' ? <SpreadsheetEditor workspaceId={workspaceId} documentId={selected.id} value={spreadsheetData} onChange={value => { setSpreadsheetData(value); setDirty(true) }} onImport={value => { setSpreadsheetData(value); setDirty(true) }} readOnly={!canEdit} /> : <DocumentEditorSurface value={documentHtml} onChange={value => { setDocumentHtml(value); setDirty(true) }} readOnly={!canEdit} />}</main>
+        {selected.kind === 'presentation' && <aside className="slide-rail">{canEdit && <button type="button" className="secondary-button" onClick={() => { setSlides(current => [...current, { title: `Slide ${current.length + 1}`, body: '' }]); setActiveSlide(slides.length); setDirty(true) }}><Plus size={14} /> Slide</button>}{slides.map((slide, index) => <button type="button" draggable={canEdit} className={index === activeSlide ? 'active' : ''} onClick={() => setActiveSlide(index)} onDragStart={() => { draggedSlideIndex.current = index }} onDragOver={event => { if (canEdit) event.preventDefault() }} onDrop={() => { const source = draggedSlideIndex.current; if (!canEdit || source === null || source === index) return; setSlides(current => { const reordered = [...current]; const [moved] = reordered.splice(source, 1); reordered.splice(index, 0, moved); return reordered }); setActiveSlide(index); setDirty(true); draggedSlideIndex.current = null }} key={index}><span>{index + 1}</span><strong>{slide.title || `Slide ${index + 1}`}</strong>{canEdit && <span className="slide-rail-actions"><span role="button" tabIndex={0} className="slide-rail-action" title="Duplicate slide" aria-label={`Duplicate slide ${index + 1}`} onClick={event => { event.stopPropagation(); duplicateSlide(index) }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); duplicateSlide(index) } }}><Plus size={12} /></span><span role="button" tabIndex={0} className="slide-rail-action" title="Delete slide" aria-label={`Delete slide ${index + 1}`} onClick={event => { event.stopPropagation(); deleteSlide(index) }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); deleteSlide(index) } }}><X size={12} /></span></span>}</button>)}</aside>}
+        <main className={selected.kind === 'presentation' ? 'presentation-canvas' : selected.kind === 'spreadsheet' ? 'spreadsheet-canvas' : 'document-canvas'}>{selected.kind === 'presentation' ? <PresentationSlideEditor slide={slides[activeSlide] || { title: '', body: '' }} onChange={nextSlide => updateSlide(nextSlide)} readOnly={!canEdit} workspaceId={workspaceId} onStatus={setStatus} /> : selected.kind === 'spreadsheet' ? <SpreadsheetEditor workspaceId={workspaceId} documentId={selected.id} value={spreadsheetData} onChange={value => { setSpreadsheetData(value); setDirty(true) }} onImport={value => { setSpreadsheetData(value); setDirty(true) }} readOnly={!canEdit} /> : <DocumentEditorSurface value={documentHtml} onChange={value => { setDocumentHtml(value); setDirty(true) }} readOnly={!canEdit} />}</main>
         {(commentsOpen || shareOpen || historyOpen) && <aside className="document-review-panel">{historyOpen && <><h3>Version history</h3><div className="document-revision-list">{revisions.map(revision => <article key={revision.id}><strong>{new Date(revision.created_at).toLocaleString()}</strong><span>{revision.created_by}</span>{canEdit && <button type="button" onClick={() => restoreRevision(revision).catch(() => setStatus('Could not restore that version.'))}>Restore</button>}</article>)}</div>{!revisions.length && <p className="workspace-inline-status">No earlier versions yet.</p>}</>}{shareOpen && <><h3>Share</h3><form onSubmit={shareDocument}><select value={shareUserId} onChange={event => setShareUserId(event.target.value)} required><option value="">Choose a team member</option>{members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select><select value={sharePermission} onChange={event => setSharePermission(event.target.value)}><option value="view">Can view</option><option value="comment">Can comment</option><option value="edit">Can edit</option></select><button className="primary-button">Share</button></form>{shares.map(share => <div className="document-share-row" key={share.id}><strong>{share.user_name}</strong><span>{share.permission}</span></div>)}</>}{commentsOpen && <><h3>Review comments</h3><div className="document-comment-list">{comments.map(comment => <article className={comment.resolved ? 'resolved' : ''} key={comment.id}><strong>{comment.author_name}</strong><span>{new Date(comment.created_at).toLocaleString()}{comment.anchor?.slide ? `, Slide ${comment.anchor.slide}` : ''}</span><p>{comment.body}</p>{canComment && <button type="button" onClick={() => resolveComment(comment)}>{comment.resolved ? 'Reopen' : 'Resolve'}</button>}</article>)}</div>{canComment ? <form onSubmit={addComment}><textarea value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Add a review comment..." /><button className="primary-button">Comment</button></form> : <p className="workspace-inline-status">View-only access does not allow comments.</p>}</>}</aside>}
       </div>
+      {presenting && selected.kind === 'presentation' && <PresentationPlayer slides={slides} startIndex={activeSlide} onClose={() => setPresenting(false)} />}
     </section>
   }
 

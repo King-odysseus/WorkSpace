@@ -1,6 +1,7 @@
 import json
 import re
 import secrets
+from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone as datetime_timezone
@@ -17,8 +18,12 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectResource, ProjectStakeholder, ProjectTemplate, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceWebhook, WorkShift
+from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceWebhook, WorkShift
 from .webhooks import notify_workspace_webhooks
+from .mailer import send_invitation_email, send_reminder_email
+from .push import send_push_to_user
+
+REMINDER_EMAIL_KINDS = {'calendar_reminder', 'due_soon_reminder', 'overdue_reminder', 'stale_update_reminder'}
 
 
 def user_workspace_ids(user):
@@ -73,6 +78,9 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
             return None
     notification = WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '')
     notify_workspace_webhooks(workspace_id, kind, title, body, target_type=target_type, target_id=target_id)
+    if kind in REMINDER_EMAIL_KINDS:
+        send_reminder_email(recipient, title, body)
+    send_push_to_user(recipient, title, body)
     return notification
 
 
@@ -115,6 +123,20 @@ def parse_iso_date(value, field_name, allow_null=True):
         return date.fromisoformat(str(value)), None
     except (TypeError, ValueError):
         return None, f'{field_name} must use YYYY-MM-DD format.'
+
+
+def parse_money_amount(value, field_name, allow_null=True):
+    if value in (None, '') and allow_null:
+        return None, None
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None, f'{field_name} must be a number.'
+    if amount < 0:
+        return None, f'{field_name} cannot be negative.'
+    if amount >= Decimal('10000000000'):
+        return None, f'{field_name} is too large.'
+    return amount, None
 
 
 def validation_error_response(error):
@@ -761,9 +783,6 @@ def plan_bucket_reorder(request, workspace_id):
     return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)]})
 
 
-@require_http_methods(['GET', 'POST'])
-
-
 @require_http_methods(['PATCH', 'DELETE'])
 def plan_bucket_detail(request, workspace_id, bucket_id):
     _, error = require_workspace_leader(request, workspace_id)
@@ -805,16 +824,13 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
 
 
 @require_http_methods(['GET', 'POST'])
-
-
-@require_http_methods(['GET', 'POST'])
 def project_resource_list(request, workspace_id, project_id):
-    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
-    if project is None:
-        return JsonResponse({'error': 'Project was not found.'}, status=404)
     _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
+    if project is None:
+        return JsonResponse({'error': 'Project was not found.'}, status=404)
     if request.method == 'GET':
         resources = ProjectResource.objects.filter(project_id=project_id, is_active=True)
         return JsonResponse({'resources': [resource.as_dict() for resource in resources]})
@@ -837,7 +853,7 @@ def project_resource_detail(request, workspace_id, project_id, resource_id):
     _, error = require_workspace_leader(request, workspace_id)
     if error:
         return error
-    resource = ProjectResource.objects.filter(id=resource_id, project_id=project_id).first()
+    resource = ProjectResource.objects.filter(id=resource_id, project_id=project_id, project__workspace_id=workspace_id).first()
     if resource is None:
         return JsonResponse({'error': 'Resource was not found.'}, status=404)
     if request.method == 'DELETE':
@@ -869,12 +885,12 @@ def project_resource_detail(request, workspace_id, project_id, resource_id):
 
 @require_http_methods(['GET', 'POST'])
 def project_stakeholder_list(request, workspace_id, project_id):
-    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
-    if project is None:
-        return JsonResponse({'error': 'Project was not found.'}, status=404)
     _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
+    if project is None:
+        return JsonResponse({'error': 'Project was not found.'}, status=404)
     if request.method == 'GET':
         stakeholders = ProjectStakeholder.objects.filter(project_id=project_id, is_active=True)
         return JsonResponse({'stakeholders': [stakeholder.as_dict() for stakeholder in stakeholders]})
@@ -898,7 +914,7 @@ def project_stakeholder_detail(request, workspace_id, project_id, stakeholder_id
     _, error = require_workspace_leader(request, workspace_id)
     if error:
         return error
-    stakeholder = ProjectStakeholder.objects.filter(id=stakeholder_id, project_id=project_id).first()
+    stakeholder = ProjectStakeholder.objects.filter(id=stakeholder_id, project_id=project_id, project__workspace_id=workspace_id).first()
     if stakeholder is None:
         return JsonResponse({'error': 'Stakeholder was not found.'}, status=404)
     if request.method == 'DELETE':
@@ -930,6 +946,82 @@ def project_stakeholder_detail(request, workspace_id, project_id, stakeholder_id
     stakeholder.save()
     return JsonResponse({'stakeholder': stakeholder.as_dict()})
 
+
+@require_http_methods(['GET', 'POST'])
+def project_expense_list(request, workspace_id, project_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
+    if project is None:
+        return JsonResponse({'error': 'Project was not found.'}, status=404)
+    if request.method == 'GET':
+        expenses = ProjectExpense.objects.filter(project_id=project_id, is_active=True)
+        return JsonResponse({'expenses': [expense.as_dict() for expense in expenses]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = str(payload.get('name', '')).strip()
+    if not name or len(name) > 160:
+        return JsonResponse({'error': 'Expense name must be between 1 and 160 characters.'}, status=400)
+    category = payload.get('category', 'other')
+    if category not in dict(ProjectExpense.CATEGORY_CHOICES):
+        return JsonResponse({'error': 'Invalid expense category.'}, status=400)
+    amount, amount_error = parse_money_amount(payload.get('amount'), 'amount', allow_null=False)
+    if amount_error:
+        return JsonResponse({'error': amount_error}, status=400)
+    incurred_on, date_error = parse_iso_date(payload.get('incurred_on'), 'incurred_on')
+    if date_error:
+        return JsonResponse({'error': date_error}, status=400)
+    expense = ProjectExpense.objects.create(project_id=project_id, name=name, category=category, amount=amount, incurred_on=incurred_on, notes=str(payload.get('notes', '')).strip())
+    return JsonResponse({'expense': expense.as_dict()}, status=201)
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def project_expense_detail(request, workspace_id, project_id, expense_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    expense = ProjectExpense.objects.filter(id=expense_id, project_id=project_id, project__workspace_id=workspace_id).first()
+    if expense is None:
+        return JsonResponse({'error': 'Expense was not found.'}, status=404)
+    if request.method == 'DELETE':
+        expense.is_active = False
+        expense.save(update_fields=['is_active'])
+        return JsonResponse({'archived': expense_id})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if set(payload) - {'name', 'category', 'amount', 'incurred_on', 'notes'}:
+        return JsonResponse({'error': 'Unsupported expense fields.'}, status=400)
+    if 'name' in payload:
+        name = str(payload['name']).strip()
+        if not name or len(name) > 160:
+            return JsonResponse({'error': 'Expense name must be between 1 and 160 characters.'}, status=400)
+        expense.name = name
+    if 'category' in payload:
+        if payload['category'] not in dict(ProjectExpense.CATEGORY_CHOICES):
+            return JsonResponse({'error': 'Invalid expense category.'}, status=400)
+        expense.category = payload['category']
+    if 'amount' in payload:
+        amount, amount_error = parse_money_amount(payload['amount'], 'amount', allow_null=False)
+        if amount_error:
+            return JsonResponse({'error': amount_error}, status=400)
+        expense.amount = amount
+    if 'incurred_on' in payload:
+        incurred_on, date_error = parse_iso_date(payload['incurred_on'], 'incurred_on')
+        if date_error:
+            return JsonResponse({'error': date_error}, status=400)
+        expense.incurred_on = incurred_on
+    if 'notes' in payload:
+        expense.notes = str(payload['notes']).strip()
+    expense.save()
+    return JsonResponse({'expense': expense.as_dict()})
+
+
+@require_http_methods(['GET', 'POST'])
 def task_template_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
@@ -1084,6 +1176,8 @@ def project_template_apply(request, workspace_id, template_id):
     record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name} from template {template.name}.')
     return JsonResponse({'project': project.as_dict()}, status=201)
 
+
+@require_http_methods(['GET', 'POST'])
 def saved_view_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
@@ -1710,7 +1804,16 @@ def invitation_list(request, workspace_id):
         invitation.role = role
         invitation.invited_by = request.user
         invitation.save(update_fields=['role', 'invited_by'])
+    send_invitation_email(invitation)
     return JsonResponse({'invitation': invitation.as_dict()}, status=201 if created else 200)
+
+
+@require_http_methods(['GET'])
+def invitation_public_detail(request, invitation_id):
+    invitation = WorkspaceInvitation.objects.select_related('workspace').filter(id=invitation_id, status='pending').first()
+    if invitation is None:
+        return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
+    return JsonResponse({'invitation': {'id': invitation.id, 'email': invitation.email, 'workspace_name': invitation.workspace.name, 'role': invitation.role}})
 
 
 @require_http_methods(['POST'])
@@ -1784,8 +1887,14 @@ def project_list(request, workspace_id):
         return JsonResponse({'error': 'due_soon_days must be an integer.'}, status=400)
     if not 0 <= due_soon_days <= 365:
         return JsonResponse({'error': 'due_soon_days must be between 0 and 365.'}, status=400)
+    budget_amount, budget_error = parse_money_amount(payload.get('budget_amount'), 'budget_amount')
+    if budget_error:
+        return JsonResponse({'error': budget_error}, status=400)
+    budget_currency = str(payload.get('budget_currency', 'USD')).strip().upper() or 'USD'
+    if budget_currency not in dict(Project.CURRENCY_CHOICES):
+        return JsonResponse({'error': 'Invalid budget currency.'}, status=400)
     try:
-        project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip(), timezone=project_timezone, due_soon_days=due_soon_days, configuration=configuration, **dates)
+        project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip(), timezone=project_timezone, due_soon_days=due_soon_days, configuration=configuration, budget_amount=budget_amount, budget_currency=budget_currency, **dates)
     except IntegrityError:
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
     record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name}.')
@@ -1808,7 +1917,7 @@ def project_detail(request, workspace_id, project_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    allowed_fields = {'name', 'description', 'status', 'due_date', 'start_date', 'end_date', 'timezone', 'week_anchor_date', 'due_soon_days', 'configuration'}
+    allowed_fields = {'name', 'description', 'status', 'due_date', 'start_date', 'end_date', 'timezone', 'week_anchor_date', 'due_soon_days', 'configuration', 'budget_amount', 'budget_currency'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -1850,6 +1959,16 @@ def project_detail(request, workspace_id, project_id):
         if not isinstance(payload['configuration'], dict):
             return JsonResponse({'error': 'configuration must be a JSON object.'}, status=400)
         project.configuration = payload['configuration']
+    if 'budget_amount' in payload:
+        budget_amount, budget_error = parse_money_amount(payload['budget_amount'], 'budget_amount')
+        if budget_error:
+            return JsonResponse({'error': budget_error}, status=400)
+        project.budget_amount = budget_amount
+    if 'budget_currency' in payload:
+        budget_currency = str(payload['budget_currency']).strip().upper()
+        if budget_currency not in dict(Project.CURRENCY_CHOICES):
+            return JsonResponse({'error': 'Invalid budget currency.'}, status=400)
+        project.budget_currency = budget_currency
     project.save()
     record_activity(workspace_id, request.user, 'project_updated', f'{request.user.get_full_name() or request.user.email} updated project {project.name}.')
     return JsonResponse({'project': project.as_dict()})

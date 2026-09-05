@@ -396,6 +396,23 @@ html[data-theme='light'] .theme-toggle {
   margin-top: 20px;
 }
 
+.auth-invite-banner {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #1D4ED8;
+  border-radius: 7px;
+  background: #E9EFFD;
+  color: #1E3A8A;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.auth-google-button {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
 .workspace-view { display: flex; flex-direction: column; gap: 22px; }
 .workspace-view-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; }
 .workspace-view-heading h1 { margin: 0; color: #FFFFFF; font: 800 28px 'Plus Jakarta Sans'; letter-spacing: -.8px; }

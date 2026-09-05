@@ -173,6 +173,32 @@ def _sanitize_slide(slide):
     return cleaned
 
 
+# CSS properties a sheet cell may carry. The editor renders these straight into
+# the browser's style object, so anything outside this set - background images
+# above all - is dropped rather than handed to every reader of the sheet.
+CELL_STYLE_PROPERTIES = {'fontWeight', 'fontStyle', 'textDecoration', 'color', 'backgroundColor', 'textAlign'}
+
+
+def _sanitize_sheet(sheet):
+    if not isinstance(sheet, dict):
+        return sheet
+    cleaned = dict(sheet)
+    styles = cleaned.get('cell_styles')
+    if isinstance(styles, dict):
+        cleaned['cell_styles'] = {
+            key: {
+                prop: entry[prop]
+                for prop in CELL_STYLE_PROPERTIES
+                if isinstance(entry.get(prop), str) and not UNSAFE_STYLE.search(entry[prop])
+            }
+            for key, entry in styles.items()
+            if isinstance(entry, dict)
+        }
+    elif 'cell_styles' in cleaned:
+        cleaned['cell_styles'] = {}
+    return cleaned
+
+
 def sanitize_document_content(content):
     """Sanitize every HTML-bearing field of a stored document payload."""
     if not isinstance(content, dict):
@@ -185,4 +211,6 @@ def sanitize_document_content(content):
         cleaned['text'] = strip_html(cleaned.get('text'))
     if isinstance(cleaned.get('slides'), list):
         cleaned['slides'] = [_sanitize_slide(slide) for slide in cleaned['slides']]
+    if isinstance(cleaned.get('sheets'), list):
+        cleaned['sheets'] = [_sanitize_sheet(sheet) for sheet in cleaned['sheets']]
     return cleaned

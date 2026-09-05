@@ -1,7 +1,12 @@
 import json
 import mimetypes
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
+from axes.handlers.proxy import AxesProxyHandler
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -14,7 +19,7 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from .models import Membership, PlanBucket, UserProfile, Workspace, WorkspaceInvitation
+from .models import Membership, PlanBucket, PushSubscription, UserProfile, Workspace, WorkspaceInvitation
 
 AVATAR_MAX_BYTES = 5 * 1024 * 1024
 AVATAR_ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
@@ -90,7 +95,7 @@ def auth_me(request):
         workspace = Workspace.objects.create(name=workspace_name, slug=f'{slugify(workspace_name)}-{user.id}')
         Membership.objects.create(workspace=workspace, user=user, role='owner')
         PlanBucket.objects.create(workspace=workspace, name='Backlog', position=0)
-    login(request, user)
+    login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     return JsonResponse({'authenticated': True, 'user': user_payload(user)}, status=201)
 
 
@@ -101,6 +106,11 @@ def auth_login(request):
         return error
     email = str(payload.get('email', '')).strip().lower()
     password = str(payload.get('password', ''))
+    # django-axes would refuse a locked-out attempt inside authenticate() anyway,
+    # but that surfaces as a plain "invalid credentials" 401. Checking first lets a
+    # locked-out user be told to wait rather than left guessing at their password.
+    if not AxesProxyHandler.is_allowed(request, {'username': email}):
+        return JsonResponse({'error': 'Too many failed sign-in attempts. Try again later.'}, status=429)
     user = authenticate(request, username=email, password=password)
     if user is None:
         return JsonResponse({'error': 'Invalid email or password.'}, status=401)
@@ -198,3 +208,70 @@ def user_profile(request):
     request.user.username = email
     request.user.save(update_fields=['first_name', 'last_name', 'email', 'username'])
     return JsonResponse({'user': user_payload(request.user)})
+
+
+@require_http_methods(['POST'])
+def auth_google(request):
+    if not settings.GOOGLE_OAUTH_CLIENT_ID:
+        return JsonResponse({'error': 'Google sign-in is not configured.'}, status=503)
+    payload, error = parse_json(request)
+    if error:
+        return error
+    credential = str(payload.get('credential', '')).strip()
+    if not credential:
+        return JsonResponse({'error': 'A Google credential is required.'}, status=400)
+    try:
+        query = urllib.parse.urlencode({'id_token': credential})
+        with urllib.request.urlopen(f'https://oauth2.googleapis.com/tokeninfo?{query}', timeout=5) as response:
+            token_info = json.loads(response.read())
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+        return JsonResponse({'error': 'Google sign-in could not be verified.'}, status=401)
+    if token_info.get('aud') != settings.GOOGLE_OAUTH_CLIENT_ID:
+        return JsonResponse({'error': 'Google sign-in could not be verified.'}, status=401)
+    email = str(token_info.get('email', '')).strip().lower()
+    if not email or token_info.get('email_verified') not in ('true', True):
+        return JsonResponse({'error': 'Your Google account has no verified email address.'}, status=401)
+    user = User.objects.filter(email__iexact=email).first()
+    if user is None:
+        first_name = str(token_info.get('given_name', '')).strip()[:150]
+        last_name = str(token_info.get('family_name', '')).strip()[:150]
+        workspace_name = str(payload.get('workspace_name', '')).strip() or 'My Workspace'
+        with transaction.atomic():
+            user = User.objects.create_user(username=email, email=email, first_name=first_name, last_name=last_name)
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+            workspace = Workspace.objects.create(name=workspace_name, slug=f'{slugify(workspace_name)}-{user.id}')
+            Membership.objects.create(workspace=workspace, user=user, role='owner')
+            PlanBucket.objects.create(workspace=workspace, name='Backlog', position=0)
+    login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+    return JsonResponse({'authenticated': True, 'user': user_payload(user)})
+
+
+@require_http_methods(['GET'])
+def push_public_key(request):
+    return JsonResponse({'public_key': settings.VAPID_PUBLIC_KEY, 'configured': settings.WEB_PUSH_CONFIGURED})
+
+
+@require_http_methods(['POST', 'DELETE'])
+def push_subscription_list(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    payload, error = parse_json(request)
+    if error:
+        return error
+    endpoint = str(payload.get('endpoint', '')).strip()
+    if not endpoint:
+        return JsonResponse({'error': 'A push endpoint is required.'}, status=400)
+    if request.method == 'DELETE':
+        PushSubscription.objects.filter(user=request.user, endpoint=endpoint).delete()
+        return JsonResponse({'removed': True})
+    keys = payload.get('keys') or {}
+    p256dh = str(keys.get('p256dh', '')).strip()
+    auth = str(keys.get('auth', '')).strip()
+    if not p256dh or not auth:
+        return JsonResponse({'error': 'Push subscription keys are required.'}, status=400)
+    subscription, _ = PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={'user': request.user, 'p256dh': p256dh, 'auth': auth},
+    )
+    return JsonResponse({'subscription': subscription.as_dict()}, status=201)

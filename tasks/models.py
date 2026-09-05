@@ -120,6 +120,12 @@ class Project(models.Model):
         ('paused', 'Paused'),
         ('completed', 'Completed'),
     ]
+    CURRENCY_CHOICES = [
+        ('USD', 'US Dollar'),
+        ('GBP', 'British Pound'),
+        ('NGN', 'Nigerian Naira'),
+        ('KES', 'Kenyan Shilling'),
+    ]
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='projects')
     name = models.CharField(max_length=160)
@@ -132,6 +138,8 @@ class Project(models.Model):
     week_anchor_date = models.DateField(null=True, blank=True)
     due_soon_days = models.PositiveSmallIntegerField(default=7)
     configuration = models.JSONField(default=dict, blank=True)
+    budget_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    budget_currency = models.CharField(max_length=8, choices=CURRENCY_CHOICES, default='USD')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -154,6 +162,8 @@ class Project(models.Model):
             'week_anchor_date': self.week_anchor_date.isoformat() if self.week_anchor_date else None,
             'due_soon_days': self.due_soon_days,
             'configuration': self.configuration or {},
+            'budget_amount': str(self.budget_amount) if self.budget_amount is not None else None,
+            'budget_currency': self.budget_currency,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
         }
@@ -216,6 +226,35 @@ class ProjectStakeholder(models.Model):
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat(),
         }
+
+
+class ProjectExpense(models.Model):
+    CATEGORY_CHOICES = [('labor', 'Labor'), ('materials', 'Materials'), ('software', 'Software'), ('travel', 'Travel'), ('other', 'Other')]
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='expenses')
+    name = models.CharField(max_length=160)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    incurred_on = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-incurred_on', '-created_at']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'project_id': self.project_id,
+            'name': self.name,
+            'category': self.category,
+            'amount': str(self.amount),
+            'incurred_on': self.incurred_on.isoformat() if self.incurred_on else None,
+            'notes': self.notes,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat(),
+        }
+
 
 class LookupValue(models.Model):
     KIND_CHOICES = [('workstream', 'Workstream'), ('phase', 'Phase / quarter')]
@@ -897,6 +936,17 @@ class NotificationPreference(models.Model):
             'task_updates': self.task_updates,
             'calendar_reminders': self.calendar_reminders,
         }
+
+
+class PushSubscription(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_subscriptions')
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def as_dict(self):
+        return {'id': self.id, 'endpoint': self.endpoint, 'created_at': self.created_at.isoformat()}
 
 
 class UserProfile(models.Model):

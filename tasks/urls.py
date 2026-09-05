@@ -1,7 +1,7 @@
 from django.urls import path
 
-from .auth_views import auth_csrf, auth_login, auth_logout, auth_me, user_avatar, user_avatar_download, user_presence, user_profile
-from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_feed_token, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_list, project_resource_detail, project_resource_list, project_stakeholder_detail, project_stakeholder_list, project_template_apply, project_template_detail, project_template_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, task_template_apply, task_template_detail, task_template_list, work_shift_list, workspace_search, workspace_webhook_detail, workspace_webhook_list
+from .auth_views import auth_csrf, auth_google, auth_login, auth_logout, auth_me, push_public_key, push_subscription_list, user_avatar, user_avatar_download, user_presence, user_profile
+from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_feed_token, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, check_in_list, direct_conversation_list, direct_message_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_detail, invitation_list, invitation_public_detail, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_expense_detail, project_expense_list, project_list, project_resource_detail, project_resource_list, project_stakeholder_detail, project_stakeholder_list, project_template_apply, project_template_detail, project_template_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, task_template_apply, task_template_detail, task_template_list, work_shift_list, workspace_search, workspace_webhook_detail, workspace_webhook_list
 from .pulse import workspace_pulse
 from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
@@ -14,10 +14,13 @@ urlpatterns = [
     path('auth/csrf/', auth_csrf, name='auth-csrf'),
     path('auth/login/', auth_login, name='auth-login'),
     path('auth/logout/', auth_logout, name='auth-logout'),
+    path('auth/google/', auth_google, name='auth-google'),
     path('auth/me/avatar/', user_avatar, name='auth-me-avatar'),
     path('auth/me/presence/', user_presence, name='auth-me-presence'),
     path('auth/me/profile/', user_profile, name='auth-me-profile'),
     path('users/<int:user_id>/avatar/', user_avatar_download, name='user-avatar-download'),
+    path('push/public-key/', push_public_key, name='push-public-key'),
+    path('push/subscriptions/', push_subscription_list, name='push-subscription-list'),
     path('workspaces/<int:workspace_id>/members/', member_list, name='member-list'),
     path('workspaces/<int:workspace_id>/members/<int:user_id>/', member_detail, name='member-detail'),
     path('workspaces/<int:workspace_id>/ai/settings/', workspace_ai_settings, name='workspace-ai-settings'),
@@ -37,6 +40,7 @@ urlpatterns = [
     path('workspace-files/<int:file_id>/download/', workspace_file_download, name='workspace-file-download'),
     path('workspaces/<int:workspace_id>/invitations/', invitation_list, name='invitation-list'),
     path('workspaces/<int:workspace_id>/invitations/<int:invitation_id>/', invitation_detail, name='invitation-detail'),
+    path('invitations/<int:invitation_id>/', invitation_public_detail, name='invitation-public-detail'),
     path('invitations/<int:invitation_id>/accept/', invitation_accept, name='invitation-accept'),
     path('workspaces/<int:workspace_id>/projects/', project_list, name='project-list'),
     path('workspaces/<int:workspace_id>/projects/<int:project_id>/', project_detail, name='project-detail'),
@@ -44,6 +48,8 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/projects/<int:project_id>/resources/<int:resource_id>/', project_resource_detail, name='project-resource-detail'),
     path('workspaces/<int:workspace_id>/projects/<int:project_id>/stakeholders/', project_stakeholder_list, name='project-stakeholder-list'),
     path('workspaces/<int:workspace_id>/projects/<int:project_id>/stakeholders/<int:stakeholder_id>/', project_stakeholder_detail, name='project-stakeholder-detail'),
+    path('workspaces/<int:workspace_id>/projects/<int:project_id>/expenses/', project_expense_list, name='project-expense-list'),
+    path('workspaces/<int:workspace_id>/projects/<int:project_id>/expenses/<int:expense_id>/', project_expense_detail, name='project-expense-detail'),
     path('workspaces/<int:workspace_id>/tasks/', task_list, name='workspace-task-list'),
     path('workspaces/<int:workspace_id>/lookup-values/', lookup_value_list, name='lookup-value-list'),
     path('workspaces/<int:workspace_id>/lookup-values/<int:value_id>/', lookup_value_detail, name='lookup-value-detail'),

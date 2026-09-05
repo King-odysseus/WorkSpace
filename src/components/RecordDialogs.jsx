@@ -2,6 +2,7 @@
 // adjusted in place: calendar events, follow-ups, daily check-ins and projects.
 
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { ArrowUpRight, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog.jsx'
@@ -116,9 +117,11 @@ function ProjectEditDrawer({ project, workspaceId, onClose, onUpdated }) {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Project could not be saved.')
       onUpdated(data.project)
+      toast.success('Project saved.')
       onClose()
     } catch (saveError) {
       setError(saveError.message)
+      toast.error(saveError.message)
     } finally {
       setSaving(false)
     }
