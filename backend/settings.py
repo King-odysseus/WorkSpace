@@ -232,6 +232,8 @@ FRONTEND_BASE_URL = os.environ.get('WORKSPACE_FRONTEND_BASE_URL', 'http://localh
 # the same value (as VITE_GOOGLE_CLIENT_ID) to render the button; this copy is what the
 # backend checks the ID token's audience against.
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '').strip()
+# Google Identity Services returns popup credentials through window.opener.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
 # Web push (browser notification bubbles even when the app/PWA is closed). Generate a
 # keypair once with `vapid --gen` (installed by pywebpush) and keep the private key secret.

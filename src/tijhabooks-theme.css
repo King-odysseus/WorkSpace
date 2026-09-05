@@ -433,14 +433,17 @@ html[data-theme='light'] .theme-toggle {
 .auth-google-button {
   display: flex;
   justify-content: center;
+  width: 100%;
+  min-height: 40px;
 }
 
-.auth-google-button > div {
-  width: 100% !important;
-}
-
-.auth-google-button iframe {
-  margin: 0 auto;
+.auth-google-wrap .auth-error button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .workspace-view { display: flex; flex-direction: column; gap: 22px; }

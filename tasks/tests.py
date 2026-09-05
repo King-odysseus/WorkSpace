@@ -1508,6 +1508,11 @@ class AuthenticationApiTests(TestCase):
         self.assertEqual(attempt('wrong-password').status_code, 401)
         self.assertEqual(attempt('secure-pass-123').status_code, 200)
 
+    def test_auth_response_allows_google_popup_communication(self):
+        response = self.client.get(reverse('auth-csrf'))
+        self.assertEqual(response.headers['Cross-Origin-Opener-Policy'], 'same-origin-allow-popups')
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID='')
     def test_google_sign_in_is_disabled_without_a_client_id(self):
         response = self.client.post(reverse('auth-google'), data=json.dumps({'credential': 'anything'}), content_type='application/json')
         self.assertEqual(response.status_code, 503)
