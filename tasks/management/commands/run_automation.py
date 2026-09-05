@@ -1,7 +1,11 @@
+import logging
+
 from django.core.management.base import BaseCommand
 
 from tasks.automation import run_workspace_automation
 from tasks.models import Workspace
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -17,7 +21,13 @@ class Command(BaseCommand):
             'operations_digest': 0, 'project_digest': 0,
         }
         for workspace_id in workspace_ids:
-            counts = run_workspace_automation(workspace_id)
+            try:
+                counts = run_workspace_automation(workspace_id)
+            except Exception:
+                # One broken workspace must not stop the others in this idempotent
+                # cron run - log the failure and move on.
+                logger.exception('Automation failed for workspace %s', workspace_id)
+                continue
             for key in totals:
                 totals[key] += counts.get(key, 0)
 

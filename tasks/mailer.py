@@ -2,18 +2,29 @@
 #
 # Sends go through Django's normal mail API, which settings.py points at Brevo's
 # SMTP relay when BREVO_SMTP_LOGIN/BREVO_SMTP_PASSWORD are configured, or the
-# console backend otherwise. Every call is fail_silently so a misconfigured or
-# unreachable mail provider never breaks the request that triggered it (creating
-# an invitation, recording a reminder notification, etc).
+# console backend otherwise. A misconfigured or unreachable mail provider never
+# breaks the request that triggered it (creating an invitation, recording a
+# reminder notification, etc) - the error is logged and the call returns False,
+# so the caller can keep going without raising.
+
+import logging
 
 from django.conf import settings
 from django.core.mail import send_mail
+
+logger = logging.getLogger(__name__)
 
 
 def send_workspace_email(to_email, subject, body):
     if not to_email:
         return False
-    send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=True)
+    try:
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=False)
+    except Exception:
+        # Broad on purpose: this is a best-effort side effect, and we would rather
+        # log the traceback and continue than let an SMTP outage 500 a request.
+        logger.exception('Failed to send email "%s" to %s', subject, to_email)
+        return False
     return True
 
 

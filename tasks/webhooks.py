@@ -114,6 +114,8 @@ def drain_webhook_deliveries(limit=100):
             delivery.last_error = 'Delivery failed.'
             if delivery.attempts >= WebhookDelivery.MAX_ATTEMPTS:
                 delivery.status = 'failed'
+                logger.warning('Webhook delivery %s gave up after %s attempts', delivery.id, delivery.attempts)
             failed += 1
         delivery.save(update_fields=['status', 'attempts', 'last_error', 'updated_at'])
+    logger.info('Drained %s webhook deliveries: %s sent, %s failed', len(pending), sent, failed)
     return sent, failed

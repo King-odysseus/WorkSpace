@@ -1,3 +1,13 @@
+import * as Sentry from '@sentry/react'
+
+// Error monitoring is inert unless VITE_SENTRY_DSN is set at build time.
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    tracesSampleRate: 0.1,
+  })
+}
+
 import { AppSelect } from './components/ui/select.jsx'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'

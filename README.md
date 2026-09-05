@@ -48,6 +48,7 @@ These are all off by default - the app works exactly as before when none of the 
 - **Transactional email (Brevo)**: set `BREVO_SMTP_LOGIN` and `BREVO_SMTP_PASSWORD` (from Brevo > SMTP & API > SMTP) to send workspace invitation emails and task/calendar reminder emails. Without them, mail is printed to the console instead of sent. Also set `WORKSPACE_DEFAULT_FROM_EMAIL` and `WORKSPACE_FRONTEND_BASE_URL` (used to build the accept-invite link in the email).
 - **Google Sign-In**: create an OAuth web client at [Google Cloud Console](https://console.cloud.google.com/apis/credentials), then set `GOOGLE_OAUTH_CLIENT_ID` (backend) and `VITE_GOOGLE_CLIENT_ID` (same value, frontend build) to show the "Sign in with Google" button.
 - **Push notifications**: generate a keypair with `vapid --gen` (installed by `pywebpush`), then set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (backend) plus `VITE_VAPID_PUBLIC_KEY` (same public key, frontend build) and `VAPID_CLAIM_EMAIL`. Users then opt in from Settings > Notifications > "Push notifications" to get alerts even when the app/PWA is closed.
+- **Error monitoring (Sentry)**: set `WORKSPACE_SENTRY_DSN` (backend) and the same DSN as `VITE_SENTRY_DSN` (frontend build) to ship uncaught errors and trace samples to Sentry. Leave the DSN blank to disable it entirely. Background jobs (`run_automation`, `deliver_webhooks`) and the email/push sends log delivery failures rather than swallowing them silently.
 
 See `.env.example` for the full variable list.
 

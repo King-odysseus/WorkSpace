@@ -7,6 +7,7 @@ so a single event (e.g. a blocked task) can still notify several people once
 each.
 """
 
+import logging
 from datetime import timedelta
 
 from django.utils import timezone
@@ -20,6 +21,8 @@ from .reporting import (
     get_workspace_setting,
 )
 from .views import create_notification
+
+logger = logging.getLogger(__name__)
 
 
 def _leaders(workspace_id):
@@ -155,6 +158,7 @@ def run_workspace_automation(workspace_id):
             if _deliver_digest(workspace_id, leader_user, 'project', label, project_tasks, digest_date, today, due_soon_days, stale_cutoff, project_id):
                 counts['project_digest'] += 1
 
+    logger.info('Workspace %s automation: %s', workspace_id, counts)
     return counts
 
 

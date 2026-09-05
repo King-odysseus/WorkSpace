@@ -215,6 +215,20 @@ VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '').strip()
 VAPID_CLAIM_EMAIL = os.environ.get('VAPID_CLAIM_EMAIL', 'admin@workspace.app').strip()
 WEB_PUSH_CONFIGURED = bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
 
+# Error monitoring (Sentry). Inert unless a DSN is set, matching the
+# configured-or-no-op pattern used for Brevo, Google and VAPID above, so local
+# dev and CI stay offline and never attempt to ship events.
+SENTRY_DSN = os.environ.get('WORKSPACE_SENTRY_DSN', '').strip()
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        traces_sample_rate=float(os.environ.get('WORKSPACE_SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+        send_default_pii=False,
+    )
+
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get('WORKSPACE_SECURE_SSL_REDIRECT', 'false').lower() == 'true'
     SECURE_HSTS_SECONDS = int(os.environ.get('WORKSPACE_HSTS_SECONDS', '0'))

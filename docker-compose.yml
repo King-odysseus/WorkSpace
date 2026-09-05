@@ -44,6 +44,8 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL:-}
+      WORKSPACE_SENTRY_DSN: ${WORKSPACE_SENTRY_DSN:-}
+      WORKSPACE_SENTRY_TRACES_SAMPLE_RATE: ${WORKSPACE_SENTRY_TRACES_SAMPLE_RATE:-0.1}
     volumes:
       - workspace-media:/app/media
     healthcheck:
@@ -79,6 +81,8 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL:-}
+      WORKSPACE_SENTRY_DSN: ${WORKSPACE_SENTRY_DSN:-}
+      WORKSPACE_SENTRY_TRACES_SAMPLE_RATE: ${WORKSPACE_SENTRY_TRACES_SAMPLE_RATE:-0.1}
     command: ["sh", "-c", "while true; do python manage.py deliver_calendar_reminders; python manage.py deliver_webhooks; python manage.py run_automation; python manage.py purge_screen_captures; sleep 60; done"]
     depends_on:
       api:
@@ -91,6 +95,7 @@ services:
       args:
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
         VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+        VITE_SENTRY_DSN: ${WORKSPACE_SENTRY_DSN:-}
     ports:
       - "${WORKSPACE_WEB_PORT:-8080}:80"
     healthcheck:
