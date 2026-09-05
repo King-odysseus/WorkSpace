@@ -37,7 +37,7 @@ import { cn } from './lib/utils.js'
 import toast, { Toaster } from 'react-hot-toast'
 
 import Avatar from './components/Avatar.jsx'
-import { Activity, AuthScreen } from './components/AuthScreen.jsx'
+import { Activity, AuthScreen, InvitationReview, NoWorkspaceScreen } from './components/AuthScreen.jsx'
 import {
   ClockInCard, MyTasksView, ProjectCostBudgetPanel, ProjectProgress, ProjectRiskIssuePanel,
   ProjectStakeholderResourcePanel, TeamBoardView, TodayDashboard,
@@ -116,8 +116,10 @@ function App() {
   const [inviteError, setInviteError] = useState('')
   const [inviteSubmitting, setInviteSubmitting] = useState(false)
   const [aiFlyoutOpen, setAiFlyoutOpen] = useState(false)
-  const [inviteId, setInviteId] = useState(() => new URLSearchParams(window.location.search).get('invite'))
+  const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'))
   const [inviteInfo, setInviteInfo] = useState(null)
+  const [inviteActionError, setInviteActionError] = useState('')
+  const [inviteActionBusy, setInviteActionBusy] = useState(false)
 
   useEffect(() => {
     // Tidy up a ?view= deep link (PWA shortcut, bookmark) once it has been applied
@@ -128,12 +130,14 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!inviteId) return
-    fetch(`/api/invitations/${inviteId}/`, { credentials: 'include' })
+    if (!inviteToken) return
+    // The token is the unguessable secret from the emailed link - this lookup
+    // never uses the invitation's (sequential) id, so it cannot be enumerated.
+    fetch(`/api/invitations/token/${encodeURIComponent(inviteToken)}/`, { credentials: 'include' })
       .then(response => response.ok ? response.json() : Promise.reject())
       .then(data => setInviteInfo(data.invitation))
-      .catch(() => setInviteId(null))
-  }, [inviteId])
+      .catch(() => setInviteToken(null))
+  }, [inviteToken])
 
   const clearInviteFromUrl = () => {
     const params = new URLSearchParams(window.location.search)
@@ -141,24 +145,64 @@ function App() {
     window.history.replaceState(null, '', params.toString() ? `${window.location.pathname}?${params}` : window.location.pathname)
   }
 
-  const handleAuthenticated = async user => {
+  // Signing in or creating an account never accepts an invitation by itself -
+  // it only establishes the session. The explicit InvitationReview screen
+  // (rendered below whenever inviteInfo is set) is the only place accept/
+  // decline happens, and it stays up after authentication until the user acts.
+  const handleAuthenticated = user => {
     setSession({ loading: false, user, error: '' })
-    if (!inviteId) return
+  }
+
+  const logout = async () => {
     try {
-      const response = await fetch(`/api/invitations/${inviteId}/accept/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-      const data = await readJsonResponse(response, 'Invitation could not be accepted.')
-      if (response.ok) {
-        toast.success(`Joined ${data.workspace.name}.`)
-        setSession(current => ({ ...current, user: { ...current.user, workspaces: [...current.user.workspaces.filter(workspace => workspace.id !== data.workspace.id), { ...data.workspace, role: data.membership.role }] } }))
-      } else {
-        toast.error(data.error || 'Invitation could not be accepted.')
-      }
-    } catch {
-      toast.error('Invitation could not be accepted.')
+      await fetch('/api/auth/logout/', { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
     } finally {
-      setInviteId(null)
-      setInviteInfo(null)
-      clearInviteFromUrl()
+      setSession({ loading: false, user: null, error: '' })
+    }
+  }
+
+  // Opens the same explicit InvitationReview screen used for the ?invite= email
+  // link, so accept/decline for an in-app "pending invitations" entry goes
+  // through the identical review-and-confirm step rather than a one-click accept.
+  const reviewInvitation = invitation => setInviteInfo({
+    id: invitation.id,
+    email: session.user?.email,
+    workspace_name: invitation.workspace_name,
+    role: invitation.role,
+    invited_by_name: invitation.invited_by_name,
+    expires_at: invitation.expires_at,
+    status: 'pending',
+  })
+
+  const dismissInvite = () => {
+    setInviteToken(null)
+    setInviteInfo(null)
+    setInviteActionError('')
+    clearInviteFromUrl()
+  }
+
+  const respondToInvite = async action => {
+    if (!inviteInfo) return
+    setInviteActionError('')
+    setInviteActionBusy(true)
+    try {
+      const response = await fetch(`/api/invitations/${inviteInfo.id}/${action}/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+      const data = await readJsonResponse(response, `Invitation could not be ${action === 'accept' ? 'accepted' : 'declined'}.`)
+      if (!response.ok) throw new Error(data.error || `Invitation could not be ${action === 'accept' ? 'accepted' : 'declined'}.`)
+      if (action === 'accept') {
+        const sessionResponse = await fetch('/api/auth/me/', { credentials: 'include' })
+        const sessionData = await sessionResponse.json()
+        if (sessionResponse.ok && sessionData.user) setSession(current => ({ ...current, user: sessionData.user }))
+        setActiveWorkspaceId(data.workspace.id)
+        toast.success(`Joined ${data.workspace.name}.`)
+      } else {
+        toast.success('Invitation declined.')
+      }
+      dismissInvite()
+    } catch (actionError) {
+      setInviteActionError(actionError.message)
+    } finally {
+      setInviteActionBusy(false)
     }
   }
 
@@ -401,6 +445,8 @@ function App() {
   }, [tasks, selectedFilter, searchQuery, today])
   if (session.loading) return <BrandedStatusScreen loading />
   if (!session.user) return <AuthScreen theme={theme} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onAuthenticated={handleAuthenticated} connectionError={session.error} inviteInfo={inviteInfo} />
+  if (inviteInfo) return <InvitationReview invitation={inviteInfo} currentUserEmail={session.user.email} submitting={inviteActionBusy} error={inviteActionError} onAccept={() => respondToInvite('accept')} onDecline={() => respondToInvite('decline')} onDismiss={dismissInvite} onSignOut={logout} />
+  if (!session.user.workspaces.length) return <NoWorkspaceScreen pendingInvitations={session.user.pending_invitations || []} onReview={reviewInvitation} onSignOut={logout} />
   const mapApiTask = apiTask => mapTaskFromApi(apiTask, {
     today,
     workspaceRole: session.user.workspaces.find(workspace => workspace.id === activeWorkspaceId)?.role,
@@ -580,32 +626,11 @@ function App() {
       setWorkspaceData(current => ({ ...current, invitations: [...current.invitations, responseData.invitation] }))
       setWorkspaceReload(current => current + 1)
       setInviteComposerOpen(false)
+      toast.success(responseData.message || `Invitation sent to ${inviteForm.email}.`)
     } catch (submitError) {
       setInviteError(submitError.message)
     } finally {
       setInviteSubmitting(false)
-    }
-  }
-  const logout = async () => {
-    try {
-      await fetch('/api/auth/logout/', { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-    } finally {
-      setSession({ loading: false, user: null, error: '' })
-    }
-  }
-  const acceptInvitation = async invitation => {
-    setWorkspaceError('')
-    try {
-      const response = await fetch(`/api/invitations/${invitation.id}/accept/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
-      const responseData = await readJsonResponse(response, 'Invitation could not be accepted.')
-      if (!response.ok) throw new Error(responseData.error || 'Invitation could not be accepted.')
-      const sessionResponse = await fetch('/api/auth/me/', { credentials: 'include' })
-      const sessionData = await sessionResponse.json()
-      if (!sessionResponse.ok || !sessionData.user) throw new Error('Workspace access could not be refreshed.')
-      setSession(current => ({ ...current, user: sessionData.user }))
-      setActiveWorkspaceId(responseData.workspace.id)
-    } catch (acceptError) {
-      toast.error(acceptError.message)
     }
   }
   const markNotificationsRead = async () => {
@@ -1121,7 +1146,7 @@ function App() {
       <main id="main-content" className="main-content flex-1 overflow-y-auto min-w-0" tabIndex="-1">
       {/* Bottom padding clears the fixed mobile pill nav; desktop has none. */}
       <div className="page-content pb-28 lg:pb-0">
-        {session.user.pending_invitations?.map(invitation => <div className="workspace-status" key={invitation.id}><span>You are invited to join {invitation.workspace_name} as a {invitation.role}.</span><button className="secondary-button" onClick={() => acceptInvitation(invitation)}>Accept invitation</button></div>)}
+        {session.user.pending_invitations?.map(invitation => <div className="workspace-status" key={invitation.id}><span>You are invited to join {invitation.workspace_name} as a {invitation.role}.</span><button className="secondary-button" onClick={() => reviewInvitation(invitation)}>Review invitation</button></div>)}
         {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}
         {workspaceError && <div className="workspace-status error" role="alert"><span>Workspace data could not be loaded: {workspaceError}</span><button className="secondary-button" onClick={() => setWorkspaceReload(current => current + 1)}>Retry</button></div>}
         {active !== 'Today' && <WorkspaceView key={workspaceId} active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} onNavigate={setActive} theme={theme} onSetTheme={setTheme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentWorkspace={currentWorkspace} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} currentUserEmail={session.user.email} currentUserId={session.user.id} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} onProfileUpdated={updateSessionUser} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} reportRange={reportRange} setReportRange={setReportRange} shiftLogUserId={shiftLogUserId} setShiftLogUserId={setShiftLogUserId} shiftLogPage={shiftLogPage} setShiftLogPage={setShiftLogPage} reportLastUpdated={reportLastUpdated} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => openTaskModal()} onOpenTask={setSelectedTask} onActionError={message => toast.error(message)} onRefresh={() => setWorkspaceReload(current => current + 1)} onConfirm={confirmAction} />}
@@ -1530,11 +1555,17 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     onRefresh()
   }
   const cancelInvitation = async invitation => {
-    if (!(await onConfirm(`Cancel invitation for ${invitation.email}?`, { title: 'Cancel invitation', confirmLabel: 'Cancel invitation' }))) return
-    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/invitations/${invitation.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Invitation could not be cancelled.')
+    if (!(await onConfirm(`Revoke invitation for ${invitation.email}?`, { title: 'Revoke invitation', confirmLabel: 'Revoke invitation' }))) return
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/invitations/${invitation.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Invitation could not be revoked.')
     if (!responseData) return
     setLocalData(current => ({ ...current, invitations: current.invitations.map(item => item.id === invitation.id ? { ...item, status: 'cancelled' } : item) }))
     onRefresh()
+  }
+  const resendInvitation = async invitation => {
+    const responseData = await runAction(async () => fetch(`/api/workspaces/${workspaceId}/invitations/${invitation.id}/resend/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } }), 'Invitation could not be resent.')
+    if (!responseData) return
+    setLocalData(current => ({ ...current, invitations: current.invitations.map(item => item.id === invitation.id ? responseData.invitation : item) }))
+    toast.success(`Invitation resent to ${invitation.email}.`)
   }
   const title = active === 'My tasks' ? 'My tasks' : active
   const subtitle = {
@@ -1794,7 +1825,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   }
 
   if (active === 'Team board') {
-    return <TeamBoardView tasks={tasks} members={localData.members} projects={localData.projects} scope={teamBoardScope} onScopeChange={setTeamBoardScope} invitations={localData.invitations} canManageMembers={canManageMembers} onInvite={() => openComposer('invite')} onComplete={onComplete} onStatusChange={onStatusChange} onOpenTask={onOpenTask} onUpdateMemberRole={updateMemberRole} onRemoveMember={removeMember} onCancelInvitation={cancelInvitation} />
+    return <TeamBoardView tasks={tasks} members={localData.members} projects={localData.projects} scope={teamBoardScope} onScopeChange={setTeamBoardScope} invitations={localData.invitations} canManageMembers={canManageMembers} onInvite={() => openComposer('invite')} onComplete={onComplete} onStatusChange={onStatusChange} onOpenTask={onOpenTask} onUpdateMemberRole={updateMemberRole} onRemoveMember={removeMember} onCancelInvitation={cancelInvitation} onResendInvitation={resendInvitation} />
   }
 
   if (active === 'My tasks') {

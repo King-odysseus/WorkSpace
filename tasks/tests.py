@@ -1035,12 +1035,129 @@ class TaskApiTests(TestCase):
         self.assertEqual(invitation.email, 'new-member@example.com')
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['new-member@example.com'])
-        self.assertIn(str(invitation.id), mail.outbox[0].body)
+        self.assertIn(invitation.token, mail.outbox[0].body)
+        self.assertNotIn(f'invite={invitation.id}', mail.outbox[0].body)
 
-        public_lookup = self.client.get(reverse('invitation-public-detail', args=[invitation.id]))
+        public_lookup = self.client.get(reverse('invitation-public-detail', args=[invitation.token]))
         self.assertEqual(public_lookup.status_code, 200)
         self.assertEqual(public_lookup.json()['invitation']['email'], 'new-member@example.com')
         self.assertEqual(public_lookup.json()['invitation']['workspace_name'], self.workspace.name)
+
+        wrong_token = self.client.get(reverse('invitation-public-detail', args=['not-a-real-token']))
+        self.assertEqual(wrong_token.status_code, 404)
+
+    def test_invitation_creation_is_generic_for_existing_and_new_accounts(self):
+        User.objects.create_user(username='existing-elsewhere@example.com', email='existing-elsewhere@example.com', password='secure-pass-123')
+        for email in ('existing-elsewhere@example.com', 'brand-new-person@example.com'):
+            response = self.client.post(
+                reverse('invitation-list', args=[self.workspace.id]),
+                data=json.dumps({'email': email, 'role': 'member'}),
+                content_type='application/json',
+            )
+            self.assertEqual(response.status_code, 201)
+            body = response.json()
+            self.assertEqual(set(body['invitation']), {'id', 'workspace_id', 'email', 'role', 'status', 'invited_by', 'invited_by_name', 'created_at', 'last_sent_at', 'expires_at'})
+            self.assertNotIn('name', body['invitation'])
+            self.assertNotIn('avatar_url', body['invitation'])
+            self.assertEqual(body['message'], f'Invitation sent to {email}. They will gain access after accepting.')
+
+    def test_manager_cannot_invite_another_manager(self):
+        manager = User.objects.create_user(username='manager@example.com', email='manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        self.client.force_login(manager)
+        response = self.client.post(
+            reverse('invitation-list', args=[self.workspace.id]),
+            data=json.dumps({'email': 'new-manager@example.com', 'role': 'manager'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+        member_role_response = self.client.post(
+            reverse('invitation-list', args=[self.workspace.id]),
+            data=json.dumps({'email': 'new-member2@example.com', 'role': 'member'}),
+            content_type='application/json',
+        )
+        self.assertEqual(member_role_response.status_code, 201)
+
+    def test_cannot_invite_own_email(self):
+        response = self.client.post(
+            reverse('invitation-list', args=[self.workspace.id]),
+            data=json.dumps({'email': self.user.email, 'role': 'member'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_duplicate_pending_invitation_is_rejected_not_recreated(self):
+        first = self.client.post(
+            reverse('invitation-list', args=[self.workspace.id]),
+            data=json.dumps({'email': 'dupe@example.com', 'role': 'member'}),
+            content_type='application/json',
+        )
+        self.assertEqual(first.status_code, 201)
+        second = self.client.post(
+            reverse('invitation-list', args=[self.workspace.id]),
+            data=json.dumps({'email': 'dupe@example.com', 'role': 'manager'}),
+            content_type='application/json',
+        )
+        self.assertEqual(second.status_code, 409)
+        self.assertEqual(WorkspaceInvitation.objects.filter(email='dupe@example.com').count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_resend_enforces_cooldown_and_rotates_token(self):
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='resend@example.com', role='member', invited_by=self.user)
+        old_token = invitation.token
+        immediate = self.client.post(reverse('invitation-resend', args=[self.workspace.id, invitation.id]))
+        self.assertEqual(immediate.status_code, 429)
+        invitation.last_sent_at = timezone.now() - timedelta(minutes=10)
+        invitation.save(update_fields=['last_sent_at'])
+        resent = self.client.post(reverse('invitation-resend', args=[self.workspace.id, invitation.id]))
+        self.assertEqual(resent.status_code, 200)
+        invitation.refresh_from_db()
+        self.assertNotEqual(invitation.token, old_token)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_expired_invitation_cannot_be_accepted(self):
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='expired@example.com', role='member', invited_by=self.user)
+        invitation.last_sent_at = timezone.now() - timedelta(days=WorkspaceInvitation.EXPIRY_DAYS, minutes=1)
+        invitation.save(update_fields=['last_sent_at'])
+        invitee = User.objects.create_user(username='expired@example.com', email='expired@example.com', password='secure-pass-123')
+        self.client.force_login(invitee)
+        response = self.client.post(reverse('invitation-accept', args=[invitation.id]))
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(Membership.objects.filter(workspace=self.workspace, user=invitee).exists())
+
+    def test_invitee_can_decline_and_a_second_accept_is_rejected(self):
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='decliner@example.com', role='member', invited_by=self.user)
+        invitee = User.objects.create_user(username='decliner@example.com', email='decliner@example.com', password='secure-pass-123')
+        self.client.force_login(invitee)
+        decline = self.client.post(reverse('invitation-decline', args=[invitation.id]))
+        self.assertEqual(decline.status_code, 200)
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, 'declined')
+        self.assertFalse(Membership.objects.filter(workspace=self.workspace, user=invitee).exists())
+        accept_after_decline = self.client.post(reverse('invitation-accept', args=[invitation.id]))
+        self.assertEqual(accept_after_decline.status_code, 409)
+
+    def test_repeated_accept_does_not_duplicate_membership_or_change_role(self):
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='repeat@example.com', role='manager', invited_by=self.user)
+        invitee = User.objects.create_user(username='repeat@example.com', email='repeat@example.com', password='secure-pass-123')
+        self.client.force_login(invitee)
+        first = self.client.post(reverse('invitation-accept', args=[invitation.id]))
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(Membership.objects.filter(workspace=self.workspace, user=invitee).count(), 1)
+        second_invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='repeat@example.com', role='member', invited_by=self.user, status='pending')
+        second = self.client.post(reverse('invitation-accept', args=[second_invitation.id]))
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(Membership.objects.filter(workspace=self.workspace, user=invitee).count(), 1)
+        membership = Membership.objects.get(workspace=self.workspace, user=invitee)
+        self.assertEqual(membership.role, 'manager')
+
+    def test_revoked_invitation_cannot_be_accepted(self):
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='revoked@example.com', role='member', invited_by=self.user)
+        self.client.delete(reverse('invitation-detail', args=[self.workspace.id, invitation.id]))
+        invitee = User.objects.create_user(username='revoked@example.com', email='revoked@example.com', password='secure-pass-123')
+        self.client.force_login(invitee)
+        response = self.client.post(reverse('invitation-accept', args=[invitation.id]))
+        self.assertEqual(response.status_code, 409)
 
     def test_regular_member_cannot_create_a_workspace_invitation(self):
         member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')

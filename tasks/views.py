@@ -13,12 +13,13 @@ from django.db.models import Count, Max, Q
 from django.core.exceptions import ValidationError
 from django.core.paginator import EmptyPage, Paginator
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceWebhook, WorkShift
+from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
@@ -1810,10 +1811,27 @@ def member_detail(request, workspace_id, user_id):
     return JsonResponse({'member': membership.as_dict()})
 
 
+INVITATION_ACTOR_DAILY_LIMIT = 30
+INVITATION_WORKSPACE_DAILY_LIMIT = 100
+
+
+def _rate_limit_exceeded(key, limit):
+    """Cache-backed fixed-window counter (no new dependency: django.core.cache,
+    already used elsewhere in the project). Returns True once ``limit`` calls
+    have been recorded against ``key`` within the current UTC day."""
+    day_key = f'{key}-{timezone.now():%Y%m%d}'
+    try:
+        count = cache.incr(day_key)
+    except ValueError:
+        cache.set(day_key, 1, timeout=86400)
+        count = 1
+    return count > limit
+
+
 @require_http_methods(['GET', 'POST'])
 def invitation_list(request, workspace_id):
     membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
-    _, error = membership_check(request, workspace_id)
+    actor, error = membership_check(request, workspace_id)
     if error:
         return error
     if request.method == 'GET':
@@ -1832,43 +1850,113 @@ def invitation_list(request, workspace_id):
         return JsonResponse({'error': 'A valid email address is required.'}, status=400)
     if role not in {'manager', 'member'}:
         return JsonResponse({'error': 'Invitation role must be manager or member.'}, status=400)
+    # A manager may only grant the role they themselves are limited to managing
+    # (see member_detail's identical rule); only an owner may invite a manager.
+    # No role can transfer ownership - 'owner' is not an accepted invite role.
+    if actor.role == 'manager' and role != 'member':
+        return JsonResponse({'error': 'Managers can only invite members.'}, status=403)
+    if email == request.user.email.lower():
+        return JsonResponse({'error': 'You cannot invite yourself.'}, status=400)
     if Membership.objects.filter(workspace_id=workspace_id, user__email__iexact=email).exists():
         return JsonResponse({'error': 'This user is already a workspace member.'}, status=409)
-    invitation, created = WorkspaceInvitation.objects.get_or_create(
-        workspace_id=workspace_id,
-        email=email,
-        status='pending',
-        defaults={'role': role, 'invited_by': request.user},
-    )
-    if not created:
-        invitation.role = role
-        invitation.invited_by = request.user
-        invitation.save(update_fields=['role', 'invited_by'])
+    if _rate_limit_exceeded(f'invite-rate-actor-{request.user.id}', INVITATION_ACTOR_DAILY_LIMIT):
+        return JsonResponse({'error': 'You have sent too many invitations today. Try again tomorrow.'}, status=429)
+    if _rate_limit_exceeded(f'invite-rate-workspace-{workspace_id}', INVITATION_WORKSPACE_DAILY_LIMIT):
+        return JsonResponse({'error': 'This workspace has sent too many invitations today. Try again tomorrow.'}, status=429)
+
+    existing = WorkspaceInvitation.objects.filter(workspace_id=workspace_id, email=email, status='pending').first()
+    if existing is not None and not existing.is_expired():
+        return JsonResponse({'error': 'An invitation is already pending for this address.', 'invitation': existing.as_dict()}, status=409)
+    try:
+        with transaction.atomic():
+            if existing is not None:
+                # The previous invitation lapsed - rotate its secret rather than
+                # leaving the old emailed link able to resolve to a live invite.
+                existing.role = role
+                existing.invited_by = request.user
+                existing.status = 'pending'
+                existing.token = generate_invitation_token()
+                existing.last_sent_at = timezone.now()
+                existing.save(update_fields=['role', 'invited_by', 'status', 'token', 'last_sent_at'])
+                invitation, created = existing, True
+            else:
+                invitation = WorkspaceInvitation.objects.create(workspace_id=workspace_id, email=email, role=role, invited_by=request.user)
+                created = True
+    except IntegrityError:
+        return JsonResponse({'error': 'An invitation is already pending for this address.'}, status=409)
     send_invitation_email(invitation)
-    return JsonResponse({'invitation': invitation.as_dict()}, status=201 if created else 200)
+    record_activity(workspace_id, request.user, 'invitation_sent', f'{request.user.get_full_name() or request.user.email} invited {invitation.email} as a {invitation.role}.')
+    return JsonResponse({'invitation': invitation.as_dict(), 'message': f'Invitation sent to {invitation.email}. They will gain access after accepting.'}, status=201 if created else 200)
+
+
+@require_http_methods(['POST'])
+def invitation_resend(request, workspace_id, invitation_id):
+    _, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    invitation = WorkspaceInvitation.objects.select_related('workspace').filter(id=invitation_id, workspace_id=workspace_id, status='pending').first()
+    if invitation is None:
+        return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
+    if not invitation.can_resend():
+        return JsonResponse({'error': 'Please wait a few minutes before resending this invitation.', 'retry_at': invitation.resend_available_at().isoformat()}, status=429)
+    if _rate_limit_exceeded(f'invite-rate-actor-{request.user.id}', INVITATION_ACTOR_DAILY_LIMIT):
+        return JsonResponse({'error': 'You have sent too many invitations today. Try again tomorrow.'}, status=429)
+    invitation.token = generate_invitation_token()
+    invitation.last_sent_at = timezone.now()
+    invitation.save(update_fields=['token', 'last_sent_at'])
+    send_invitation_email(invitation)
+    record_activity(workspace_id, request.user, 'invitation_resent', f'{request.user.get_full_name() or request.user.email} resent an invitation to {invitation.email}.')
+    return JsonResponse({'invitation': invitation.as_dict()})
 
 
 @require_http_methods(['GET'])
-def invitation_public_detail(request, invitation_id):
-    invitation = WorkspaceInvitation.objects.select_related('workspace').filter(id=invitation_id, status='pending').first()
+def invitation_public_detail(request, token):
+    invitation = WorkspaceInvitation.objects.select_related('workspace', 'invited_by').filter(token=token).first()
     if invitation is None:
-        return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
-    return JsonResponse({'invitation': {'id': invitation.id, 'email': invitation.email, 'workspace_name': invitation.workspace.name, 'role': invitation.role}})
+        return JsonResponse({'error': 'Invitation was not found.'}, status=404)
+    return JsonResponse({'invitation': invitation.public_dict()})
+
+
+def _resolve_actionable_invitation(request, invitation_id):
+    """Shared guard for the authenticated accept/decline endpoints: requires
+    login, a still-live invitation, and an exact (case-insensitive) match
+    between the invited address and the signed-in account's own email. Row is
+    locked so a repeated or concurrent request cannot double-apply."""
+    if not request.user.is_authenticated:
+        return None, JsonResponse({'error': 'Authentication is required.'}, status=401)
+    invitation = WorkspaceInvitation.objects.select_for_update().select_related('workspace').filter(id=invitation_id).first()
+    if invitation is None:
+        return None, JsonResponse({'error': 'Invitation was not found.'}, status=404)
+    if invitation.status != 'pending' or invitation.is_expired():
+        return None, JsonResponse({'error': f'This invitation is {invitation.effective_status()} and can no longer be actioned.', 'status': invitation.effective_status()}, status=409)
+    if invitation.email.lower() != request.user.email.lower():
+        return None, JsonResponse({'error': 'This invitation is for a different email address. Sign out and sign in with the invited address.'}, status=403)
+    return invitation, None
 
 
 @require_http_methods(['POST'])
 def invitation_accept(request, invitation_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication is required.'}, status=401)
-    invitation = WorkspaceInvitation.objects.select_related('workspace').filter(id=invitation_id, status='pending').first()
-    if invitation is None:
-        return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
-    if invitation.email.lower() != request.user.email.lower():
-        return JsonResponse({'error': 'This invitation belongs to a different email address.'}, status=403)
-    membership, _ = Membership.objects.get_or_create(workspace=invitation.workspace, user=request.user, defaults={'role': invitation.role})
-    invitation.status = 'accepted'
-    invitation.save(update_fields=['status'])
+    with transaction.atomic():
+        invitation, error = _resolve_actionable_invitation(request, invitation_id)
+        if error:
+            return error
+        membership, member_created = Membership.objects.get_or_create(workspace=invitation.workspace, user=request.user, defaults={'role': invitation.role})
+        invitation.status = 'accepted'
+        invitation.save(update_fields=['status'])
+    record_activity(invitation.workspace_id, request.user, 'invitation_accepted', f'{request.user.get_full_name() or request.user.email} accepted an invitation to join as a {invitation.role}.')
     return JsonResponse({'workspace': {'id': invitation.workspace_id, 'name': invitation.workspace.name, 'slug': invitation.workspace.slug}, 'membership': membership.as_dict()})
+
+
+@require_http_methods(['POST'])
+def invitation_decline(request, invitation_id):
+    with transaction.atomic():
+        invitation, error = _resolve_actionable_invitation(request, invitation_id)
+        if error:
+            return error
+        invitation.status = 'declined'
+        invitation.save(update_fields=['status'])
+    record_activity(invitation.workspace_id, request.user, 'invitation_declined', f'{request.user.get_full_name() or request.user.email} declined an invitation to join.')
+    return JsonResponse({'invitation': {'id': invitation.id, 'status': invitation.status}})
 
 
 @require_http_methods(['DELETE'])

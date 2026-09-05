@@ -407,6 +407,30 @@ html[data-theme='light'] .theme-toggle {
   line-height: 1.5;
 }
 
+.invitation-review-details {
+  margin: 4px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--workspace-border, #E2E8F0);
+  border-radius: 10px;
+  background: var(--workspace-surface-soft, #F8FAFC);
+}
+
+.invitation-review-details p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.invitation-review-details p:last-child {
+  margin-bottom: 0;
+}
+
+.invitation-review-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .auth-google-wrap {
   margin-top: 16px;
 }
@@ -3346,12 +3370,10 @@ label > [data-slot='select-trigger'].app-select-trigger { width:100%; }
 .calendar-filter-row select { min-width:140px; min-height:36px; padding:0 10px; font-size:12px; }
 .calendar-summary-badges { grid-area:summary; display:flex; flex-wrap:wrap; gap:8px; }
 .calendar-summary-badge { display:inline-flex; align-items:center; min-height:28px; padding:0 10px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font-size:11px; font-weight:700; }
-.close-button:hover, .sidebar-toggle:hover, .help-button:hover { color:var(--workspace-on-accent) !important; }
+.close-button:hover, .sidebar-toggle:hover { color:var(--workspace-on-accent) !important; }
 .rich-toolbar-button.is-active, .spreadsheet-tabs button.active, .spreadsheet-scroll th.active { color:var(--workspace-on-accent) !important; }
-/* The default shared Button changes from navy to bronze on hover. Keep its
-   foreground dark enough for that lighter background on every page. */
-button[data-slot='button'].bg-primary:hover,
-button[data-slot='button'][class*='bg-primary']:hover { color:var(--workspace-on-accent) !important; }
+/* Shared Button hover colours come from its paired secondary theme tokens.
+   An accent foreground override would put dark text on the dark secondary. */
 @media (max-width:600px) {
   .calendar-toolbar { grid-template-columns:1fr; grid-template-areas:"title" "actions" "filters" "summary"; gap:12px; }
   .calendar-toolbar-actions { justify-content:flex-start; }

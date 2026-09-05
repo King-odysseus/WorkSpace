@@ -1,6 +1,8 @@
 from django.db import models
 import logging
+import secrets
 import uuid
+from datetime import timedelta
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.storage import FileSystemStorage
@@ -10,6 +12,12 @@ from django.conf import settings
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def generate_invitation_token():
+    # url-safe, unguessable secret used for the unauthenticated public preview
+    # link mailed to the recipient - never derived from or exposing the row id.
+    return secrets.token_urlsafe(32)
 
 
 def private_screen_capture_storage():
@@ -91,18 +99,57 @@ class Membership(models.Model):
 
 
 class WorkspaceInvitation(models.Model):
-    STATUS_CHOICES = [('pending', 'Pending'), ('accepted', 'Accepted'), ('cancelled', 'Cancelled')]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+        ('cancelled', 'Revoked'),
+    ]
+
+    # Documented default lifetime for a sent (or resent) invitation - see
+    # Instruct.md invitation review: "If expiry is absent, use a documented
+    # default, such as seven days." Kept as a class constant rather than a
+    # stored column so tuning it never needs a migration or backfill.
+    EXPIRY_DAYS = 7
+    RESEND_COOLDOWN_MINUTES = 5
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='invitations')
     email = models.EmailField()
     role = models.CharField(max_length=20, choices=Membership.ROLE_CHOICES, default='member')
     invited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_invitations')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    # Unguessable secret for the public, pre-authentication preview link mailed
+    # to the recipient. The primary key stays sequential and is fine for every
+    # authenticated/admin lookup, but must never by itself authorize the public
+    # lookup - only the token does.
+    token = models.CharField(max_length=64, unique=True, default=generate_invitation_token, editable=False)
+    last_sent_at = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['status', '-created_at']
-        constraints = [models.UniqueConstraint(fields=['workspace', 'email', 'status'], name='unique_workspace_invitation_status')]
+        constraints = [
+            # Scoped to 'pending' only: a workspace/email pair may have at most one
+            # LIVE invitation, but history (accepted/declined/cancelled) can repeat
+            # across re-invitations of a former or returning member.
+            models.UniqueConstraint(fields=['workspace', 'email'], condition=models.Q(status='pending'), name='unique_pending_workspace_invitation'),
+        ]
+
+    @property
+    def expires_at(self):
+        return self.last_sent_at + timedelta(days=self.EXPIRY_DAYS)
+
+    def is_expired(self):
+        return self.status == 'pending' and timezone.now() >= self.expires_at
+
+    def effective_status(self):
+        return 'expired' if self.is_expired() else self.status
+
+    def resend_available_at(self):
+        return self.last_sent_at + timedelta(minutes=self.RESEND_COOLDOWN_MINUTES)
+
+    def can_resend(self):
+        return timezone.now() >= self.resend_available_at()
 
     def as_dict(self):
         return {
@@ -110,9 +157,23 @@ class WorkspaceInvitation(models.Model):
             'workspace_id': self.workspace_id,
             'email': self.email,
             'role': self.role,
-            'status': self.status,
+            'status': self.effective_status(),
             'invited_by': self.invited_by_id,
+            'invited_by_name': self.invited_by.get_full_name() or self.invited_by.email,
             'created_at': self.created_at.isoformat(),
+            'last_sent_at': self.last_sent_at.isoformat(),
+            'expires_at': self.expires_at.isoformat(),
+        }
+
+    def public_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'workspace_name': self.workspace.name,
+            'role': self.role,
+            'status': self.effective_status(),
+            'expires_at': self.expires_at.isoformat(),
+            'invited_by_name': self.invited_by.get_full_name() or self.invited_by.email,
         }
 
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import userEvent from '@testing-library/user-event'
-import { AuthScreen } from './AuthScreen.jsx'
+import { AuthScreen, InvitationReview, NoWorkspaceScreen } from './AuthScreen.jsx'
 import { mockApi, expectRequest } from '../test/setup-tests.js'
 
 const renderScreen = (props = {}) => {
@@ -82,6 +82,68 @@ describe('AuthScreen invitation handling', () => {
   it('shows no invitation banner when there is no invitation', () => {
     renderScreen()
     expect(screen.queryByText(/invited to join/i)).not.toBeInTheDocument()
+  })
+
+  it('does not require a workspace name when joining solely via an invitation', async () => {
+    const fetchMock = mockApi({ '/api/auth/csrf/': { status: 'ok' }, '/api/auth/me/': { user } })
+    renderScreen({ inviteInfo })
+
+    await userEvent.click(screen.getByRole('button', { name: /create an account/i }))
+    expect(screen.queryByLabelText(/workspace name/i)).not.toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText(/first name/i), 'Ada')
+    await userEvent.type(screen.getByLabelText(/password/i), 'secure-pass-123')
+    await userEvent.click(screen.getByRole('button', { name: /create workspace/i }))
+
+    const [, init] = await waitFor(() => expectRequest(fetchMock, '/api/auth/me/', 'POST'))
+    expect(JSON.parse(init.body)).toMatchObject({ join_only: true, email: 'invitee@example.com' })
+  })
+})
+
+describe('InvitationReview', () => {
+  const invitation = { id: 7, email: 'invitee@example.com', workspace_name: 'Northstar', role: 'member', status: 'pending', invited_by_name: 'Ada Lovelace', expires_at: '2026-09-12T00:00:00Z' }
+
+  it('lets the matching account accept the invitation', async () => {
+    const onAccept = vi.fn()
+    render(<InvitationReview invitation={invitation} currentUserEmail="invitee@example.com" onAccept={onAccept} onDecline={vi.fn()} onDismiss={vi.fn()} onSignOut={vi.fn()} />)
+    expect(screen.getByText('Northstar')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /accept invitation/i }))
+    expect(onAccept).toHaveBeenCalled()
+  })
+
+  it('lets the matching account decline the invitation', async () => {
+    const onDecline = vi.fn()
+    render(<InvitationReview invitation={invitation} currentUserEmail="invitee@example.com" onAccept={vi.fn()} onDecline={onDecline} onDismiss={vi.fn()} onSignOut={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /decline/i }))
+    expect(onDecline).toHaveBeenCalled()
+  })
+
+  it('blocks acceptance and offers sign-out when the signed-in account does not match', () => {
+    render(<InvitationReview invitation={invitation} currentUserEmail="someone-else@example.com" onAccept={vi.fn()} onDecline={vi.fn()} onDismiss={vi.fn()} onSignOut={vi.fn()} />)
+    expect(screen.getByRole('alert')).toHaveTextContent('does not match the account')
+    expect(screen.queryByRole('button', { name: /accept invitation/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
+  })
+
+  it('shows an expired invitation as unactionable', () => {
+    render(<InvitationReview invitation={{ ...invitation, status: 'expired' }} currentUserEmail="invitee@example.com" onAccept={vi.fn()} onDecline={vi.fn()} onDismiss={vi.fn()} onSignOut={vi.fn()} />)
+    expect(screen.getByRole('alert')).toHaveTextContent('expired')
+    expect(screen.queryByRole('button', { name: /accept invitation/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('NoWorkspaceScreen', () => {
+  it('lists pending invitations for a user with no memberships', async () => {
+    const onReview = vi.fn()
+    const invitation = { id: 9, workspace_name: 'Northstar', role: 'member', invited_by_name: 'Ada Lovelace' }
+    render(<NoWorkspaceScreen pendingInvitations={[invitation]} onReview={onReview} onSignOut={vi.fn()} />)
+    expect(screen.getByText(/Northstar/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /review invitation/i }))
+    expect(onReview).toHaveBeenCalledWith(invitation)
+  })
+
+  it('explains there is nothing to review when there are no invitations', () => {
+    render(<NoWorkspaceScreen pendingInvitations={[]} onReview={vi.fn()} onSignOut={vi.fn()} />)
+    expect(screen.getByText(/no pending workspace invitations/i)).toBeInTheDocument()
   })
 })
 

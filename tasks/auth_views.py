@@ -40,8 +40,17 @@ def user_payload(user):
             for membership in user.workspace_memberships.select_related('workspace').all()
         ],
         'pending_invitations': [
-            {'id': invitation.id, 'workspace_id': invitation.workspace_id, 'workspace_name': invitation.workspace.name, 'role': invitation.role, 'created_at': invitation.created_at.isoformat()}
-            for invitation in WorkspaceInvitation.objects.filter(email__iexact=user.email, status='pending').select_related('workspace')
+            {
+                'id': invitation.id,
+                'workspace_id': invitation.workspace_id,
+                'workspace_name': invitation.workspace.name,
+                'role': invitation.role,
+                'invited_by_name': invitation.invited_by.get_full_name() or invitation.invited_by.email,
+                'created_at': invitation.created_at.isoformat(),
+                'expires_at': invitation.expires_at.isoformat(),
+            }
+            for invitation in WorkspaceInvitation.objects.filter(email__iexact=user.email, status='pending').select_related('workspace', 'invited_by')
+            if not invitation.is_expired()
         ],
     }
 
@@ -84,6 +93,11 @@ def auth_me(request):
     if User.objects.filter(email__iexact=email).exists():
         return JsonResponse({'error': 'An account with this email already exists.'}, status=409)
     username = email
+    # A visitor who arrived solely to accept a workspace invitation should not
+    # also be handed a throwaway personal workspace - the frontend sets
+    # join_only when it has a pending invite preview to hand back to after
+    # authentication, and omits/blanks workspace_name in that case.
+    join_only = bool(payload.get('join_only')) and not str(payload.get('workspace_name', '')).strip()
     workspace_name = str(payload.get('workspace_name', '')).strip() or 'My Workspace'
     if len(workspace_name) > 120:
         return JsonResponse({'error': 'Workspace name must be 120 characters or fewer.'}, status=400)
@@ -92,9 +106,10 @@ def auth_me(request):
         return JsonResponse({'error': 'First name must be 150 characters or fewer.'}, status=400)
     with transaction.atomic():
         user = User.objects.create_user(username=username, email=email, password=password, first_name=first_name)
-        workspace = Workspace.objects.create(name=workspace_name, slug=f'{slugify(workspace_name)}-{user.id}')
-        Membership.objects.create(workspace=workspace, user=user, role='owner')
-        PlanBucket.objects.create(workspace=workspace, name='Backlog', position=0)
+        if not join_only:
+            workspace = Workspace.objects.create(name=workspace_name, slug=f'{slugify(workspace_name)}-{user.id}')
+            Membership.objects.create(workspace=workspace, user=user, role='owner')
+            PlanBucket.objects.create(workspace=workspace, name='Backlog', position=0)
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     return JsonResponse({'authenticated': True, 'user': user_payload(user)}, status=201)
 

@@ -29,7 +29,9 @@ def send_workspace_email(to_email, subject, body):
 
 
 def send_invitation_email(invitation):
-    accept_url = f'{settings.FRONTEND_BASE_URL}/?invite={invitation.id}'
+    # The link carries the invitation's unguessable token, never its (sequential)
+    # id - the public preview endpoint only resolves by token. Never log this URL.
+    accept_url = f'{settings.FRONTEND_BASE_URL}/?invite={invitation.token}'
     inviter_name = invitation.invited_by.get_full_name() or invitation.invited_by.email
     subject = f'You are invited to join {invitation.workspace.name} on WorkSpace'
     body = (
