@@ -26,6 +26,31 @@ from .push import send_push_to_user
 REMINDER_EMAIL_KINDS = {'calendar_reminder', 'due_soon_reminder', 'overdue_reminder', 'stale_update_reminder'}
 
 
+def paginate_response(request, queryset):
+    """Slice ``queryset`` by the ``page``/``page_size`` query params, matching the
+    ``pagination`` block shape used by ``activity_list``. Returns ``(page, pagination)``;
+    when the params are malformed, ``page`` is None and ``pagination`` is the 400
+    response to return to the caller."""
+    try:
+        page_size = min(max(int(request.GET.get('page_size', 100)), 1), 500)
+        page_number = max(int(request.GET.get('page', 1)), 1)
+    except ValueError:
+        return None, JsonResponse({'error': 'page and page_size must be integers.'}, status=400)
+    paginator = Paginator(queryset, page_size)
+    try:
+        page = paginator.page(page_number)
+    except EmptyPage:
+        page = paginator.page(paginator.num_pages)
+    return page, {
+        'page': page.number,
+        'page_size': page_size,
+        'total_items': paginator.count,
+        'total_pages': paginator.num_pages,
+        'has_next': page.has_next(),
+        'has_previous': page.has_previous(),
+    }
+
+
 def user_workspace_ids(user):
     return user.workspace_memberships.values_list('workspace_id', flat=True)
 
@@ -1028,7 +1053,10 @@ def task_template_list(request, workspace_id):
         return error
     if request.method == 'GET':
         templates = TaskTemplate.objects.filter(workspace_id=workspace_id)
-        return JsonResponse({'task_templates': [template.as_dict() for template in templates]})
+        page, pagination = paginate_response(request, templates)
+        if page is None:
+            return pagination
+        return JsonResponse({'task_templates': [template.as_dict() for template in page.object_list], 'pagination': pagination})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -1116,7 +1144,10 @@ def project_template_list(request, workspace_id):
         return error
     if request.method == 'GET':
         templates = ProjectTemplate.objects.filter(workspace_id=workspace_id)
-        return JsonResponse({'project_templates': [template.as_dict() for template in templates]})
+        page, pagination = paginate_response(request, templates)
+        if page is None:
+            return pagination
+        return JsonResponse({'project_templates': [template.as_dict() for template in page.object_list], 'pagination': pagination})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -1650,7 +1681,10 @@ def workspace_webhook_list(request, workspace_id):
         return error
     if request.method == 'GET':
         hooks = WorkspaceWebhook.objects.filter(workspace_id=workspace_id)
-        return JsonResponse({'webhooks': [hook.as_dict() for hook in hooks]})
+        page, pagination = paginate_response(request, hooks)
+        if page is None:
+            return pagination
+        return JsonResponse({'webhooks': [hook.as_dict() for hook in page.object_list], 'pagination': pagination})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -1743,8 +1777,11 @@ def member_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
-    members = Membership.objects.filter(workspace_id=workspace_id).select_related('user', 'user__profile')
-    return JsonResponse({'members': [member.as_dict() for member in members]})
+    members = Membership.objects.filter(workspace_id=workspace_id).select_related('user', 'user__profile').order_by('joined_at', 'id')
+    page, pagination = paginate_response(request, members)
+    if page is None:
+        return pagination
+    return JsonResponse({'members': [member.as_dict() for member in page.object_list], 'pagination': pagination})
 
 
 @require_http_methods(['PATCH', 'DELETE'])
@@ -1781,7 +1818,10 @@ def invitation_list(request, workspace_id):
         return error
     if request.method == 'GET':
         invitations = WorkspaceInvitation.objects.filter(workspace_id=workspace_id)
-        return JsonResponse({'invitations': [invitation.as_dict() for invitation in invitations]})
+        page, pagination = paginate_response(request, invitations)
+        if page is None:
+            return pagination
+        return JsonResponse({'invitations': [invitation.as_dict() for invitation in page.object_list], 'pagination': pagination})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -1853,7 +1893,10 @@ def project_list(request, workspace_id):
         return error
     if request.method == 'GET':
         projects = Project.objects.filter(workspace_id=workspace_id)
-        return JsonResponse({'projects': [project.as_dict() for project in projects]})
+        page, pagination = paginate_response(request, projects)
+        if page is None:
+            return pagination
+        return JsonResponse({'projects': [project.as_dict() for project in page.object_list], 'pagination': pagination})
 
     try:
         payload = json.loads(request.body or '{}')

@@ -71,7 +71,7 @@ function SettingsView({ theme, onSetTheme, sidebarCollapsed, onToggleSidebar, cu
   useEffect(() => {
     if (!workspaceId || section !== 'integrations') return undefined
     let isCurrent = true
-    fetch(`/api/workspaces/${workspaceId}/webhooks/`, { credentials: 'include', headers: { 'X-Workspace-Id': String(workspaceId) } })
+    fetch(`/api/workspaces/${workspaceId}/webhooks/?page_size=500`, { credentials: 'include', headers: { 'X-Workspace-Id': String(workspaceId) } })
       .then(response => response.json().then(data => ({ ok: response.ok, data })))
       .then(({ ok, data }) => { if (isCurrent && ok) setWebhooks(data.webhooks) })
       .catch(() => { if (isCurrent) setWebhooksError('Webhooks could not be loaded.') })
