@@ -6,6 +6,31 @@ import sys
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Local development reads configuration from a .env file next to manage.py. Real
+# environments (Docker, Railway) inject the same names as real environment
+# variables, so anything already present in the environment always wins and the
+# file is simply absent there. Parsed by hand rather than with python-dotenv to
+# keep the dependency list as small as the rest of the project's integrations.
+def load_dotenv(path):
+    try:
+        lines = path.read_text(encoding='utf-8').splitlines()
+    except (OSError, UnicodeDecodeError):
+        return
+    for line in lines:
+        entry = line.strip()
+        if not entry or entry.startswith('#') or '=' not in entry:
+            continue
+        name, _, value = entry.partition('=')
+        name = name.removeprefix('export ').strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        if name:
+            os.environ.setdefault(name, value)
+
+
+load_dotenv(BASE_DIR / '.env')
 development_secret = 'local-development-only-key-change-before-deploy'
 SECRET_KEY = os.environ.get('WORKSPACE_SECRET_KEY', development_secret)
 DEBUG = os.environ.get('WORKSPACE_DEBUG', 'true').lower() == 'true'
