@@ -213,7 +213,10 @@ SESSION_COOKIE_AGE = int(os.environ.get('WORKSPACE_SESSION_COOKIE_AGE', 7 * 24 *
 # core/brevo_api_email.py. Falls back to the console backend (prints instead
 # of sending) whenever no key is configured, so local dev and CI never
 # attempt a real network send.
-BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '').strip()
+# .strip('"\'') as well as whitespace: a key pasted into a dashboard field with
+# its surrounding quotes included is otherwise sent verbatim and rejected as
+# "Key not found", which reads like a wrong key rather than a quoting mistake.
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '').strip().strip('"\'').strip()
 # Optional - same variable names as TijhaBooks. A Brevo API send must use a
 # verified sender, so these take priority over WORKSPACE_DEFAULT_FROM_EMAIL
 # when set (see tasks/mailer.py's BrevoAPIEmailBackend).
