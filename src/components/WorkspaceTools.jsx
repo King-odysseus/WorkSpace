@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
-import { AlignCenter, AlignLeft, AlignRight, Bold, Bot, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog.jsx'
+import Avatar from './Avatar.jsx'
 import { readJsonResponse } from '../lib/workspace-format.js'
 import { FORMULA_ERRORS, columnLabel, evaluateSheet } from '../lib/spreadsheet-formulas.js'
 
@@ -899,7 +900,7 @@ export function AssistantFlyout({ workspaceId, onClose, onHide }) {
   const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
   useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
   useEffect(() => { feedEndRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy])
-  useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Assistant unavailable.') }).catch(() => setError('Assistant unavailable.')) }, [workspaceId])
+  useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
   const clearConversation = () => { setTurns([]); setError(''); writeAiHistory(workspaceId, []) }
   const ask = async event => {
     event.preventDefault()
@@ -917,7 +918,7 @@ export function AssistantFlyout({ workspaceId, onClose, onHide }) {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/ai/chat/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ message: asked, provider, history }) })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Assistant unavailable.')
+      if (!response.ok) throw new Error(result.error || 'Zuri is unavailable.')
       const answered = [...withQuestion, { role: 'assistant', content: result.answer }]
       setTurns(answered)
       writeAiHistory(workspaceId, answered)
@@ -932,26 +933,27 @@ export function AssistantFlyout({ workspaceId, onClose, onHide }) {
   return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
     <DialogContent className="ai-chat-window" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
-        <DialogTitle className="ai-chat-title"><Bot size={24} /> AI assistant</DialogTitle>
+        <DialogTitle className="ai-chat-title"><Avatar name="Zuri" color="zuri" small /> Zuri</DialogTitle>
         <div className="ai-chat-actions">
           {turns.length > 0 && <button type="button" onClick={clearConversation} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={19} /></button>}
-          {onHide && <button type="button" onClick={onHide} aria-label="Hide AI button" title="Hide AI button (restore from your profile menu)"><EyeOff size={19} /></button>}
-          <button type="button" onClick={onClose} aria-label="Close assistant"><X size={22} /></button>
+          {onHide && <button type="button" onClick={onHide} aria-label="Hide Zuri button" title="Hide Zuri button (restore from your profile menu)"><EyeOff size={19} /></button>}
+          <button type="button" onClick={onClose} aria-label="Close Zuri"><X size={22} /></button>
         </div>
       </div>
       <div className="ai-chat-messages" aria-live="polite">
-        {!turns.length && !error && <p className="ai-chat-empty">Ask your workspace assistant a question.</p>}
+        {!turns.length && !error && <p className="ai-chat-empty">Ask Zuri a question.</p>}
         {turns.map((turn, index) => (
           <div className={`ai-chat-row is-${turn.role}`} key={`${turn.role}-${index}`}>
+            <span className="ai-chat-sender">{turn.role === 'user' ? 'You' : 'Zuri'}</span>
             <div className="ai-chat-bubble">{turn.content}</div>
           </div>
         ))}
-        {busy && <div className="ai-chat-row is-assistant"><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div>}
+        {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div>}
         {error && <div role="alert" className="ai-chat-error">{error}</div>}
         <div ref={feedEndRef} />
       </div>
       <form onSubmit={ask} className="ai-chat-composer">
-        <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to AI assistant" placeholder="Ask anything..." />
+        <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder="Ask anything..." />
         <button className="ai-chat-send" disabled={busy || !message.trim()} aria-label="Send message"><Send size={20} /></button>
       </form>
     </DialogContent>
@@ -1079,7 +1081,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Could not save AI settings.')
       setData(current => ({ ...current, ...result, can_manage: current.can_manage }))
-      toast.success('Workspace AI access settings saved.')
+      toast.success('Zuri access settings saved.')
     } catch (error) {
       setNotice(error.message || 'Could not save AI settings.')
     } finally {
@@ -1090,9 +1092,9 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   return <Card className="settings-panel p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p className="eyebrow">Company assistant</p>
-        <h2>AI providers & access</h2>
-        <p className="text-sm text-text-muted">Add the company credentials here. API keys are encrypted and are never shown again.</p>
+        <p className="eyebrow">Zuri</p>
+        <h2>Providers & access</h2>
+        <p className="text-sm text-text-muted">Add the company credentials that power Zuri here. API keys are encrypted and are never shown again.</p>
       </div>
       <button type="button" className="secondary-button" onClick={() => setHelpOpen(current => !current)}>
         <HelpCircle size={15} /> Setup help
@@ -1184,7 +1186,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
     <div className="mt-5">
       <label className="flex items-center gap-3 rounded-xl bg-surface-secondary px-4 py-3 text-sm font-semibold">
         <input type="checkbox" checked={settings.ai_enabled} onChange={event => updateSettings({ ai_enabled: event.target.checked })} disabled={!mayManage} />
-        Enable the assistant for this workspace
+        Enable Zuri for this workspace
       </label>
     </div>
 

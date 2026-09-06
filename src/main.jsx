@@ -15,7 +15,7 @@ import {
   AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Brush, Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ClipboardList,
   CircleHelp, Clock3, Copy, Filter, FileText, Hash, LayoutDashboard, LayoutGrid, Link2, LogOut, MessageSquare, MoreHorizontal,
   ChevronLeft, ChevronRight,
-  Bot, EyeOff, MonitorUp, Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
+  EyeOff, MonitorUp, Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
 } from 'lucide-react'
 import 'flowbite/dist/flowbite.css'
 import './tijhabooks-theme.css'
@@ -1038,7 +1038,7 @@ function App() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
-          {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-mobile-launcher" aria-label="Open AI assistant" aria-haspopup="dialog"><Bot size={20} /><span>Ask AI</span></button>}
+          {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-mobile-launcher" aria-label="Open Zuri" aria-haspopup="dialog"><Avatar name="Zuri" color="zuri" small /><span>Ask Zuri</span></button>}
 
           <div className="relative" ref={notifRef}>
             <button
@@ -1140,7 +1140,7 @@ function App() {
                   </button>
                 )}
                 <button type="button" onClick={() => { setAiLauncherVisibility(!aiLauncherHidden); setProfileMenuOpen(false) }} className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary">
-                  {aiLauncherHidden ? <Bot size={16} /> : <EyeOff size={16} />}{aiLauncherHidden ? 'Show AI button' : 'Hide AI button'}
+                  {aiLauncherHidden ? <Avatar name="Zuri" color="zuri" small /> : <EyeOff size={16} />}{aiLauncherHidden ? 'Show Zuri button' : 'Hide Zuri button'}
                 </button>
                 <button
                   type="button"
@@ -1173,11 +1173,13 @@ function App() {
       </main>
     </div>
 
-    {aiLauncherHidden && activeWorkspaceId && <button type="button" className="ai-restore-tab" aria-label="Show Ask AI button" title="Show Ask AI" onClick={() => {
+    {aiLauncherHidden && activeWorkspaceId && <button type="button" className="ai-restore-tab" aria-label="Show Ask Zuri button" title="Show Ask Zuri" onClick={() => {
       setAiLauncherVisibility(false)
       requestAnimationFrame(() => document.querySelector(window.matchMedia('(min-width: 1024px)').matches ? '.ai-desktop-launcher' : '.ai-mobile-launcher')?.focus())
     }}><ChevronLeft size={20} /></button>}
-    {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-desktop-launcher" aria-label="Open AI assistant" aria-haspopup="dialog" title="Open AI assistant"><Bot size={26} /></button>}
+    {/* Already a round, accent-coloured badge - a nested Avatar in the same
+        accent colour would be invisible against it, so this is a plain glyph. */}
+    {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-desktop-launcher" aria-label="Open Zuri" aria-haspopup="dialog" title="Open Zuri">Z</button>}
 
     {/* ── Mobile bottom pill nav - four primary destinations plus "More",
         which opens the same drawer as the header hamburger so the full

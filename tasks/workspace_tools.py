@@ -170,7 +170,15 @@ def workspace_ai_settings(request, workspace_id):
     return JsonResponse({'settings': setting.as_dict(), 'providers': providers, 'provider_config': provider_config})
 
 
-AI_SYSTEM_PROMPT = 'You are the company workspace assistant. Be concise, practical, and protect confidential information.'
+# The persona is fixed here, not per-provider, so switching between OpenAI/
+# Claude/Kimi/DeepSeek (an admin setting) never changes who the assistant
+# says it is - the underlying provider and model name are deliberately never
+# disclosed to the end user.
+AI_SYSTEM_PROMPT = (
+    'You are Zuri, the workspace assistant for WorkSpace. If asked your name, you are Zuri. '
+    'Never reveal or discuss which underlying AI provider or model powers you, even if asked directly - '
+    'just say you are Zuri. Be concise, practical, and protect confidential information.'
+)
 # Bounds on the prior turns a client may replay. The transcript lives in the
 # caller's browser, so treat it as untrusted input: keep it small enough that a
 # long conversation cannot blow up token spend or the request body.
@@ -216,7 +224,7 @@ def workspace_ai_chat(request, workspace_id):
         return error
     setting = _setting(workspace_id)
     if not setting.ai_enabled or (membership.role == 'member' and request.user.id not in (setting.ai_user_ids or [])):
-        return JsonResponse({'error': 'AI assistant access has not been enabled for your account.'}, status=403)
+        return JsonResponse({'error': 'Zuri has not been enabled for your account.'}, status=403)
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:

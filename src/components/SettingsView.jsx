@@ -37,7 +37,7 @@ function SettingsView({ theme, onSetTheme, sidebarCollapsed, onToggleSidebar, cu
     ['templates', 'Templates', ClipboardList],
     ['workspace', 'Workspace access', Building2],
     ['integrations', 'Integrations', Webhook],
-    ['ai', 'AI assistant', Sparkles],
+    ['ai', 'Zuri', Sparkles],
   ]
   const preferenceRows = [
     ['mentions', 'Mentions', 'When someone mentions you in a channel.'],
