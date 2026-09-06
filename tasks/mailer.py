@@ -19,6 +19,7 @@ from email.utils import parseaddr
 
 import requests
 from django.conf import settings
+from django.core.exceptions import DisallowedHost
 from django.core.mail import send_mail
 from django.core.mail.backends.base import BaseEmailBackend
 from django.template.loader import render_to_string
@@ -103,10 +104,28 @@ def send_workspace_email(to_email, subject, body, html_body=None):
     return True
 
 
-def send_invitation_email(invitation):
+def frontend_base_url(request=None):
+    # An explicit WORKSPACE_FRONTEND_BASE_URL always wins (split frontend/API
+    # deployments). Otherwise use the host the request actually arrived on:
+    # on the single-service build the SPA is served from this same process, so
+    # that host is the app. Trustworthy because Django rejects any request
+    # whose Host is not in ALLOWED_HOSTS before a view ever runs.
+    if settings.FRONTEND_BASE_URL_OVERRIDE:
+        return settings.FRONTEND_BASE_URL_OVERRIDE
+    if request is not None:
+        try:
+            return request.build_absolute_uri('/').rstrip('/')
+        except DisallowedHost:
+            # Host not in ALLOWED_HOSTS. Building a link is never worth failing
+            # the invitation itself over, so fall back rather than propagate.
+            logger.warning('Could not derive the frontend URL from the request host; falling back to FRONTEND_BASE_URL.')
+    return settings.FRONTEND_BASE_URL
+
+
+def send_invitation_email(invitation, request=None):
     # The link carries the invitation's unguessable token, never its (sequential)
     # id - the public preview endpoint only resolves by token. Never log this URL.
-    accept_url = f'{settings.FRONTEND_BASE_URL}/?invite={invitation.token}'
+    accept_url = f'{frontend_base_url(request)}/?invite={invitation.token}'
     inviter_name = invitation.invited_by.get_full_name() or invitation.invited_by.email
     workspace_name = invitation.workspace.name
     role_label = invitation.get_role_display()

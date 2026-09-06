@@ -230,7 +230,15 @@ EMAIL_SENDING_CONFIGURED = bool(BREVO_API_KEY)
 DEFAULT_FROM_EMAIL = os.environ.get('WORKSPACE_DEFAULT_FROM_EMAIL', 'WorkSpace <no-reply@workspace.app>')
 
 # Base URL of the deployed frontend, used to build links inside emails (invitations, etc).
-FRONTEND_BASE_URL = os.environ.get('WORKSPACE_FRONTEND_BASE_URL', 'http://localhost:5173').rstrip('/')
+# Explicit override, needed only where the SPA is served from a different host
+# than the API (the split Dockerfile.web/nginx setup). Left unset on the
+# single-service Railway build, where WhiteNoise serves the SPA from this very
+# process - there, links are built from the request's own host instead, so a
+# missing variable can no longer silently ship localhost links to real users.
+# The literal default still applies for request-less senders (reminder emails
+# from the management command), where localhost is the right dev guess.
+FRONTEND_BASE_URL_OVERRIDE = os.environ.get('WORKSPACE_FRONTEND_BASE_URL', '').strip().rstrip('/')
+FRONTEND_BASE_URL = FRONTEND_BASE_URL_OVERRIDE or 'http://localhost:5173'
 
 # Google Sign-In: the OAuth web client ID from Google Cloud Console. The frontend needs
 # the same value (as VITE_GOOGLE_CLIENT_ID) to render the button; this copy is what the

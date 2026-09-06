@@ -1884,7 +1884,7 @@ def invitation_list(request, workspace_id):
                 created = True
     except IntegrityError:
         return JsonResponse({'error': 'An invitation is already pending for this address.'}, status=409)
-    send_invitation_email(invitation)
+    send_invitation_email(invitation, request=request)
     record_activity(workspace_id, request.user, 'invitation_sent', f'{request.user.get_full_name() or request.user.email} invited {invitation.email} as a {invitation.role}.')
     return JsonResponse({'invitation': invitation.as_dict(), 'message': f'Invitation sent to {invitation.email}. They will gain access after accepting.'}, status=201 if created else 200)
 
@@ -1904,7 +1904,7 @@ def invitation_resend(request, workspace_id, invitation_id):
     invitation.token = generate_invitation_token()
     invitation.last_sent_at = timezone.now()
     invitation.save(update_fields=['token', 'last_sent_at'])
-    send_invitation_email(invitation)
+    send_invitation_email(invitation, request=request)
     record_activity(workspace_id, request.user, 'invitation_resent', f'{request.user.get_full_name() or request.user.email} resent an invitation to {invitation.email}.')
     return JsonResponse({'invitation': invitation.as_dict()})
 
