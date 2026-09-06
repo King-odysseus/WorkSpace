@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
-import { AlignCenter, AlignLeft, AlignRight, Bold, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, CircleUserRound, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog.jsx'
-import Avatar from './Avatar.jsx'
 import { readJsonResponse } from '../lib/workspace-format.js'
 import { FORMULA_ERRORS, columnLabel, evaluateSheet } from '../lib/spreadsheet-formulas.js'
 
@@ -933,7 +932,7 @@ export function AssistantFlyout({ workspaceId, onClose, onHide }) {
   return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
     <DialogContent className="ai-chat-window" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
-        <DialogTitle className="ai-chat-title"><Avatar name="Zuri" color="zuri" small /> Zuri</DialogTitle>
+        <DialogTitle className="ai-chat-title"><CircleUserRound size={24} /> Zuri</DialogTitle>
         <div className="ai-chat-actions">
           {turns.length > 0 && <button type="button" onClick={clearConversation} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={19} /></button>}
           {onHide && <button type="button" onClick={onHide} aria-label="Hide Zuri button" title="Hide Zuri button (restore from your profile menu)"><EyeOff size={19} /></button>}

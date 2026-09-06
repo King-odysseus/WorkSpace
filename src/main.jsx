@@ -13,7 +13,7 @@ import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'rea
 import { createRoot } from 'react-dom/client'
 import {
   AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Brush, Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ClipboardList,
-  CircleHelp, Clock3, Copy, Filter, FileText, Hash, LayoutDashboard, LayoutGrid, Link2, LogOut, MessageSquare, MoreHorizontal,
+  CircleHelp, CircleUserRound, Clock3, Copy, Filter, FileText, Hash, LayoutDashboard, LayoutGrid, Link2, LogOut, MessageSquare, MoreHorizontal,
   ChevronLeft, ChevronRight,
   EyeOff, MonitorUp, Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
 } from 'lucide-react'
@@ -36,7 +36,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { cn } from './lib/utils.js'
 import toast, { Toaster } from 'react-hot-toast'
 
-import Avatar from './components/Avatar.jsx'
 import { Activity, AuthScreen, InvitationReview, NoWorkspaceScreen } from './components/AuthScreen.jsx'
 import {
   ClockInCard, MyTasksView, ProjectCostBudgetPanel, ProjectProgress, ProjectRiskIssuePanel,
@@ -1038,7 +1037,7 @@ function App() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
-          {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-mobile-launcher" aria-label="Open Zuri" aria-haspopup="dialog"><Avatar name="Zuri" color="zuri" small /><span>Ask Zuri</span></button>}
+          {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-mobile-launcher" aria-label="Open Zuri" aria-haspopup="dialog"><CircleUserRound size={20} /><span>Ask Zuri</span></button>}
 
           <div className="relative" ref={notifRef}>
             <button
@@ -1140,7 +1139,7 @@ function App() {
                   </button>
                 )}
                 <button type="button" onClick={() => { setAiLauncherVisibility(!aiLauncherHidden); setProfileMenuOpen(false) }} className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary">
-                  {aiLauncherHidden ? <Avatar name="Zuri" color="zuri" small /> : <EyeOff size={16} />}{aiLauncherHidden ? 'Show Zuri button' : 'Hide Zuri button'}
+                  {aiLauncherHidden ? <CircleUserRound size={16} /> : <EyeOff size={16} />}{aiLauncherHidden ? 'Show Zuri button' : 'Hide Zuri button'}
                 </button>
                 <button
                   type="button"
@@ -1177,9 +1176,7 @@ function App() {
       setAiLauncherVisibility(false)
       requestAnimationFrame(() => document.querySelector(window.matchMedia('(min-width: 1024px)').matches ? '.ai-desktop-launcher' : '.ai-mobile-launcher')?.focus())
     }}><ChevronLeft size={20} /></button>}
-    {/* Already a round, accent-coloured badge - a nested Avatar in the same
-        accent colour would be invisible against it, so this is a plain glyph. */}
-    {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-desktop-launcher" aria-label="Open Zuri" aria-haspopup="dialog" title="Open Zuri">Z</button>}
+    {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-desktop-launcher" aria-label="Open Zuri" aria-haspopup="dialog" title="Open Zuri"><CircleUserRound size={26} /></button>}
 
     {/* ── Mobile bottom pill nav - four primary destinations plus "More",
         which opens the same drawer as the header hamburger so the full
