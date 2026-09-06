@@ -21,6 +21,7 @@ import requests
 from django.conf import settings
 from django.core.mail import send_mail
 from django.core.mail.backends.base import BaseEmailBackend
+from django.template.loader import render_to_string
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,14 @@ class BrevoAPIEmailBackend(BaseEmailBackend):
                 'subject': message.subject,
                 'textContent': message.body,
             }
+            # send_mail(html_message=...) attaches the HTML as an alternative
+            # part; Brevo takes it as htmlContent alongside the plain-text
+            # fallback, so clients that block HTML still get a readable email.
+            for alternative in getattr(message, 'alternatives', None) or []:
+                content, mimetype = alternative[0], alternative[1]
+                if mimetype == 'text/html':
+                    payload['htmlContent'] = content
+                    break
             try:
                 response = requests.post(BREVO_API_URL, json=payload, headers=headers, timeout=10)
             except requests.RequestException:
@@ -69,14 +78,26 @@ class BrevoAPIEmailBackend(BaseEmailBackend):
         return sent
 
 
-def send_workspace_email(to_email, subject, body):
+def render_branded_email(title, paragraphs, cta_label=None, cta_url=None, footer_note=None):
+    # Every email goes out as branded HTML with the plain-text body as the
+    # fallback part. The template autoescapes, so callers pass raw values.
+    return render_to_string('tasks/emails/workspace_email.html', {
+        'title': title,
+        'paragraphs': paragraphs,
+        'cta_label': cta_label,
+        'cta_url': cta_url,
+        'footer_note': footer_note,
+    })
+
+
+def send_workspace_email(to_email, subject, body, html_body=None):
     if not to_email:
         return False
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=False)
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=False, html_message=html_body)
     except Exception:
         # Broad on purpose: this is a best-effort side effect, and we would rather
-        # log the traceback and continue than let an SMTP outage 500 a request.
+        # log the traceback and continue than let a mail outage 500 a request.
         logger.exception('Failed to send email "%s" to %s', subject, to_email)
         return False
     return True
@@ -87,16 +108,31 @@ def send_invitation_email(invitation):
     # id - the public preview endpoint only resolves by token. Never log this URL.
     accept_url = f'{settings.FRONTEND_BASE_URL}/?invite={invitation.token}'
     inviter_name = invitation.invited_by.get_full_name() or invitation.invited_by.email
-    subject = f'You are invited to join {invitation.workspace.name} on WorkSpace'
-    body = (
-        f'{inviter_name} invited you to join "{invitation.workspace.name}" on WorkSpace as a {invitation.get_role_display()}.\n\n'
-        f'Accept your invitation: {accept_url}\n\n'
-        'If you do not already have a WorkSpace account, that link will let you create one with this email address first.'
+    workspace_name = invitation.workspace.name
+    role_label = invitation.get_role_display()
+    subject = f'You are invited to join {workspace_name} on WorkSpace'
+    intro = f'{inviter_name} invited you to join "{workspace_name}" on WorkSpace as a {role_label}.'
+    fallback_note = 'If you do not already have a WorkSpace account, that link will let you create one with this email address first.'
+    body = f'{intro}\n\nAccept your invitation: {accept_url}\n\n{fallback_note}'
+    html_body = render_branded_email(
+        title=f'You have been invited to {workspace_name}',
+        paragraphs=[intro, 'Review the invitation and choose whether to accept it:'],
+        cta_label='Review invitation',
+        cta_url=accept_url,
+        footer_note=fallback_note,
     )
-    return send_workspace_email(invitation.email, subject, body)
+    return send_workspace_email(invitation.email, subject, body, html_body=html_body)
 
 
 def send_reminder_email(user, title, body):
     if user is None or not user.email:
         return False
-    return send_workspace_email(user.email, title, body or title)
+    text_body = body or title
+    html_body = render_branded_email(
+        title=title,
+        paragraphs=[text_body],
+        cta_label='Open WorkSpace',
+        cta_url=settings.FRONTEND_BASE_URL,
+        footer_note='You can turn reminder emails off under Settings > Notifications.',
+    )
+    return send_workspace_email(user.email, title, text_body, html_body=html_body)
