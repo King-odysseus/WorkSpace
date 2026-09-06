@@ -176,7 +176,7 @@ function HelpView({ onNavigate }) {
       steps: [
         'Open Team board.',
         'Scroll to People & access.',
-        'Select Invite member.',
+        'Select Invite team member.',
         'Enter their email address.',
         'Choose Member or Manager.',
         'Send the invitation.',
