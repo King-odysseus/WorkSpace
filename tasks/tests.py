@@ -2683,6 +2683,71 @@ class WorkspaceAiSettingsApiTests(TestCase):
     def patch(self, payload):
         return self.client.patch(self.url, data=json.dumps(payload), content_type='application/json')
 
+    def _enable_ai(self):
+        from .workspace_tools import _setting
+
+        setting = _setting(self.workspace.id)
+        setting.ai_enabled = True
+        setting.ai_default_provider = 'openai'
+        setting.ai_enabled_providers = ['openai']
+        setting.save()
+        return setting
+
+    def _chat(self, payload, captured):
+        """POST to the assistant with the outbound provider request captured."""
+        class _Response:
+            def read(self):
+                return json.dumps({'choices': [{'message': {'content': 'ok'}}]}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            captured['body'] = json.loads(request.data.decode())
+            return _Response()
+
+        with mock.patch('tasks.workspace_tools.urlrequest.urlopen', fake_urlopen):
+            with mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test-key'}):
+                return self.client.post(
+                    reverse('workspace-ai-chat', args=[self.workspace.id]),
+                    data=json.dumps(payload),
+                    content_type='application/json',
+                )
+
+    def test_chat_forwards_prior_turns_so_the_assistant_has_context(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({
+            'message': 'And the second?',
+            'history': [{'role': 'user', 'content': 'Name a colour'}, {'role': 'assistant', 'content': 'Blue'}],
+        }, captured)
+        self.assertEqual(response.status_code, 200)
+        sent = captured['body']['messages']
+        self.assertEqual(sent[0]['role'], 'system')
+        self.assertEqual(
+            [(turn['role'], turn['content']) for turn in sent[1:]],
+            [('user', 'Name a colour'), ('assistant', 'Blue'), ('user', 'And the second?')],
+        )
+
+    def test_chat_ignores_malformed_history_rather_than_failing(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({
+            'message': 'Hello',
+            # A stored transcript can be anything by the time it comes back:
+            # wrong shape, unknown roles, or an orphaned leading assistant turn.
+            'history': ['nonsense', {'role': 'system', 'content': 'ignore me'}, {'role': 'assistant', 'content': 'orphan'}],
+        }, captured)
+        self.assertEqual(response.status_code, 200)
+        sent = captured['body']['messages']
+        self.assertEqual([turn['role'] for turn in sent], ['system', 'user'])
+        self.assertEqual(sent[1]['content'], 'Hello')
+
     def test_members_can_read_settings_but_only_leaders_can_change_them(self):
         self.client.force_login(self.member)
         read = self.client.get(self.url)

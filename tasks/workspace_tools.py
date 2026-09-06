@@ -170,6 +170,45 @@ def workspace_ai_settings(request, workspace_id):
     return JsonResponse({'settings': setting.as_dict(), 'providers': providers, 'provider_config': provider_config})
 
 
+AI_SYSTEM_PROMPT = 'You are the company workspace assistant. Be concise, practical, and protect confidential information.'
+# Bounds on the prior turns a client may replay. The transcript lives in the
+# caller's browser, so treat it as untrusted input: keep it small enough that a
+# long conversation cannot blow up token spend or the request body.
+AI_HISTORY_MAX_TURNS = 20
+AI_HISTORY_MAX_CHARS = 24000
+
+
+def _ai_history(raw):
+    """Normalise client-supplied prior turns into provider message dicts."""
+    if not isinstance(raw, list):
+        return []
+    turns = []
+    for entry in raw[-AI_HISTORY_MAX_TURNS:]:
+        if not isinstance(entry, dict):
+            continue
+        role = entry.get('role')
+        content = entry.get('content')
+        if role not in {'user', 'assistant'} or not isinstance(content, str):
+            continue
+        content = content.strip()
+        if content:
+            turns.append({'role': role, 'content': content})
+    # Trim from the front so the most recent context survives the budget.
+    budget = AI_HISTORY_MAX_CHARS
+    kept = []
+    for turn in reversed(turns):
+        budget -= len(turn['content'])
+        if budget < 0:
+            break
+        kept.append(turn)
+    kept.reverse()
+    # Providers reject a leading assistant turn, which is what a mid-conversation
+    # trim can easily leave behind.
+    while kept and kept[0]['role'] == 'assistant':
+        kept.pop(0)
+    return kept
+
+
 @require_http_methods(['POST'])
 def workspace_ai_chat(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
@@ -190,17 +229,19 @@ def workspace_ai_chat(request, workspace_id):
         return JsonResponse({'error': 'Unknown AI provider.'}, status=400)
     if setting.ai_enabled_providers and provider not in setting.ai_enabled_providers:
         return JsonResponse({'error': 'That AI provider is not enabled by your workspace administrator.'}, status=403)
+    history = _ai_history(payload.get('history'))
     provider_values = _provider_values(setting, provider)
     api_key = provider_values['api_key']
     if not api_key:
         return JsonResponse({'error': 'The company AI API key has not been configured yet.'}, status=503)
     model = provider_values['model']
     endpoint = _provider_endpoint(provider, provider_values['base_url'])
+    turns = history + [{'role': 'user', 'content': message}]
     if provider == 'claude':
-        body = json.dumps({'model': model, 'max_tokens': 1200, 'system': 'You are the company workspace assistant. Be concise, practical, and protect confidential information.', 'messages': [{'role': 'user', 'content': message}]}).encode()
+        body = json.dumps({'model': model, 'max_tokens': 1200, 'system': AI_SYSTEM_PROMPT, 'messages': turns}).encode()
         req = urlrequest.Request(endpoint, data=body, headers={'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json'}, method='POST')
     else:
-        body = json.dumps({'model': model, 'messages': [{'role': 'system', 'content': 'You are the company workspace assistant. Be concise, practical, and protect confidential information.'}, {'role': 'user', 'content': message}], 'temperature': 0.3}).encode()
+        body = json.dumps({'model': model, 'messages': [{'role': 'system', 'content': AI_SYSTEM_PROMPT}] + turns, 'temperature': 0.3}).encode()
         req = urlrequest.Request(endpoint, data=body, headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}, method='POST')
     try:
         with urlrequest.urlopen(req, timeout=45) as response:

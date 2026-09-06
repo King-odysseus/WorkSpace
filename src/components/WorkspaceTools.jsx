@@ -862,26 +862,92 @@ export function FilesWorkspaceView({ workspaceId }) {
   >{deleteTarget && <FileDeleteDialog target={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={() => confirmDelete().catch(error => setStatus(error.message || "Delete failed."))} />}<div className="files-browser-heading"><div><p className="eyebrow">Workspace resources</p><h2>Files</h2><p>Browse documents, presentations, and uploads.</p></div><div className="files-create-actions"><button type="button" className="secondary-button" onClick={() => createDocument('document')}><FileText size={15} /> New document</button><button type="button" className="secondary-button" onClick={() => createDocument('presentation')}><Presentation size={15} /> New presentation</button><button type="button" className="secondary-button" onClick={() => createDocument('spreadsheet')}><Table2 size={15} /> New spreadsheet</button><label className="primary-button"><Upload size={15} /> Upload<input type="file" hidden multiple onChange={upload} /></label></div></div>{status && <p className="workspace-inline-status" role="status">{status}</p>}<div className="files-browser-toolbar"><div className="files-categories">{[['all', 'All'], ['document', 'Documents'], ['presentation', 'Presentations'], ['spreadsheet', 'Spreadsheets'], ['file', 'Uploads']].map(([value, label]) => <button type="button" className={category === value ? 'active' : ''} onClick={() => setCategory(value)} key={value}>{label}</button>)}</div><label className="files-search"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search files" /></label><div className="files-view-switch"><button type="button" className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')} aria-label="Thumbnail view"><Grid3X3 size={16} /></button><button type="button" className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} aria-label="Table view"><Table2 size={16} /></button></div></div>{viewMode === 'grid' ? <div className="files-thumbnail-grid">{items.map(item => <div className="files-thumbnail-tile" key={`${item.itemType}-${item.id}`}><button type="button" onClick={() => openItem(item)}><span className={`file-thumbnail file-thumbnail-${item.itemType}`}>{item.itemType === 'presentation' ? <Presentation size={38} /> : item.itemType === 'spreadsheet' ? <Table2 size={38} /> : <FileText size={38} />}</span><strong>{item.title}</strong><small>{typeLabel(item.itemType)} · {new Date(item.modified).toLocaleDateString()}</small></button>{item.itemType === 'file' && <button type="button" className="files-tile-delete" onClick={() => removeFile(item)} aria-label={`Delete ${item.title}`} title="Delete"><Trash2 size={14} /></button>}</div>)}</div> : <div className="files-table-wrap"><table className="files-table"><thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Modified</th><th>Size</th><th><span className="visually-hidden">Actions</span></th></tr></thead><tbody>{items.map(item => <tr key={`${item.itemType}-${item.id}`} tabIndex={0} role="button" aria-label={`Open ${item.title}`} onClick={() => openItem(item)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openItem(item) } }}><td><span>{item.itemType === 'presentation' ? <Presentation size={17} /> : item.itemType === 'spreadsheet' ? <Table2 size={17} /> : <FileText size={17} />}</span>{item.title}</td><td>{typeLabel(item.itemType)}</td><td>{item.owner ? [item.owner.first_name, item.owner.last_name].filter(Boolean).join(' ') || item.owner.email : '-'}</td><td>{new Date(item.modified).toLocaleString()}</td><td>{item.size ? `${Math.ceil(item.size / 1024)} KB` : '-'}</td><td>{item.itemType === 'file' && <button type="button" className="files-row-delete" onClick={event => { event.stopPropagation(); removeFile(item) }} aria-label={`Delete ${item.title}`} title="Delete"><Trash2 size={15} /></button>}</td></tr>)}</tbody></table></div>}{!items.length && <div className="files-empty">No matching files.</div>}</section>
 }
 
+// The flyout unmounts every time it closes, so the transcript is kept in
+// localStorage rather than component state. It is per browser, not synced
+// between devices. AI_HISTORY_TURNS bounds both what is stored and what is
+// sent back as context, matching the server's own cap.
+const AI_HISTORY_TURNS = 20
+const aiHistoryKey = workspaceId => `workspace-ai-chat:${workspaceId}`
+
+function readAiHistory(workspaceId) {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(aiHistoryKey(workspaceId)) || '[]')
+    if (!Array.isArray(stored)) return []
+    return stored
+      .filter(entry => entry && typeof entry.content === 'string' && ['user', 'assistant'].includes(entry.role))
+      .slice(-AI_HISTORY_TURNS)
+  } catch {
+    // Unparseable or unavailable storage (private mode, quota) must not stop
+    // the assistant from opening - start the conversation fresh instead.
+    return []
+  }
+}
+
+function writeAiHistory(workspaceId, turns) {
+  try {
+    window.localStorage.setItem(aiHistoryKey(workspaceId), JSON.stringify(turns.slice(-AI_HISTORY_TURNS)))
+  } catch {
+    // Storage full or blocked: the in-memory transcript still works for this session.
+  }
+}
+
 export function AssistantFlyout({ workspaceId, onClose, onHide }) {
   const launcherRef = useRef(document.activeElement)
-  const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [answer, setAnswer] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+  const feedEndRef = useRef(null)
+  const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+  const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
+  useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
+  useEffect(() => { feedEndRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy])
   useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Assistant unavailable.') }).catch(() => setError('Assistant unavailable.')) }, [workspaceId])
-  const ask = async event => { event.preventDefault(); if (busy || !message.trim()) return; setBusy(true); setError(''); try { const response = await fetch(`/api/workspaces/${workspaceId}/ai/chat/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ message, provider }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Assistant unavailable.'); setAnswer(result.answer); setMessage('') } catch (requestError) { setError(requestError.message) } finally { setBusy(false) } }
+  const clearConversation = () => { setTurns([]); setError(''); writeAiHistory(workspaceId, []) }
+  const ask = async event => {
+    event.preventDefault()
+    const asked = message.trim()
+    if (busy || !asked) return
+    // Show the question immediately and clear the box, so the transcript reads
+    // like a conversation instead of the answer appearing with no prompt.
+    const history = turns.slice(-AI_HISTORY_TURNS)
+    const withQuestion = [...turns, { role: 'user', content: asked }]
+    setTurns(withQuestion)
+    writeAiHistory(workspaceId, withQuestion)
+    setMessage('')
+    setBusy(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/ai/chat/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ message: asked, provider, history }) })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Assistant unavailable.')
+      const answered = [...withQuestion, { role: 'assistant', content: result.answer }]
+      setTurns(answered)
+      writeAiHistory(workspaceId, answered)
+    } catch (requestError) {
+      // The question stays in the transcript: retyping it to retry would be worse.
+      setError(requestError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
   const providers = data?.providers || {}; const enabled = data?.settings?.ai_enabled_providers || Object.keys(providers).filter(key => providers[key])
   return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
     <DialogContent className="ai-chat-window" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
         <DialogTitle className="ai-chat-title"><Bot size={24} /> AI assistant</DialogTitle>
         <div className="ai-chat-actions">
+          {turns.length > 0 && <button type="button" onClick={clearConversation} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={19} /></button>}
           {onHide && <button type="button" onClick={onHide} aria-label="Hide AI button" title="Hide AI button (restore from your profile menu)"><EyeOff size={19} /></button>}
           <button type="button" onClick={onClose} aria-label="Close assistant"><X size={22} /></button>
         </div>
       </div>
       <div className="ai-chat-messages" aria-live="polite">
-        {!answer && !error && <p className="text-sm text-text-muted">Ask your workspace assistant a question.</p>}
-        {answer && <div className="whitespace-pre-wrap rounded-xl bg-surface-secondary p-3 text-sm leading-6">{answer}</div>}
-        {error && <div role="alert" className="rounded-xl bg-danger/10 p-3 text-sm text-danger">{error}</div>}
-        {busy && <p role="status" className="text-sm text-text-muted">Thinking...</p>}
+        {!turns.length && !error && <p className="ai-chat-empty">Ask your workspace assistant a question.</p>}
+        {turns.map((turn, index) => (
+          <div className={`ai-chat-row is-${turn.role}`} key={`${turn.role}-${index}`}>
+            <div className="ai-chat-bubble">{turn.content}</div>
+          </div>
+        ))}
+        {busy && <div className="ai-chat-row is-assistant"><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div>}
+        {error && <div role="alert" className="ai-chat-error">{error}</div>}
+        <div ref={feedEndRef} />
       </div>
       <form onSubmit={ask} className="ai-chat-composer">
         <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to AI assistant" placeholder="Ask anything..." />
