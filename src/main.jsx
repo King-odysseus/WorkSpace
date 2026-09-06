@@ -1173,6 +1173,10 @@ function App() {
       </main>
     </div>
 
+    {aiLauncherHidden && activeWorkspaceId && <button type="button" className="ai-restore-tab" aria-label="Show Ask AI button" title="Show Ask AI" onClick={() => {
+      setAiLauncherVisibility(false)
+      requestAnimationFrame(() => document.querySelector(window.matchMedia('(min-width: 1024px)').matches ? '.ai-desktop-launcher' : '.ai-mobile-launcher')?.focus())
+    }}><ChevronLeft size={20} /></button>}
     {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-desktop-launcher" aria-label="Open AI assistant" aria-haspopup="dialog" title="Open AI assistant"><Bot size={26} /></button>}
 
     {/* ── Mobile bottom pill nav - four primary destinations plus "More",
@@ -1791,7 +1795,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
           <CardContent className={calendarView === 'agenda' ? 'calendar-agenda px-5' : (calendarView === 'day' || calendarView === 'week' ? 'calendar-time-content px-0' : 'calendar-grid px-0')}>
             {calendarView === 'agenda' ? (agendaEvents.length ? agendaEvents.map(event => <button type="button" className={`agenda-event-row event-type-${event.event_type || 'meeting'}`} key={event.id} onClick={() => setSelectedEvent(event)}><time><strong>{formatCalendarDate(new Date(event.start_at), { weekday: 'short', month: 'short', day: 'numeric' })}</strong><span>{formatCalendarDate(new Date(event.start_at), { hour: 'numeric', minute: '2-digit' })}</span></time><div><strong>{event.title}</strong><span>{event.event_type || 'Event'} · {formatCalendarDate(new Date(event.end_at || event.start_at), { hour: 'numeric', minute: '2-digit' })}</span></div><ArrowUpRight size={15} /></button>) : <EmptyState text="No upcoming events match this filter." />) : (calendarView === 'day' || calendarView === 'week' ? timeGrid : calendarDays.map(day => <div className={`calendar-day${toDateKey(day) === today ? ' is-today' : ''}`} key={day.toISOString()}>
               <strong>{calendarView === 'year' ? formatCalendarDate(day, { month: 'short' }) : formatCalendarDate(day, { weekday: 'short', day: 'numeric' })}{toDateKey(day) === today && <Badge variant="accent" className="today-badge">Today</Badge>}</strong>
-              <div className="calendar-slot">{calendarEventsForDay(day).filter(event => calendarFilter === 'all' || event.event_type === calendarFilter).map(event => <button type="button" className={`event-pill event-type-${event.event_type || 'meeting'}`} key={event.id} onClick={() => setSelectedEvent(event)} aria-label={`View ${event.title}`}><span>{formatCalendarDate(new Date(event.start_at), calendarView === 'year' ? { month: 'short', day: 'numeric' } : { hour: 'numeric', minute: '2-digit' })}</span>{event.title}</button>)}</div>
+              <div className="calendar-slot">{calendarEventsForDay(day).filter(event => calendarFilter === 'all' || event.event_type === calendarFilter).map(event => <button type="button" className={`event-pill event-type-${event.event_type || 'meeting'}`} key={event.id} onClick={() => setSelectedEvent(event)} aria-label={`View ${event.title}`}><span>{formatCalendarDate(new Date(event.start_at), calendarView === 'year' ? { month: 'short', day: 'numeric' } : { hour: 'numeric', minute: '2-digit' })}</span><span className="event-pill-title">{event.title}</span></button>)}</div>
             </div>))}
           </CardContent>
         </Card>

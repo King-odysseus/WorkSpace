@@ -8,11 +8,52 @@
 # so the caller can keep going without raising.
 
 import logging
+import smtplib
+import socket
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.core.mail.backends.smtp import EmailBackend as DjangoSMTPBackend
 
 logger = logging.getLogger(__name__)
+
+
+def _ipv4_create_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
+    # Same shape as socket.create_connection(), restricted to AF_INET. Plain
+    # create_connection() tries every address getaddrinfo() returns for the
+    # host - IPv6 first, on most resolvers. On hosts whose outbound IPv6
+    # route is blackholed (no rejection, packets just dropped) rather than
+    # genuinely unreachable, that first attempt hangs for minutes with no
+    # error, tying up a whole gunicorn sync worker per send. Brevo's relay
+    # serves IPv4 fine, so skip the IPv6 attempt entirely.
+    host, port = address
+    err = None
+    for family, socktype, proto, _canonname, sockaddr in socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM):
+        sock = None
+        try:
+            sock = socket.socket(family, socktype, proto)
+            if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
+                sock.settimeout(timeout)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sockaddr)
+            return sock
+        except OSError as exc:
+            err = exc
+            if sock is not None:
+                sock.close()
+    if err is not None:
+        raise err
+    raise OSError('getaddrinfo returned no IPv4 address for %s' % (host,))
+
+
+class _IPv4SMTP(smtplib.SMTP):
+    def _get_socket(self, host, port, timeout):
+        return _ipv4_create_connection((host, port), timeout, self.source_address)
+
+
+class WorkspaceEmailBackend(DjangoSMTPBackend):
+    connection_class = _IPv4SMTP
 
 
 def send_workspace_email(to_email, subject, body):
