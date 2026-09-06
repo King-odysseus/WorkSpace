@@ -1,59 +1,65 @@
 # Transactional email helpers (invitations, task/calendar reminders).
 #
-# Sends go through Django's normal mail API, which settings.py points at Brevo's
-# SMTP relay when BREVO_SMTP_LOGIN/BREVO_SMTP_PASSWORD are configured, or the
-# console backend otherwise. A misconfigured or unreachable mail provider never
-# breaks the request that triggered it (creating an invitation, recording a
-# reminder notification, etc) - the error is logged and the call returns False,
-# so the caller can keep going without raising.
+# Sends go through Django's normal mail API (send_mail), which settings.py points
+# at BrevoAPIEmailBackend below when BREVO_API_KEY is configured, or the console
+# backend otherwise. A misconfigured or unreachable mail provider never breaks
+# the request that triggered it (creating an invitation, recording a reminder
+# notification, etc) - the error is logged and the call returns False, so the
+# caller can keep going without raising.
+#
+# This uses Brevo's HTTPS REST API (api.brevo.com, port 443) rather than raw
+# SMTP (port 587), mirroring TijhaBooks' core/brevo_api_email.py. WorkSpace
+# tried SMTP first; on Railway, connecting to smtp-relay.brevo.com:587 timed
+# out on both IPv4 and IPv6 (confirmed via traceback - the hang was a raw
+# socket connect, before any auth), consistent with outbound SMTP being
+# blocked at the platform/network level while HTTPS is not.
 
 import logging
-import smtplib
-import socket
+from email.utils import parseaddr
 
+import requests
 from django.conf import settings
 from django.core.mail import send_mail
-from django.core.mail.backends.smtp import EmailBackend as DjangoSMTPBackend
+from django.core.mail.backends.base import BaseEmailBackend
 
 logger = logging.getLogger(__name__)
 
-
-def _ipv4_create_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
-    # Same shape as socket.create_connection(), restricted to AF_INET. Plain
-    # create_connection() tries every address getaddrinfo() returns for the
-    # host - IPv6 first, on most resolvers. On hosts whose outbound IPv6
-    # route is blackholed (no rejection, packets just dropped) rather than
-    # genuinely unreachable, that first attempt hangs for minutes with no
-    # error, tying up a whole gunicorn sync worker per send. Brevo's relay
-    # serves IPv4 fine, so skip the IPv6 attempt entirely.
-    host, port = address
-    err = None
-    for family, socktype, proto, _canonname, sockaddr in socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM):
-        sock = None
-        try:
-            sock = socket.socket(family, socktype, proto)
-            if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
-                sock.settimeout(timeout)
-            if source_address:
-                sock.bind(source_address)
-            sock.connect(sockaddr)
-            return sock
-        except OSError as exc:
-            err = exc
-            if sock is not None:
-                sock.close()
-    if err is not None:
-        raise err
-    raise OSError('getaddrinfo returned no IPv4 address for %s' % (host,))
+BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email'
 
 
-class _IPv4SMTP(smtplib.SMTP):
-    def _get_socket(self, host, port, timeout):
-        return _ipv4_create_connection((host, port), timeout, self.source_address)
-
-
-class WorkspaceEmailBackend(DjangoSMTPBackend):
-    connection_class = _IPv4SMTP
+class BrevoAPIEmailBackend(BaseEmailBackend):
+    def send_messages(self, email_messages):
+        if not email_messages:
+            return 0
+        api_key = getattr(settings, 'BREVO_API_KEY', '')
+        if not api_key:
+            if not self.fail_silently:
+                raise ValueError('BREVO_API_KEY is not configured.')
+            return 0
+        headers = {'accept': 'application/json', 'content-type': 'application/json', 'api-key': api_key}
+        sent = 0
+        for message in email_messages:
+            sender_name, sender_email = parseaddr(message.from_email or settings.DEFAULT_FROM_EMAIL)
+            payload = {
+                'sender': {'name': sender_name or 'WorkSpace', 'email': sender_email},
+                'to': [{'email': recipient} for recipient in message.to],
+                'subject': message.subject,
+                'textContent': message.body,
+            }
+            try:
+                response = requests.post(BREVO_API_URL, json=payload, headers=headers, timeout=10)
+            except requests.RequestException:
+                logger.exception('Brevo API request failed sending "%s" to %s', message.subject, message.to)
+                if not self.fail_silently:
+                    raise
+                continue
+            if response.status_code == 201:
+                sent += 1
+            else:
+                logger.error('Brevo API error (%s) sending "%s" to %s: %s', response.status_code, message.subject, message.to, response.text[:500])
+                if not self.fail_silently:
+                    raise RuntimeError(f'Brevo API error {response.status_code}: {response.text[:500]}')
+        return sent
 
 
 def send_workspace_email(to_email, subject, body):

@@ -208,30 +208,17 @@ AXES_ENABLED = os.environ.get('WORKSPACE_AXES_ENABLED', 'true').lower() == 'true
 # week runs from sign-in rather than from last activity.
 SESSION_COOKIE_AGE = int(os.environ.get('WORKSPACE_SESSION_COOKIE_AGE', 7 * 24 * 60 * 60))
 
-# Transactional email (invitations, task/calendar reminders) via Brevo's SMTP relay.
-# Falls back to the console backend (prints instead of sending) whenever credentials
-# are not configured, so local dev and CI never attempt a real network send.
-BREVO_SMTP_LOGIN = os.environ.get('BREVO_SMTP_LOGIN', '').strip()
-BREVO_SMTP_PASSWORD = os.environ.get('BREVO_SMTP_PASSWORD', '').strip()
-if BREVO_SMTP_LOGIN and BREVO_SMTP_PASSWORD:
-    # WorkspaceEmailBackend forces the SMTP connection over IPv4 - see its
-    # docstring in tasks/mailer.py for why (some hosts blackhole outbound
-    # IPv6 to the relay, hanging the plain SMTP backend for minutes).
-    EMAIL_BACKEND = 'tasks.mailer.WorkspaceEmailBackend'
-    EMAIL_HOST = os.environ.get('BREVO_SMTP_HOST', 'smtp-relay.brevo.com')
-    EMAIL_PORT = int(os.environ.get('BREVO_SMTP_PORT', '587'))
-    EMAIL_HOST_USER = BREVO_SMTP_LOGIN
-    EMAIL_HOST_PASSWORD = BREVO_SMTP_PASSWORD
-    EMAIL_USE_TLS = True
-    # send_invitation_email/send_reminder_email run synchronously inside the request
-    # (invitation_list, create_notification, ...). Without a timeout, smtplib blocks
-    # on connect/send with no bound when the relay is unreachable or slow, so the
-    # request - and the frontend's "Sending..." button - hangs instead of failing
-    # fast into mailer.py's logged-and-continue path.
-    EMAIL_TIMEOUT = 10
+# Transactional email (invitations, task/calendar reminders) via Brevo's HTTPS
+# REST API (tasks.mailer.BrevoAPIEmailBackend), same approach as TijhaBooks'
+# core/brevo_api_email.py. Falls back to the console backend (prints instead
+# of sending) whenever no key is configured, so local dev and CI never
+# attempt a real network send.
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '').strip()
+if BREVO_API_KEY:
+    EMAIL_BACKEND = 'tasks.mailer.BrevoAPIEmailBackend'
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-EMAIL_SENDING_CONFIGURED = bool(BREVO_SMTP_LOGIN and BREVO_SMTP_PASSWORD)
+EMAIL_SENDING_CONFIGURED = bool(BREVO_API_KEY)
 DEFAULT_FROM_EMAIL = os.environ.get('WORKSPACE_DEFAULT_FROM_EMAIL', 'WorkSpace <no-reply@workspace.app>')
 
 # Base URL of the deployed frontend, used to build links inside emails (invitations, etc).
