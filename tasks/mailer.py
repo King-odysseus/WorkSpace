@@ -37,11 +37,18 @@ class BrevoAPIEmailBackend(BaseEmailBackend):
                 raise ValueError('BREVO_API_KEY is not configured.')
             return 0
         headers = {'accept': 'application/json', 'content-type': 'application/json', 'api-key': api_key}
+        # BREVO_SENDER_EMAIL/BREVO_SENDER_NAME (same names TijhaBooks uses) take
+        # priority when set, since a Brevo API sender must be a verified address -
+        # falling back to parsing message.from_email/DEFAULT_FROM_EMAIL otherwise.
+        configured_sender_email = getattr(settings, 'BREVO_SENDER_EMAIL', '')
+        configured_sender_name = getattr(settings, 'BREVO_SENDER_NAME', '')
         sent = 0
         for message in email_messages:
-            sender_name, sender_email = parseaddr(message.from_email or settings.DEFAULT_FROM_EMAIL)
+            parsed_name, parsed_email = parseaddr(message.from_email or settings.DEFAULT_FROM_EMAIL)
+            sender_email = configured_sender_email or parsed_email
+            sender_name = configured_sender_name or parsed_name or 'WorkSpace'
             payload = {
-                'sender': {'name': sender_name or 'WorkSpace', 'email': sender_email},
+                'sender': {'name': sender_name, 'email': sender_email},
                 'to': [{'email': recipient} for recipient in message.to],
                 'subject': message.subject,
                 'textContent': message.body,

@@ -1713,7 +1713,7 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .invitation-status-badge.is-expired { color: #8B97A7; background: var(--workspace-surface-soft); }
 html[data-theme='dark'] .invitation-status-badge.is-pending { color: #DAB68D; background: #3A2A14; }
 html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; background: #123A5B; }
-.team-access-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.team-access-row > .team-access-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; justify-items: normal; }
 .team-access-actions button[data-slot='button'] {
   height: 24px;
   padding: 0 9px;

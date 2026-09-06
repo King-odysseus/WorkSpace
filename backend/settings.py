@@ -214,6 +214,11 @@ SESSION_COOKIE_AGE = int(os.environ.get('WORKSPACE_SESSION_COOKIE_AGE', 7 * 24 *
 # of sending) whenever no key is configured, so local dev and CI never
 # attempt a real network send.
 BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '').strip()
+# Optional - same variable names as TijhaBooks. A Brevo API send must use a
+# verified sender, so these take priority over WORKSPACE_DEFAULT_FROM_EMAIL
+# when set (see tasks/mailer.py's BrevoAPIEmailBackend).
+BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', '').strip()
+BREVO_SENDER_NAME = os.environ.get('BREVO_SENDER_NAME', '').strip()
 if BREVO_API_KEY:
     EMAIL_BACKEND = 'tasks.mailer.BrevoAPIEmailBackend'
 else:
