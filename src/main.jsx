@@ -15,7 +15,7 @@ import {
   AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Brush, Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ClipboardList,
   CircleHelp, Clock3, Copy, Filter, FileText, Hash, LayoutDashboard, LayoutGrid, Link2, LogOut, MessageSquare, MoreHorizontal,
   ChevronLeft, ChevronRight,
-  MonitorUp, Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
+  Bot, EyeOff, MonitorUp, Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
 } from 'lucide-react'
 import 'flowbite/dist/flowbite.css'
 import './tijhabooks-theme.css'
@@ -116,6 +116,19 @@ function App() {
   const [inviteError, setInviteError] = useState('')
   const [inviteSubmitting, setInviteSubmitting] = useState(false)
   const [aiFlyoutOpen, setAiFlyoutOpen] = useState(false)
+  const [aiLauncherHidden, setAiLauncherHidden] = useState(false)
+  const aiPreferenceKey = session.user?.id ? `workspace-ai-hidden-${session.user.id}` : null
+  useEffect(() => {
+    try { setAiLauncherHidden(aiPreferenceKey ? localStorage.getItem(aiPreferenceKey) === 'true' : false) }
+    catch (error) { console.warn('AI button preference could not be read.', error); setAiLauncherHidden(false) }
+  }, [aiPreferenceKey])
+  const setAiLauncherVisibility = hidden => {
+    setAiLauncherHidden(hidden)
+    if (hidden) setAiFlyoutOpen(false)
+    try { if (aiPreferenceKey) localStorage.setItem(aiPreferenceKey, String(hidden)) }
+    catch { toast.error('Your browser could not save the AI button preference.') }
+  }
+
   const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'))
   const [inviteInfo, setInviteInfo] = useState(null)
   const [inviteActionError, setInviteActionError] = useState('')
@@ -809,7 +822,7 @@ function App() {
     />
     <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     <Suspense fallback={null}><ScreenShareControl workspaceId={workspaceId} currentUserId={session.user.id} /></Suspense>
-    {aiFlyoutOpen && <Suspense fallback={null}><AssistantFlyout workspaceId={activeWorkspaceId} onClose={() => setAiFlyoutOpen(false)} /></Suspense>}
+    {aiFlyoutOpen && <Suspense fallback={null}><AssistantFlyout workspaceId={activeWorkspaceId} onClose={() => setAiFlyoutOpen(false)} onHide={() => setAiLauncherVisibility(true)} /></Suspense>}
     <a className="skip-link" href="#main-content">Skip to main content</a>
 
     {/* ── Mobile overlay - stays mounted and fades in step with the drawer's
@@ -1025,6 +1038,8 @@ function App() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+          {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-mobile-launcher" aria-label="Open AI assistant" aria-haspopup="dialog"><Bot size={20} /><span>Ask AI</span></button>}
+
           <div className="relative" ref={notifRef}>
             <button
               type="button"
@@ -1124,6 +1139,9 @@ function App() {
                     <Building2 size={16} /> Switch workspace
                   </button>
                 )}
+                <button type="button" onClick={() => { setAiLauncherVisibility(!aiLauncherHidden); setProfileMenuOpen(false) }} className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary">
+                  {aiLauncherHidden ? <Bot size={16} /> : <EyeOff size={16} />}{aiLauncherHidden ? 'Show AI button' : 'Hide AI button'}
+                </button>
                 <button
                   type="button"
                   onClick={() => { setActive('Settings'); setProfileMenuOpen(false) }}
@@ -1155,7 +1173,7 @@ function App() {
       </main>
     </div>
 
-    {!aiFlyoutOpen && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="fixed bottom-6 right-5 z-[70] flex h-14 w-14 items-center justify-center rounded-full bg-accent text-navy shadow-xl ring-4 ring-accent/20 transition hover:scale-105 hover:shadow-2xl focus:outline-none focus:ring-4 focus:ring-accent/40 lg:bottom-7 lg:right-7" aria-label="Open AI assistant" title="Open AI assistant"><Sparkles size={22} /></button>}
+    {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-desktop-launcher" aria-label="Open AI assistant" aria-haspopup="dialog" title="Open AI assistant"><Bot size={26} /></button>}
 
     {/* ── Mobile bottom pill nav - four primary destinations plus "More",
         which opens the same drawer as the header hamburger so the full
