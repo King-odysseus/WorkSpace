@@ -364,7 +364,12 @@ html[data-theme='light'] .theme-toggle {
   margin-top: 9px;
   background: #C49A6C;
   border-color: #C49A6C;
-  color: #071A2E;
+  color: #FFFFFF;
+  border-radius: 999px;
+}
+
+.auth-policy-links {
+  text-align: center;
 }
 
 .auth-submit:hover {
