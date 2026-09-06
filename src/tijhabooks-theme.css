@@ -1682,6 +1682,7 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .team-member-heading div { min-width: 0; flex: 1; }
 .team-member-heading h2, .team-column-heading h2 { margin: 0; color: var(--workspace-text); font: 700 13px 'Plus Jakarta Sans'; }
 .team-member-heading span { color: var(--workspace-text-soft); font-size: 9px; text-transform: capitalize; }
+.team-member-last-seen { display: block; margin-top: 2px; text-transform: none; }
 .team-member-heading strong { color: var(--teal); font-size: 11px; }
 .team-member-progress { height: 5px; margin: 12px 0 9px; overflow: hidden; border-radius: 5px; background: var(--workspace-surface-soft); }
 .team-member-progress i { display: block; height: 100%; border-radius: inherit; background: var(--teal); }

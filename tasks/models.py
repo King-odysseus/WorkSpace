@@ -95,6 +95,7 @@ class Membership(models.Model):
             'joined_at': self.joined_at.isoformat(),
             'avatar_url': profile.avatar_url if profile else '',
             'presence': profile.presence if profile else 'available',
+            'last_seen_at': profile.last_seen_at.isoformat() if profile and profile.last_seen_at else '',
         }
 
 
@@ -1025,6 +1026,10 @@ class UserProfile(models.Model):
     avatar = models.ImageField(upload_to='avatars/%Y/%m/', null=True, blank=True)
     presence = models.CharField(max_length=20, choices=PRESENCE_CHOICES, default='available')
     presence_updated_at = models.DateTimeField(null=True, blank=True)
+    # Observed activity, stamped by LastSeenMiddleware - distinct from presence,
+    # which is whatever the member last chose for themselves and can sit on
+    # "available" for days after they stop using the app.
+    last_seen_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @property

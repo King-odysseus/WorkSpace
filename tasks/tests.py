@@ -495,6 +495,75 @@ class TaskApiTests(TestCase):
         teammate_member = next(member for member in members_response.json()['members'] if member['id'] == teammate.id)
         self.assertEqual(teammate_member['presence'], 'available')
 
+    def test_last_seen_is_stamped_on_request_and_throttled_within_the_window(self):
+        from django.core.cache import cache
+
+        from .middleware import LastSeenMiddleware
+        from .models import UserProfile
+
+        cache.delete(LastSeenMiddleware.cache_key(self.user.pk))
+        UserProfile.objects.filter(user=self.user).update(last_seen_at=None)
+
+        self.client.get(reverse('member-list', args=[self.workspace.id]))
+        first_seen = UserProfile.objects.get(user=self.user).last_seen_at
+        self.assertIsNotNone(first_seen)
+
+        # A second request inside the refresh window must not write again: the
+        # throttle is what keeps this middleware off the per-request query path.
+        UserProfile.objects.filter(user=self.user).update(last_seen_at=None)
+        self.client.get(reverse('member-list', args=[self.workspace.id]))
+        self.assertIsNone(UserProfile.objects.get(user=self.user).last_seen_at)
+
+        # Once the window lapses, the next request stamps again.
+        cache.delete(LastSeenMiddleware.cache_key(self.user.pk))
+        self.client.get(reverse('member-list', args=[self.workspace.id]))
+        self.assertIsNotNone(UserProfile.objects.get(user=self.user).last_seen_at)
+
+    def test_last_seen_costs_no_queries_once_throttled(self):
+        """It runs on every request, so the steady-state path must not touch the database."""
+        from .middleware import LastSeenMiddleware
+
+        url = reverse('member-list', args=[self.workspace.id])
+        self.client.get(url)  # warm the throttle
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(url)
+        # This endpoint legitimately reads UserProfile to serialize presence, so
+        # look for the stamping write specifically, not any mention of the table.
+        writes = [
+            query['sql'] for query in captured.captured_queries
+            if 'tasks_userprofile' in query['sql'].lower()
+            and query['sql'].lstrip().upper().startswith(('UPDATE', 'INSERT'))
+        ]
+        self.assertEqual(writes, [], 'throttled requests must not write last_seen_at')
+        self.assertGreater(LastSeenMiddleware.REFRESH_AFTER.total_seconds(), 0)
+
+    def test_last_seen_is_exposed_to_teammates_and_blank_before_first_visit(self):
+        from django.core.cache import cache
+
+        from .middleware import LastSeenMiddleware
+
+        teammate = User.objects.create_user(username='seen-teammate@example.com', email='seen-teammate@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+
+        # The throttle lives in the process-wide cache, which Django does not
+        # reset between tests, so clear it rather than depend on test order.
+        cache.delete(LastSeenMiddleware.cache_key(self.user.pk))
+        members = self.client.get(reverse('member-list', args=[self.workspace.id])).json()['members']
+        owner_member = next(member for member in members if member['id'] == self.user.id)
+        teammate_member = next(member for member in members if member['id'] == teammate.id)
+        # The requester was just stamped by the middleware; the teammate has
+        # never made a request, so the field is blank rather than absent.
+        self.assertTrue(owner_member['last_seen_at'])
+        self.assertEqual(teammate_member['last_seen_at'], '')
+
+    def test_last_seen_is_not_stamped_for_anonymous_requests(self):
+        from .models import UserProfile
+
+        UserProfile.objects.filter(user=self.user).update(last_seen_at=None)
+        self.client.logout()
+        self.client.get(reverse('member-list', args=[self.workspace.id]))
+        self.assertIsNone(UserProfile.objects.filter(user=self.user).values_list('last_seen_at', flat=True).first())
+
     def test_notification_preferences_default_to_enabled_and_can_be_updated(self):
         response = self.client.get(reverse('notification-preference-detail', args=[self.workspace.id]))
         self.assertEqual(response.status_code, 200)
@@ -1979,6 +2048,10 @@ class TaskDependencyApiTests(TestCase):
                 self.assertEqual(response.status_code, 200)
             return len(captured)
 
+        # Warm LastSeenMiddleware's throttle first. It stamps last_seen_at at
+        # most once per refresh window, so counting a cold request would measure
+        # that one-off write rather than the per-request cost guarded here.
+        self.client.get(reverse('task-list'), HTTP_X_WORKSPACE_ID=str(self.workspace.id))
         baseline = count_queries()
         for index in range(20):
             filler = Task.objects.create(workspace=self.workspace, title=f'Filler {index}', assignee=self.user)
@@ -2300,6 +2373,10 @@ class WorkspacePulseApiTests(TestCase):
                 self.assertEqual(self.client.get(reverse('workspace-pulse', args=[self.workspace.id])).status_code, 200)
             return len(captured)
 
+        # Warm LastSeenMiddleware's throttle first, for the same reason as in
+        # test_task_list_query_count_is_flat: its once-per-window write is not
+        # the per-poll cost this guards.
+        self.client.get(reverse('workspace-pulse', args=[self.workspace.id]))
         baseline = pulse_queries()
         self.assertLessEqual(baseline, 8, 'pulse should fold its aggregates into a few round trips')
 

@@ -87,6 +87,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # After AuthenticationMiddleware, which is what puts request.user in place.
+    'tasks.middleware.LastSeenMiddleware',
     # Must come last: it turns the PermissionDenied that AxesStandaloneBackend
     # raises for a locked-out login into the configured lockout response.
     'axes.middleware.AxesMiddleware',

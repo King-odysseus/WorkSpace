@@ -95,6 +95,26 @@ function formatRelativeActivityTime(value) {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
+// Deliberately not formatRelativeActivityTime: that one degrades to a bare
+// clock time past 24h, which would render a three-week-old timestamp as
+// "3:45 PM". Last seen has to stay unambiguous at any age.
+function formatLastSeen(value) {
+  if (!value) return 'Never signed in'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'n/a'
+  const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
+  // Matches LastSeenMiddleware.REFRESH_AFTER: inside its write window a member
+  // is genuinely active, and anything tighter would flicker between writes.
+  if (minutes < 3) return 'Active now'
+  if (minutes < 60) return `Active ${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `Active ${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'Active yesterday'
+  if (days < 7) return `Active ${days}d ago`
+  return `Last seen ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+}
+
 function formatCalendarDate(value, options) {
   return new Intl.DateTimeFormat(undefined, options).format(value)
 }
@@ -161,6 +181,7 @@ export {
   taskSearchText,
   mapTaskFromApi,
   formatRelativeActivityTime,
+  formatLastSeen,
   formatCalendarDate,
   toDateTimeLocal,
   googleCalendarUrl,
