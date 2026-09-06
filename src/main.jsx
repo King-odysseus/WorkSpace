@@ -773,13 +773,13 @@ function App() {
         { label: 'Chats', icon: MessageSquare, badge: workspaceData.notifications.filter(item => item.target_type === 'direct_conversation' && !item.read).length, badgeTone: 'accent' },
         { label: 'Follow-up', icon: Bell, badge: workspaceData.followUps.filter(item => item.status !== 'completed').length },
         { label: 'Check-ins', icon: Hash },
+        { label: 'Team board', icon: Users },
       ],
     },
     {
       heading: 'Work',
       items: [
         { label: 'Planner', icon: LayoutGrid },
-        { label: 'Team board', icon: Users },
         { label: 'Projects', icon: Target },
         { label: 'Calendar', icon: CalendarDays },
       ],
