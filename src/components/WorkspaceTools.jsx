@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
 import { AlignCenter, AlignLeft, AlignRight, Bold, Bot, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
@@ -992,17 +993,25 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   const providerConfig = data.provider_config || {}
   const mayManage = Boolean(data.can_manage)
 
-  const updateSettings = changes => setData(current => ({
-    ...current,
-    settings: { ...current.settings, ...changes },
-  }))
-  const updateProvider = (provider, changes) => setData(current => ({
-    ...current,
-    provider_config: {
-      ...current.provider_config,
-      [provider]: { ...(current.provider_config?.[provider] || {}), ...changes },
-    },
-  }))
+  const updateSettings = changes => {
+    setNotice(current => current ? '' : current)
+    setData(current => ({
+      ...current,
+      settings: { ...current.settings, ...changes },
+    }))
+  }
+  const updateProvider = (provider, changes) => {
+    // Any edit invalidates the last save's feedback - clear it so a stale
+    // "Saved" notice can never sit next to a field the user has since changed.
+    setProviderNotices(current => (current[provider] ? { ...current, [provider]: '' } : current))
+    setData(current => ({
+      ...current,
+      provider_config: {
+        ...current.provider_config,
+        [provider]: { ...(current.provider_config?.[provider] || {}), ...changes },
+      },
+    }))
+  }
   const toggleProvider = provider => {
     const enabled = settings.ai_enabled_providers.includes(provider)
     updateSettings({ ai_enabled_providers: enabled
@@ -1044,7 +1053,12 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
           [provider]: result.provider_config[provider],
         },
       }))
-      setProviderNotices(current => ({ ...current, [provider]: 'Saved' }))
+      // A toast is unambiguous where the old inline "Saved" text was not: it
+      // appears and clears itself, so it can never be mistaken for confirming
+      // an edit made after the save. Errors stay inline, next to the field
+      // that needs fixing, where they are more useful sitting still.
+      const label = AI_PROVIDERS.find(([value]) => value === provider)?.[1] || provider
+      toast.success(`${label} settings saved.`)
     } catch (error) {
       setProviderNotices(current => ({ ...current, [provider]: error.message || 'Could not save provider.' }))
     } finally {
@@ -1065,7 +1079,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Could not save AI settings.')
       setData(current => ({ ...current, ...result, can_manage: current.can_manage }))
-      setNotice('Workspace AI access settings saved.')
+      toast.success('Workspace AI access settings saved.')
     } catch (error) {
       setNotice(error.message || 'Could not save AI settings.')
     } finally {
@@ -1100,7 +1114,11 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold">{label}</h3>
-              <p className="text-xs text-text-muted">{config.has_api_key && !config.clear_api_key ? `Key saved (${config.key_hint})` : 'No API key saved'}</p>
+              {/* Reflects the last-saved server state only - config.clear_api_key
+                  is a pending, unsaved choice, and mixing it in here made this
+                  line claim the key was gone before Save was ever clicked. */}
+              <p className="text-xs text-text-muted">{config.has_api_key ? `Key saved (${config.key_hint})` : 'No API key saved'}</p>
+              {config.clear_api_key && <p className="text-xs font-semibold text-danger">Removing on next save, not yet saved</p>}
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <label className="ai-provider-default">
