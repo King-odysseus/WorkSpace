@@ -1708,8 +1708,19 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .team-access-row span:not(.avatar):not(.invite-dot) { overflow: hidden; color: var(--workspace-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .team-access-row select { padding: 5px; border: 1px solid var(--workspace-border); border-radius: 6px; background: var(--workspace-surface-soft); color: var(--workspace-text); font-size: 9px; }
 .team-access-row em { flex-shrink: 0; color: var(--workspace-text-soft); font-size: 9px; font-style: normal; text-transform: capitalize; }
+.invitation-status-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 999px; font-weight: 700; letter-spacing: .2px; }
+.invitation-status-badge.is-pending { color: #9A6A1E; background: #FBF0DC; }
+.invitation-status-badge.is-expired { color: #8B97A7; background: var(--workspace-surface-soft); }
+html[data-theme='dark'] .invitation-status-badge.is-pending { color: #DAB68D; background: #3A2A14; }
+html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; background: #123A5B; }
 .team-access-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.team-access-actions button[data-slot='button'] { font-family: 'DM Sans'; }
+.team-access-actions button[data-slot='button'] {
+  height: 24px;
+  padding: 0 9px;
+  font-family: 'DM Sans';
+  font-size: 9px;
+}
+.team-access-actions button[data-slot='button']:has(svg) { width: 24px; padding: 0; }
 .planner-view-wrapper { gap: 10px; }
 .planner-saved-views-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .planner-saved-views-bar > select { min-width: 150px; padding: 8px 10px; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface-soft); color: var(--workspace-text); font: 600 11px 'DM Sans'; }
