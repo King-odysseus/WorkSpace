@@ -3409,7 +3409,13 @@ label > [data-slot='select-trigger'].app-select-trigger { width:100%; }
 .chat-workspace-view .chat-feed { height:100%; min-height:0; max-height:none; border:0; border-radius:0; box-shadow:none; }
 .chat-workspace-view .chat-message-scroll { flex:1 1 auto; min-height:0; padding:4px 16px 8px; }
 .chat-workspace-view .chat-message { gap:8px; padding:8px 0; }
-.chat-workspace-view .chat-message p { width:fit-content; max-width:min(680px, 100%); margin:3px 0 0; padding:7px 10px; border-radius:10px; background:var(--workspace-surface-soft); color:var(--workspace-text); font-size:13px; line-height:1.35; }
+.chat-workspace-view .chat-message-bubble { position:relative; width:fit-content; max-width:min(700px, 100%); }
+.chat-workspace-view .chat-message p { width:fit-content; max-width:100%; margin:3px 0 0; padding:9px 12px; border-radius:12px; background:var(--workspace-surface-soft); color:var(--workspace-text); font-size:13px; line-height:1.4; }
+.chat-workspace-view .chat-reactions { position:absolute; right:-8px; bottom:-11px; z-index:1; display:flex; gap:3px; margin:0; padding:2px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface); box-shadow:0 2px 6px rgb(7 26 46 / 12%); opacity:0; pointer-events:none; transform:translateY(-2px); transition:opacity .15s ease, transform .15s ease; }
+.chat-workspace-view .chat-message:hover .chat-reactions, .chat-workspace-view .chat-message:focus-within .chat-reactions, .chat-workspace-view .chat-reactions.has-reactions { opacity:1; pointer-events:auto; transform:translateY(0); }
+.chat-workspace-view .chat-reactions button { border:0; padding:2px 5px; background:transparent; font-size:11px; }
+.chat-workspace-view .chat-reactions .chat-reaction-add { display:none; }
+.chat-workspace-view .chat-message:hover .chat-reaction-add, .chat-workspace-view .chat-message:focus-within .chat-reaction-add { display:inline-flex; }
 .chat-workspace-view .chat-inline-composer { flex:0 0 auto; padding:8px 14px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--workspace-border); background:var(--workspace-surface); }
 .chat-workspace-view .chat-inline-composer .chat-compose-surface textarea { min-height:44px; max-height:140px; padding:10px 12px; font-size:13px; line-height:1.4; }
 .chat-workspace-view .chat-compose-toolbar { gap:6px; padding:7px 10px; }
