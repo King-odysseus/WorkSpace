@@ -39,10 +39,10 @@ describe('ProjectCostBudgetPanel summary', () => {
   it('totals the expenses and reports what is left of the budget', async () => {
     renderPanel({ expenses: [expense(1, 'Licences', '250.00'), expense(2, 'Travel', '150.50')] })
 
-    await waitFor(() => expect(summaryValue('Spent')).toMatch(/400\.50$/))
+    await waitFor(() => expect(summaryValue('Actual spend')).toMatch(/400\.50$/))
     expect(summaryValue('Budget')).toMatch(/1,000\.00$/)
     expect(summaryValue('Remaining')).toMatch(/599\.50$/)
-    expect(summaryValue('Used')).toBe('40%')
+    expect(summaryValue('Variance used')).toBe('40%')
   })
 
   it('flags an overspend instead of showing a negative remainder as normal', async () => {
@@ -56,10 +56,10 @@ describe('ProjectCostBudgetPanel summary', () => {
   it('shows placeholders rather than zeroes when no budget has been set', async () => {
     renderPanel({ expenses: [expense(1, 'Licences', '80.00')], projectOverrides: { budget_amount: null } })
 
-    await waitFor(() => expect(summaryValue('Spent')).toMatch(/80\.00$/))
+    await waitFor(() => expect(summaryValue('Actual spend')).toMatch(/80\.00$/))
     expect(summaryValue('Budget')).toBe('Not set')
     expect(summaryValue('Remaining')).toBe('n/a')
-    expect(summaryValue('Used')).toBe('n/a')
+    expect(summaryValue('Variance used')).toBe('n/a')
   })
 })
 
@@ -73,8 +73,8 @@ describe('ProjectCostBudgetPanel currency', () => {
 
   it('formats the summary in the project currency', async () => {
     renderPanel({ expenses: [expense(1, 'Venue', '500.00')], projectOverrides: { budget_currency: 'NGN' } })
-    await waitFor(() => expect(summaryValue('Spent')).toContain('500.00'))
-    expect(summaryValue('Spent')).not.toMatch(/US\$|^\$/)
+    await waitFor(() => expect(summaryValue('Actual spend')).toContain('500.00'))
+    expect(summaryValue('Actual spend')).not.toMatch(/US\$|^\$/)
   })
 })
 
