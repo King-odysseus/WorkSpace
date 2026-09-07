@@ -3407,8 +3407,13 @@ label > [data-slot='select-trigger'].app-select-trigger { width:100%; }
 .chat-workspace-view .chat-layout { height:calc(100dvh - 250px); min-height:540px; align-items:stretch; gap:0; border:1px solid var(--workspace-border); border-radius:14px; overflow:hidden; background:var(--workspace-surface); }
 .chat-workspace-view .chat-conversation-list { min-height:0; margin:0; border:0; border-right:1px solid var(--workspace-border); border-radius:0; box-shadow:none; overflow-y:auto; }
 .chat-workspace-view .chat-feed { height:100%; min-height:0; max-height:none; border:0; border-radius:0; box-shadow:none; }
-.chat-workspace-view .chat-message-scroll { flex:1 1 auto; min-height:0; }
-.chat-workspace-view .chat-inline-composer { flex:0 0 auto; padding:12px 18px calc(14px + env(safe-area-inset-bottom)); border-top:1px solid var(--workspace-border); background:var(--workspace-surface); }
+.chat-workspace-view .chat-message-scroll { flex:1 1 auto; min-height:0; padding:4px 16px 8px; }
+.chat-workspace-view .chat-message { gap:8px; padding:8px 0; }
+.chat-workspace-view .chat-message p { width:fit-content; max-width:min(680px, 100%); margin:3px 0 0; padding:7px 10px; border-radius:10px; background:var(--workspace-surface-soft); color:var(--workspace-text); font-size:13px; line-height:1.35; }
+.chat-workspace-view .chat-inline-composer { flex:0 0 auto; padding:8px 14px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--workspace-border); background:var(--workspace-surface); }
+.chat-workspace-view .chat-inline-composer .chat-compose-surface textarea { min-height:44px; max-height:140px; padding:10px 12px; font-size:13px; line-height:1.4; }
+.chat-workspace-view .chat-compose-toolbar { gap:6px; padding:7px 10px; }
+.chat-workspace-view .chat-compose-hint { display:none; }
 @media (max-width:850px) { .chat-workspace-view .chat-layout { height:auto; min-height:0; overflow:visible; border:0; background:transparent; } .chat-workspace-view .chat-feed { min-height:520px; border:1px solid var(--workspace-border); border-radius:14px; } .chat-workspace-view .chat-conversation-list { border:1px solid var(--workspace-border); border-radius:14px; } }
 
 .calendar-side-section { display:grid; gap:8px; margin-top:8px; padding-top:14px; border-top:1px solid var(--workspace-border); }
