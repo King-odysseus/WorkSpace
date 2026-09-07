@@ -3449,6 +3449,13 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .chat-member-profile dl div { display:flex; justify-content:space-between; gap:16px; padding-top:10px; border-top:1px solid var(--workspace-border); }
 .chat-member-profile dt { color:var(--workspace-text-soft); font-size:13px; }
 .chat-member-profile dd { margin:0; color:var(--workspace-text); font-size:13px; font-weight:700; text-transform:capitalize; }
+.member-profile-popup { width:min(380px, calc(100vw - 32px)); }
+.member-profile-summary { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+.member-profile-summary > div { display:grid; gap:2px; }
+.member-profile-summary span, .member-profile-summary small { color:var(--workspace-text-soft); }
+.member-profile-popup .primary-button, .member-profile-popup button[type='button']:not(.close-button) { margin-top:8px; }
+.team-member-heading { width:100%; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.team-member-heading:hover h2, .team-member-heading:focus-visible h2 { color:var(--workspace-primary); text-decoration:underline; }
 .chat-workspace-view .chat-inline-composer { flex:0 0 auto; padding:8px 14px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--workspace-border); background:var(--workspace-surface); }
 .chat-workspace-view .chat-inline-composer .chat-compose-surface textarea { min-height:44px; max-height:140px; padding:10px 12px; font-size:13px; line-height:1.4; }
 .chat-workspace-view .chat-compose-toolbar { gap:6px; padding:7px 10px; }
