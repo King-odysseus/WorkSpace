@@ -2056,7 +2056,6 @@ function App() {
                   <div className="max-h-[320px] divide-y divide-border-light overflow-y-auto">
                     {workspaceData.notifications.length ? (
                       workspaceData.notifications
-                        .slice(0, 8)
                         .map((notification) => (
                           <button
                             type="button"

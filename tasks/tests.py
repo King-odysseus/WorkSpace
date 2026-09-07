@@ -287,6 +287,43 @@ class TaskApiTests(TestCase):
         self.assertEqual(mention_notification.target_type, 'chat_channel')
         self.assertEqual(mention_notification.target_id, 'launch')
 
+    def test_direct_and_channel_messages_create_recipient_notifications(self):
+        """Message notifications must reach the bell, not only activity history."""
+        teammate = User.objects.create_user(username='chat-notify@example.com', email='chat-notify@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+
+        channel_response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': 'Please review the launch update.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(channel_response.status_code, 201)
+        channel_notification = WorkspaceNotification.objects.get(recipient=teammate, kind='channel_message')
+        self.assertEqual(channel_notification.target_type, 'chat_channel')
+        self.assertEqual(channel_notification.target_id, 'general')
+
+        conversation_response = self.client.post(
+            reverse('direct-conversation-list', args=[self.workspace.id]),
+            data=json.dumps({'participant_ids': [teammate.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(conversation_response.status_code, 201)
+        conversation_id = conversation_response.json()['conversation']['id']
+        direct_response = self.client.post(
+            reverse('direct-message-list', args=[conversation_id]),
+            data=json.dumps({'message': 'Can you confirm the launch time?'}),
+            content_type='application/json',
+        )
+        self.assertEqual(direct_response.status_code, 201)
+        direct_notification = WorkspaceNotification.objects.get(recipient=teammate, kind='direct_message')
+        self.assertEqual(direct_notification.target_type, 'direct_conversation')
+        self.assertEqual(direct_notification.target_id, str(conversation_id))
+
+        self.client.force_login(teammate)
+        bell_response = self.client.get(reverse('notification-list', args=[self.workspace.id]))
+        self.assertEqual(bell_response.status_code, 200)
+        self.assertEqual(bell_response.json()['unread_count'], 2)
+
     def test_reassigning_task_notifies_new_assignee(self):
         original_assignee = User.objects.create_user(username='first@example.com', email='first@example.com', password='secure-pass-123')
         new_assignee = User.objects.create_user(username='second@example.com', email='second@example.com', password='secure-pass-123')

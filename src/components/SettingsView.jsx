@@ -452,16 +452,20 @@ function SettingsView({
   const [pushConfigured, setPushConfigured] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState("");
   useEffect(() => {
     fetch("/api/push/public-key/", { credentials: "include" })
-      .then((response) => response.json())
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(data.error || "Push notification configuration could not be loaded.");
+        return data;
+      })
       .then((data) => {
         setPushPublicKey(data.public_key || "");
         setPushConfigured(Boolean(data.configured));
       })
-      .catch((error) =>
-        console.error("Push notification config could not be loaded", error),
-      );
+      .catch((error) => setPushError(error.message || "Push notification configuration could not be loaded."));
   }, []);
   useEffect(() => {
     if (!pushSupported) return;
@@ -483,12 +487,15 @@ function SettingsView({
   const togglePushSubscription = async () => {
     if (!pushSupported || !pushConfigured || pushBusy) return;
     setPushBusy(true);
+    setPushError("");
     try {
+      if (!pushPublicKey)
+        throw new Error("Push notifications are not configured for this workspace yet.");
       const registration = await navigator.serviceWorker.ready;
       if (pushSubscribed) {
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
-          await fetch("/api/push/subscriptions/", {
+          const response = await fetch("/api/push/subscriptions/", {
             method: "DELETE",
             credentials: "include",
             headers: {
@@ -497,6 +504,9 @@ function SettingsView({
             },
             body: JSON.stringify({ endpoint: subscription.endpoint }),
           });
+          const data = await response.json();
+          if (!response.ok)
+            throw new Error(data.error || "Push notifications could not be disabled on this device.");
           await subscription.unsubscribe();
         }
         setPushSubscribed(false);
@@ -509,7 +519,7 @@ function SettingsView({
           applicationServerKey: urlBase64ToUint8Array(pushPublicKey),
         });
         const subscriptionJson = subscription.toJSON();
-        await fetch("/api/push/subscriptions/", {
+        const response = await fetch("/api/push/subscriptions/", {
           method: "POST",
           credentials: "include",
           headers: {
@@ -521,10 +531,17 @@ function SettingsView({
             keys: subscriptionJson.keys,
           }),
         });
+        const data = await response.json();
+        if (!response.ok) {
+          await subscription.unsubscribe();
+          throw new Error(data.error || "Push notifications could not be enabled on this device.");
+        }
         setPushSubscribed(true);
       }
-    } catch {
-      // Leave state as-is so the user can retry from the same button.
+    } catch (error) {
+      // Leave state as-is so the user can retry from the same button, but do not
+      // claim the browser subscription was saved when the API rejected it.
+      setPushError(error.message || "Push notifications could not be updated.");
     } finally {
       setPushBusy(false);
     }
@@ -1018,28 +1035,36 @@ function SettingsView({
                 )}
               </div>
               {pushSupported && pushConfigured && (
-                <div className="settings-row settings-control-row">
-                  <div>
-                    <strong>Push notifications</strong>
-                    <span>
-                      {pushSubscribed
-                        ? "Enabled on this device - alerts arrive even when WorkSpace is closed."
-                        : "Get alerts on this device even when WorkSpace is closed."}
-                    </span>
+                <>
+                  <div className="settings-row settings-control-row">
+                    <div>
+                      <strong>Push notifications</strong>
+                      <span>
+                        {pushSubscribed
+                          ? "Enabled on this device - alerts arrive even when WorkSpace is closed."
+                          : "Get alerts on this device even when WorkSpace is closed."}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={pushBusy}
+                      onClick={togglePushSubscription}
+                    >
+                      {pushBusy
+                        ? "Working..."
+                        : pushSubscribed
+                          ? "Disable"
+                          : "Enable"}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={pushBusy}
-                    onClick={togglePushSubscription}
-                  >
-                    {pushBusy
-                      ? "Working..."
-                      : pushSubscribed
-                        ? "Disable"
-                        : "Enable"}
-                  </button>
-                </div>
+                  {pushError && <p className="settings-note" role="alert">{pushError}</p>}
+                </>
+              )}
+              {pushSupported && !pushConfigured && (
+                <p className="settings-note" role={pushError ? "alert" : undefined}>
+                  {pushError || "Push notifications are not configured for this workspace yet."}
+                </p>
               )}
               <p className="settings-note">
                 Turning a category off stops those notifications from being
