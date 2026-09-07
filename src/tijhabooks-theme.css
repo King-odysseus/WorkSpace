@@ -3559,3 +3559,29 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 @media (prefers-reduced-motion: reduce) {
   .ai-mobile-launcher, .ai-desktop-launcher { animation:none; box-shadow:0 0 0 2px rgb(196 154 108 / 20%); }
 }
+
+/* "A new version is available" prompt. Pinned to the bottom rather than the top
+   so it never covers the header nav, and above the AI launcher's stacking range
+   so it stays clickable. Colours come from the workspace tokens, which already
+   carry their own dark-theme values. */
+.app-update-banner {
+  position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); left:16px; z-index:1200;
+  display:flex; align-items:center; flex-wrap:wrap; gap:12px;
+  width:fit-content; max-width:calc(100% - 32px); margin:0 auto;
+  padding:12px 16px; border:1px solid var(--workspace-border); border-radius:12px;
+  background:var(--workspace-surface); color:var(--workspace-text);
+  box-shadow:0 10px 30px rgb(7 26 46 / 22%);
+  animation:app-update-banner-reveal .2s ease-out;
+}
+.app-update-banner-mark { flex:0 0 auto; width:9px; height:9px; border-radius:50%; background:var(--brand-accent); }
+.app-update-banner-copy { display:grid; gap:2px; min-width:0; }
+.app-update-banner-copy strong { font-size:13px; }
+.app-update-banner-copy span { color:var(--workspace-text-soft); font-size:12px; }
+.app-update-banner .primary-button { padding:7px 14px; font-size:12px; }
+.app-update-banner-dismiss { padding:7px 10px; border:0; border-radius:8px; background:transparent; color:var(--workspace-text-soft); cursor:pointer; font-size:12px; }
+.app-update-banner-dismiss:hover { color:var(--workspace-text); }
+@keyframes app-update-banner-reveal {
+  from { opacity:0; transform:translateY(8px); }
+  to { opacity:1; transform:translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .app-update-banner { animation:none; } }

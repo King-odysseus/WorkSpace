@@ -142,6 +142,8 @@ const ScreenShareControl = lazy(() =>
   })),
 );
 import ImportView from "./components/ImportView.jsx";
+import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
+import { startAppUpdateWatch } from "./lib/app-updates.js";
 import {
   CookieConsent,
   HelpView,
@@ -5730,18 +5732,20 @@ function BrandedStatusScreen({ loading = false, error = "" }) {
   );
 }
 
+// The banner sits outside the error boundary on purpose: if a bad build has
+// taken the app down to the error screen, offering the new one is exactly what
+// the user needs, and the boundary would otherwise replace the banner too.
 createRoot(document.getElementById("root")).render(
-  <AppErrorBoundary>
-    <App />
-  </AppErrorBoundary>,
+  <>
+    <AppUpdateBanner />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
+  </>,
 );
 
 // Production only: a dev-registered service worker fights Vite's HMR (it can
 // serve a stale cached module instead of the one Vite just recompiled).
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((error) => {
-      console.warn("Service worker registration failed.", error);
-    });
-  });
+if (import.meta.env.PROD) {
+  window.addEventListener("load", startAppUpdateWatch);
 }

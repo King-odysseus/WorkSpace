@@ -12,9 +12,16 @@
 //                                  showing the browser's own offline page.
 //   - everything else             pass straight through to the network.
 //
-// CACHE_VERSION must be bumped whenever this file's caching *behaviour* changes,
-// so returning visitors pick up the new logic instead of an old worker's cache.
-const CACHE_VERSION = 'workspace-v3'
+// BUILD_ID is replaced at build time by the stampServiceWorkerBuildId plugin in
+// vite.config.js, and it is what makes updates detectable at all: the browser
+// only goes looking for a new worker when /sw.js differs byte for byte from the
+// installed one. With a hand-maintained version constant, a deploy that changed
+// only the app bundle left this file identical, so an installed app never
+// noticed the new build. The id is derived from the emitted asset names, so it
+// changes exactly when the bundle does. In dev the placeholder stays as-is,
+// which is harmless because the worker is only registered in production builds.
+const BUILD_ID = '__BUILD_ID__'
+const CACHE_VERSION = `workspace-v4-${BUILD_ID}`
 const SHELL_URL = '/'
 
 // There's no build-time precache manifest here (no vite-plugin-pwa), so the
@@ -37,9 +44,17 @@ self.addEventListener('install', event => {
       const { response, urls } = await shellAssetUrls()
       await cache.put(SHELL_URL, response)
       await Promise.all(urls.map(url => cache.add(url).catch(() => {})))
-      await self.skipWaiting()
     })()
   )
+})
+
+// Deliberately no skipWaiting() above: a new worker parks in the waiting state
+// so the page can offer the update instead of swapping the cached assets under a
+// running session (which can break a lazily loaded chunk, and discards whatever
+// the user was in the middle of without asking). src/lib/app-updates.js shows
+// the banner and posts this message once the user accepts.
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('activate', event => {
