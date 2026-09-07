@@ -1607,17 +1607,19 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .today-exception-list button { display: grid; grid-template-columns: 7px minmax(0,1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--workspace-border); border-radius: 7px; background: var(--workspace-surface-soft); color: var(--workspace-text); text-align: left; cursor: pointer; }
 .today-exception-list button span:nth-child(2) { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .today-exception-list small { color: var(--workspace-text-soft); font-size: 9px; }
-.today-clock-panel { display: grid; align-content: start; gap: 7px; }
-.today-clock-panel .today-panel-heading { align-items: flex-start; }
-.today-clock-timer { color: var(--workspace-text); font: 800 27px 'Plus Jakarta Sans'; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.clock-state { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font: 700 9px 'DM Sans'; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.today-clock-panel { display: grid; align-content: start; gap: 4px; padding: 12px; }
+.today-clock-panel .today-panel-heading { align-items: flex-start; margin-bottom: 6px; }
+.today-clock-timer { color: var(--workspace-text); font: 800 19px 'Plus Jakarta Sans'; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.clock-state { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font: 700 8px 'DM Sans'; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
 .clock-state-active { border-color: rgb(34 197 94 / 0.4); color: #16a34a; }
 .clock-state-break { border-color: rgb(245 158 11 / 0.4); color: #d97706; }
-.today-clock-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
-.clock-break-timer { margin: 0; padding: 6px 9px; border: 1px solid rgb(245 158 11 / 0.35); border-radius: 8px; background: rgb(245 158 11 / 0.08); color: #b45309; font: 600 10px 'DM Sans'; }
+.today-clock-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.today-clock-actions button { height: 26px; padding: 0 8px; font-size: 10px; gap: 4px; }
+.today-clock-actions svg { width: 11px; height: 11px; }
+.clock-break-timer { margin: 0; padding: 4px 8px; border: 1px solid rgb(245 158 11 / 0.35); border-radius: 8px; background: rgb(245 158 11 / 0.08); color: #b45309; font: 600 9px 'DM Sans'; }
 .clock-break-timer.is-over { border-color: rgb(239 68 68 / 0.4); background: rgb(239 68 68 / 0.08); color: #dc2626; }
-.today-status-select { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: 3px; padding-top: 9px; border-top: 1px solid var(--workspace-border); }
-.today-status-select > span:first-child { color: var(--workspace-text-soft); font: 700 10px 'DM Sans'; }
+.today-status-select { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: 1px; padding-top: 6px; border-top: 1px solid var(--workspace-border); }
+.today-status-select > span:first-child { color: var(--workspace-text-soft); font: 700 9px 'DM Sans'; }
 .today-checkin-panel { display: grid; align-content: start; gap: 7px; }
 .today-checkin-count { color: var(--workspace-text); font: 800 25px 'Plus Jakarta Sans'; }
 .today-checkin-panel .secondary-button { margin-top: 7px; }
