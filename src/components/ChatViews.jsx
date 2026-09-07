@@ -2,7 +2,7 @@ import { AppSelect } from './ui/select.jsx'
 // Channels and direct messages, plus the shared composer modal used for every
 // "create a record" flow (events, projects, check-ins, chat, follow-ups, invites).
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowUpRight, Download, FileText, Hash, MessageSquare, Paperclip, Plus, Search, Smile, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
@@ -61,7 +61,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [uploadingFile, setUploadingFile] = useState(false)
   const [channelForm, setChannelForm] = useState({ name: '', description: '', is_private: false, member_ids: [] })
   const [directMemberIds, setDirectMemberIds] = useState([])
-  const feedEndRef = useRef(null)
+  const messageScrollRef = useRef(null)
   const messageInputRef = useRef(null)
   const channels = data.channels || []
   const conversations = data.directConversations || []
@@ -108,9 +108,17 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     return groups
   }, {})
 
-  useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  }, [visibleChannelMessages.length, visibleDirectMessages.length, mode])
+  const lastChannelMessageId = visibleChannelMessages.length ? visibleChannelMessages[visibleChannelMessages.length - 1].id : null
+  const lastDirectMessageId = visibleDirectMessages.length ? visibleDirectMessages[visibleDirectMessages.length - 1].id : null
+
+  // Pin the feed to the newest message by scrolling the feed element itself.
+  // scrollIntoView also scrolls every scrollable ancestor, which made the whole
+  // page jump instead of simply revealing the message that was just sent.
+  useLayoutEffect(() => {
+    const scroller = messageScrollRef.current
+    if (!scroller) return
+    scroller.scrollTop = scroller.scrollHeight
+  }, [mode, selectedChannel, selectedConversationId, directLoading, lastChannelMessageId, lastDirectMessageId, visibleChannelMessages.length, visibleDirectMessages.length])
 
   const submitChannelMessage = async event => {
     event.preventDefault()
@@ -340,7 +348,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     <div className="chat-layout">
       <section className="chat-feed">
         <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.title}</h2><p>{selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div></div>
-        <div className="chat-message-scroll">{mode === 'channels' ? (visibleChannelMessages.length ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</h3>{messages.map(renderMessage)}</div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>) : selectedConversation ? (directLoading ? <div className="chat-placeholder"><p>Loading messages…</p></div> : visibleDirectMessages.length ? visibleDirectMessages.map(renderMessage) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><Users size={22} /></div><h2>Start a private conversation</h2><p>Choose an existing conversation or create a new one.</p></div>}<div ref={feedEndRef} /></div>
+        <div className="chat-message-scroll" ref={messageScrollRef}>{mode === 'channels' ? (visibleChannelMessages.length ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</h3>{messages.map(renderMessage)}</div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>) : selectedConversation ? (directLoading ? <div className="chat-placeholder"><p>Loading messages…</p></div> : visibleDirectMessages.length ? visibleDirectMessages.map(renderMessage) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><Users size={22} /></div><h2>Start a private conversation</h2><p>Choose an existing conversation or create a new one.</p></div>}</div>
         {(mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
           {replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
           {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
