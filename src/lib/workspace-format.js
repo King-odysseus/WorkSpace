@@ -115,6 +115,16 @@ function formatLastSeen(value) {
   return `Last seen ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
 }
 
+function sortMembersByRecentActivity(members, currentUserId, limit = 8) {
+  return [...members]
+    .filter(member => String(member.id) !== String(currentUserId))
+    .sort((a, b) => {
+      const seen = member => (member.last_seen_at ? new Date(member.last_seen_at).getTime() : 0)
+      return seen(b) - seen(a)
+    })
+    .slice(0, limit)
+}
+
 function formatCalendarDate(value, options) {
   return new Intl.DateTimeFormat(undefined, options).format(value)
 }
@@ -182,6 +192,7 @@ export {
   mapTaskFromApi,
   formatRelativeActivityTime,
   formatLastSeen,
+  sortMembersByRecentActivity,
   formatCalendarDate,
   toDateTimeLocal,
   googleCalendarUrl,

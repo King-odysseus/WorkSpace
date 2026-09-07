@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapTaskFromApi, taskDueLabel, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { mapTaskFromApi, sortMembersByRecentActivity, taskDueLabel, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -86,5 +86,32 @@ describe('readJsonResponse', () => {
     await expect(readJsonResponse(response, 'Bucket could not be archived.')).rejects.toThrow(
       'Bucket could not be archived. (server returned 405)',
     )
+  })
+})
+
+describe('sortMembersByRecentActivity', () => {
+  it('excludes the current user and sorts most-recently-active first', () => {
+    const members = [
+      { id: 1, last_seen_at: '2026-09-07T08:00:00Z' },
+      { id: 2, last_seen_at: '2026-09-07T10:00:00Z' },
+      { id: 3, last_seen_at: '2026-09-06T10:00:00Z' },
+    ]
+    const result = sortMembersByRecentActivity(members, 2)
+    expect(result.map(member => member.id)).toEqual([1, 3])
+  })
+
+  it('treats members with no last-seen as least recent', () => {
+    const members = [
+      { id: 1, last_seen_at: '' },
+      { id: 2, last_seen_at: '2026-09-07T10:00:00Z' },
+    ]
+    const result = sortMembersByRecentActivity(members, 999)
+    expect(result.map(member => member.id)).toEqual([2, 1])
+  })
+
+  it('respects the limit', () => {
+    const members = [1, 2, 3, 4, 5].map(id => ({ id, last_seen_at: '2026-09-07T10:00:00Z' }))
+    const result = sortMembersByRecentActivity(members, 999, 3)
+    expect(result.length).toBe(3)
   })
 })

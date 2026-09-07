@@ -1009,6 +1009,9 @@ class WorkspaceNotification(models.Model):
     body = models.CharField(max_length=500, blank=True)
     target_type = models.CharField(max_length=40, blank=True)
     target_id = models.CharField(max_length=80, blank=True)
+    # Stable grouping key (e.g. "task:42") so a future digest can collapse
+    # several manager-activity notifications about one record into one line.
+    group_key = models.CharField(max_length=255, blank=True, default='')
     read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1024,6 +1027,7 @@ class WorkspaceNotification(models.Model):
             'body': self.body,
             'target_type': self.target_type,
             'target_id': self.target_id,
+            'group_key': self.group_key,
             'read': self.read_at is not None,
             'created_at': self.created_at.isoformat(),
         }
@@ -1083,6 +1087,10 @@ class NotificationPreference(models.Model):
     channel_messages = models.BooleanField(default=True)
     task_updates = models.BooleanField(default=True)
     calendar_reminders = models.BooleanField(default=True)
+    # Manager activity: owners/managers are notified when teammates create,
+    # complete, delete, or materially update shared records. Default on so
+    # oversight is not silently lost, but each leader can opt out.
+    manager_activity = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -1095,6 +1103,7 @@ class NotificationPreference(models.Model):
             'channel_messages': self.channel_messages,
             'task_updates': self.task_updates,
             'calendar_reminders': self.calendar_reminders,
+            'manager_activity': self.manager_activity,
         }
 
 

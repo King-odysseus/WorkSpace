@@ -78,6 +78,7 @@ function SettingsView({ theme, onSetTheme, sidebarCollapsed, onToggleSidebar, cu
     ['channel_messages', 'Channel messages', 'When teammates post in channels you can access.'],
     ['task_updates', 'Task updates', 'Assignments, comments, and status changes.'],
     ['calendar_reminders', 'Calendar reminders', 'Upcoming event reminders.'],
+    ...(canManageMembers ? [['manager_activity', 'Manager activity', 'When teammates create, complete, delete, or update shared records.']] : []),
   ]
   useEffect(() => {
     if (!workspaceId) return undefined

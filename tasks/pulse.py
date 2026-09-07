@@ -36,6 +36,7 @@ from .models import (
     Project,
     RiskIssue,
     Task,
+    UserProfile,
     WorkspaceInvitation,
     WorkspaceNotification,
     WorkShift,
@@ -108,6 +109,15 @@ def workspace_fingerprint(workspace_id, user):
         conversation__workspace_id=workspace_id, conversation__participants=user
     ).aggregate(newest=Max('created_at'), total=Count('id'))
     parts.append(f'direct:{direct["newest"] or ""}:{direct["total"]}')
+
+    # Presence and last-seen live on UserProfile (not Membership), so a member's
+    # status change or a LastSeenMiddleware stamp would otherwise leave this
+    # fingerprint unchanged and the team-online card would go stale.
+    presence = UserProfile.objects.filter(user__workspace_memberships__workspace_id=workspace_id).aggregate(
+        newest_presence=Max('presence_updated_at'),
+        newest_seen=Max('last_seen_at'),
+    )
+    parts.append(f'presence:{presence["newest_presence"] or ""}:{presence["newest_seen"] or ""}')
 
     return hashlib.sha256('|'.join(str(part) for part in parts).encode('utf-8')).hexdigest()[:32]
 

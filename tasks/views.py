@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
@@ -93,22 +93,65 @@ NOTIFICATION_KIND_PREFERENCE = {
     'blocked_alert': 'task_updates',
     'stale_update_reminder': 'task_updates',
     'workspace_digest': 'task_updates',
+    'manager_activity': 'manager_activity',
 }
 
 
-def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id=''):
+def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id='', group_key='', immediate=True):
     from .models import WorkspaceNotification
     preference_field = NOTIFICATION_KIND_PREFERENCE.get(kind)
     if preference_field and recipient is not None:
         preference = NotificationPreference.objects.filter(workspace_id=workspace_id, user=recipient).first()
         if preference is not None and not getattr(preference, preference_field):
             return None
-    notification = WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '')
+    notification = WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '', group_key=group_key)
     notify_workspace_webhooks(workspace_id, kind, title, body, target_type=target_type, target_id=target_id)
     if kind in REMINDER_EMAIL_KINDS:
         send_reminder_email(recipient, title, body)
-    send_push_to_user(recipient, title, body)
+    if immediate:
+        send_push_to_user(recipient, title, body)
     return notification
+
+
+def notify_managers(workspace_id, actor, verb, object_label, target_type='', target_id='', immediate=False, dedup_key=''):
+    """Notify workspace owners and managers (never the actor) about a teammate's
+    action on a shared record. The title is human-readable by construction
+    (``<actor> <verb>: <object>``) and the body is the workspace name, so an
+    entry stays legible in a long activity list without resolving foreign keys.
+    When ``dedup_key`` is supplied the delivery is recorded in
+    NotificationDelivery so a repeated call for the same event never notifies
+    the same leader twice."""
+    leaders = (
+        Membership.objects
+        .filter(workspace_id=workspace_id, role__in=['owner', 'manager'])
+        .exclude(user_id=actor.id)
+        .select_related('user')
+    )
+    actor_name = actor.get_full_name() or actor.email or actor.username
+    workspace = Workspace.objects.filter(id=workspace_id).first()
+    body = workspace.name if workspace else ''
+    title = f'{actor_name} {verb}: {object_label}'
+    group_key = f'{target_type}:{target_id}' if target_type and str(target_id) else ''
+    for membership in leaders:
+        recipient = membership.user
+        if dedup_key:
+            _, created = NotificationDelivery.objects.get_or_create(
+                workspace_id=workspace_id,
+                kind='manager_activity',
+                dedup_key=f'{dedup_key}:{recipient.id}',
+                defaults={
+                    'recipient_id': recipient.id,
+                    'target_type': target_type,
+                    'target_id': str(target_id) if target_id else '',
+                },
+            )
+            if not created:
+                continue
+        create_notification(
+            workspace_id, recipient, 'manager_activity', title, body,
+            target_type=target_type, target_id=target_id,
+            group_key=group_key, immediate=immediate,
+        )
 
 
 def parse_task_labels(value):
@@ -188,13 +231,16 @@ def task_snapshot(task, fields):
 
 def record_task_changes(task, actor, previous, fields):
     changes = []
+    changed_fields = []
     for field in fields:
         old_value = previous.get(field)
         new_value = json_value(getattr(task, field))
         if old_value != new_value:
+            changed_fields.append(field)
             changes.append(TaskChangeHistory(task=task, task_code=task.code, workspace_id=task.workspace_id, actor=actor, field=field, previous_value=old_value, new_value=new_value))
     if changes:
         TaskChangeHistory.objects.bulk_create(changes)
+    return changed_fields
 
 
 def reserve_task_code(workspace):
@@ -724,6 +770,7 @@ def task_list(request, workspace_id=None):
     record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')
     if assignee and assignee != request.user:
         create_notification(workspace_id, assignee, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
+    notify_managers(workspace_id, request.user, 'created task', task.title, target_type='task', target_id=task.id, dedup_key=f'created_task:{task.id}')
     return JsonResponse({'task': task.as_dict()}, status=201)
 
 
@@ -1325,11 +1372,13 @@ def task_detail(request, task_id):
         if hard_delete:
             if membership.role != 'owner':
                 return JsonResponse({'error': 'Only workspace owners can permanently delete tasks.'}, status=403)
+            task_title = task.title
             TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=task.workspace_id, actor=request.user, field='permanently_deleted', previous_value={'title': task.title, 'state': task.state}, new_value=None)
             for attachment in task.attachments.all():
                 attachment.file.delete(save=False)
             task.delete()
-            record_activity(task.workspace_id, request.user, 'task_permanently_deleted', f'{request.user.get_full_name() or request.user.email} permanently deleted task {task.title}.')
+            record_activity(task.workspace_id, request.user, 'task_permanently_deleted', f'{request.user.get_full_name() or request.user.email} permanently deleted task {task_title}.')
+            notify_managers(task.workspace_id, request.user, 'deleted task', task_title, target_type='task', target_id=task_id, immediate=True, dedup_key=f'deleted_task:{task_id}')
             return JsonResponse({'deleted': task_id, 'permanent': True})
         previous_state = task.state
         task.state = 'archived'
@@ -1338,6 +1387,7 @@ def task_detail(request, task_id):
         task.save(update_fields=['state', 'archived_at', 'archived_by', 'updated_at'])
         record_task_changes(task, request.user, {'state': previous_state}, ['state'])
         record_activity(task.workspace_id, request.user, 'task_archived', f'{request.user.get_full_name() or request.user.email} archived task {task.title}.')
+        notify_managers(task.workspace_id, request.user, 'archived task', task.title, target_type='task', target_id=task.id, immediate=True, dedup_key=f'archived_task:{task.id}')
         return JsonResponse({'deleted': task_id, 'archived': True, 'task': task.as_dict()})
 
     if not membership.has_permission('edit_team_tasks'):
@@ -1485,11 +1535,17 @@ def task_detail(request, task_id):
         if blocked_by_error:
             transaction.set_rollback(True)
             return blocked_by_error
-        record_task_changes(task, request.user, previous_values, material_fields)
+        changed_fields = record_task_changes(task, request.user, previous_values, material_fields)
         if 'supporter_ids' in payload:
             new_supporters = list(task.supporters.values_list('id', flat=True))
             if sorted(previous_supporters) != sorted(new_supporters):
                 TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=task.workspace_id, actor=request.user, field='supporter_ids', previous_value=previous_supporters, new_value=new_supporters)
+    completed = previous_status != 'done' and task.status == 'done'
+    manager_changes = [field for field in changed_fields if field not in {'progress_percent', 'actual_completion_date'}]
+    if completed:
+        notify_managers(task.workspace_id, request.user, 'completed task', task.title, target_type='task', target_id=task.id, immediate=True, dedup_key=f'completed_task:{task.id}')
+    elif manager_changes:
+        notify_managers(task.workspace_id, request.user, 'updated task', task.title, target_type='task', target_id=task.id)
     actor_name = request.user.get_full_name() or request.user.email
     if previous_status != task.status:
         record_activity(task.workspace_id, request.user, 'task_status', f'{actor_name} moved {task.title} to {task.get_status_display()}.')
@@ -1559,6 +1615,7 @@ def task_comment_list(request, task_id):
     record_activity(task.workspace_id, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.')
     if task.assignee and task.assignee != request.user:
         create_notification(task.workspace_id, task.assignee, 'task_comment', f'New comment on {task.title}', body[:120], target_type='task', target_id=task.id)
+    notify_managers(task.workspace_id, request.user, 'commented on task', task.title, target_type='task', target_id=task.id)
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
@@ -1732,7 +1789,7 @@ def notification_preference_detail(request, workspace_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders']
+    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'manager_activity']
     updated_fields = []
     for field in fields:
         if field in payload:
@@ -1849,11 +1906,25 @@ def member_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
+    actor = Membership.objects.filter(workspace_id=workspace_id, user=request.user).first()
     members = Membership.objects.filter(workspace_id=workspace_id).select_related('user', 'user__profile').order_by('joined_at', 'id')
     page, pagination = paginate_response(request, members)
     if page is None:
         return pagination
-    return JsonResponse({'members': [member.as_dict() for member in page.object_list], 'pagination': pagination})
+    member_dicts = [member.as_dict() for member in page.object_list]
+    # Only owners/managers see attendance detail (clocked-in, break status and
+    # clock-in time); members still see everyone's presence and last-seen but
+    # not each other's shift history.
+    if actor is not None and actor.role in {'owner', 'manager'}:
+        user_ids = [member.user_id for member in page.object_list]
+        open_shifts = WorkShift.objects.filter(workspace_id=workspace_id, user_id__in=user_ids, ended_at__isnull=True)
+        shift_by_user = {shift.user_id: shift for shift in open_shifts}
+        for member_dict in member_dicts:
+            shift = shift_by_user.get(member_dict['id'])
+            member_dict['clocked_in'] = shift is not None
+            member_dict['on_break'] = bool(shift and shift.is_on_break)
+            member_dict['clock_in_at'] = shift.started_at.isoformat() if shift else ''
+    return JsonResponse({'members': member_dicts, 'pagination': pagination})
 
 
 @require_http_methods(['PATCH', 'DELETE'])
@@ -2203,6 +2274,7 @@ def project_list(request, workspace_id):
     except IntegrityError:
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
     record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name}.')
+    notify_managers(workspace_id, request.user, 'created project', project.name, target_type='project', target_id=project.id, dedup_key=f'created_project:{project.id}')
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
@@ -2215,8 +2287,10 @@ def project_detail(request, workspace_id, project_id):
     if project is None:
         return JsonResponse({'error': 'Project was not found.'}, status=404)
     if request.method == 'DELETE':
-        record_activity(workspace_id, request.user, 'project_deleted', f'{request.user.get_full_name() or request.user.email} deleted project {project.name}.')
+        project_name = project.name
+        record_activity(workspace_id, request.user, 'project_deleted', f'{request.user.get_full_name() or request.user.email} deleted project {project_name}.')
         project.delete()
+        notify_managers(workspace_id, request.user, 'deleted project', project_name, target_type='project', target_id=project_id, immediate=True, dedup_key=f'deleted_project:{project_id}')
         return JsonResponse({'deleted': project_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -2276,6 +2350,7 @@ def project_detail(request, workspace_id, project_id):
         project.budget_currency = budget_currency
     project.save()
     record_activity(workspace_id, request.user, 'project_updated', f'{request.user.get_full_name() or request.user.email} updated project {project.name}.')
+    notify_managers(workspace_id, request.user, 'updated project', project.name, target_type='project', target_id=project.id)
     return JsonResponse({'project': project.as_dict()})
 
 
@@ -2319,6 +2394,8 @@ def lookup_value_list(request, workspace_id):
     except (TypeError, ValueError):
         return JsonResponse({'error': 'position must be a non-negative integer.'}, status=400)
     value = LookupValue.objects.create(workspace_id=workspace_id, project=project, kind=kind, name=name, slug=value_slug, position=position)
+    if kind == 'workstream':
+        notify_managers(workspace_id, request.user, 'created workstream', value.name, target_type='workstream', target_id=value.id, dedup_key=f'created_workstream:{value.id}')
     return JsonResponse({'lookup_value': value.as_dict()}, status=201)
 
 
@@ -2333,6 +2410,8 @@ def lookup_value_detail(request, workspace_id, value_id):
     if request.method == 'DELETE':
         value.is_active = False
         value.save(update_fields=['is_active'])
+        if value.kind == 'workstream':
+            notify_managers(workspace_id, request.user, 'archived workstream', value.name, target_type='workstream', target_id=value.id, immediate=True, dedup_key=f'archived_workstream:{value.id}')
         return JsonResponse({'archived': value_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -2359,6 +2438,8 @@ def lookup_value_detail(request, workspace_id, value_id):
         value.save()
     except IntegrityError:
         return JsonResponse({'error': 'This lookup value already exists in the selected scope.'}, status=409)
+    if value.kind == 'workstream':
+        notify_managers(workspace_id, request.user, 'updated workstream', value.name, target_type='workstream', target_id=value.id)
     return JsonResponse({'lookup_value': value.as_dict()})
 
 
@@ -2447,6 +2528,7 @@ def risk_issue_list(request, workspace_id):
         return relation_error
     record = RiskIssue.objects.create(workspace_id=workspace_id, project=project, kind=kind, title=title, detail=str(payload.get('detail', '') or '').strip(), severity=severity, likelihood=payload.get('likelihood') or None, impact=payload.get('impact') or None, mitigation=str(payload.get('mitigation', '') or '').strip(), escalation=str(payload.get('escalation', '') or '').strip(), status=status, owner=owner, owner_name=str(payload.get('owner', '') or '').strip(), due_date=due_date, task=task, expense=expense, created_by=request.user)
     record_activity(workspace_id, request.user, f'{kind}_created', f'{request.user.get_full_name() or request.user.email} created {kind} {record.title}.')
+    notify_managers(workspace_id, request.user, f'created {kind}', record.title, target_type='risk_issue', target_id=record.id, dedup_key=f'created_{kind}:{record.id}')
     return JsonResponse({'record': record.as_dict()}, status=201)
 
 
@@ -2465,6 +2547,7 @@ def risk_issue_detail(request, workspace_id, record_id):
             return JsonResponse({'error': 'Only workspace leaders can archive risks and issues.'}, status=403)
         record.archived_at = timezone.now()
         record.save(update_fields=['archived_at', 'updated_at'])
+        notify_managers(workspace_id, request.user, f'archived {record.kind}', record.title, target_type='risk_issue', target_id=record.id, immediate=True, dedup_key=f'archived_{record.kind}:{record.id}')
         return JsonResponse({'archived': record_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -2509,6 +2592,7 @@ def risk_issue_detail(request, workspace_id, record_id):
         record.task = task
         record.expense = expense
     record.save()
+    notify_managers(workspace_id, request.user, f'updated {record.kind}', record.title, target_type='risk_issue', target_id=record.id)
     return JsonResponse({'record': record.as_dict()})
 
 
@@ -2564,6 +2648,7 @@ def calendar_event_list(request, workspace_id):
         created_by=request.user,
     )
     record_activity(workspace_id, request.user, 'calendar_created', f'{request.user.get_full_name() or request.user.email} created calendar event {event.title}.')
+    notify_managers(workspace_id, request.user, 'created event', event.title, target_type='calendar_event', target_id=event.id, dedup_key=f'created_event:{event.id}')
     return JsonResponse({'event': event.as_dict()}, status=201)
 
 
@@ -2578,8 +2663,10 @@ def calendar_event_detail(request, workspace_id, event_id):
     if membership.role == 'member' and event.created_by_id != request.user.id:
         return JsonResponse({'error': 'Members can only manage their own calendar events.'}, status=403)
     if request.method == 'DELETE':
-        record_activity(workspace_id, request.user, 'calendar_deleted', f'{request.user.get_full_name() or request.user.email} deleted calendar event {event.title}.')
+        event_title = event.title
+        record_activity(workspace_id, request.user, 'calendar_deleted', f'{request.user.get_full_name() or request.user.email} deleted calendar event {event_title}.')
         event.delete()
+        notify_managers(workspace_id, request.user, 'deleted event', event_title, target_type='calendar_event', target_id=event_id, immediate=True, dedup_key=f'deleted_event:{event_id}')
         return JsonResponse({'deleted': event_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -2622,6 +2709,7 @@ def calendar_event_detail(request, workspace_id, event_id):
     event.end_at = end_at
     event.save()
     record_activity(workspace_id, request.user, 'calendar_updated', f'{request.user.get_full_name() or request.user.email} updated calendar event {event.title}.')
+    notify_managers(workspace_id, request.user, 'updated event', event.title, target_type='calendar_event', target_id=event.id)
     return JsonResponse({'event': event.as_dict()})
 
 
@@ -2715,6 +2803,7 @@ def check_in_list(request, workspace_id):
     actor_name = request.user.get_full_name() or request.user.email
     action = 'submitted' if created else 'updated'
     record_activity(workspace_id, request.user, 'check_in_submitted', f'{actor_name} {action} a daily check-in for {check_in.date.isoformat()}.')
+    notify_managers(workspace_id, request.user, f'{action} a check-in', check_in.date.isoformat(), target_type='check_in', target_id=check_in.id, dedup_key=f'check_in:{check_in.id}' if created else '')
     if check_in.blockers:
         leaders = Membership.objects.filter(workspace_id=workspace_id, role__in=['owner', 'manager']).select_related('user')
         for leader in leaders:
@@ -3039,6 +3128,7 @@ def follow_up_list(request, workspace_id):
     record_activity(workspace_id, request.user, 'follow_up_created', f'{request.user.get_full_name() or request.user.email} created a follow-up.')
     if assigned_to and assigned_to != request.user:
         create_notification(workspace_id, assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', note, target_type='follow_up', target_id=follow_up.id)
+    notify_managers(workspace_id, request.user, 'created a follow-up', note[:120], target_type='follow_up', target_id=follow_up.id, dedup_key=f'created_follow_up:{follow_up.id}')
     return JsonResponse({'follow_up': follow_up.as_dict()}, status=201)
 
 
@@ -3055,8 +3145,10 @@ def follow_up_detail(request, follow_up_id):
     if request.method == 'DELETE':
         if membership.role not in {'owner', 'manager'} and follow_up.created_by_id != request.user.id:
             return JsonResponse({'error': 'Only the follow-up creator or a workspace leader can delete it.'}, status=403)
+        follow_up_note = follow_up.note
         record_activity(follow_up.workspace_id, request.user, 'follow_up_deleted', f'{request.user.get_full_name() or request.user.email} deleted a follow-up.')
         follow_up.delete()
+        notify_managers(follow_up.workspace_id, request.user, 'deleted a follow-up', follow_up_note[:120], target_type='follow_up', target_id=follow_up_id, immediate=True, dedup_key=f'deleted_follow_up:{follow_up_id}')
         return JsonResponse({'deleted': follow_up_id})
     previous_status = follow_up.status
     previous_assignee = follow_up.assigned_to
@@ -3094,6 +3186,11 @@ def follow_up_detail(request, follow_up_id):
         if payload['task_id'] and follow_up.task is None:
             return JsonResponse({'error': 'Task was not found in this workspace.'}, status=404)
     follow_up.save()
+    completed = previous_status != 'completed' and follow_up.status == 'completed'
+    if completed:
+        notify_managers(follow_up.workspace_id, request.user, 'completed a follow-up', follow_up.note[:120], target_type='follow_up', target_id=follow_up.id, immediate=True, dedup_key=f'completed_follow_up:{follow_up.id}')
+    elif previous_status != follow_up.status or previous_assignee != follow_up.assigned_to or previous_task != follow_up.task or previous_due_date != follow_up.due_date or payload.get('note') is not None:
+        notify_managers(follow_up.workspace_id, request.user, 'updated a follow-up', follow_up.note[:120], target_type='follow_up', target_id=follow_up.id)
     actor_name = request.user.get_full_name() or request.user.email
     if previous_status != follow_up.status:
         record_activity(follow_up.workspace_id, request.user, 'follow_up_status', f'{actor_name} marked a follow-up {follow_up.status}.')

@@ -664,7 +664,7 @@ function App() {
       toast.error(error.message || 'Notification could not be marked as read.')
     }
   }
-  const notificationDestinations = { follow_up: 'Follow-up', chat_channel: 'Channels', direct_conversation: 'Chats', calendar_event: 'Calendar', check_in: 'Check-ins', screen_share_session: 'Screen sharing' }
+  const notificationDestinations = { follow_up: 'Follow-up', chat_channel: 'Channels', direct_conversation: 'Chats', calendar_event: 'Calendar', check_in: 'Check-ins', screen_share_session: 'Screen sharing', project: 'Projects', risk_issue: 'Projects', workstream: 'Planner' }
   const openNotification = notification => {
     setNotificationOpen(false)
     markNotificationRead(notification.id)

@@ -567,7 +567,7 @@ class TaskApiTests(TestCase):
     def test_notification_preferences_default_to_enabled_and_can_be_updated(self):
         response = self.client.get(reverse('notification-preference-detail', args=[self.workspace.id]))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['preferences'], {'mentions': True, 'direct_messages': True, 'channel_messages': True, 'task_updates': True, 'calendar_reminders': True})
+        self.assertEqual(response.json()['preferences'], {'mentions': True, 'direct_messages': True, 'channel_messages': True, 'task_updates': True, 'calendar_reminders': True, 'manager_activity': True})
 
         update_response = self.client.patch(
             reverse('notification-preference-detail', args=[self.workspace.id]),
@@ -3167,3 +3167,96 @@ class WorkspaceAiSettingsPersistenceTests(TestCase):
         self.client.force_login(self.member)
         response = self.patch({'ai_user_ids': [self.member.id]})
         self.assertEqual(response.status_code, 403)
+
+
+class ManagerOversightTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.manager = User.objects.create_user(username='manager@example.com', email='manager@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+
+    def _login(self, user):
+        self.client.force_login(user)
+
+    def _create_task_as(self, user, title):
+        self._login(user)
+        return self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': title}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+
+    def test_manager_activity_notified_on_member_task_create(self):
+        response = self._create_task_as(self.member, 'Member task')
+        self.assertEqual(response.status_code, 201)
+        task_id = response.json()['task']['id']
+
+        notifications = WorkspaceNotification.objects.filter(workspace=self.workspace, kind='manager_activity')
+        recipients = set(notifications.values_list('recipient_id', flat=True))
+        self.assertIn(self.owner.id, recipients)
+        self.assertIn(self.manager.id, recipients)
+        self.assertNotIn(self.member.id, recipients)
+
+        manager_notification = notifications.filter(recipient=self.manager).first()
+        self.assertIsNotNone(manager_notification)
+        self.assertIn('created task', manager_notification.title)
+        self.assertIn('Member task', manager_notification.title)
+        self.assertEqual(manager_notification.body, self.workspace.name)
+        self.assertEqual(manager_notification.target_type, 'task')
+        self.assertEqual(manager_notification.group_key, f'task:{task_id}')
+
+    def test_manager_activity_excludes_the_actor(self):
+        response = self._create_task_as(self.manager, 'Manager task')
+        self.assertEqual(response.status_code, 201)
+        recipients = set(WorkspaceNotification.objects.filter(workspace=self.workspace, kind='manager_activity').values_list('recipient_id', flat=True))
+        self.assertIn(self.owner.id, recipients)
+        self.assertNotIn(self.manager.id, recipients)
+
+    def test_manager_activity_preference_gate(self):
+        NotificationPreference.objects.update_or_create(
+            workspace=self.workspace, user=self.manager, defaults={'manager_activity': False},
+        )
+        response = self._create_task_as(self.member, 'Another task')
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(WorkspaceNotification.objects.filter(workspace=self.workspace, kind='manager_activity', recipient=self.manager).exists())
+        self.assertTrue(WorkspaceNotification.objects.filter(workspace=self.workspace, kind='manager_activity', recipient=self.owner).exists())
+
+    def test_notify_managers_dedupes_repeated_delivery(self):
+        from .views import notify_managers
+        notify_managers(self.workspace.id, self.member, 'created task', 'Task A', target_type='task', target_id=1, dedup_key='created_task:1')
+        notify_managers(self.workspace.id, self.member, 'created task', 'Task A', target_type='task', target_id=1, dedup_key='created_task:1')
+        self.assertEqual(WorkspaceNotification.objects.filter(workspace=self.workspace, kind='manager_activity', recipient=self.manager).count(), 1)
+
+    def test_immediate_controls_push_delivery(self):
+        from .views import notify_managers
+        with mock.patch('tasks.views.send_push_to_user') as push:
+            notify_managers(self.workspace.id, self.member, 'updated task', 'Task A', target_type='task', target_id=1, immediate=False)
+            self.assertEqual(push.call_count, 0)
+            notify_managers(self.workspace.id, self.member, 'deleted task', 'Task B', target_type='task', target_id=2, immediate=True)
+            self.assertEqual(push.call_count, 2)  # owner + manager
+
+    def test_member_list_leader_only_shift_status(self):
+        shift = WorkShift.objects.create(
+            workspace=self.workspace, user=self.member,
+            date=timezone.localdate(), started_at=timezone.now() - timedelta(hours=1),
+        )
+        self._login(self.manager)
+        response = self.client.get(reverse('member-list', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        member_entry = next(item for item in response.json()['members'] if item['id'] == self.member.id)
+        self.assertTrue(member_entry['clocked_in'])
+        self.assertFalse(member_entry['on_break'])
+        self.assertEqual(member_entry['clock_in_at'], shift.started_at.isoformat())
+
+        self._login(self.member)
+        response = self.client.get(reverse('member-list', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        member_entry = next(item for item in response.json()['members'] if item['id'] == self.member.id)
+        self.assertNotIn('clocked_in', member_entry)
+        self.assertNotIn('on_break', member_entry)
+        self.assertNotIn('clock_in_at', member_entry)
