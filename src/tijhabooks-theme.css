@@ -3358,6 +3358,7 @@ html[data-theme='dark'] :where(
 .chat-mode-channels .channel-row { background:transparent !important; color:var(--workspace-text) !important; padding-left:14px; padding-right:12px; }
 .chat-mode-channels .channel-row:hover { background:var(--workspace-surface-soft) !important; color:var(--workspace-text) !important; }
 .chat-mode-channels .channel-row.active { background:#eaf0ff !important; color:#1d4ed8 !important; }
+html[data-theme='dark'] .chat-mode-channels .channel-row.active { background:#0E2A46 !important; color:#DAB68D !important; }
 .chat-mode-channels .channel-row .channel-name { color:inherit !important; }
 .chat-mode-direct .chat-conversation-list { background:var(--workspace-surface) !important; color:var(--workspace-text) !important; padding:16px 14px !important; box-shadow:none !important; }
 .chat-mode-direct .chat-list-heading h3 { color:var(--workspace-text) !important; }
@@ -3425,6 +3426,11 @@ label > [data-slot='select-trigger'].app-select-trigger { width:100%; }
 .chat-workspace-view .chat-member-tone-2 p { background:#edf8f3; }
 .chat-workspace-view .chat-member-tone-3 p { background:#fff5e8; }
 .chat-workspace-view .chat-member-tone-4 p { background:#f8eff3; }
+html[data-theme='dark'] .chat-workspace-view .chat-member-tone-0 p { background:#16324B; }
+html[data-theme='dark'] .chat-workspace-view .chat-member-tone-1 p { background:#2A2450; }
+html[data-theme='dark'] .chat-workspace-view .chat-member-tone-2 p { background:#123A2E; }
+html[data-theme='dark'] .chat-workspace-view .chat-member-tone-3 p { background:#3A2C12; }
+html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:#3A1F2E; }
 .chat-workspace-view .chat-reactions { position:absolute; right:-8px; bottom:-11px; z-index:1; display:flex; gap:3px; margin:0; padding:2px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface); box-shadow:0 2px 6px rgb(7 26 46 / 12%); opacity:0; pointer-events:none; transform:translateY(-2px); transition:opacity .15s ease, transform .15s ease; }
 .chat-workspace-view .chat-message:hover .chat-reactions, .chat-workspace-view .chat-message:focus-within .chat-reactions, .chat-workspace-view .chat-reactions.has-reactions { opacity:1; pointer-events:auto; transform:translateY(0); }
 .chat-workspace-view .chat-reactions button { border:0; padding:2px 5px; background:transparent; font-size:11px; }
