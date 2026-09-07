@@ -3401,6 +3401,16 @@ label > [data-slot='select-trigger'].app-select-trigger { width:100%; }
 .chat-compose-toolbar > .primary-button { margin-left:auto; }
 .chat-compose-hint { display:block; margin-top:8px; color:var(--workspace-text-soft); font-size:11px; }
 
+/* The chat shell owns the available page height so its composer is never
+   pushed below a card boundary by a long conversation. */
+.chat-workspace-view { min-height:calc(100dvh - 150px); }
+.chat-workspace-view .chat-layout { height:calc(100dvh - 250px); min-height:540px; align-items:stretch; gap:0; border:1px solid var(--workspace-border); border-radius:14px; overflow:hidden; background:var(--workspace-surface); }
+.chat-workspace-view .chat-conversation-list { min-height:0; margin:0; border:0; border-right:1px solid var(--workspace-border); border-radius:0; box-shadow:none; overflow-y:auto; }
+.chat-workspace-view .chat-feed { height:100%; min-height:0; max-height:none; border:0; border-radius:0; box-shadow:none; }
+.chat-workspace-view .chat-message-scroll { flex:1 1 auto; min-height:0; }
+.chat-workspace-view .chat-inline-composer { flex:0 0 auto; padding:12px 18px calc(14px + env(safe-area-inset-bottom)); border-top:1px solid var(--workspace-border); background:var(--workspace-surface); }
+@media (max-width:850px) { .chat-workspace-view .chat-layout { height:auto; min-height:0; overflow:visible; border:0; background:transparent; } .chat-workspace-view .chat-feed { min-height:520px; border:1px solid var(--workspace-border); border-radius:14px; } .chat-workspace-view .chat-conversation-list { border:1px solid var(--workspace-border); border-radius:14px; } }
+
 .calendar-side-section { display:grid; gap:8px; margin-top:8px; padding-top:14px; border-top:1px solid var(--workspace-border); }
 .calendar-side-section .calendar-side-heading { margin-bottom:0; }
 .calendar-task-deadline { display:flex; align-items:center; gap:9px; width:100%; padding:9px 0; border:0; border-bottom:1px solid var(--workspace-border); background:transparent; color:var(--workspace-text); text-align:left; cursor:pointer; }
