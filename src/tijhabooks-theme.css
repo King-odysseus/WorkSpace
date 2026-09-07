@@ -3438,6 +3438,10 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .chat-workspace-view .chat-message:hover .chat-reaction-add, .chat-workspace-view .chat-message:focus-within .chat-reaction-add { display:inline-flex; }
 .chat-workspace-view .chat-reply-button { position:absolute; left:calc(100% + 8px); top:50%; margin-top:0; white-space:nowrap; opacity:0; pointer-events:none; transform:translate(6px, -50%); transition:opacity .15s ease, transform .15s ease; }
 .chat-workspace-view .chat-message:hover .chat-reply-button, .chat-workspace-view .chat-message:focus-within .chat-reply-button { opacity:1; pointer-events:auto; transform:translate(0, -50%); }
+.chat-workspace-view .chat-message-mine { flex-direction: row-reverse; }
+.chat-workspace-view .chat-message-mine .chat-message-body { display: flex; flex-direction: column; align-items: flex-end; }
+.chat-workspace-view .chat-message-mine .chat-reactions { right: auto; left: -8px; }
+.chat-workspace-view .chat-message-mine .chat-reply-button { left: auto; right: calc(100% + 8px); transform: translate(-6px, -50%); }
 .chat-member-profile-summary { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
 .chat-member-profile-summary .avatar { width:44px; height:44px; font-size:14px; }
 .chat-member-profile-summary div { display:grid; gap:2px; }
