@@ -1703,6 +1703,8 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .team-column-heading span { color: var(--workspace-text-soft); font-size: 10px; }
 .team-access-panel { margin-top: 14px; }
 .team-access-row { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--workspace-border); }
+.team-online-panel .team-access-row { width: 100%; border-inline: 0; border-top: 0; background: transparent; text-align: left; cursor: pointer; }
+.team-online-panel .team-access-row:hover { color: var(--workspace-primary); }
 .team-access-row:last-child { border-bottom: 0; }
 .team-access-row > div { min-width: 0; flex: 1; display: grid; gap: 3px; }
 .team-access-row strong { overflow: hidden; color: var(--workspace-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -1833,6 +1835,8 @@ html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, va
 .chat-inline-composer .reply-context { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .chat-inline-composer .reply-context button { display: grid; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .chat-reactions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.chat-reply-context { display: grid; gap: 2px; margin: 7px 0; padding: 6px 8px; border-left: 3px solid var(--workspace-primary); border-radius: 4px; background: var(--workspace-surface-soft); font-size: 11px; }
+.chat-reply-context span { overflow: hidden; color: var(--workspace-text-soft); text-overflow: ellipsis; white-space: nowrap; }
 .chat-reactions button { border: 1px solid var(--workspace-border); border-radius: 999px; padding: 3px 7px; background: var(--workspace-surface-soft); color: var(--workspace-text); cursor: pointer; font-size: 11px; }
 .chat-reactions button.active { border-color: #1D4ED8; background: #EAF0FF; color: #1D4ED8; }
 .chat-mention-picker { position: absolute; z-index: 5; max-height: 180px; overflow-y: auto; margin: -4px 14px 0; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface); box-shadow: 0 10px 22px rgb(7 26 46 / 18%); }

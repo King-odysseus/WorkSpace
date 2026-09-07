@@ -149,12 +149,13 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       const response = await fetch(`/api/direct-conversations/${selectedConversation.id}/messages/`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
-        body: JSON.stringify({ message: messageText, document_ids: sharedDocumentIds, file_ids: sharedFileIds }),
+        body: JSON.stringify({ message: messageText, parent_id: replyTo?.id || null, document_ids: sharedDocumentIds, file_ids: sharedFileIds }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Message could not be sent.')
       setDirectMessages(current => [...current, payload.message])
       setDraft('')
+      setReplyTo(null)
       setSharedDocumentIds([]); setSharedFileIds([]); setShareOpen(false)
       setEmojiOpen(false)
       onRefresh()
@@ -190,16 +191,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     }
   }
 
-  const createDirectConversation = async event => {
-    event.preventDefault()
-    if (!directMemberIds.length || submitting) return
+  const openDirectConversation = async memberIds => {
+    if (!memberIds.length || submitting) return
     setSubmitting(true)
     setError('')
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/direct-conversations/`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) },
-        body: JSON.stringify({ participant_ids: directMemberIds }),
+        body: JSON.stringify({ participant_ids: memberIds }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Conversation could not be created.')
@@ -213,6 +213,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       setSubmitting(false)
     }
   }
+  const createDirectConversation = async event => { event.preventDefault(); await openDirectConversation(directMemberIds) }
+  useEffect(() => {
+    const openFromToday = event => {
+      const memberId = Number(event.detail?.memberId)
+      if (memberId && memberId !== Number(currentUserId)) openDirectConversation([memberId])
+    }
+    window.addEventListener('chat:direct', openFromToday)
+    return () => window.removeEventListener('chat:direct', openFromToday)
+  }, [currentUserId, workspaceId, submitting])
 
   const deleteChannel = async channel => {
     if (!(await onConfirm(`Delete #${channel.name} and all of its messages?`, { title: 'Delete channel', confirmLabel: 'Delete channel' }))) return
@@ -285,10 +294,13 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   useEffect(() => {
     if (mode === 'channels' && selectedChannel) markConversationRead('chat_channel', selectedChannel)
   }, [mode, selectedChannel, workspaceId])
-  const renderMessage = message => <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''}`} key={message.id}>
+  const renderMessage = message => {
+    const parent = message.parent_id ? (mode === 'channels' ? data.messages : directMessages).find(item => item.id === message.parent_id) : null
+    return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''}`} key={message.id}>
     <span className="avatar blue small">{message.author_name.slice(0, 2).toUpperCase()}</span>
-    <div className="chat-message-body"><div className="chat-message-meta"><strong>{message.author_name}</strong><span>{formatRelativeActivityTime(message.created_at)}</span></div><p>{renderMessageText(message.message)}</p>{(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}{(message.shared_files || []).map(file => <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}<div className="chat-reactions" aria-label="Message reactions">{(reactionUpdates[message.id] || message.reactions || []).map(reaction => <button type="button" key={reaction.emoji} className={reaction.reacted ? 'active' : ''} onClick={() => toggleReaction(message, reaction.emoji)} aria-pressed={reaction.reacted}>{reaction.emoji} {reaction.count}</button>)}<button type="button" onClick={() => toggleReaction(message, '👍')} aria-label="React with thumbs up">👍</button></div>{mode === 'channels' && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div>
+    <div className="chat-message-body"><div className="chat-message-meta"><strong>{message.author_name}</strong><span>{formatRelativeActivityTime(message.created_at)}</span></div>{message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.message || 'Original message is unavailable.'}</span></div>}<p>{renderMessageText(message.message)}</p>{(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}{(message.shared_files || []).map(file => <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}<div className="chat-reactions" aria-label="Message reactions">{(reactionUpdates[message.id] || message.reactions || []).map(reaction => <button type="button" key={reaction.emoji} className={reaction.reacted ? 'active' : ''} onClick={() => toggleReaction(message, reaction.emoji)} aria-pressed={reaction.reacted}>{reaction.emoji} {reaction.count}</button>)}<button type="button" onClick={() => toggleReaction(message, '👍')} aria-label="React with thumbs up">👍</button></div>{!message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div>
   </div>
+  }
 
   const uploadChatFile = async event => {
     const file = event.target.files?.[0]
@@ -321,7 +333,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.title}</h2><p>{selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div></div>
         <div className="chat-message-scroll">{mode === 'channels' ? (visibleChannelMessages.length ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</h3>{messages.map(renderMessage)}</div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>) : selectedConversation ? (directLoading ? <div className="chat-placeholder"><p>Loading messages…</p></div> : visibleDirectMessages.length ? visibleDirectMessages.map(renderMessage) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><Users size={22} /></div><h2>Start a private conversation</h2><p>Choose an existing conversation or create a new one.</p></div>}<div ref={feedEndRef} /></div>
         {(mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
-          {replyTo && mode === 'channels' && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
+          {replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
           {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
           {emojiOpen && <EmojiPicker onSelect={insertEmoji} />}
           {mentionOpen && <div className="chat-mention-picker" role="listbox" aria-label="Mention a workspace member">{data.members.filter(member => member.id !== currentUserId).map(member => <button type="button" role="option" key={member.id} onClick={() => insertMention(member)}><strong>{memberName(member)}</strong><span>@{member.email.split('@')[0]}</span></button>)}</div>}

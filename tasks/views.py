@@ -3045,8 +3045,13 @@ def direct_message_list(request, conversation_id):
         return JsonResponse({'error': 'Message is required.'}, status=400)
     if len(message_text) > 4000:
         return JsonResponse({'error': 'Message must be 4000 characters or fewer.'}, status=400)
+    parent = None
+    if data.get('parent_id'):
+        parent = DirectMessage.objects.filter(id=data['parent_id'], conversation=conversation, parent__isnull=True).first()
+        if parent is None:
+            return JsonResponse({'error': 'The parent message was not found in this conversation.'}, status=404)
     shared_documents, shared_files = shared_chat_items(conversation.workspace_id, data)
-    message = DirectMessage.objects.create(conversation=conversation, author=request.user, message=message_text, shared_documents=shared_documents, shared_files=shared_files)
+    message = DirectMessage.objects.create(conversation=conversation, author=request.user, parent=parent, message=message_text, shared_documents=shared_documents, shared_files=shared_files)
     sender = request.user.get_full_name() or request.user.email
     for participant in conversation.participants.exclude(id=request.user.id):
         create_notification(conversation.workspace_id, participant, 'direct_message', f'New message from {sender}', message_text[:120], target_type='direct_conversation', target_id=conversation.id)

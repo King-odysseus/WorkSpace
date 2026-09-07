@@ -643,6 +643,7 @@ class DirectConversation(models.Model):
 class DirectMessage(models.Model):
     conversation = models.ForeignKey(DirectConversation, on_delete=models.CASCADE, related_name='messages')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_messages')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     message = models.TextField(max_length=4000)
     shared_documents = models.JSONField(default=list, blank=True)
     shared_files = models.JSONField(default=list, blank=True)
@@ -657,6 +658,8 @@ class DirectMessage(models.Model):
             'conversation_id': self.conversation_id,
             'author_id': self.author_id,
             'author_name': self.author.get_full_name() or self.author.email,
+            'parent_id': self.parent_id,
+            'reply_count': self.replies.count(),
             'message': self.message,
             'shared_documents': self.shared_documents or [],
             'shared_files': self.shared_files or [],
