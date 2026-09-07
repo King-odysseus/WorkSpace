@@ -1524,8 +1524,13 @@ class ExecutionFoundationApiTests(TestCase):
 
     def test_authenticated_risk_issue_api_and_permissions(self):
         project = Project.objects.create(workspace=self.workspace, name='Launch')
-        response = self.client.post(reverse('risk-issue-list', args=[self.workspace.id]), data=json.dumps({'project_id': project.id, 'kind': 'risk', 'title': 'Supplier delay', 'severity': 'high', 'owner_id': self.member.id, 'due': '2026-10-01'}), content_type='application/json')
+        task = Task.objects.create(workspace=self.workspace, project_ref=project, title='Contact supplier')
+        expense = ProjectExpense.objects.create(project=project, name='Supplier deposit', amount='100.00')
+        response = self.client.post(reverse('risk-issue-list', args=[self.workspace.id]), data=json.dumps({'project_id': project.id, 'kind': 'risk', 'title': 'Supplier delay', 'severity': 'high', 'likelihood': 4, 'impact': 5, 'mitigation': 'Confirm an alternate supplier.', 'escalation': 'Escalate to the sponsor after two days.', 'task_id': task.id, 'expense_id': expense.id, 'owner_id': self.member.id, 'due': '2026-10-01'}), content_type='application/json')
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['record']['likelihood'], 4)
+        self.assertEqual(response.json()['record']['task_id'], task.id)
+        self.assertEqual(response.json()['record']['expense_id'], expense.id)
         record_id = response.json()['record']['id']
         self.client.force_login(self.supporter)
         self.assertEqual(self.client.get(reverse('risk-issue-list', args=[self.workspace.id]), {'project_id': project.id}).status_code, 200)
@@ -1534,6 +1539,23 @@ class ExecutionFoundationApiTests(TestCase):
         self.client.force_login(self.member)
         allowed = self.client.patch(reverse('risk-issue-detail', args=[self.workspace.id, record_id]), data=json.dumps({'status': 'mitigated'}), content_type='application/json')
         self.assertEqual(allowed.status_code, 200)
+
+    def test_project_operational_records_enforce_leader_financial_access(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        task = Task.objects.create(workspace=self.workspace, project_ref=project, title='Install equipment')
+        expense_url = reverse('project-expense-list', args=[self.workspace.id, project.id])
+        resource_url = reverse('project-resource-list', args=[self.workspace.id, project.id])
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(expense_url, data=json.dumps({'name': 'Laptop', 'amount': '1200'}), content_type='application/json').status_code, 403)
+        self.assertEqual(self.client.post(resource_url, data=json.dumps({'name': 'Designer'}), content_type='application/json').status_code, 403)
+        self.client.force_login(self.owner)
+        expense = self.client.post(expense_url, data=json.dumps({'name': 'Laptop', 'amount': '1200', 'is_committed': True, 'receipt_url': 'https://example.com/receipt'}), content_type='application/json')
+        self.assertEqual(expense.status_code, 201)
+        self.assertTrue(expense.json()['expense']['is_committed'])
+        resource = self.client.post(resource_url, data=json.dumps({'name': 'Designer', 'resource_type': 'person', 'role': 'Design lead', 'capacity_percent': 60, 'allocation_percent': 80, 'task_id': task.id, 'file_url': 'https://example.com/brief'}), content_type='application/json')
+        self.assertEqual(resource.status_code, 201)
+        self.assertEqual(resource.json()['resource']['task_id'], task.id)
+        self.assertEqual(resource.json()['resource']['allocation_percent'], 80)
 
 
 class ProjectScopeIsolationTests(TestCase):

@@ -852,7 +852,8 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
 
 @require_http_methods(['GET', 'POST'])
 def project_resource_list(request, workspace_id, project_id):
-    _, error = require_workspace_member(request, workspace_id)
+    permission_check = require_workspace_member if request.method == 'GET' else require_workspace_leader
+    _, error = permission_check(request, workspace_id)
     if error:
         return error
     project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
@@ -871,7 +872,18 @@ def project_resource_list(request, workspace_id, project_id):
     resource_type = payload.get('resource_type', 'person')
     if resource_type not in dict(ProjectResource.RESOURCE_TYPES):
         return JsonResponse({'error': 'Invalid resource type.'}, status=400)
-    resource = ProjectResource.objects.create(project_id=project_id, name=name, resource_type=resource_type, availability=str(payload.get('availability', '')).strip(), notes=str(payload.get('notes', '')).strip())
+    task = Task.objects.filter(id=payload.get('task_id'), workspace_id=workspace_id, project_ref_id=project_id).first() if payload.get('task_id') else None
+    if payload.get('task_id') and task is None:
+        return JsonResponse({'error': 'Task was not found in this project.'}, status=404)
+    for field in ('capacity_percent', 'allocation_percent'):
+        if payload.get(field) not in (None, ''):
+            try:
+                value = int(payload[field])
+            except (TypeError, ValueError):
+                return JsonResponse({'error': f'{field} must be a whole percentage.'}, status=400)
+            if value < 0 or value > 100:
+                return JsonResponse({'error': f'{field} must be between 0 and 100.'}, status=400)
+    resource = ProjectResource.objects.create(project_id=project_id, task=task, name=name, resource_type=resource_type, role=str(payload.get('role', '')).strip(), availability=str(payload.get('availability', '')).strip(), capacity_percent=payload.get('capacity_percent') or None, allocation_percent=payload.get('allocation_percent') or None, file_url=str(payload.get('file_url', '')).strip(), notes=str(payload.get('notes', '')).strip())
     return JsonResponse({'resource': resource.as_dict()}, status=201)
 
 
@@ -891,7 +903,7 @@ def project_resource_detail(request, workspace_id, project_id, resource_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    if set(payload) - {'name', 'resource_type', 'availability', 'notes'}:
+    if set(payload) - {'name', 'resource_type', 'role', 'availability', 'capacity_percent', 'allocation_percent', 'file_url', 'task_id', 'notes'}:
         return JsonResponse({'error': 'Unsupported resource fields.'}, status=400)
     if 'name' in payload:
         name = str(payload['name']).strip()
@@ -904,6 +916,26 @@ def project_resource_detail(request, workspace_id, project_id, resource_id):
         resource.resource_type = payload['resource_type']
     if 'availability' in payload:
         resource.availability = str(payload['availability']).strip()
+    if 'role' in payload:
+        resource.role = str(payload['role']).strip()
+    if 'file_url' in payload:
+        resource.file_url = str(payload['file_url']).strip()
+    if 'task_id' in payload:
+        resource.task = Task.objects.filter(id=payload['task_id'], workspace_id=workspace_id, project_ref_id=project_id).first() if payload['task_id'] else None
+        if payload['task_id'] and resource.task is None:
+            return JsonResponse({'error': 'Task was not found in this project.'}, status=404)
+    for field in ('capacity_percent', 'allocation_percent'):
+        if field in payload:
+            if payload[field] in (None, ''):
+                setattr(resource, field, None)
+                continue
+            try:
+                value = int(payload[field])
+            except (TypeError, ValueError):
+                return JsonResponse({'error': f'{field} must be a whole percentage.'}, status=400)
+            if value < 0 or value > 100:
+                return JsonResponse({'error': f'{field} must be between 0 and 100.'}, status=400)
+            setattr(resource, field, value)
     if 'notes' in payload:
         resource.notes = str(payload['notes']).strip()
     resource.save()
@@ -976,7 +1008,8 @@ def project_stakeholder_detail(request, workspace_id, project_id, stakeholder_id
 
 @require_http_methods(['GET', 'POST'])
 def project_expense_list(request, workspace_id, project_id):
-    _, error = require_workspace_member(request, workspace_id)
+    permission_check = require_workspace_member if request.method == 'GET' else require_workspace_leader
+    _, error = permission_check(request, workspace_id)
     if error:
         return error
     project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
@@ -1001,7 +1034,9 @@ def project_expense_list(request, workspace_id, project_id):
     incurred_on, date_error = parse_iso_date(payload.get('incurred_on'), 'incurred_on')
     if date_error:
         return JsonResponse({'error': date_error}, status=400)
-    expense = ProjectExpense.objects.create(project_id=project_id, name=name, category=category, amount=amount, incurred_on=incurred_on, notes=str(payload.get('notes', '')).strip())
+    if not isinstance(payload.get('is_committed', False), bool):
+        return JsonResponse({'error': 'is_committed must be a boolean.'}, status=400)
+    expense = ProjectExpense.objects.create(project_id=project_id, name=name, category=category, amount=amount, is_committed=payload.get('is_committed', False), incurred_on=incurred_on, notes=str(payload.get('notes', '')).strip(), receipt_url=str(payload.get('receipt_url', '')).strip())
     return JsonResponse({'expense': expense.as_dict()}, status=201)
 
 
@@ -1021,7 +1056,7 @@ def project_expense_detail(request, workspace_id, project_id, expense_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    if set(payload) - {'name', 'category', 'amount', 'incurred_on', 'notes'}:
+    if set(payload) - {'name', 'category', 'amount', 'is_committed', 'incurred_on', 'notes', 'receipt_url'}:
         return JsonResponse({'error': 'Unsupported expense fields.'}, status=400)
     if 'name' in payload:
         name = str(payload['name']).strip()
@@ -1044,6 +1079,12 @@ def project_expense_detail(request, workspace_id, project_id, expense_id):
         expense.incurred_on = incurred_on
     if 'notes' in payload:
         expense.notes = str(payload['notes']).strip()
+    if 'receipt_url' in payload:
+        expense.receipt_url = str(payload['receipt_url']).strip()
+    if 'is_committed' in payload:
+        if not isinstance(payload['is_committed'], bool):
+            return JsonResponse({'error': 'is_committed must be a boolean.'}, status=400)
+        expense.is_committed = payload['is_committed']
     expense.save()
     return JsonResponse({'expense': expense.as_dict()})
 
@@ -2207,6 +2248,29 @@ def validate_risk_issue_status(kind, status):
     return status in allowed[kind]
 
 
+def risk_issue_related_records(payload, workspace_id, project):
+    task = Task.objects.filter(id=payload.get('task_id'), workspace_id=workspace_id, project_ref=project).first() if payload.get('task_id') else None
+    if payload.get('task_id') and task is None:
+        return None, None, JsonResponse({'error': 'Task was not found in this project.'}, status=404)
+    expense = ProjectExpense.objects.filter(id=payload.get('expense_id'), project=project, is_active=True).first() if payload.get('expense_id') else None
+    if payload.get('expense_id') and expense is None:
+        return None, None, JsonResponse({'error': 'Expense was not found in this project.'}, status=404)
+    return task, expense, None
+
+
+def validate_risk_scores(payload):
+    for field in ('likelihood', 'impact'):
+        if payload.get(field) in (None, ''):
+            continue
+        try:
+            score = int(payload[field])
+        except (TypeError, ValueError):
+            return JsonResponse({'error': f'{field} must be a whole number from 1 to 5.'}, status=400)
+        if score < 1 or score > 5:
+            return JsonResponse({'error': f'{field} must be between 1 and 5.'}, status=400)
+    return None
+
+
 @require_http_methods(['GET', 'POST'])
 def risk_issue_list(request, workspace_id):
     membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
@@ -2247,7 +2311,13 @@ def risk_issue_list(request, workspace_id):
     due_date, date_error = parse_iso_date(payload.get('due_date', payload.get('due')), 'Due date')
     if date_error:
         return JsonResponse({'error': date_error}, status=400)
-    record = RiskIssue.objects.create(workspace_id=workspace_id, project=project, kind=kind, title=title, detail=str(payload.get('detail', '') or '').strip(), severity=severity, status=status, owner=owner, owner_name=str(payload.get('owner', '') or '').strip(), due_date=due_date, created_by=request.user)
+    score_error = validate_risk_scores(payload)
+    if score_error:
+        return score_error
+    task, expense, relation_error = risk_issue_related_records(payload, workspace_id, project)
+    if relation_error:
+        return relation_error
+    record = RiskIssue.objects.create(workspace_id=workspace_id, project=project, kind=kind, title=title, detail=str(payload.get('detail', '') or '').strip(), severity=severity, likelihood=payload.get('likelihood') or None, impact=payload.get('impact') or None, mitigation=str(payload.get('mitigation', '') or '').strip(), escalation=str(payload.get('escalation', '') or '').strip(), status=status, owner=owner, owner_name=str(payload.get('owner', '') or '').strip(), due_date=due_date, task=task, expense=expense, created_by=request.user)
     record_activity(workspace_id, request.user, f'{kind}_created', f'{request.user.get_full_name() or request.user.email} created {kind} {record.title}.')
     return JsonResponse({'record': record.as_dict()}, status=201)
 
@@ -2272,7 +2342,7 @@ def risk_issue_detail(request, workspace_id, record_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    allowed = {'title', 'detail', 'severity', 'status', 'owner_id', 'owner', 'due_date', 'due'}
+    allowed = {'title', 'detail', 'severity', 'likelihood', 'impact', 'mitigation', 'escalation', 'status', 'owner_id', 'owner', 'due_date', 'due', 'task_id', 'expense_id'}
     if set(payload) - allowed:
         return JsonResponse({'error': 'Unsupported risk or issue fields.'}, status=400)
     if membership.role not in {'owner', 'manager'} and {'owner_id', 'owner'} & set(payload):
@@ -2281,10 +2351,16 @@ def risk_issue_detail(request, workspace_id, record_id):
         return JsonResponse({'error': 'Invalid status for this record type.'}, status=400)
     if 'severity' in payload and payload['severity'] not in dict(RiskIssue.SEVERITY_CHOICES):
         return JsonResponse({'error': 'Invalid severity.'}, status=400)
+    score_error = validate_risk_scores(payload)
+    if score_error:
+        return score_error
     if 'title' in payload and (not str(payload['title']).strip() or len(str(payload['title']).strip()) > 200):
         return JsonResponse({'error': 'title must be between 1 and 200 characters.'}, status=400)
-    for field in {'title', 'detail', 'severity', 'status'} & set(payload):
+    for field in {'title', 'detail', 'severity', 'mitigation', 'escalation', 'status'} & set(payload):
         setattr(record, field, str(payload[field] or '').strip())
+    for field in ('likelihood', 'impact'):
+        if field in payload:
+            setattr(record, field, int(payload[field]) if payload[field] not in (None, '') else None)
     if 'owner_id' in payload:
         record.owner = User.objects.filter(id=payload['owner_id'], workspace_memberships__workspace_id=workspace_id).first() if payload['owner_id'] else None
         if payload['owner_id'] and record.owner is None:
@@ -2295,6 +2371,15 @@ def risk_issue_detail(request, workspace_id, record_id):
         record.due_date, date_error = parse_iso_date(payload.get('due_date', payload.get('due')), 'Due date')
         if date_error:
             return JsonResponse({'error': date_error}, status=400)
+    if 'task_id' in payload or 'expense_id' in payload:
+        task, expense, relation_error = risk_issue_related_records({
+            'task_id': payload.get('task_id', record.task_id),
+            'expense_id': payload.get('expense_id', record.expense_id),
+        }, workspace_id, record.project)
+        if relation_error:
+            return relation_error
+        record.task = task
+        record.expense = expense
     record.save()
     return JsonResponse({'record': record.as_dict()})
 

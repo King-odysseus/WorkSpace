@@ -243,11 +243,16 @@ class Project(models.Model):
 
 
 class ProjectResource(models.Model):
-    RESOURCE_TYPES = [('person', 'Person'), ('equipment', 'Equipment'), ('budget', 'Budget'), ('other', 'Other')]
+    RESOURCE_TYPES = [('person', 'Person'), ('equipment', 'Equipment'), ('supplier', 'Supplier'), ('file', 'File'), ('other', 'Other')]
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='resources')
+    task = models.ForeignKey('Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='project_resources')
     name = models.CharField(max_length=160)
     resource_type = models.CharField(max_length=20, choices=RESOURCE_TYPES, default='person')
+    role = models.CharField(max_length=160, blank=True)
     availability = models.CharField(max_length=160, blank=True)
+    capacity_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+    allocation_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+    file_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -259,9 +264,15 @@ class ProjectResource(models.Model):
         return {
             'id': self.id,
             'project_id': self.project_id,
+            'task_id': self.task_id,
+            'task_title': self.task.title if self.task_id else '',
             'name': self.name,
             'resource_type': self.resource_type,
+            'role': self.role,
             'availability': self.availability,
+            'capacity_percent': self.capacity_percent,
+            'allocation_percent': self.allocation_percent,
+            'file_url': self.file_url,
             'notes': self.notes,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat(),
@@ -305,8 +316,10 @@ class ProjectExpense(models.Model):
     name = models.CharField(max_length=160)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    is_committed = models.BooleanField(default=False)
     incurred_on = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    receipt_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -320,8 +333,10 @@ class ProjectExpense(models.Model):
             'name': self.name,
             'category': self.category,
             'amount': str(self.amount),
+            'is_committed': self.is_committed,
             'incurred_on': self.incurred_on.isoformat() if self.incurred_on else None,
             'notes': self.notes,
+            'receipt_url': self.receipt_url,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat(),
         }
@@ -850,10 +865,16 @@ class RiskIssue(models.Model):
     title = models.CharField(max_length=200)
     detail = models.TextField(blank=True)
     severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='medium')
+    likelihood = models.PositiveSmallIntegerField(null=True, blank=True)
+    impact = models.PositiveSmallIntegerField(null=True, blank=True)
+    mitigation = models.TextField(blank=True)
+    escalation = models.TextField(blank=True)
     status = models.CharField(max_length=30, default='open')
     owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_risks_and_issues')
     owner_name = models.CharField(max_length=120, blank=True)
     due_date = models.DateField(null=True, blank=True)
+    task = models.ForeignKey(Task, on_delete=models.SET_NULL, null=True, blank=True, related_name='risks_and_issues')
+    expense = models.ForeignKey(ProjectExpense, on_delete=models.SET_NULL, null=True, blank=True, related_name='risks_and_issues')
     archived_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_risks_and_issues')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -868,7 +889,7 @@ class RiskIssue(models.Model):
             raise ValidationError({'project': 'Project must belong to the same workspace.'})
 
     def as_dict(self):
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'kind': self.kind, 'title': self.title, 'detail': self.detail, 'severity': self.severity, 'status': self.status, 'owner_id': self.owner_id, 'owner': (self.owner.get_full_name() or self.owner.email) if self.owner else self.owner_name, 'due': self.due_date.isoformat() if self.due_date else None, 'due_date': self.due_date.isoformat() if self.due_date else None, 'archived_at': self.archived_at.isoformat() if self.archived_at else None, 'created_at': self.created_at.isoformat(), 'updated_at': self.updated_at.isoformat()}
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'kind': self.kind, 'title': self.title, 'detail': self.detail, 'severity': self.severity, 'likelihood': self.likelihood, 'impact': self.impact, 'mitigation': self.mitigation, 'escalation': self.escalation, 'status': self.status, 'owner_id': self.owner_id, 'owner': (self.owner.get_full_name() or self.owner.email) if self.owner else self.owner_name, 'due': self.due_date.isoformat() if self.due_date else None, 'due_date': self.due_date.isoformat() if self.due_date else None, 'task_id': self.task_id, 'task_title': self.task.title if self.task_id else '', 'expense_id': self.expense_id, 'expense_name': self.expense.name if self.expense_id else '', 'archived_at': self.archived_at.isoformat() if self.archived_at else None, 'created_at': self.created_at.isoformat(), 'updated_at': self.updated_at.isoformat()}
 
 
 class TaskComment(models.Model):

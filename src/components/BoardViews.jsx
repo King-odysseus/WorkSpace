@@ -81,13 +81,41 @@ function ProjectProgress({ project, tasks }) {
   return <div className="project-progress" aria-label={`${completedTasks} of ${projectTasks.length} project tasks completed`}><div className="project-progress-label"><span>{projectTasks.length ? `${completedTasks} of ${projectTasks.length} tasks complete` : 'No tasks linked yet'}</span><strong>{completionPercent}%</strong></div><div className="project-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={completionPercent}><span style={{ width: `${completionPercent}%` }} /></div></div>
 }
 
-function ProjectRiskIssuePanel({ projects, workspaceId, hidden = false }) {
+function ProjectOperationsSummary({ project, workspaceId, onOpen }) {
+  const [summary, setSummary] = useState({ expenses: [], resources: [], records: [] })
+  useEffect(() => {
+    if (!project?.id || !workspaceId) return
+    Promise.all([
+      fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/expenses/`, { credentials: 'include' }),
+      fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/resources/`, { credentials: 'include' }),
+      fetch(`/api/workspaces/${workspaceId}/risks-issues/?project_id=${project.id}`, { credentials: 'include' }),
+    ]).then(async responses => {
+      const payloads = await Promise.all(responses.map(response => response.json()))
+      if (responses.every(response => response.ok)) setSummary({ expenses: payloads[0].expenses || [], resources: payloads[1].resources || [], records: payloads[2].records || [] })
+    }).catch(error => { console.warn('Project operational summary could not be loaded.', error) })
+  }, [project?.id, workspaceId])
+  const actual = summary.expenses.filter(item => !item.is_committed).reduce((total, item) => total + Number(item.amount || 0), 0)
+  const committed = summary.expenses.filter(item => item.is_committed).reduce((total, item) => total + Number(item.amount || 0), 0)
+  const remaining = project.budget_amount === null || project.budget_amount === undefined ? null : Number(project.budget_amount) - actual - committed
+  const highRisks = summary.records.filter(item => item.kind === 'risk' && ['high', 'critical'].includes(item.severity) && item.status !== 'closed').length
+  const overdueMitigations = summary.records.filter(item => item.kind === 'risk' && item.due_date && item.due_date < toDateKey(new Date()) && !['mitigated', 'closed'].includes(item.status)).length
+  const conflicts = summary.resources.filter(item => item.capacity_percent !== null && item.allocation_percent > item.capacity_percent).length
+  const currency = project.budget_currency || 'USD'
+  const money = value => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value || 0)
+  return <div className="project-detail-links project-operation-summary">
+    <button type="button" onClick={() => onOpen('budget')}><strong>Budget & costs</strong><span>{remaining === null ? `${summary.expenses.length} cost entries` : `${money(remaining)} remaining`}</span></button>
+    <button type="button" onClick={() => onOpen('resources')}><strong>Resources</strong><span>{summary.resources.length} resources, {conflicts} conflicts</span></button>
+    <button type="button" onClick={() => onOpen('risks')}><strong>Risks & issues</strong><span>{highRisks} high risks, {overdueMitigations} overdue mitigations</span></button>
+  </div>
+}
+
+function ProjectRiskIssuePanel({ projects, workspaceId, hidden = false, tasks = [], canManage = false }) {
   const [projectId, setProjectId] = useState(() => projects[0]?.id || '')
   const [records, setRecords] = useState([])
   const [activeTab, setActiveTab] = useState('risk')
   const [modalOpen, setModalOpen] = useState(false)
   const [kind, setKind] = useState('risk')
-  const [form, setForm] = useState({ title: '', detail: '', severity: 'medium', owner: '', due: '' })
+  const [form, setForm] = useState({ title: '', detail: '', severity: 'medium', likelihood: '', impact: '', mitigation: '', escalation: '', owner: '', due: '', task_id: '' })
   useEffect(() => { if (!projectId && projects[0]) setProjectId(projects[0].id) }, [projects, projectId])
   useEffect(() => {
     if (!workspaceId || !projectId) return setRecords([])
@@ -108,11 +136,11 @@ function ProjectRiskIssuePanel({ projects, workspaceId, hidden = false }) {
   const addRecord = async event => {
     event.preventDefault()
     if (!projectId || !form.title.trim()) return
-    const response = await fetch(`/api/workspaces/${workspaceId}/risks-issues/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify({ project_id: projectId, kind, title: form.title.trim(), detail: form.detail.trim(), severity: form.severity, owner: form.owner.trim(), due: form.due }) })
+    const response = await fetch(`/api/workspaces/${workspaceId}/risks-issues/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify({ project_id: projectId, kind, title: form.title.trim(), detail: form.detail.trim(), severity: form.severity, likelihood: form.likelihood || null, impact: form.impact || null, mitigation: form.mitigation.trim(), escalation: form.escalation.trim(), task_id: form.task_id || null, owner: form.owner.trim(), due: form.due }) })
     const data = await readJsonResponse(response, 'Risk or issue could not be added.')
     if (!response.ok) return toast.error(data.error || 'Risk or issue could not be added.')
     setRecords(current => [...current, data.record])
-    setForm({ title: '', detail: '', severity: 'medium', owner: '', due: '' })
+    setForm({ title: '', detail: '', severity: 'medium', likelihood: '', impact: '', mitigation: '', escalation: '', owner: '', due: '', task_id: '' })
     setActiveTab(kind)
     setModalOpen(false)
     toast.success(`${kind === 'risk' ? 'Risk' : 'Issue'} added.`)
@@ -154,18 +182,18 @@ function ProjectRiskIssuePanel({ projects, workspaceId, hidden = false }) {
           <button type="button" role="tab" aria-selected={activeTab === 'risk'} className={activeTab === 'risk' ? 'active' : ''} onClick={() => setActiveTab('risk')}>Risk register <span>{risks.length}</span></button>
           <button type="button" role="tab" aria-selected={activeTab === 'issue'} className={activeTab === 'issue' ? 'active' : ''} onClick={() => setActiveTab('issue')}>Issue log <span>{issues.length}</span></button>
         </div>
-        <button type="button" className="primary-button project-register-add" onClick={openAddModal} disabled={!projectId}><Plus size={15} /> Add new</button>
+        {canManage && <button type="button" className="primary-button project-register-add" onClick={openAddModal} disabled={!projectId}><Plus size={15} /> Add new</button>}
       </div>
       <div className="project-register-table-wrap">
         <table className="project-register-table">
           <thead><tr><th>{activeTab === 'risk' ? 'Risk' : 'Issue'}</th><th>Severity</th><th>Owner</th><th>Target date</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>{visibleItems.length ? pageItems.map(item => <tr key={item.id}>
-            <td><strong>{item.title}</strong><span>{item.detail || 'No description added.'}</span></td>
+            <td><strong>{item.title}</strong><span>{item.detail || 'No description added.'}{item.mitigation ? ` · Mitigation: ${item.mitigation}` : ''}{item.task_title ? ` · Task: ${item.task_title}` : ''}</span></td>
             <td><span className={`record-severity ${item.severity}`}>{item.severity}</span></td>
             <td>{item.owner || <span className="table-muted">Unassigned</span>}</td>
-            <td>{item.due || <span className="table-muted">No date</span>}</td>
-            <td><select value={item.status} onChange={event => updateStatus(item.id, event.target.value)} aria-label={`Set status for ${item.title}`}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
-            <td><button type="button" className="inline-delete" onClick={() => remove(item.id)} aria-label={`Delete ${item.title}`}><X size={14} /></button></td>
+            <td className={item.due_date && item.due_date < toDateKey(new Date()) && !['mitigated', 'closed', 'resolved'].includes(item.status) ? 'is-danger' : ''}>{item.due || <span className="table-muted">No date</span>}</td>
+            <td>{canManage ? <select value={item.status} onChange={event => updateStatus(item.id, event.target.value)} aria-label={`Set status for ${item.title}`}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : item.status}</td>
+            <td>{canManage && <button type="button" className="inline-delete" onClick={() => remove(item.id)} aria-label={`Delete ${item.title}`}><X size={14} /></button>}</td>
           </tr>) : <tr><td className="project-register-empty" colSpan="6"><Brush size={22} /><strong>No {activeTab === 'risk' ? 'risks' : 'issues'} yet</strong><span>{activeTab === 'risk' ? 'Add a risk to begin tracking possible threats.' : 'Add an issue to track an active project problem.'}</span></td></tr>}</tbody>
         </table>
       <div className="planner-pagination"><span>{visibleItems.length ? `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, visibleItems.length)} of ${visibleItems.length}` : '0 records'}</span><div><button type="button" disabled={page === 1} onClick={() => setPage(current => current - 1)} aria-label="Previous page"><ChevronLeft size={15} /></button><span>Page {page} of {totalPages}</span><button type="button" disabled={page === totalPages} onClick={() => setPage(current => current + 1)} aria-label="Next page"><ChevronRight size={15} /></button></div></div>
@@ -176,7 +204,8 @@ function ProjectRiskIssuePanel({ projects, workspaceId, hidden = false }) {
       <div className="record-form-toggle" role="group" aria-label="Record type"><button type="button" className={kind === 'risk' ? 'active' : ''} onClick={() => setKind('risk')}>Risk</button><button type="button" className={kind === 'issue' ? 'active' : ''} onClick={() => setKind('issue')}>Issue</button></div>
       <label>{kind === 'risk' ? 'Risk title' : 'Issue title'}<input autoFocus value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder={kind === 'risk' ? 'What could affect delivery?' : 'What problem needs resolving?'} required /></label>
       <label>Description<textarea value={form.detail} onChange={event => setForm({ ...form, detail: event.target.value })} placeholder={kind === 'risk' ? 'Describe the risk and planned mitigation' : 'Describe the issue and next action'} /></label>
-      <div className="record-form-grid"><label>Severity<select value={form.severity} onChange={event => setForm({ ...form, severity: event.target.value })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label><label>Owner<input value={form.owner} onChange={event => setForm({ ...form, owner: event.target.value })} placeholder="Name or team" /></label><DateField label="Target date" value={form.due} onChange={event => setForm({ ...form, due: event.target.value })} /></div>
+      <div className="record-form-grid"><label>Severity<select value={form.severity} onChange={event => setForm({ ...form, severity: event.target.value })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label><label>Likelihood (1-5)<input type="number" min="1" max="5" value={form.likelihood} onChange={event => setForm({ ...form, likelihood: event.target.value })} /></label><label>Impact (1-5)<input type="number" min="1" max="5" value={form.impact} onChange={event => setForm({ ...form, impact: event.target.value })} /></label><label>Owner<input value={form.owner} onChange={event => setForm({ ...form, owner: event.target.value })} placeholder="Name or team" /></label><DateField label="Target date" value={form.due} onChange={event => setForm({ ...form, due: event.target.value })} /></div>
+      <label>Mitigation<textarea value={form.mitigation} onChange={event => setForm({ ...form, mitigation: event.target.value })} placeholder="Preventive action and next step" /></label><label>Escalation<textarea value={form.escalation} onChange={event => setForm({ ...form, escalation: event.target.value })} placeholder="When and who to escalate to" /></label><label>Linked task<select value={form.task_id} onChange={event => setForm({ ...form, task_id: event.target.value })}><option value="">No task link</option>{tasks.filter(task => String(task.project_id) === String(projectId)).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
       <button type="submit" className="primary-button modal-submit">Add {kind}</button>
     </form></div>}
   </section>
@@ -260,10 +289,10 @@ function ClockInCard({ shifts, currentUserId, presence, onSubmitShift, onChangeP
 }
 
 
-function ProjectStakeholderResourcePanel({ project, workspaceId, canManage }) {
+function ProjectStakeholderResourcePanel({ project, workspaceId, canManage, tasks = [] }) {
   const [resources, setResources] = useState([])
   const [stakeholders, setStakeholders] = useState([])
-  const [resourceForm, setResourceForm] = useState({ name: '', resource_type: 'person', availability: '', notes: '' })
+  const [resourceForm, setResourceForm] = useState({ name: '', resource_type: 'person', role: '', availability: '', capacity_percent: '', allocation_percent: '', task_id: '', file_url: '', notes: '' })
   const [stakeholderForm, setStakeholderForm] = useState({ name: '', role: '', email: '', influence: 'medium', interest: 'medium', notes: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -294,7 +323,7 @@ function ProjectStakeholderResourcePanel({ project, workspaceId, canManage }) {
     const data = await response.json()
     if (!response.ok) { setError(data.error || 'Resource could not be added.'); return toast.error(data.error || 'Resource could not be added.') }
     setResources(current => [...current, data.resource])
-    setResourceForm({ name: '', resource_type: 'person', availability: '', notes: '' })
+    setResourceForm({ name: '', resource_type: 'person', role: '', availability: '', capacity_percent: '', allocation_percent: '', task_id: '', file_url: '', notes: '' })
     toast.success(`${data.resource.name} added.`)
   }
   const addStakeholder = async event => {
@@ -322,8 +351,8 @@ function ProjectStakeholderResourcePanel({ project, workspaceId, canManage }) {
     <div className="project-stakeholder-resource-grid">
       <Card className="project-stakeholder-card">
         <div className="drawer-section-heading"><h3>Resources</h3><span>{resources.length}</span></div>
-        {canManage && <form className="project-resource-form" onSubmit={addResource}><label>Name<input value={resourceForm.name} onChange={event => setResourceForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. Senior designer" required /></label><label>Type<select value={resourceForm.resource_type} onChange={event => setResourceForm(current => ({ ...current, resource_type: event.target.value }))}><option value="person">Person</option><option value="equipment">Equipment</option><option value="budget">Budget</option><option value="other">Other</option></select></label><label>Availability<input value={resourceForm.availability} onChange={event => setResourceForm(current => ({ ...current, availability: event.target.value }))} placeholder="e.g. 50% this sprint" /></label><button className="secondary-button" type="submit"><Plus size={15} /> Add resource</button></form>}
-        <div className="project-stakeholder-list">{resources.map(resource => <div className="project-stakeholder-row" key={resource.id}><div><strong>{resource.name}</strong><span>{resource.resource_type} · {resource.availability || 'No availability'}</span></div>{canManage && <button type="button" className="inline-delete" onClick={() => archiveResource(resource)} aria-label={`Archive ${resource.name}`}><X size={14} /></button>}</div>)}</div>
+        {canManage && <form className="project-resource-form" onSubmit={addResource}><label>Name<input value={resourceForm.name} onChange={event => setResourceForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. Senior designer" required /></label><label>Type<select value={resourceForm.resource_type} onChange={event => setResourceForm(current => ({ ...current, resource_type: event.target.value }))}><option value="person">Person</option><option value="equipment">Equipment</option><option value="supplier">Supplier</option><option value="file">File</option><option value="other">Other</option></select></label><label>Role<input value={resourceForm.role} onChange={event => setResourceForm(current => ({ ...current, role: event.target.value }))} placeholder="e.g. Design lead" /></label><label>Capacity %<input type="number" min="0" max="100" value={resourceForm.capacity_percent} onChange={event => setResourceForm(current => ({ ...current, capacity_percent: event.target.value }))} /></label><label>Allocation %<input type="number" min="0" max="100" value={resourceForm.allocation_percent} onChange={event => setResourceForm(current => ({ ...current, allocation_percent: event.target.value }))} /></label><label>Task link<select value={resourceForm.task_id} onChange={event => setResourceForm(current => ({ ...current, task_id: event.target.value }))}><option value="">No task link</option>{tasks.filter(task => String(task.project_id) === String(project.id)).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label><label>File or supplier link<input type="url" value={resourceForm.file_url} onChange={event => setResourceForm(current => ({ ...current, file_url: event.target.value }))} placeholder="https://..." /></label><button className="secondary-button" type="submit"><Plus size={15} /> Add resource</button></form>}
+        <div className="project-stakeholder-list">{resources.map(resource => <div className="project-stakeholder-row" key={resource.id}><div><strong>{resource.name}</strong><span>{resource.resource_type} · {resource.role || resource.availability || 'No role or availability'}{resource.capacity_percent !== null ? ` · ${resource.allocation_percent || 0}% of ${resource.capacity_percent}% capacity` : ''}{resource.task_title ? ` · ${resource.task_title}` : ''}{resource.file_url ? ' · linked file' : ''}</span>{resource.capacity_percent !== null && resource.allocation_percent > resource.capacity_percent && <span className="auth-error">Over-allocated</span>}</div>{canManage && <button type="button" className="inline-delete" onClick={() => archiveResource(resource)} aria-label={`Archive ${resource.name}`}><X size={14} /></button>}</div>)}</div>
       </Card>
       <Card className="project-stakeholder-card">
         <div className="drawer-section-heading"><h3>Stakeholders</h3><span>{stakeholders.length}</span></div>
@@ -335,7 +364,7 @@ function ProjectStakeholderResourcePanel({ project, workspaceId, canManage }) {
 }
 function ProjectCostBudgetPanel({ project, workspaceId, canManage, onProjectUpdated }) {
   const [expenses, setExpenses] = useState([])
-  const [expenseForm, setExpenseForm] = useState({ name: '', category: 'other', amount: '', incurred_on: '', notes: '' })
+  const [expenseForm, setExpenseForm] = useState({ name: '', category: 'other', amount: '', is_committed: false, incurred_on: '', notes: '', receipt_url: '' })
   const [budgetForm, setBudgetForm] = useState({ budget_amount: project.budget_amount || '', budget_currency: project.budget_currency || 'USD' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -363,7 +392,9 @@ function ProjectCostBudgetPanel({ project, workspaceId, canManage, onProjectUpda
       return `${amount}`
     }
   }
-  const totalSpent = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
+  const actualSpent = expenses.filter(expense => !expense.is_committed).reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
+  const committedSpent = expenses.filter(expense => expense.is_committed).reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
+  const totalSpent = actualSpent + committedSpent
   const budgetAmount = project.budget_amount ? Number(project.budget_amount) : null
   const remaining = budgetAmount === null ? null : budgetAmount - totalSpent
   const saveBudget = async event => {
@@ -381,7 +412,7 @@ function ProjectCostBudgetPanel({ project, workspaceId, canManage, onProjectUpda
     const data = await response.json()
     if (!response.ok) { setError(data.error || 'Expense could not be added.'); return toast.error(data.error || 'Expense could not be added.') }
     setExpenses(current => [data.expense, ...current])
-    setExpenseForm({ name: '', category: 'other', amount: '', incurred_on: '', notes: '' })
+    setExpenseForm({ name: '', category: 'other', amount: '', is_committed: false, incurred_on: '', notes: '', receipt_url: '' })
     toast.success(`${data.expense.name} added.`)
   }
   const archiveExpense = async expense => {
@@ -394,9 +425,10 @@ function ProjectCostBudgetPanel({ project, workspaceId, canManage, onProjectUpda
     {error && <p className="auth-error" role="alert">{error}</p>}
     <div className="project-summary">
       <div><strong>{budgetAmount === null ? 'Not set' : formatMoney(budgetAmount)}</strong><span>Budget</span></div>
-      <div><strong>{formatMoney(totalSpent)}</strong><span>Spent</span></div>
+      <div><strong>{formatMoney(actualSpent)}</strong><span>Actual spend</span></div>
+      <div><strong>{formatMoney(committedSpent)}</strong><span>Committed</span></div>
       <div className={remaining !== null && remaining < 0 ? 'is-danger' : ''}><strong>{remaining === null ? 'n/a' : formatMoney(remaining)}</strong><span>{remaining !== null && remaining < 0 ? 'Over budget' : 'Remaining'}</span></div>
-      <div><strong>{budgetAmount ? `${Math.min(Math.round((totalSpent / budgetAmount) * 100), 999)}%` : 'n/a'}</strong><span>Used</span></div>
+      <div className={budgetAmount && totalSpent / budgetAmount >= 0.9 ? 'is-warning' : ''}><strong>{budgetAmount ? `${Math.min(Math.round((totalSpent / budgetAmount) * 100), 999)}%` : 'n/a'}</strong><span>{budgetAmount && totalSpent / budgetAmount >= 0.9 ? 'Budget alert' : 'Variance used'}</span></div>
     </div>
     <div className="project-stakeholder-resource-grid">
       <Card className="project-stakeholder-card">
@@ -405,8 +437,8 @@ function ProjectCostBudgetPanel({ project, workspaceId, canManage, onProjectUpda
       </Card>
       <Card className="project-stakeholder-card">
         <div className="drawer-section-heading"><h3>Expenses</h3><span>{expenses.length}</span></div>
-        {canManage && <form className="project-resource-form" onSubmit={addExpense}><label>Name<input value={expenseForm.name} onChange={event => setExpenseForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. Design contractor" required /></label><label>Category<select value={expenseForm.category} onChange={event => setExpenseForm(current => ({ ...current, category: event.target.value }))}><option value="labor">Labor</option><option value="materials">Materials</option><option value="software">Software</option><option value="travel">Travel</option><option value="other">Other</option></select></label><label>Amount<input type="number" min="0" step="0.01" value={expenseForm.amount} onChange={event => setExpenseForm(current => ({ ...current, amount: event.target.value }))} placeholder="e.g. 1200" required /></label><label>Date<input type="date" value={expenseForm.incurred_on} onChange={event => setExpenseForm(current => ({ ...current, incurred_on: event.target.value }))} /></label><button className="secondary-button" type="submit"><Plus size={15} /> Add expense</button></form>}
-        <div className="project-stakeholder-list">{expenses.map(expense => <div className="project-stakeholder-row" key={expense.id}><div><strong>{expense.name}</strong><span>{expense.category} · {formatMoney(expense.amount)}{expense.incurred_on ? ` · ${expense.incurred_on}` : ''}</span></div>{canManage && <button type="button" className="inline-delete" onClick={() => archiveExpense(expense)} aria-label={`Archive ${expense.name}`}><X size={14} /></button>}</div>)}</div>
+        {canManage && <form className="project-resource-form" onSubmit={addExpense}><label>Name<input value={expenseForm.name} onChange={event => setExpenseForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. Design contractor" required /></label><label>Category<select value={expenseForm.category} onChange={event => setExpenseForm(current => ({ ...current, category: event.target.value }))}><option value="labor">Labor</option><option value="materials">Materials</option><option value="software">Software</option><option value="travel">Travel</option><option value="other">Other</option></select></label><label>Amount<input type="number" min="0" step="0.01" value={expenseForm.amount} onChange={event => setExpenseForm(current => ({ ...current, amount: event.target.value }))} placeholder="e.g. 1200" required /></label><label>Date<input type="date" value={expenseForm.incurred_on} onChange={event => setExpenseForm(current => ({ ...current, incurred_on: event.target.value }))} /></label><label><input type="checkbox" checked={expenseForm.is_committed} onChange={event => setExpenseForm(current => ({ ...current, is_committed: event.target.checked }))} /> Committed, not yet paid</label><label>Receipt or file link<input type="url" value={expenseForm.receipt_url} onChange={event => setExpenseForm(current => ({ ...current, receipt_url: event.target.value }))} placeholder="https://..." /></label><label>Notes<textarea value={expenseForm.notes} onChange={event => setExpenseForm(current => ({ ...current, notes: event.target.value }))} /></label><button className="secondary-button" type="submit"><Plus size={15} /> Add expense</button></form>}
+        <div className="project-stakeholder-list">{expenses.map(expense => <div className="project-stakeholder-row" key={expense.id}><div><strong>{expense.name}</strong><span>{expense.category} · {formatMoney(expense.amount)} · {expense.is_committed ? 'Committed' : 'Actual'}{expense.incurred_on ? ` · ${expense.incurred_on}` : ''}{expense.receipt_url ? ' · receipt linked' : ''}{expense.notes ? ` · ${expense.notes}` : ''}</span></div>{canManage && <button type="button" className="inline-delete" onClick={() => archiveExpense(expense)} aria-label={`Archive ${expense.name}`}><X size={14} /></button>}</div>)}</div>
       </Card>
     </div>
   </section>
@@ -443,4 +475,4 @@ function TodayDashboard({ today, todayLabel, currentUserName, currentUserId, cur
   </section>
 }
 
-export { TeamBoardView, MyTasksView, ProjectProgress, ProjectRiskIssuePanel, ClockInCard, ProjectStakeholderResourcePanel, ProjectCostBudgetPanel, TodayDashboard }
+export { TeamBoardView, MyTasksView, ProjectProgress, ProjectOperationsSummary, ProjectRiskIssuePanel, ClockInCard, ProjectStakeholderResourcePanel, ProjectCostBudgetPanel, TodayDashboard }
