@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
@@ -86,6 +86,7 @@ NOTIFICATION_KIND_PREFERENCE = {
     'task_comment': 'task_updates',
     'follow_up_assigned': 'task_updates',
     'follow_up_completed': 'task_updates',
+    'follow_up_comment': 'task_updates',
     'check_in_blocker': 'task_updates',
     'calendar_reminder': 'calendar_reminders',
     'due_soon_reminder': 'task_updates',
@@ -3228,6 +3229,48 @@ def follow_up_list(request, workspace_id):
         create_notification(workspace_id, assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', note, target_type='follow_up', target_id=follow_up.id)
     notify_managers(workspace_id, request.user, 'created a follow-up', note[:120], target_type='follow_up', target_id=follow_up.id, dedup_key=f'created_follow_up:{follow_up.id}')
     return JsonResponse({'follow_up': follow_up.as_dict()}, status=201)
+
+
+@require_http_methods(['GET', 'POST'])
+def follow_up_comment_list(request, follow_up_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    follow_up = FollowUp.objects.filter(id=follow_up_id, workspace_id__in=user_workspace_ids(request.user)).select_related('created_by').first()
+    if follow_up is None:
+        return JsonResponse({'error': 'Follow-up was not found.'}, status=404)
+    _, error = require_workspace_member(request, follow_up.workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        comments = FollowUpComment.objects.filter(follow_up=follow_up).select_related('author')
+        return JsonResponse({'comments': [comment.as_dict() for comment in comments]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    body, body_error = parse_bounded_text(payload.get('body'), 'Comment', max_length=2000)
+    if body_error:
+        return JsonResponse({'error': body_error}, status=400)
+    if not body:
+        return JsonResponse({'error': 'Comment is required.'}, status=400)
+    comment = FollowUpComment.objects.create(follow_up=follow_up, author=request.user, body=body)
+    actor_name = request.user.get_full_name() or request.user.email
+    record_activity(follow_up.workspace_id, request.user, 'follow_up_comment', f'{actor_name} commented on a follow-up.')
+    recipient_ids = set(FollowUpComment.objects.filter(follow_up=follow_up).exclude(author=request.user).values_list('author_id', flat=True))
+    recipient_ids.add(follow_up.created_by_id)
+    recipient_ids.discard(request.user.id)
+    recipients = User.objects.filter(id__in=recipient_ids, workspace_memberships__workspace_id=follow_up.workspace_id).distinct()
+    for recipient in recipients:
+        create_notification(
+            follow_up.workspace_id,
+            recipient,
+            'follow_up_comment',
+            f'{actor_name} commented on a follow-up',
+            body[:120],
+            target_type='follow_up',
+            target_id=follow_up.id,
+        )
+    return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
 @require_http_methods(['PATCH', 'DELETE'])

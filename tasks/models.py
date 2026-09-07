@@ -732,6 +732,27 @@ class FollowUp(models.Model):
         }
 
 
+class FollowUpComment(models.Model):
+    """A workspace-visible discussion entry attached to one follow-up."""
+    follow_up = models.ForeignKey(FollowUp, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='follow_up_comments')
+    body = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'follow_up_id': self.follow_up_id,
+            'author_id': self.author_id,
+            'author_name': self.author.get_full_name() or self.author.email,
+            'body': self.body,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
 class Task(models.Model):
     STATUS_CHOICES = [
         ('todo', 'To do'),
