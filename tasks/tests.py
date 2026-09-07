@@ -1125,7 +1125,7 @@ class TaskApiTests(TestCase):
             )
             self.assertEqual(response.status_code, 201)
             body = response.json()
-            self.assertEqual(set(body['invitation']), {'id', 'workspace_id', 'email', 'role', 'status', 'invited_by', 'invited_by_name', 'created_at', 'last_sent_at', 'expires_at'})
+            self.assertEqual(set(body['invitation']), {'id', 'workspace_id', 'email', 'role', 'status', 'invited_by', 'invited_by_name', 'created_at', 'last_sent_at', 'expires_at', 'token'})
             self.assertNotIn('name', body['invitation'])
             self.assertNotIn('avatar_url', body['invitation'])
             self.assertEqual(body['message'], f'Invitation sent to {email}. They will gain access after accepting.')

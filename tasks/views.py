@@ -1845,7 +1845,8 @@ def invitation_list(request, workspace_id):
         page, pagination = paginate_response(request, invitations)
         if page is None:
             return pagination
-        return JsonResponse({'invitations': [invitation.as_dict() for invitation in page.object_list], 'pagination': pagination})
+        include_token = actor.role in {'owner', 'manager'}
+        return JsonResponse({'invitations': [invitation.as_dict(include_token=include_token) for invitation in page.object_list], 'pagination': pagination})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -1872,7 +1873,7 @@ def invitation_list(request, workspace_id):
 
     existing = WorkspaceInvitation.objects.filter(workspace_id=workspace_id, email=email, status='pending').first()
     if existing is not None and not existing.is_expired():
-        return JsonResponse({'error': 'An invitation is already pending for this address.', 'invitation': existing.as_dict()}, status=409)
+        return JsonResponse({'error': 'An invitation is already pending for this address.', 'invitation': existing.as_dict(include_token=True)}, status=409)
     try:
         with transaction.atomic():
             if existing is not None:
@@ -1892,7 +1893,7 @@ def invitation_list(request, workspace_id):
         return JsonResponse({'error': 'An invitation is already pending for this address.'}, status=409)
     send_invitation_email(invitation, request=request)
     record_activity(workspace_id, request.user, 'invitation_sent', f'{request.user.get_full_name() or request.user.email} invited {invitation.email} as a {invitation.role}.')
-    return JsonResponse({'invitation': invitation.as_dict(), 'message': f'Invitation sent to {invitation.email}. They will gain access after accepting.'}, status=201 if created else 200)
+    return JsonResponse({'invitation': invitation.as_dict(include_token=True), 'message': f'Invitation sent to {invitation.email}. They will gain access after accepting.'}, status=201 if created else 200)
 
 
 @require_http_methods(['POST'])
@@ -1912,7 +1913,7 @@ def invitation_resend(request, workspace_id, invitation_id):
     invitation.save(update_fields=['token', 'last_sent_at'])
     send_invitation_email(invitation, request=request)
     record_activity(workspace_id, request.user, 'invitation_resent', f'{request.user.get_full_name() or request.user.email} resent an invitation to {invitation.email}.')
-    return JsonResponse({'invitation': invitation.as_dict()})
+    return JsonResponse({'invitation': invitation.as_dict(include_token=True)})
 
 
 @require_http_methods(['GET'])

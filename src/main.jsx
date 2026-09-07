@@ -1390,6 +1390,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
       onRefresh()
       setComposerOpen(false)
       setReplyTo(null)
+      if (composerType === 'invite') toast.success(responseData.message || `Invitation sent to ${form.email}.`)
     } catch (submitError) {
       setComposerError(submitError.message)
     } finally {

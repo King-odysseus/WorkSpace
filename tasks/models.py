@@ -152,8 +152,8 @@ class WorkspaceInvitation(models.Model):
     def can_resend(self):
         return timezone.now() >= self.resend_available_at()
 
-    def as_dict(self):
-        return {
+    def as_dict(self, include_token=False):
+        data = {
             'id': self.id,
             'workspace_id': self.workspace_id,
             'email': self.email,
