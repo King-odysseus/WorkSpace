@@ -587,8 +587,7 @@ html[data-theme='light'] .theme-toggle {
 .chat-search input { width: 100%; padding-left: 32px; }
 .chat-day + .chat-day { margin-top: 20px; }
 .chat-day h3 { margin: 0 0 3px; padding-bottom: 7px; border-bottom: 1px solid #EEF0F3; color: #8A93A3; font-size: 10px; text-transform: uppercase; letter-spacing: .45px; }
-.chat-message { display: flex; gap: 10px; padding: 14px 0; border-bottom: 1px solid #EEF0F3; }
-.chat-message:last-child { border-bottom: 0; }
+.chat-message { display: flex; gap: 10px; padding: 14px 0; }
 .chat-message-meta { display: flex; gap: 9px; align-items: center; }
 .chat-message-meta strong { color: #071A2E; font-size: 11px; }
 .chat-message-meta span { color: #1D4ED8; font-size: 10px; }
