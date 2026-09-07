@@ -15,7 +15,7 @@ import {
   AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Brush, Building2, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ClipboardList,
   CircleHelp, CircleUserRound, Clock3, Copy, Filter, FileText, Hash, LayoutDashboard, LayoutGrid, Link2, LogOut, MessageSquare, MoreHorizontal,
   ChevronLeft, ChevronRight,
-  EyeOff, MonitorUp, Pause, Play, Plus, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
+  EyeOff, MonitorUp, Pause, Play, Plus, RefreshCw, Search, Settings, Sparkles, Square, Target, Users, Webhook, X, Sun, Moon
 } from 'lucide-react'
 import 'flowbite/dist/flowbite.css'
 import './tijhabooks-theme.css'
@@ -65,7 +65,13 @@ function App() {
   const todayLabel = new Intl.DateTimeFormat('en-GB', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${today}T12:00:00`))
   // Supports PWA shortcuts (manifest.webmanifest) and any other deep link that
   // wants to land on a specific view, e.g. /?view=My+tasks.
-  const [active, setActive] = useState(() => { const requested = new URLSearchParams(window.location.search).get('view') || 'Today'; return ['Files', 'Import data'].includes(requested) ? 'Today' : requested })
+  const [active, setActive] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('view')
+    const saved = localStorage.getItem('workspace-last-page')
+    const page = requested || saved || 'Today'
+    return ['Files', 'Import data'].includes(page) ? 'Today' : page
+  })
+  useEffect(() => { localStorage.setItem('workspace-last-page', active) }, [active])
   const [tasks, setTasks] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [confirmState, setConfirmState] = useState(null)
@@ -1052,6 +1058,16 @@ function App() {
 
         <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
           {!aiLauncherHidden && activeWorkspaceId && <button type="button" onClick={() => setAiFlyoutOpen(true)} className="ai-mobile-launcher" aria-label="Open Zuri" aria-haspopup="dialog"><CircleUserRound size={20} /><span>Ask Zuri</span></button>}
+
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:bg-surface-secondary hover:text-text-primary transition-colors"
+            aria-label="Refresh app"
+            title="Refresh app"
+          >
+            <RefreshCw size={18} />
+          </button>
 
           <div className="relative" ref={notifRef}>
             <button
