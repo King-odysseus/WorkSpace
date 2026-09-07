@@ -49,6 +49,8 @@ def user_payload(user):
         'first_name': user.first_name,
         'last_name': user.last_name,
         'avatar_url': profile.avatar_url if profile else '',
+        'company': profile.company if profile else '',
+        'job_role': profile.job_role if profile else '',
         'presence': profile.presence if profile else 'available',
         'workspaces': workspaces,
         'default_workspace_id': profile.default_workspace_id if profile and profile.default_workspace_id in active_workspace_ids else None,
@@ -230,6 +232,14 @@ def user_profile(request):
         return JsonResponse({'error': 'Enter a valid email address.'}, status=400)
     if User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
         return JsonResponse({'error': 'That email address is already in use.'}, status=409)
+    company = str(payload.get('company', '')).strip()
+    job_role = str(payload.get('job_role', '')).strip()
+    if len(company) > 150 or len(job_role) > 150:
+        return JsonResponse({'error': 'Company and job role must be 150 characters or fewer.'}, status=400)
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    profile.company = company
+    profile.job_role = job_role
+    profile.save(update_fields=['company', 'job_role', 'updated_at'])
     if 'default_workspace_id' in payload:
         default_workspace_id = payload.get('default_workspace_id')
         if default_workspace_id in (None, ''):

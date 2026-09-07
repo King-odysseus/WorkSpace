@@ -142,6 +142,8 @@ class Membership(models.Model):
             'permissions': sorted(self.effective_permissions()),
             'joined_at': self.joined_at.isoformat(),
             'avatar_url': profile.avatar_url if profile else '',
+            'company': profile.company if profile else '',
+            'job_role': profile.job_role if profile else '',
             'presence': profile.presence if profile else 'available',
             'last_seen_at': profile.last_seen_at.isoformat() if profile and profile.last_seen_at else '',
         }
@@ -1133,6 +1135,8 @@ class UserProfile(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     avatar = models.ImageField(upload_to='avatars/%Y/%m/', null=True, blank=True)
+    company = models.CharField(max_length=150, blank=True)
+    job_role = models.CharField(max_length=150, blank=True)
     presence = models.CharField(max_length=20, choices=PRESENCE_CHOICES, default='available')
     presence_updated_at = models.DateTimeField(null=True, blank=True)
     # Observed activity, stamped by LastSeenMiddleware - distinct from presence,
