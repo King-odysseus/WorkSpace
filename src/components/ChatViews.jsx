@@ -5,6 +5,7 @@ import { AppSelect } from './ui/select.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUpRight, Download, FileText, Hash, MessageSquare, Paperclip, Plus, Search, Smile, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
+import Avatar from './Avatar.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { formatRelativeActivityTime, getCsrfToken, toDateKey } from '../lib/workspace-format.js'
 
@@ -300,7 +301,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const reactions = reactionUpdates[message.id] || message.reactions || []
     const author = memberForMessage(message)
     return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${String(author.id) === String(currentUserId) ? 'chat-message-mine' : ''}`} key={message.id}>
-    <span className="avatar blue small">{message.author_name.slice(0, 2).toUpperCase()}</span>
+    <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={author.presence} small />
     <div className="chat-message-body"><div className="chat-message-meta">{String(author.id) === String(currentUserId) ? <strong>{message.author_name}</strong> : <button type="button" className="chat-member-name" onClick={() => setProfileMember(author)} aria-label={`View ${message.author_name}'s profile`}>{message.author_name}</button>}<span>{formatRelativeActivityTime(message.created_at)}</span></div>{message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.message || 'Original message is unavailable.'}</span></div>}<div className={`chat-message-bubble chat-member-tone-${Number(author.id) % 5}`}><p>{renderMessageText(message.message)}</p><div className={`chat-reactions ${reactions.length ? 'has-reactions' : ''}`} aria-label="Message reactions">{reactions.map(reaction => <button type="button" key={reaction.emoji} className={reaction.reacted ? 'active' : ''} onClick={() => toggleReaction(message, reaction.emoji)} aria-pressed={reaction.reacted}>{reaction.emoji} {reaction.count}</button>)}<button type="button" className="chat-reaction-add" onClick={() => toggleReaction(message, '👍')} aria-label="React with thumbs up">👍</button></div>{!message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div>{(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}{(message.shared_files || []).map(file => <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}</div>
   </div>
   }
