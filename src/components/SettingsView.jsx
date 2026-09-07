@@ -146,11 +146,11 @@ function SettingsView({ theme, onSetTheme, sidebarCollapsed, onToggleSidebar, cu
     fetch('/api/push/public-key/', { credentials: 'include' })
       .then(response => response.json())
       .then(data => { setPushPublicKey(data.public_key || ''); setPushConfigured(Boolean(data.configured)) })
-      .catch(() => {})
+      .catch(error => console.error('Push notification config could not be loaded', error))
   }, [])
   useEffect(() => {
     if (!pushSupported) return
-    navigator.serviceWorker.ready.then(registration => registration.pushManager.getSubscription()).then(subscription => setPushSubscribed(Boolean(subscription))).catch(() => {})
+    navigator.serviceWorker.ready.then(registration => registration.pushManager.getSubscription()).then(subscription => setPushSubscribed(Boolean(subscription))).catch(error => console.error('Push subscription state could not be checked', error))
   }, [pushSupported])
   const urlBase64ToUint8Array = base64String => {
     const padding = '='.repeat((4 - base64String.length % 4) % 4)
