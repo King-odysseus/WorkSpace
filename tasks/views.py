@@ -1795,8 +1795,30 @@ def notification_list(request, workspace_id):
         return error
     from .models import WorkspaceNotification
     if request.method == 'GET':
-        notifications = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)[:50]
-        return JsonResponse({'notifications': [notification.as_dict() for notification in notifications], 'unread_count': WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True).count()})
+        notifications = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)
+        try:
+            page_number = max(int(request.GET.get('page', 1)), 1)
+        except ValueError:
+            return JsonResponse({'error': 'page must be an integer.'}, status=400)
+        # Keep the history endpoint bounded as a workspace accumulates years of
+        # read notifications, while still retaining all entries for paging.
+        paginator = Paginator(notifications, 20)
+        try:
+            page = paginator.page(page_number)
+        except EmptyPage:
+            page = paginator.page(paginator.num_pages)
+        return JsonResponse({
+            'notifications': [notification.as_dict() for notification in page.object_list],
+            'unread_count': WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True).count(),
+            'pagination': {
+                'page': page.number,
+                'page_size': 20,
+                'total_items': paginator.count,
+                'total_pages': paginator.num_pages,
+                'has_next': page.has_next(),
+                'has_previous': page.has_previous(),
+            },
+        })
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:

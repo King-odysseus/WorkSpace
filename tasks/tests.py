@@ -324,6 +324,30 @@ class TaskApiTests(TestCase):
         self.assertEqual(bell_response.status_code, 200)
         self.assertEqual(bell_response.json()['unread_count'], 2)
 
+    def test_notification_history_is_paginated_in_pages_of_twenty(self):
+        for index in range(23):
+            WorkspaceNotification.objects.create(
+                workspace=self.workspace,
+                recipient=self.user,
+                kind='task_status',
+                title=f'Notification {index}',
+            )
+
+        first_page = self.client.get(reverse('notification-list', args=[self.workspace.id]))
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual(len(first_page.json()['notifications']), 20)
+        self.assertEqual(first_page.json()['pagination'], {
+            'page': 1, 'page_size': 20, 'total_items': 23, 'total_pages': 2,
+            'has_next': True, 'has_previous': False,
+        })
+
+        second_page = self.client.get(f"{reverse('notification-list', args=[self.workspace.id])}?page=2")
+        self.assertEqual(second_page.status_code, 200)
+        self.assertEqual(len(second_page.json()['notifications']), 3)
+        self.assertEqual(second_page.json()['pagination']['page'], 2)
+        self.assertTrue(second_page.json()['pagination']['has_previous'])
+        self.assertFalse(second_page.json()['pagination']['has_next'])
+
     def test_reassigning_task_notifies_new_assignee(self):
         original_assignee = User.objects.create_user(username='first@example.com', email='first@example.com', password='secure-pass-123')
         new_assignee = User.objects.create_user(username='second@example.com', email='second@example.com', password='secure-pass-123')

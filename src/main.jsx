@@ -2058,6 +2058,7 @@ function App() {
                   <div className="max-h-[320px] divide-y divide-border-light overflow-y-auto">
                     {workspaceData.notifications.length ? (
                       workspaceData.notifications
+                        .slice(0, 5)
                         .map((notification) => (
                           <button
                             type="button"
@@ -2080,6 +2081,18 @@ function App() {
                     ) : (
                       <EmptyState text="No notifications yet." />
                     )}
+                  </div>
+                  <div className="border-t border-border-light px-4 py-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotificationOpen(false);
+                        setActive("Notifications");
+                      }}
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      View all notifications
+                    </button>
                   </div>
                 </div>
               )}
@@ -2309,6 +2322,8 @@ function App() {
                 onDelete={deleteTask}
                 onAddTask={() => openTaskModal()}
                 onOpenTask={setSelectedTask}
+                onOpenNotification={openNotification}
+                onMarkNotificationsRead={markNotificationsRead}
                 onActionError={(message) => toast.error(message)}
                 onRefresh={() => setWorkspaceReload((current) => current + 1)}
                 onConfirm={confirmAction}
@@ -2670,6 +2685,8 @@ function WorkspaceView({
   onDelete,
   onAddTask,
   onOpenTask,
+  onOpenNotification,
+  onMarkNotificationsRead,
   onActionError,
   onRefresh,
   onConfirm,
@@ -2705,6 +2722,12 @@ function WorkspaceView({
   const [activityActor, setActivityActor] = useState("all");
   const [activityKind, setActivityKind] = useState("all");
   const [activityPage, setActivityPage] = useState(1);
+  const [notificationPage, setNotificationPage] = useState(1);
+  const [notificationHistory, setNotificationHistory] = useState([]);
+  const [notificationPagination, setNotificationPagination] = useState(null);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
+  const [notificationReload, setNotificationReload] = useState(0);
   const [projectQuery, setProjectQuery] = useState("");
   const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [projectHealthFilter, setProjectHealthFilter] = useState("all");
@@ -2746,6 +2769,38 @@ function WorkspaceView({
   useEffect(() => {
     setActivityPage(1);
   }, [activitySearch, activityActor, activityKind]);
+  useEffect(() => {
+    if (active === "Notifications") setNotificationPage(1);
+  }, [active]);
+  useEffect(() => {
+    if (active !== "Notifications" || !workspaceId) return undefined;
+    let current = true;
+    setNotificationLoading(true);
+    setNotificationError("");
+    fetch(`/api/workspaces/${workspaceId}/notifications/?page=${notificationPage}`, {
+      credentials: "include",
+    })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok)
+          throw new Error(payload.error || "Notifications could not be loaded.");
+        return payload;
+      })
+      .then((payload) => {
+        if (!current) return;
+        setNotificationHistory(payload.notifications || []);
+        setNotificationPagination(payload.pagination || null);
+      })
+      .catch((error) => {
+        if (current) setNotificationError(error.message || "Notifications could not be loaded.");
+      })
+      .finally(() => {
+        if (current) setNotificationLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [active, workspaceId, notificationPage, notificationReload]);
   useEffect(() => {
     const handleReportFilter = (event) => {
       if (event.detail) setPlannerFilter(event.detail);
@@ -4416,6 +4471,70 @@ function WorkspaceView({
         projects={localData.projects}
         onRefresh={onRefresh}
       />
+    );
+  }
+  if (active === "Notifications") {
+    const pagination = notificationPagination;
+    return (
+      <section className="workspace-view">
+        <WorkspaceViewHeading
+          title="Notifications"
+          subtitle="Your workspace notification history."
+          action="Mark all read"
+          onAction={async () => {
+            await onMarkNotificationsRead();
+            setNotificationHistory((current) =>
+              current.map((notification) => ({ ...notification, read: true })),
+            );
+          }}
+        />
+        <Card className="activity-history">
+          {notificationLoading ? (
+            <p className="p-4 text-sm text-text-muted">Loading notifications...</p>
+          ) : notificationError ? (
+            <div className="workspace-status error" role="alert">
+              <span>{notificationError}</span>
+              <button className="secondary-button" onClick={() => setNotificationReload((current) => current + 1)}>
+                Retry
+              </button>
+            </div>
+          ) : notificationHistory.length ? (
+            <div className="divide-y divide-border-light">
+              {notificationHistory.map((notification) => (
+                <button
+                  type="button"
+                  key={notification.id}
+                  onClick={() => onOpenNotification(notification)}
+                  className="flex w-full flex-col items-start gap-1 px-4 py-3 text-left hover:bg-surface-secondary"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+                    {notification.title}
+                    {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                  </span>
+                  <span className="text-xs text-text-muted">{notification.body || "Workspace update"}</span>
+                  <span className="text-xs text-text-muted">{formatRelativeActivityTime(notification.created_at)}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <EmptyState text="No notifications yet." />
+          )}
+        </Card>
+        {pagination && pagination.total_pages > 1 && (
+          <div className="activity-pagination">
+            <span>{`${(pagination.page - 1) * pagination.page_size + 1}-${Math.min(pagination.page * pagination.page_size, pagination.total_items)} of ${pagination.total_items}`}</span>
+            <div>
+              <button type="button" disabled={!pagination.has_previous} onClick={() => setNotificationPage((current) => Math.max(1, current - 1))} aria-label="Previous notifications page">
+                <ChevronLeft size={15} />
+              </button>
+              <span>Page {pagination.page} of {pagination.total_pages}</span>
+              <button type="button" disabled={!pagination.has_next} onClick={() => setNotificationPage((current) => current + 1)} aria-label="Next notifications page">
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
     );
   }
   if (active === "Screen sharing") {
