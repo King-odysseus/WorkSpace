@@ -1,7 +1,7 @@
 // Edit dialogs for the records that are created elsewhere in the app and then
 // adjusted in place: calendar events, follow-ups, daily check-ins and projects.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { ArrowUpRight, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
@@ -103,6 +103,71 @@ function CheckInEditDialog({ checkIn, workspaceId, onClose, onUpdated }) {
   return <div className="modal-backdrop" onMouseDown={onClose}><form className="modal composer-modal" role="dialog" aria-modal="true" aria-labelledby="checkin-edit-title" onSubmit={save} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Daily check-in</p><h2 id="checkin-edit-title">Edit check-in</h2><p className="modal-subtitle">Update what you completed, what is next, and any blockers.</p></div><button type="button" className="close-button" onClick={onClose} aria-label="Close check-in editor"><X size={18} /></button></div><DateField label="Date" name="date" value={form.date} onChange={update} /><label>What did you complete?<textarea name="completed" value={form.completed} onChange={update} maxLength="4000" required /></label><label>What is next?<textarea name="next_steps" value={form.next_steps} onChange={update} maxLength="4000" /></label><label>Any blockers?<textarea name="blockers" value={form.blockers} onChange={update} maxLength="4000" /></label>{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button modal-submit" disabled={saving}>{saving ? 'Saving...' : 'Save check-in'}</button></form></div>
 }
 
+function CheckInDetailDialog({ checkIn, workspaceId, canComment, canEdit, onClose, onEdit }) {
+  const [comments, setComments] = useState([])
+  const [commentBody, setCommentBody] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadComments = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/check-ins/${checkIn.id}/comments/`, { credentials: 'include' })
+      const data = await readJsonResponse(response, 'Check-in comments could not be loaded.')
+      if (!response.ok) throw new Error(data.error || 'Check-in comments could not be loaded.')
+      setComments(data.comments || [])
+    } catch (loadError) {
+      setError(loadError.message || 'Check-in comments could not be loaded.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadComments()
+  }, [workspaceId, checkIn.id])
+
+  const submitComment = async event => {
+    event.preventDefault()
+    const body = commentBody.trim()
+    if (!body || submitting) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/check-ins/${checkIn.id}/comments/`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
+        body: JSON.stringify({ body }),
+      })
+      const data = await readJsonResponse(response, 'Comment could not be added.')
+      if (!response.ok) throw new Error(data.error || 'Comment could not be added.')
+      setComments(current => [...current, data.comment])
+      setCommentBody('')
+    } catch (submitError) {
+      setError(submitError.message || 'Comment could not be added.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return <Dialog open onOpenChange={openState => !openState && onClose()}>
+    <DialogContent className="modal checkin-detail-dialog" showCloseButton={false}>
+      <DialogHeader className="modal-heading flex-row items-start justify-between gap-3 space-y-0">
+        <div><p className="eyebrow">Daily check-in</p><DialogTitle>{checkIn.user_name}</DialogTitle><p className="modal-subtitle">{checkIn.date}</p></div>
+        <div className="flex items-center gap-2"><Button type="button" variant="ghost" size="sm" onClick={onEdit} disabled={!canEdit}>Edit</Button><Button type="button" variant="ghost" size="icon" className="close-button rounded-full" onClick={onClose} aria-label="Close check-in details"><X size={18} /></Button></div>
+      </DialogHeader>
+      <div className="checkin-detail-content">
+        <section><h3>Completed</h3><p>{checkIn.completed || 'No update yet.'}</p></section>
+        <section><h3>Next steps</h3><p>{checkIn.next_steps || 'No next step recorded.'}</p></section>
+        <section className={checkIn.blockers ? 'checkin-detail-blockers' : ''}><h3>Blockers</h3><p>{checkIn.blockers || 'None reported.'}</p></section>
+      </div>
+      <section className="checkin-comments" aria-label="Check-in comments"><div className="drawer-section-heading"><h3>Discussion</h3><span>{comments.length}</span></div>{loading ? <p className="drawer-muted">Loading comments...</p> : comments.length ? <div className="checkin-comment-list">{comments.map(comment => <article className="drawer-comment" key={comment.id}><strong>{comment.author_name}</strong><time>{formatCalendarDate(new Date(comment.created_at), { dateStyle: 'medium', timeStyle: 'short' })}</time><p>{comment.body}</p></article>)}</div> : <p className="drawer-muted">No comments yet.</p>}{canComment ? <form className="drawer-comment-form" onSubmit={submitComment}><label htmlFor="checkin-comment">Add a comment</label><textarea id="checkin-comment" value={commentBody} onChange={event => setCommentBody(event.target.value)} maxLength="2000" placeholder="Share feedback, an update, or help with a blocker." required /><Button type="submit" className="primary-button justify-center" disabled={submitting}>{submitting ? 'Posting...' : 'Post comment'}</Button></form> : <p className="drawer-muted">You do not have permission to comment on check-ins.</p>}{error && <p className="auth-error" role="alert">{error}</p>}</section>
+    </DialogContent>
+  </Dialog>
+}
+
 function ProjectEditDrawer({ project, workspaceId, onClose, onUpdated }) {
   const [form, setForm] = useState({ name: project.name, description: project.description || '', due_date: project.due_date || '' })
   const [error, setError] = useState('')
@@ -129,4 +194,4 @@ function ProjectEditDrawer({ project, workspaceId, onClose, onUpdated }) {
   return <div className="drawer-backdrop" onMouseDown={onClose}><aside className="task-drawer" role="dialog" aria-modal="true" aria-labelledby="project-edit-title" onMouseDown={event => event.stopPropagation()}><div className="drawer-heading"><div><p className="eyebrow">Project details</p><h2 id="project-edit-title">Edit project</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Close project editor"><X size={18} /></button></div><form className="drawer-task-form" onSubmit={save}><label>Name<input name="name" value={form.name} onChange={update} maxLength="160" required /></label><label>Description<textarea name="description" value={form.description} onChange={update} /></label><DateField label="Due date" name="due_date" value={form.due_date} onChange={update} />{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? 'Saving...' : 'Save project'}</button></form></aside></div>
 }
 
-export { CalendarEventEditDialog, FollowUpEditDialog, CheckInEditDialog, ProjectEditDrawer }
+export { CalendarEventEditDialog, FollowUpEditDialog, CheckInDetailDialog, CheckInEditDialog, ProjectEditDrawer }

@@ -129,6 +129,7 @@ const ChatWorkspaceView = lazy(() =>
 );
 import {
   CalendarEventEditDialog,
+  CheckInDetailDialog,
   CheckInEditDialog,
   FollowUpEditDialog,
   ProjectEditDrawer,
@@ -2740,9 +2741,11 @@ function WorkspaceView({
   const [projectOperation, setProjectOperation] = useState("");
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
+  const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [savedViews, setSavedViews] = useState(data.savedViews || []);
+  const canCommentCheckIns = Boolean(currentWorkspace?.permissions?.includes("comment_check_ins"));
   const [form, setForm] = useState({
     title: "",
     name: "",
@@ -5091,6 +5094,14 @@ function WorkspaceView({
                 <p>
                   <b>Blockers</b> {checkIn.blockers || "None reported"}
                 </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedCheckInDetail(checkIn)}
+                >
+                  View details
+                </Button>
               </Card>
             ))
           ) : (
@@ -5124,6 +5135,19 @@ function WorkspaceView({
               }));
               onRefresh();
               setSelectedCheckIn(null);
+            }}
+          />
+        )}
+        {selectedCheckInDetail && (
+          <CheckInDetailDialog
+            checkIn={selectedCheckInDetail}
+            workspaceId={workspaceId}
+            canComment={canCommentCheckIns}
+            canEdit={selectedCheckInDetail.user_id === currentUserId}
+            onClose={() => setSelectedCheckInDetail(null)}
+            onEdit={() => {
+              setSelectedCheckInDetail(null);
+              setSelectedCheckIn(selectedCheckInDetail);
             }}
           />
         )}

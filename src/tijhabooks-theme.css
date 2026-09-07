@@ -2684,6 +2684,66 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .modal {
   margin: auto;
 }
+
+/* Check-in discussion needs room for the update and its conversation without
+   forcing people to switch between a compact card and a separate page. */
+.checkin-detail-dialog {
+  width: min(760px, calc(100vw - 36px));
+}
+.checkin-detail-content {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.checkin-detail-content section {
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 12px;
+  background: var(--workspace-surface-soft);
+}
+.checkin-detail-content h3,
+.checkin-comments h3 {
+  margin: 0 0 7px;
+  color: var(--workspace-text);
+  font-size: 12px;
+}
+.checkin-detail-content p {
+  margin: 0;
+  color: var(--workspace-text-soft);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.checkin-detail-blockers {
+  border-color: #E36B43 !important;
+}
+.checkin-comments {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--workspace-border);
+}
+.checkin-comment-list {
+  display: grid;
+  gap: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.checkin-comment-list .drawer-comment {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+}
+.checkin-comment-list time {
+  display: block;
+  margin-top: 2px;
+  color: var(--workspace-text-soft);
+  font-size: 10px;
+}
+@media (max-width: 640px) {
+  .checkin-detail-content { grid-template-columns: 1fr; }
+}
 /* Planner scope switch: spaced segmented control instead of inline collision. */
 .planner-scope-switch {
   display: flex;

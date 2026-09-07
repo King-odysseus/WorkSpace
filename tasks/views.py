@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
@@ -2873,6 +2873,36 @@ def check_in_list(request, workspace_id):
             if leader.user != request.user:
                 create_notification(workspace_id, leader.user, 'check_in_blocker', f'{actor_name} reported a blocker', check_in.blockers[:120], target_type='check_in', target_id=check_in.id)
     return JsonResponse({'check_in': check_in.as_dict()}, status=201 if created else 200)
+
+
+@require_http_methods(['GET', 'POST'])
+def check_in_comment_list(request, workspace_id, check_in_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    check_in = CheckIn.objects.filter(id=check_in_id, workspace_id=workspace_id).select_related('user').first()
+    if check_in is None:
+        return JsonResponse({'error': 'Check-in was not found.'}, status=404)
+    if request.method == 'GET':
+        comments = CheckInComment.objects.filter(check_in=check_in).select_related('author')
+        return JsonResponse({'comments': [comment.as_dict() for comment in comments]})
+    if not membership.has_permission('comment_check_ins'):
+        return JsonResponse({'error': 'You do not have permission to comment on check-ins.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    body, body_error = parse_bounded_text(payload.get('body'), 'Comment', max_length=2000)
+    if body_error:
+        return JsonResponse({'error': body_error}, status=400)
+    if not body:
+        return JsonResponse({'error': 'Comment is required.'}, status=400)
+    comment = CheckInComment.objects.create(check_in=check_in, author=request.user, body=body)
+    actor_name = request.user.get_full_name() or request.user.email
+    record_activity(workspace_id, request.user, 'check_in_comment', f'{actor_name} commented on {check_in.user.get_full_name() or check_in.user.email}\'s check-in.')
+    if check_in.user_id != request.user.id:
+        create_notification(workspace_id, check_in.user, 'check_in_comment', f'{actor_name} commented on your check-in', body[:120], target_type='check_in', target_id=check_in.id)
+    return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
 def accessible_chat_channels(workspace_id, user):

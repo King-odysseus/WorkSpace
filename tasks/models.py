@@ -89,7 +89,7 @@ PERMISSION_KEYS = (
     'create_tasks', 'edit_own_tasks', 'edit_team_tasks', 'assign_tasks',
     'create_projects', 'manage_projects',
     'create_workstreams', 'manage_workstreams',
-    'use_ai', 'manage_ai_access', 'manage_ai_providers',
+    'use_ai', 'manage_ai_access', 'manage_ai_providers', 'comment_check_ins',
     'view_reports',
 )
 
@@ -98,7 +98,7 @@ PERMISSION_KEYS = (
 # permissions changes nothing for an existing workspace until an owner
 # deliberately narrows a specific manager's grant.
 MANAGER_DEFAULT_PERMISSIONS = frozenset(PERMISSION_KEYS)
-MEMBER_DEFAULT_PERMISSIONS = frozenset({'create_tasks', 'edit_own_tasks', 'use_ai', 'view_reports'})
+MEMBER_DEFAULT_PERMISSIONS = frozenset({'create_tasks', 'edit_own_tasks', 'use_ai', 'view_reports', 'comment_check_ins'})
 
 
 class Membership(models.Model):
@@ -546,6 +546,27 @@ class CheckIn(models.Model):
             'next_steps': self.next_steps,
             'blockers': self.blockers,
             'updated_at': self.updated_at.isoformat(),
+        }
+
+
+class CheckInComment(models.Model):
+    """A workspace-visible discussion entry attached to one daily check-in."""
+    check_in = models.ForeignKey(CheckIn, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='check_in_comments')
+    body = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'check_in_id': self.check_in_id,
+            'author_id': self.author_id,
+            'author_name': self.author.get_full_name() or self.author.email,
+            'body': self.body,
+            'created_at': self.created_at.isoformat(),
         }
 
 
