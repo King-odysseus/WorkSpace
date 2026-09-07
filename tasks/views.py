@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
@@ -80,6 +80,7 @@ def record_activity(workspace_id, actor, kind, message):
 NOTIFICATION_KIND_PREFERENCE = {
     'mention': 'mentions',
     'direct_message': 'direct_messages',
+    'channel_message': 'channel_messages',
     'task_assigned': 'task_updates',
     'task_status': 'task_updates',
     'task_comment': 'task_updates',
@@ -1640,6 +1641,11 @@ def notification_list(request, workspace_id):
     if payload.get('read_all') is True:
         WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True).update(read_at=timezone.now())
         return JsonResponse({'updated': 'all'})
+    target_type = str(payload.get('target_type', '')).strip()
+    target_id = str(payload.get('target_id', '')).strip()
+    if target_type and target_id:
+        WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, target_type=target_type, target_id=target_id, read_at__isnull=True).update(read_at=timezone.now())
+        return JsonResponse({'updated': 'target'})
     notification_id = payload.get('notification_id')
     notification = WorkspaceNotification.objects.filter(id=notification_id, workspace_id=workspace_id, recipient=request.user).first()
     if notification is None:
@@ -1661,7 +1667,7 @@ def notification_preference_detail(request, workspace_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    fields = ['mentions', 'direct_messages', 'task_updates', 'calendar_reminders']
+    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders']
     updated_fields = []
     for field in fields:
         if field in payload:
@@ -2542,6 +2548,28 @@ def notify_mentions(workspace_id, actor, text, target_type, target_id, recipient
                 create_notification(workspace_id, member.user, 'mention', f'{actor.get_full_name() or actor.email} mentioned you', text[:120], target_type=target_type, target_id=target_id)
 
 
+def reaction_summary(reaction_model, message_ids, user):
+    """Return compact, viewer-aware reaction rows without a query per message."""
+    rows = reaction_model.objects.filter(message_id__in=message_ids).values('message_id', 'emoji').annotate(count=Count('id'))
+    mine = set(reaction_model.objects.filter(message_id__in=message_ids, user=user).values_list('message_id', 'emoji'))
+    grouped = {message_id: [] for message_id in message_ids}
+    for row in rows:
+        grouped[row['message_id']].append({'emoji': row['emoji'], 'count': row['count'], 'reacted': (row['message_id'], row['emoji']) in mine})
+    return grouped
+
+
+def serialize_chat_messages(messages, user):
+    messages = list(messages)
+    reactions = reaction_summary(ChatMessageReaction, [message.id for message in messages], user)
+    return [{**message.as_dict(), 'reactions': reactions.get(message.id, [])} for message in messages]
+
+
+def serialize_direct_messages(messages, user):
+    messages = list(messages)
+    reactions = reaction_summary(DirectMessageReaction, [message.id for message in messages], user)
+    return [{**message.as_dict(), 'reactions': reactions.get(message.id, [])} for message in messages]
+
+
 @require_http_methods(['GET', 'POST'])
 def chat_channel_list(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
@@ -2629,7 +2657,7 @@ def chat_message_list(request, workspace_id):
     if request.method == 'GET':
         recent_messages = list(ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=allowed_channels).select_related('author').order_by('-created_at')[:100])
         messages = reversed(recent_messages)
-        return JsonResponse({'messages': [message.as_dict() for message in messages]})
+        return JsonResponse({'messages': serialize_chat_messages(messages, request.user)})
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -2658,8 +2686,13 @@ def chat_message_list(request, workspace_id):
     shared_documents, shared_files = shared_chat_items(workspace_id, payload)
     message = ChatMessage.objects.create(workspace_id=workspace_id, author=request.user, channel=channel, parent=parent, message=message_text, shared_documents=shared_documents, shared_files=shared_files)
     record_activity(workspace_id, request.user, 'chat_message', f'{request.user.get_full_name() or request.user.email} posted in #{channel}.')
+    channel_record = ChatChannel.objects.filter(workspace_id=workspace_id, name=channel).first()
+    recipients = channel_record.members.all() if channel_record and channel_record.is_private else User.objects.filter(workspace_memberships__workspace_id=workspace_id)
+    sender = request.user.get_full_name() or request.user.email
+    for recipient in recipients.exclude(id=request.user.id).distinct():
+        create_notification(workspace_id, recipient, 'channel_message', f'New message in #{channel}', f'{sender}: {message_text[:100]}', target_type='chat_channel', target_id=channel)
     notify_mentions(workspace_id, request.user, message_text, 'chat_channel', channel)
-    return JsonResponse({'message': message.as_dict()}, status=201)
+    return JsonResponse({'message': serialize_chat_messages([message], request.user)[0]}, status=201)
 
 
 @require_http_methods(['GET', 'POST'])
@@ -2698,7 +2731,8 @@ def direct_message_list(request, conversation_id):
         return JsonResponse({'error': 'Conversation was not found.'}, status=404)
     if request.method == 'GET':
         messages = conversation.messages.select_related('author')
-        return JsonResponse({'messages': [message.as_dict() for message in messages]})
+        WorkspaceNotification.objects.filter(workspace_id=conversation.workspace_id, recipient=request.user, target_type='direct_conversation', target_id=str(conversation.id), read_at__isnull=True).update(read_at=timezone.now())
+        return JsonResponse({'messages': serialize_direct_messages(messages, request.user)})
     try:
         data = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -2714,7 +2748,44 @@ def direct_message_list(request, conversation_id):
     for participant in conversation.participants.exclude(id=request.user.id):
         create_notification(conversation.workspace_id, participant, 'direct_message', f'New message from {sender}', message_text[:120], target_type='direct_conversation', target_id=conversation.id)
     notify_mentions(conversation.workspace_id, request.user, message_text, 'direct_conversation', conversation.id, Membership.objects.filter(workspace_id=conversation.workspace_id, user__in=conversation.participants.all()).select_related('user'))
-    return JsonResponse({'message': message.as_dict()}, status=201)
+    return JsonResponse({'message': serialize_direct_messages([message], request.user)[0]}, status=201)
+
+
+def toggle_message_reaction(request, message, reaction_model, serializer):
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    emoji = str(payload.get('emoji', '')).strip()
+    if not emoji or len(emoji) > 32:
+        return JsonResponse({'error': 'Choose a valid reaction.'}, status=400)
+    if request.method == 'POST':
+        reaction_model.objects.get_or_create(message=message, user=request.user, emoji=emoji)
+    else:
+        reaction_model.objects.filter(message=message, user=request.user, emoji=emoji).delete()
+    return JsonResponse({'message': serializer([message], request.user)[0]})
+
+
+@require_http_methods(['POST', 'DELETE'])
+def chat_message_reaction(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = ChatMessage.objects.filter(id=message_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    if message is None:
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    if not accessible_chat_channels(message.workspace_id, request.user).filter(name=message.channel).exists():
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return toggle_message_reaction(request, message, ChatMessageReaction, serialize_chat_messages)
+
+
+@require_http_methods(['POST', 'DELETE'])
+def direct_message_reaction(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = DirectMessage.objects.filter(id=message_id, conversation__participants=request.user).first()
+    if message is None:
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return toggle_message_reaction(request, message, DirectMessageReaction, serialize_direct_messages)
 
 
 @require_http_methods(['GET', 'POST'])

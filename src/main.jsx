@@ -294,7 +294,8 @@ function App() {
 
   useEffect(() => {
     if (session.user && !session.user.workspaces.some(workspace => workspace.id === activeWorkspaceId)) {
-      setActiveWorkspaceId(session.user.workspaces[0]?.id || null)
+      const preferred = session.user.workspaces.find(workspace => workspace.id === session.user.default_workspace_id)
+      setActiveWorkspaceId(preferred?.id || session.user.workspaces[0]?.id || null)
     }
   }, [session.user, activeWorkspaceId])
 
@@ -744,6 +745,19 @@ function App() {
   const currentUserAvatarUrl = session.user.avatar_url || ''
   const currentUserPresence = session.user.presence || 'available'
   const updateSessionUser = patch => setSession(current => ({ ...current, user: { ...current.user, ...patch } }))
+  const setDefaultWorkspace = async workspaceId => {
+    try {
+      const response = await fetch('/api/auth/me/profile/', {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
+        body: JSON.stringify({ default_workspace_id: workspaceId }),
+      })
+      const data = await readJsonResponse(response, 'Default workspace could not be saved.')
+      if (!response.ok) throw new Error(data.error || 'Default workspace could not be saved.')
+      setSession(current => ({ ...current, user: data.user }))
+      toast.success('Default workspace saved.')
+    } catch (error) { toast.error(error.message || 'Default workspace could not be saved.') }
+  }
   const todayTasks = tasks.filter(task => !task.due_date || task.due_date <= today)
   const completedTaskCount = todayTasks.filter(task => task.status === 'done').length
   const attentionTaskCount = todayTasks.filter(task => ['blocked', 'review'].includes(task.status) || task.due === 'Overdue').length
@@ -1166,7 +1180,7 @@ function App() {
         {session.user.pending_invitations?.map(invitation => <div className="workspace-status" key={invitation.id}><span>You are invited to join {invitation.workspace_name} as a {invitation.role}.</span><button className="secondary-button" onClick={() => reviewInvitation(invitation)}>Review invitation</button></div>)}
         {workspaceLoading && <div className="workspace-status" role="status">Loading workspace data...</div>}
         {workspaceError && <div className="workspace-status error" role="alert"><span>Workspace data could not be loaded: {workspaceError}</span><button className="secondary-button" onClick={() => setWorkspaceReload(current => current + 1)}>Retry</button></div>}
-        {active !== 'Today' && <WorkspaceView key={workspaceId} active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} onNavigate={setActive} theme={theme} onSetTheme={setTheme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentWorkspace={currentWorkspace} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} currentUserEmail={session.user.email} currentUserId={session.user.id} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} onProfileUpdated={updateSessionUser} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} reportRange={reportRange} setReportRange={setReportRange} shiftLogUserId={shiftLogUserId} setShiftLogUserId={setShiftLogUserId} shiftLogPage={shiftLogPage} setShiftLogPage={setShiftLogPage} reportLastUpdated={reportLastUpdated} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => openTaskModal()} onOpenTask={setSelectedTask} onActionError={message => toast.error(message)} onRefresh={() => setWorkspaceReload(current => current + 1)} onConfirm={confirmAction} />}
+        {active !== 'Today' && <WorkspaceView key={workspaceId} active={active} data={workspaceData} tasks={tasks} searchQuery={searchQuery} onSearchChange={setSearchQuery} onNavigate={setActive} theme={theme} onSetTheme={setTheme} sidebarCollapsed={sidebarCollapsed} workspaceId={workspaceId} currentWorkspace={currentWorkspace} currentUserName={[session.user.first_name, session.user.last_name].filter(Boolean).join(' ') || session.user.email} currentUserEmail={session.user.email} currentUserId={session.user.id} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} currentUserWorkspaces={session.user.workspaces} defaultWorkspaceId={session.user.default_workspace_id} onSetDefaultWorkspace={setDefaultWorkspace} onProfileUpdated={updateSessionUser} canManageMembers={['owner', 'manager'].includes(currentWorkspace?.role)} canManageTasks={['owner', 'manager'].includes(currentWorkspace?.role)} reportRange={reportRange} setReportRange={setReportRange} shiftLogUserId={shiftLogUserId} setShiftLogUserId={setShiftLogUserId} shiftLogPage={shiftLogPage} setShiftLogPage={setShiftLogPage} reportLastUpdated={reportLastUpdated} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onToggleSidebar={() => setSidebarCollapsed(current => !current)} onComplete={completeTask} onStatusChange={changeTaskStatus} onBucketChange={changeTaskBucket} onDelete={deleteTask} onAddTask={() => openTaskModal()} onOpenTask={setSelectedTask} onActionError={message => toast.error(message)} onRefresh={() => setWorkspaceReload(current => current + 1)} onConfirm={confirmAction} />}
         {active === 'Today' && <TodayDashboard today={today} todayLabel={todayLabel} currentUserName={currentUserName} workspaceName={currentWorkspace?.name || 'your workspace'} tasks={tasks} events={workspaceData.events} followUps={workspaceData.followUps} checkIns={workspaceData.checkIns} workShifts={workspaceData.workShifts} currentUserId={session.user.id} currentUserPresence={currentUserPresence} onSubmitShift={submitWorkShift} onChangePresence={changePresence} members={workspaceData.members} canManageMembers={canManageMembers} onAddTask={() => openTaskModal()} onInvite={() => openComposer('invite')} onOpenTask={setSelectedTask} onNavigate={setActive} onComplete={completeTask} onStatusChange={changeTaskStatus} />}
       </div>
       </main>
@@ -1233,7 +1247,7 @@ function App() {
   </div>
 }
 
-function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNavigate, theme, onSetTheme, sidebarCollapsed, workspaceId, currentWorkspace, currentUserName, currentUserEmail, currentUserId, currentUserAvatarUrl, currentUserPresence, onProfileUpdated, canManageMembers, canManageTasks, reportRange, setReportRange, shiftLogUserId, setShiftLogUserId, shiftLogPage, setShiftLogPage, reportLastUpdated, onToggleTheme, onToggleSidebar, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask, onActionError, onRefresh, onConfirm }) {
+function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNavigate, theme, onSetTheme, sidebarCollapsed, workspaceId, currentWorkspace, currentUserName, currentUserEmail, currentUserId, currentUserAvatarUrl, currentUserPresence, currentUserWorkspaces, defaultWorkspaceId, onSetDefaultWorkspace, onProfileUpdated, canManageMembers, canManageTasks, reportRange, setReportRange, shiftLogUserId, setShiftLogUserId, shiftLogPage, setShiftLogPage, reportLastUpdated, onToggleTheme, onToggleSidebar, onComplete, onStatusChange, onBucketChange, onDelete, onAddTask, onOpenTask, onActionError, onRefresh, onConfirm }) {
   const today = toDateKey(new Date())
   const [localData, setLocalData] = useState(data)
   const [calendarView, setCalendarView] = useState('week')
@@ -1744,7 +1758,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
   }
 
   if (active === 'Settings') {
-    return <SettingsView theme={theme} onSetTheme={onSetTheme || onToggleTheme} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={onToggleSidebar} currentWorkspace={currentWorkspace} currentUserName={currentUserName} currentUserEmail={currentUserEmail} currentUserId={currentUserId} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} onProfileUpdated={onProfileUpdated} canManageMembers={canManageMembers} members={localData.members} notifications={localData.notifications} workspaceId={workspaceId} taskTemplates={localData.taskTemplates || []} projectTemplates={localData.projectTemplates || []} projects={localData.projects} onRefresh={onRefresh} />
+    return <SettingsView theme={theme} onSetTheme={onSetTheme || onToggleTheme} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={onToggleSidebar} currentWorkspace={currentWorkspace} currentUserName={currentUserName} currentUserEmail={currentUserEmail} currentUserId={currentUserId} currentUserAvatarUrl={currentUserAvatarUrl} currentUserPresence={currentUserPresence} onProfileUpdated={onProfileUpdated} canManageMembers={canManageMembers} members={localData.members} notifications={localData.notifications} workspaceId={workspaceId} workspaces={currentUserWorkspaces} defaultWorkspaceId={defaultWorkspaceId} onSetDefaultWorkspace={onSetDefaultWorkspace} taskTemplates={localData.taskTemplates || []} projectTemplates={localData.projectTemplates || []} projects={localData.projects} onRefresh={onRefresh} />
   }
   if (active === 'Screen sharing') {
     return <Suspense fallback={null}><ScreenSharingView workspaceId={workspaceId} members={localData.members} currentUserId={currentUserId} role={currentWorkspace?.role} /></Suspense>

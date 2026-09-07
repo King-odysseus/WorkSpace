@@ -1832,6 +1832,13 @@ html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, va
 .chat-inline-composer .primary-button { width: auto; min-height: 42px; }
 .chat-inline-composer .reply-context { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .chat-inline-composer .reply-context button { display: grid; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.chat-reactions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.chat-reactions button { border: 1px solid var(--workspace-border); border-radius: 999px; padding: 3px 7px; background: var(--workspace-surface-soft); color: var(--workspace-text); cursor: pointer; font-size: 11px; }
+.chat-reactions button.active { border-color: #1D4ED8; background: #EAF0FF; color: #1D4ED8; }
+.chat-mention-picker { position: absolute; z-index: 5; max-height: 180px; overflow-y: auto; margin: -4px 14px 0; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface); box-shadow: 0 10px 22px rgb(7 26 46 / 18%); }
+.chat-mention-picker button { display: grid; width: 100%; grid-template-columns: 1fr auto; gap: 12px; padding: 9px 11px; border: 0; background: transparent; color: var(--workspace-text); cursor: pointer; font: inherit; font-size: 12px; text-align: left; }
+.chat-mention-picker button:hover { background: var(--workspace-surface-soft); }
+.chat-mention-picker span { color: var(--workspace-text-soft); }
 .chat-list-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .chat-list-heading h3 { margin: 0 !important; }
 .chat-list-heading button, .channel-delete { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); cursor: pointer; }

@@ -27,6 +27,11 @@ AVATAR_ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
 
 def user_payload(user):
     profile = getattr(user, 'profile', None)
+    workspaces = [
+        {'id': membership.workspace.id, 'name': membership.workspace.name, 'slug': membership.workspace.slug, 'role': membership.role}
+        for membership in user.workspace_memberships.select_related('workspace').all()
+    ]
+    workspace_ids = {workspace['id'] for workspace in workspaces}
     return {
         'id': user.id,
         'username': user.username,
@@ -35,10 +40,8 @@ def user_payload(user):
         'last_name': user.last_name,
         'avatar_url': profile.avatar_url if profile else '',
         'presence': profile.presence if profile else 'available',
-        'workspaces': [
-            {'id': membership.workspace.id, 'name': membership.workspace.name, 'slug': membership.workspace.slug, 'role': membership.role}
-            for membership in user.workspace_memberships.select_related('workspace').all()
-        ],
+        'workspaces': workspaces,
+        'default_workspace_id': profile.default_workspace_id if profile and profile.default_workspace_id in workspace_ids else None,
         'pending_invitations': [
             {
                 'id': invitation.id,
@@ -217,6 +220,23 @@ def user_profile(request):
         return JsonResponse({'error': 'Enter a valid email address.'}, status=400)
     if User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
         return JsonResponse({'error': 'That email address is already in use.'}, status=409)
+    if 'default_workspace_id' in payload:
+        default_workspace_id = payload.get('default_workspace_id')
+        if default_workspace_id in (None, ''):
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            profile.default_workspace = None
+            profile.save(update_fields=['default_workspace', 'updated_at'])
+        else:
+            try:
+                default_workspace_id = int(default_workspace_id)
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'Default workspace must be a valid workspace.'}, status=400)
+            membership = Membership.objects.filter(user=request.user, workspace_id=default_workspace_id).first()
+            if membership is None:
+                return JsonResponse({'error': 'You can only choose a workspace you belong to.'}, status=403)
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            profile.default_workspace_id = membership.workspace_id
+            profile.save(update_fields=['default_workspace', 'updated_at'])
     request.user.first_name = first_name
     request.user.last_name = last_name
     request.user.email = email

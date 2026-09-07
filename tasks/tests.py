@@ -567,7 +567,7 @@ class TaskApiTests(TestCase):
     def test_notification_preferences_default_to_enabled_and_can_be_updated(self):
         response = self.client.get(reverse('notification-preference-detail', args=[self.workspace.id]))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['preferences'], {'mentions': True, 'direct_messages': True, 'task_updates': True, 'calendar_reminders': True})
+        self.assertEqual(response.json()['preferences'], {'mentions': True, 'direct_messages': True, 'channel_messages': True, 'task_updates': True, 'calendar_reminders': True})
 
         update_response = self.client.patch(
             reverse('notification-preference-detail', args=[self.workspace.id]),

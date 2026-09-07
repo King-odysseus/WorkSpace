@@ -51,6 +51,8 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [directDialogOpen, setDirectDialogOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [reactionUpdates, setReactionUpdates] = useState({})
   const [workspaceDocuments, setWorkspaceDocuments] = useState([])
   const [workspaceFiles, setWorkspaceFiles] = useState([])
   const [sharedDocumentIds, setSharedDocumentIds] = useState([])
@@ -70,6 +72,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setDraft('')
     setReplyTo(null)
     setEmojiOpen(false)
+    setMentionOpen(false)
     setError('')
   }, [viewType])
 
@@ -239,9 +242,52 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       messageInputRef.current?.setSelectionRange(cursor, cursor)
     })
   }
+  const insertMention = member => {
+    const input = messageInputRef.current
+    const start = input?.selectionStart ?? draft.length
+    const end = input?.selectionEnd ?? start
+    const alias = member.email.split('@')[0]
+    const prefix = start && !/\s/.test(draft[start - 1]) ? ' ' : ''
+    const mention = `${prefix}@${alias} `
+    setDraft(`${draft.slice(0, start)}${mention}${draft.slice(end)}`.slice(0, 4000))
+    setMentionOpen(false)
+    requestAnimationFrame(() => {
+      const cursor = Math.min(start + mention.length, 4000)
+      messageInputRef.current?.focus()
+      messageInputRef.current?.setSelectionRange(cursor, cursor)
+    })
+  }
+  const markConversationRead = async (targetType, targetId) => {
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/notifications/`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) },
+        body: JSON.stringify({ target_type: targetType, target_id: String(targetId) }),
+      })
+      if (response.ok) onRefresh()
+    } catch (readError) { console.warn('Chat notifications could not be marked read.', readError) }
+  }
+  const toggleReaction = async (message, emoji) => {
+    const direct = mode === 'direct'
+    const endpoint = direct ? `/api/direct-messages/${message.id}/reactions/` : `/api/chat-messages/${message.id}/reactions/`
+    const existing = (reactionUpdates[message.id] || message.reactions || []).find(item => item.emoji === emoji)
+    setError('')
+    try {
+      const response = await fetch(endpoint, {
+        method: existing?.reacted ? 'DELETE' : 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ emoji }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Reaction could not be updated.')
+      setReactionUpdates(current => ({ ...current, [message.id]: payload.message.reactions }))
+    } catch (reactionError) { setError(reactionError.message) }
+  }
+  useEffect(() => {
+    if (mode === 'channels' && selectedChannel) markConversationRead('chat_channel', selectedChannel)
+  }, [mode, selectedChannel, workspaceId])
   const renderMessage = message => <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''}`} key={message.id}>
     <span className="avatar blue small">{message.author_name.slice(0, 2).toUpperCase()}</span>
-    <div className="chat-message-body"><div className="chat-message-meta"><strong>{message.author_name}</strong><span>{formatRelativeActivityTime(message.created_at)}</span></div><p>{renderMessageText(message.message)}</p>{(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}{(message.shared_files || []).map(file => <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}{mode === 'channels' && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div>
+    <div className="chat-message-body"><div className="chat-message-meta"><strong>{message.author_name}</strong><span>{formatRelativeActivityTime(message.created_at)}</span></div><p>{renderMessageText(message.message)}</p>{(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}{(message.shared_files || []).map(file => <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}<div className="chat-reactions" aria-label="Message reactions">{(reactionUpdates[message.id] || message.reactions || []).map(reaction => <button type="button" key={reaction.emoji} className={reaction.reacted ? 'active' : ''} onClick={() => toggleReaction(message, reaction.emoji)} aria-pressed={reaction.reacted}>{reaction.emoji} {reaction.count}</button>)}<button type="button" onClick={() => toggleReaction(message, '👍')} aria-label="React with thumbs up">👍</button></div>{mode === 'channels' && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div>
   </div>
 
   const uploadChatFile = async event => {
@@ -278,10 +324,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {replyTo && mode === 'channels' && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
           {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
           {emojiOpen && <EmojiPicker onSelect={insertEmoji} />}
+          {mentionOpen && <div className="chat-mention-picker" role="listbox" aria-label="Mention a workspace member">{data.members.filter(member => member.id !== currentUserId).map(member => <button type="button" role="option" key={member.id} onClick={() => insertMention(member)}><strong>{memberName(member)}</strong><span>@{member.email.split('@')[0]}</span></button>)}</div>}
           <div className="chat-compose-surface">
             <textarea ref={messageInputRef} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
             <div className="chat-compose-toolbar">
-            <button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} onClick={() => { setEmojiOpen(current => !current); setShareOpen(false) }} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button>
+            <button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} onClick={() => { setMentionOpen(current => !current); setEmojiOpen(false) }} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button>
+            <button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} onClick={() => { setEmojiOpen(current => !current); setMentionOpen(false); setShareOpen(false) }} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button>
             <label className="secondary-button chat-upload-button" aria-label="Upload and attach a file"><Paperclip size={15} /> {uploadingFile ? 'Uploading...' : 'Attach file'}<input type="file" hidden onChange={uploadChatFile} disabled={uploadingFile} /></label>
             <button type="submit" className="primary-button" disabled={submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
           </div>
@@ -290,7 +338,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {error && <p className="auth-error" role="alert">{error}</p>}
         </form>}
       </Card>
-      <Card className="workspace-side-card chat-conversation-list"><div className="chat-list-heading"><h3>{mode === 'channels' ? 'Channels' : 'Chats'}</h3><button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button></div>{mode === 'channels' ? channels.map(channel => { const unread = data.notifications.filter(notification => notification.target_type === 'chat_channel' && notification.target_id === channel.name && !notification.read).length; return <div className="channel-row-wrap" key={channel.id}><button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''}`} onClick={() => { setSelectedChannel(channel.name); setSearch(''); setReplyTo(null) }}>{channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}<span className="channel-name">{channel.name}</span>{unread > 0 && <Badge>{unread}</Badge>}</button>{channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}</div> }) : conversations.length ? conversations.map(conversation => { const unread = data.notifications.filter(notification => notification.target_type === 'direct_conversation' && notification.target_id === String(conversation.id) && !notification.read).length; return <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''}`} key={conversation.id} onClick={() => { setSelectedConversationId(conversation.id); setSearch('') }}><span className={`avatar blue small ${conversation.is_group ? 'group-chat-avatar' : ''}`}>{conversation.is_group ? <Users size={14} /> : conversation.title.slice(0, 2).toUpperCase()}</span><span><strong>{conversation.title}</strong><small>{conversation.is_group ? `Group · ${conversation.participants.length} people` : conversation.last_message || 'Direct chat'}</small></span>{unread > 0 && <Badge>{unread}</Badge>}</button> }) : <p className="chat-sidebar-empty">No chats yet.</p>}</Card>
+      <Card className="workspace-side-card chat-conversation-list"><div className="chat-list-heading"><h3>{mode === 'channels' ? 'Channels' : 'Chats'}</h3><button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button></div>{mode === 'channels' ? channels.map(channel => { const unread = data.notifications.filter(notification => notification.target_type === 'chat_channel' && notification.target_id === channel.name && !notification.read).length; return <div className="channel-row-wrap" key={channel.id}><button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''}`} onClick={() => { setSelectedChannel(channel.name); setSearch(''); setReplyTo(null); markConversationRead('chat_channel', channel.name) }}>{channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}<span className="channel-name">{channel.name}</span>{unread > 0 && <Badge>{unread}</Badge>}</button>{channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}</div> }) : conversations.length ? conversations.map(conversation => { const unread = data.notifications.filter(notification => notification.target_type === 'direct_conversation' && notification.target_id === String(conversation.id) && !notification.read).length; return <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''}`} key={conversation.id} onClick={() => { setSelectedConversationId(conversation.id); setSearch(''); markConversationRead('direct_conversation', conversation.id) }}><span className={`avatar blue small ${conversation.is_group ? 'group-chat-avatar' : ''}`}>{conversation.is_group ? <Users size={14} /> : conversation.title.slice(0, 2).toUpperCase()}</span><span><strong>{conversation.title}</strong><small>{conversation.is_group ? `Group · ${conversation.participants.length} people` : conversation.last_message || 'Direct chat'}</small></span>{unread > 0 && <Badge>{unread}</Badge>}</button> }) : <p className="chat-sidebar-empty">No chats yet.</p>}</Card>
     </div>
     {channelDialogOpen && <div className="modal-backdrop" onMouseDown={() => setChannelDialogOpen(false)}><form className="modal chat-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-channel-title" onSubmit={createChannel} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Channels</p><h2 id="create-channel-title">Create a channel</h2></div><button type="button" className="close-button" onClick={() => setChannelDialogOpen(false)} aria-label="Close"><X size={18} /></button></div><label>Channel name<input autoFocus value={channelForm.name} onChange={event => setChannelForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. product-launch" maxLength="80" required /></label><label>Description<textarea value={channelForm.description} onChange={event => setChannelForm(current => ({ ...current, description: event.target.value }))} placeholder="What is this channel for?" maxLength="240" /></label><label className="chat-privacy-toggle"><input type="checkbox" checked={channelForm.is_private} onChange={event => setChannelForm(current => ({ ...current, is_private: event.target.checked, member_ids: [] }))} /> Private channel</label>{channelForm.is_private && <div className="chat-member-picker"><span>Add members</span>{data.members.filter(member => member.id !== currentUserId).map(member => <label key={member.id}><input type="checkbox" checked={channelForm.member_ids.includes(member.id)} onChange={() => toggleMember(member.id, channelForm.member_ids, member_ids => setChannelForm(current => ({ ...current, member_ids })))} /> {memberName(member)}</label>)}</div>}{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button modal-submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create channel'}</button></form></div>}
     {directDialogOpen && <div className="modal-backdrop" onMouseDown={() => setDirectDialogOpen(false)}><form className="modal chat-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-direct-title" onSubmit={createDirectConversation} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Private chats</p><h2 id="create-direct-title">New chat</h2><p className="modal-subtitle">Choose one person for a direct chat or several people for a group chat.</p></div><button type="button" className="close-button" onClick={() => setDirectDialogOpen(false)} aria-label="Close"><X size={18} /></button></div><div className="chat-member-picker"><span>Choose people</span>{data.members.filter(member => member.id !== currentUserId).map(member => <label key={member.id}><input type="checkbox" checked={directMemberIds.includes(member.id)} onChange={() => toggleMember(member.id, directMemberIds, setDirectMemberIds)} /> {memberName(member)}</label>)}</div>{directMemberIds.length > 0 && <p className="chat-selection-summary">{directMemberIds.length === 1 ? 'Direct chat' : `Group chat with ${directMemberIds.length + 1} people`}</p>}{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button modal-submit" disabled={submitting || !directMemberIds.length}>{submitting ? 'Starting…' : directMemberIds.length > 1 ? 'Start group chat' : 'Start direct chat'}</button></form></div>}

@@ -165,6 +165,12 @@ class WorkspaceInvitation(models.Model):
             'last_sent_at': self.last_sent_at.isoformat(),
             'expires_at': self.expires_at.isoformat(),
         }
+        # Only handed to owners/managers (see invitation_list/invitation_resend) -
+        # the same trust level as the emailed recipient, so they can share the
+        # accept link manually when delivery to the invited address fails.
+        if include_token:
+            data['token'] = self.token
+        return data
 
     def public_dict(self):
         return {
@@ -507,6 +513,16 @@ class ChatMessage(models.Model):
         }
 
 
+class ChatMessageReaction(models.Model):
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='reaction_rows')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_message_reactions')
+    emoji = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'user', 'emoji'], name='unique_chat_message_reaction')]
+
+
 class ChatChannel(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='chat_channels')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_chat_channels')
@@ -585,6 +601,16 @@ class DirectMessage(models.Model):
             'shared_files': self.shared_files or [],
             'created_at': self.created_at.isoformat(),
         }
+
+
+class DirectMessageReaction(models.Model):
+    message = models.ForeignKey(DirectMessage, on_delete=models.CASCADE, related_name='reaction_rows')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_message_reactions')
+    emoji = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'user', 'emoji'], name='unique_direct_message_reaction')]
 
 
 class FollowUp(models.Model):
@@ -987,6 +1013,7 @@ class NotificationPreference(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_notification_preferences')
     mentions = models.BooleanField(default=True)
     direct_messages = models.BooleanField(default=True)
+    channel_messages = models.BooleanField(default=True)
     task_updates = models.BooleanField(default=True)
     calendar_reminders = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -998,6 +1025,7 @@ class NotificationPreference(models.Model):
         return {
             'mentions': self.mentions,
             'direct_messages': self.direct_messages,
+            'channel_messages': self.channel_messages,
             'task_updates': self.task_updates,
             'calendar_reminders': self.calendar_reminders,
         }
@@ -1030,6 +1058,7 @@ class UserProfile(models.Model):
     # which is whatever the member last chose for themselves and can sit on
     # "available" for days after they stop using the app.
     last_seen_at = models.DateTimeField(null=True, blank=True)
+    default_workspace = models.ForeignKey(Workspace, on_delete=models.SET_NULL, null=True, blank=True, related_name='default_for_profiles')
     updated_at = models.DateTimeField(auto_now=True)
 
     @property
