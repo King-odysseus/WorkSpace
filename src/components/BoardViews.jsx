@@ -264,7 +264,7 @@ function TeamBoardView({
             ).length;
             return (
               <section className="team-member-card" key={member.id}>
-                <button type="button" className="team-member-heading" onClick={() => setProfileMember(member)} aria-label={`Open ${memberName(member)} profile`}>
+                <button type="button" className="team-member-heading" onClick={() => setProfileMember(member)} aria-label={`Open ${memberName(member)} profile`} title={`${member.job_role || member.role || "Member"}${member.company ? ` at ${member.company}` : ""}`}>
                   <Avatar
                     name={memberName(member)}
                     avatarUrl={member.avatar_url}
@@ -2777,6 +2777,7 @@ function TodayDashboard({
                   key={member.id}
                   onClick={() => setProfileMember(member)}
                   aria-label={`Open ${memberName(member)} profile`}
+                  title={`${member.job_role || member.role || "Member"}${member.company ? ` at ${member.company}` : ""}`}
                 >
                   <Avatar
                     name={memberName(member)}
