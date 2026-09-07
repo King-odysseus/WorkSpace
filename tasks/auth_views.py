@@ -28,10 +28,20 @@ AVATAR_ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
 def user_payload(user):
     profile = getattr(user, 'profile', None)
     workspaces = [
-        {'id': membership.workspace.id, 'name': membership.workspace.name, 'slug': membership.workspace.slug, 'role': membership.role}
+        {
+            'id': membership.workspace.id,
+            'name': membership.workspace.name,
+            'slug': membership.workspace.slug,
+            'role': membership.role,
+            'status': membership.workspace.status,
+            'permissions': sorted(membership.effective_permissions()),
+        }
         for membership in user.workspace_memberships.select_related('workspace').all()
     ]
-    workspace_ids = {workspace['id'] for workspace in workspaces}
+    # A workspace stays reachable in the switcher after it is archived (an
+    # owner needs it to restore or delete), but it is never a valid *default* -
+    # an archived workspace as the landing workspace would strand the user.
+    active_workspace_ids = {workspace['id'] for workspace in workspaces if workspace['status'] == 'active'}
     return {
         'id': user.id,
         'username': user.username,
@@ -41,7 +51,7 @@ def user_payload(user):
         'avatar_url': profile.avatar_url if profile else '',
         'presence': profile.presence if profile else 'available',
         'workspaces': workspaces,
-        'default_workspace_id': profile.default_workspace_id if profile and profile.default_workspace_id in workspace_ids else None,
+        'default_workspace_id': profile.default_workspace_id if profile and profile.default_workspace_id in active_workspace_ids else None,
         'pending_invitations': [
             {
                 'id': invitation.id,
@@ -231,9 +241,11 @@ def user_profile(request):
                 default_workspace_id = int(default_workspace_id)
             except (TypeError, ValueError):
                 return JsonResponse({'error': 'Default workspace must be a valid workspace.'}, status=400)
-            membership = Membership.objects.filter(user=request.user, workspace_id=default_workspace_id).first()
+            membership = Membership.objects.select_related('workspace').filter(user=request.user, workspace_id=default_workspace_id).first()
             if membership is None:
                 return JsonResponse({'error': 'You can only choose a workspace you belong to.'}, status=403)
+            if membership.workspace.status != 'active':
+                return JsonResponse({'error': 'An archived workspace cannot be set as your default.'}, status=400)
             profile, _ = UserProfile.objects.get_or_create(user=request.user)
             profile.default_workspace_id = membership.workspace_id
             profile.save(update_fields=['default_workspace', 'updated_at'])

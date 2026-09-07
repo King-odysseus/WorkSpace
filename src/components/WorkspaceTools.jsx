@@ -973,7 +973,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       .then(async response => ({ ok: response.ok, result: await response.json() }))
       .then(({ ok, result }) => {
         if (!active) return
-        setData(ok ? result : { error: result.error || 'AI settings could not be loaded.' })
+        setData(ok ? { ...result, savedSettings: result.settings } : { error: result.error || 'AI settings could not be loaded.' })
       })
       .catch(() => active && setData({ error: 'AI settings could not be loaded.' }))
     return () => { active = false }
@@ -1047,8 +1047,10 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       if (!response.ok) throw new Error(result.error || `Could not save ${provider}.`)
       setData(current => ({
         ...current,
+        can_manage: result.can_manage,
         providers: result.providers,
         settings: result.settings,
+        savedSettings: result.settings,
         provider_config: {
           ...current.provider_config,
           [provider]: result.provider_config[provider],
@@ -1061,7 +1063,12 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       const label = AI_PROVIDERS.find(([value]) => value === provider)?.[1] || provider
       toast.success(`${label} settings saved.`)
     } catch (error) {
+      // The PATCH failed, so nothing was persisted - drop this provider's
+      // unsaved edits back to the server's last confirmed state instead of
+      // leaving the form showing a change that a reload would silently undo.
+      setData(current => ({ ...current, settings: current.savedSettings || current.settings }))
       setProviderNotices(current => ({ ...current, [provider]: error.message || 'Could not save provider.' }))
+      toast.error(error.message || `Could not save ${provider}.`)
     } finally {
       setSavingProvider('')
     }
@@ -1079,10 +1086,14 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Could not save AI settings.')
-      setData(current => ({ ...current, ...result, can_manage: current.can_manage }))
+      setData(current => ({ ...current, ...result, savedSettings: result.settings }))
       toast.success('Zuri access settings saved.')
     } catch (error) {
+      // Same rule as saveProvider: a failed save must not leave the checkboxes
+      // showing a change that never actually made it to the database.
+      setData(current => ({ ...current, settings: current.savedSettings || current.settings }))
       setNotice(error.message || 'Could not save AI settings.')
+      toast.error(error.message || 'Could not save AI settings.')
     } finally {
       setSaving(false)
     }

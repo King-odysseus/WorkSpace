@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_POST
 from openpyxl.utils.exceptions import InvalidFileException
 
 from .models import AuditLog, ImportRun, Project
-from .views import require_workspace_leader, require_workspace_member
+from .views import require_permission, require_workspace_leader, require_workspace_member
 
 
 REPORT_SCOPES = {'all', 'operations', 'project'}
@@ -35,7 +35,7 @@ def _parse_date(value, label):
 
 @require_GET
 def workspace_report(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
+    _, error = require_permission(request, workspace_id, 'view_reports')
     if error:
         return error
     from .reporting import build_report
@@ -91,7 +91,7 @@ def workspace_report(request, workspace_id):
 
 @require_GET
 def project_health_report(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
+    _, error = require_permission(request, workspace_id, 'view_reports')
     if error:
         return error
     try:

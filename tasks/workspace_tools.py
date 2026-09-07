@@ -21,7 +21,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
 from .sanitize import sanitize_document_content
-from .views import require_workspace_leader, require_workspace_member
+from .views import require_workspace_member
 
 logger = logging.getLogger(__name__)
 
@@ -114,26 +114,44 @@ def _provider_endpoint(provider, base_url):
 
 @require_http_methods(['GET', 'PATCH'])
 def workspace_ai_settings(request, workspace_id):
-    membership, error = (require_workspace_leader(request, workspace_id) if request.method == 'PATCH' else require_workspace_member(request, workspace_id))
+    membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     setting = _setting(workspace_id)
     provider_config = _safe_provider_config(setting)
     providers = {provider: values['has_api_key'] for provider, values in provider_config.items()}
+    can_manage_access = membership.has_permission('manage_ai_access')
+    can_manage_providers = membership.has_permission('manage_ai_providers')
     if request.method == 'GET':
-        return JsonResponse({'settings': setting.as_dict(), 'can_manage': membership.role in {'owner', 'manager'}, 'providers': providers, 'provider_config': provider_config})
+        return JsonResponse({'settings': setting.as_dict(), 'can_manage': can_manage_access or can_manage_providers, 'providers': providers, 'provider_config': provider_config})
+    if not can_manage_access and not can_manage_providers:
+        return JsonResponse({'error': 'You do not have permission to manage Zuri settings.'}, status=403)
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+
+    # Every field is validated into a local candidate value below - nothing is
+    # written to `setting` until every check across the whole payload passes,
+    # so a rejected request never leaves the row partially mutated in memory
+    # only to silently discard those changes instead of persisting them.
     member_ids = {member.user_id for member in setting.workspace.memberships.all()}
     selected = [int(value) for value in payload.get('ai_user_ids', []) if str(value).isdigit()]
+    if 'ai_user_ids' in payload and not can_manage_access:
+        return JsonResponse({'error': 'You do not have permission to manage Zuri member access.'}, status=403)
     if not set(selected).issubset(member_ids):
         return JsonResponse({'error': 'AI access can only be granted to workspace members.'}, status=400)
-    setting.ai_enabled = bool(payload.get('ai_enabled', setting.ai_enabled))
-    setting.ai_user_ids = selected
-    setting.ai_model = str(payload.get('ai_model', setting.ai_model or os.environ.get('AI_MODEL', ''))).strip()[:120]
-    setting.ai_default_provider = payload.get('ai_default_provider', setting.ai_default_provider) if payload.get('ai_default_provider') in providers else setting.ai_default_provider
+    if 'ai_enabled' in payload and not can_manage_access:
+        return JsonResponse({'error': 'You do not have permission to manage Zuri member access.'}, status=403)
+    new_ai_enabled = bool(payload.get('ai_enabled', setting.ai_enabled))
+    new_ai_user_ids = selected if 'ai_user_ids' in payload else setting.ai_user_ids
+
+    provider_fields_touched = bool({'ai_model', 'ai_default_provider', 'provider_config', 'ai_enabled_providers'} & set(payload))
+    if provider_fields_touched and not can_manage_providers:
+        return JsonResponse({'error': 'You do not have permission to manage Zuri providers.'}, status=403)
+    new_ai_model = str(payload.get('ai_model', setting.ai_model or os.environ.get('AI_MODEL', ''))).strip()[:120]
+    new_ai_default_provider = payload.get('ai_default_provider', setting.ai_default_provider) if payload.get('ai_default_provider') in providers else setting.ai_default_provider
+
     stored_config = dict(setting.ai_provider_config or {})
     submitted_config = payload.get('provider_config', {})
     if submitted_config is not None and not isinstance(submitted_config, dict):
@@ -157,17 +175,31 @@ def workspace_ai_settings(request, workspace_id):
         elif submitted.get('clear_api_key'):
             current.pop('api_key_encrypted', None)
         stored_config[provider] = current
-    setting.ai_provider_config = stored_config
-    provider_config = _safe_provider_config(setting)
-    providers = {provider: values['has_api_key'] for provider, values in provider_config.items()}
+
+    # Recompute has_api_key against the *candidate* config (not the persisted
+    # one) so a key submitted in this same request already counts when
+    # deciding which providers may be enabled.
+    candidate_setting_snapshot = WorkspaceSetting(ai_provider_config=stored_config, ai_default_provider=new_ai_default_provider, ai_model=new_ai_model)
+    candidate_provider_config = _safe_provider_config(candidate_setting_snapshot)
+    candidate_providers = {provider: values['has_api_key'] for provider, values in candidate_provider_config.items()}
     requested_enabled = payload.get('ai_enabled_providers', setting.ai_enabled_providers or [])
-    missing_keys = [provider for provider in requested_enabled if provider in providers and not providers[provider]]
+    missing_keys = [provider for provider in requested_enabled if provider in candidate_providers and not candidate_providers[provider]]
     if missing_keys:
         labels = ', '.join(provider.title() for provider in missing_keys)
         return JsonResponse({'error': f'Add and save an API key before enabling {labels}.'}, status=400)
-    setting.ai_enabled_providers = [provider for provider in requested_enabled if provider in providers and providers[provider]]
+    new_ai_enabled_providers = [provider for provider in requested_enabled if provider in candidate_providers and candidate_providers[provider]]
+
+    # All validation passed - apply every field together and save once.
+    setting.ai_enabled = new_ai_enabled
+    setting.ai_user_ids = new_ai_user_ids
+    setting.ai_model = new_ai_model
+    setting.ai_default_provider = new_ai_default_provider
+    setting.ai_provider_config = stored_config
+    setting.ai_enabled_providers = new_ai_enabled_providers
     setting.save(update_fields=['ai_enabled', 'ai_user_ids', 'ai_model', 'ai_default_provider', 'ai_enabled_providers', 'ai_provider_config', 'updated_at'])
-    return JsonResponse({'settings': setting.as_dict(), 'providers': providers, 'provider_config': provider_config})
+    provider_config = _safe_provider_config(setting)
+    providers = {provider: values['has_api_key'] for provider, values in provider_config.items()}
+    return JsonResponse({'settings': setting.as_dict(), 'can_manage': can_manage_access or can_manage_providers, 'providers': providers, 'provider_config': provider_config})
 
 
 # The persona is fixed here, not per-provider, so switching between OpenAI/

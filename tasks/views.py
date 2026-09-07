@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, LookupValue, Membership, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
@@ -324,12 +324,25 @@ def require_workspace_leader(request, workspace_id):
     return membership, None
 
 
+def require_permission(request, workspace_id, permission_key):
+    """Server-side gate for one of PERMISSION_KEYS. Owners always pass; managers
+    pass unless the permission was explicitly revoked from their membership;
+    members pass only for their fixed minimal defaults. UI-side hiding is not
+    authorization - every granular-permission endpoint must call this."""
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return None, error
+    if not membership.has_permission(permission_key):
+        return None, JsonResponse({'error': 'You do not have permission to do this.'}, status=403)
+    return membership, None
+
+
 def require_task_editor(request, task):
     membership, error = require_workspace_member(request, task.workspace_id)
     if error:
         return error
-    if membership.role == 'member' and task.assignee_id != request.user.id:
-        return JsonResponse({'error': 'Members can only edit subtasks on tasks assigned to them.'}, status=403)
+    if not membership.has_permission('edit_team_tasks') and task.assignee_id != request.user.id:
+        return JsonResponse({'error': 'You can only edit subtasks on tasks assigned to you.'}, status=403)
     return None
 
 
@@ -404,7 +417,7 @@ def workspace_search(request, workspace_id):
 
 @require_http_methods(['GET'])
 def report_summary(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
+    _, error = require_permission(request, workspace_id, 'view_reports')
     if error:
         return error
     tasks = Task.objects.filter(workspace_id=workspace_id).exclude(state='archived')
@@ -602,6 +615,10 @@ def task_list(request, workspace_id=None):
             page = paginator.page(paginator.num_pages)
         return JsonResponse({'tasks': [task.as_dict() for task in page.object_list], 'pagination': {'page': page.number, 'page_size': page_size, 'total_items': paginator.count, 'total_pages': paginator.num_pages, 'has_next': page.has_next(), 'has_previous': page.has_previous()}})
 
+    _, permission_error = require_permission(request, workspace_id, 'create_tasks')
+    if permission_error:
+        return permission_error
+
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -653,8 +670,10 @@ def task_list(request, workspace_id=None):
 
     max_position = Task.objects.filter(workspace_id=workspace_id, bucket=bucket).aggregate(max_position=Max('position'))['max_position']
     restricted = {'assignee_id', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
-    if membership.role == 'member' and restricted & set(payload):
-        return JsonResponse({'error': 'Only owners and managers can set ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
+    if not membership.has_permission('edit_team_tasks') and restricted & set(payload):
+        return JsonResponse({'error': 'You do not have permission to set ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
+    if 'assignee_id' in payload and not membership.has_permission('assign_tasks'):
+        return JsonResponse({'error': 'You do not have permission to assign tasks.'}, status=403)
     start_date, date_error = parse_iso_date(payload.get('start_date'), 'Start date')
     if date_error:
         return JsonResponse({'error': date_error}, status=400)
@@ -1321,8 +1340,11 @@ def task_detail(request, task_id):
         record_activity(task.workspace_id, request.user, 'task_archived', f'{request.user.get_full_name() or request.user.email} archived task {task.title}.')
         return JsonResponse({'deleted': task_id, 'archived': True, 'task': task.as_dict()})
 
-    if membership.role == 'member' and task.assignee_id != request.user.id:
-        return JsonResponse({'error': 'Members can only update tasks assigned to them.'}, status=403)
+    if not membership.has_permission('edit_team_tasks'):
+        if task.assignee_id != request.user.id:
+            return JsonResponse({'error': 'You can only update tasks assigned to you.'}, status=403)
+        if not membership.has_permission('edit_own_tasks'):
+            return JsonResponse({'error': 'You do not have permission to edit tasks.'}, status=403)
 
     try:
         payload = json.loads(request.body or '{}')
@@ -1334,8 +1356,10 @@ def task_detail(request, task_id):
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
     leader_fields = {'assignee_id', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
-    if membership.role == 'member' and leader_fields & set(payload):
-        return JsonResponse({'error': 'Only owners and managers can change ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
+    if not membership.has_permission('edit_team_tasks') and leader_fields & set(payload):
+        return JsonResponse({'error': 'You do not have permission to change ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
+    if 'assignee_id' in payload and not membership.has_permission('assign_tasks'):
+        return JsonResponse({'error': 'You do not have permission to assign tasks.'}, status=403)
 
     material_fields = ['title', 'description', 'assignee_id', 'project_ref_id', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'workstream_ref_id', 'phase_ref_id', 'state']
     previous_values = task_snapshot(task, material_fields)
@@ -1851,11 +1875,109 @@ def member_detail(request, workspace_id, user_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    if set(payload) != {'role'} or payload['role'] not in {'manager', 'member'}:
-        return JsonResponse({'error': 'Role must be manager or member.'}, status=400)
-    membership.role = payload['role']
-    membership.save(update_fields=['role'])
+    unknown_fields = set(payload) - {'role', 'permissions'}
+    if unknown_fields:
+        return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
+    if 'role' in payload:
+        if payload['role'] not in {'manager', 'member'}:
+            return JsonResponse({'error': 'Role must be manager or member.'}, status=400)
+        membership.role = payload['role']
+    if 'permissions' in payload:
+        # Only a manager's grants are configurable - members always get the
+        # fixed minimal defaults, so a member target can never carry an override.
+        if membership.role != 'manager':
+            return JsonResponse({'error': 'Only a manager\'s permissions can be customised.'}, status=400)
+        permissions = payload['permissions']
+        if permissions is not None:
+            if not isinstance(permissions, list) or not set(permissions).issubset(PERMISSION_KEYS):
+                return JsonResponse({'error': f'permissions must be a list drawn from: {", ".join(PERMISSION_KEYS)}.'}, status=400)
+        membership.permissions = permissions
+    membership.save(update_fields=['role', 'permissions'])
     return JsonResponse({'member': membership.as_dict()})
+
+
+def _reassign_default_workspace(user, leaving_workspace_id):
+    """If `user`'s default workspace is the one they just left/lost access to,
+    fall back to another workspace they still belong to (or None) so the
+    profile never points at a workspace they can no longer see."""
+    profile = getattr(user, 'profile', None)
+    if profile is None or profile.default_workspace_id != leaving_workspace_id:
+        return
+    fallback = Membership.objects.filter(user=user, workspace__status='active').exclude(workspace_id=leaving_workspace_id).select_related('workspace').order_by('joined_at').first()
+    profile.default_workspace = fallback.workspace if fallback else None
+    profile.save(update_fields=['default_workspace', 'updated_at'])
+
+
+@require_http_methods(['POST'])
+def workspace_leave(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if membership.role == 'owner':
+        return JsonResponse({'error': 'Owners cannot leave their own workspace. Archive or delete it instead.'}, status=403)
+    workspace_name = membership.workspace.name
+    membership.delete()
+    _reassign_default_workspace(request.user, workspace_id)
+    record_activity(workspace_id, request.user, 'member_left', f'{request.user.get_full_name() or request.user.email} left the workspace.')
+    return JsonResponse({'left': workspace_id, 'workspace_name': workspace_name})
+
+
+@require_http_methods(['POST'])
+def workspace_archive(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if membership.role != 'owner':
+        return JsonResponse({'error': 'Only the workspace owner can archive it.'}, status=403)
+    workspace = membership.workspace
+    if workspace.status == 'archived':
+        return JsonResponse({'error': 'This workspace is already archived.'}, status=409)
+    workspace.status = 'archived'
+    workspace.archived_at = timezone.now()
+    workspace.archived_by = request.user
+    workspace.save(update_fields=['status', 'archived_at', 'archived_by'])
+    for member_user_id in Membership.objects.filter(workspace_id=workspace_id).values_list('user_id', flat=True):
+        member_user = User.objects.filter(id=member_user_id).select_related('profile').first()
+        if member_user:
+            _reassign_default_workspace(member_user, workspace_id)
+    record_activity(workspace_id, request.user, 'workspace_archived', f'{request.user.get_full_name() or request.user.email} archived this workspace.')
+    return JsonResponse({'workspace': {'id': workspace.id, 'status': workspace.status, 'archived_at': workspace.archived_at.isoformat()}})
+
+
+@require_http_methods(['POST'])
+def workspace_restore(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if membership.role != 'owner':
+        return JsonResponse({'error': 'Only the workspace owner can restore it.'}, status=403)
+    workspace = membership.workspace
+    if workspace.status != 'archived':
+        return JsonResponse({'error': 'This workspace is not archived.'}, status=409)
+    workspace.status = 'active'
+    workspace.archived_at = None
+    workspace.archived_by = None
+    workspace.save(update_fields=['status', 'archived_at', 'archived_by'])
+    record_activity(workspace_id, request.user, 'workspace_restored', f'{request.user.get_full_name() or request.user.email} restored this workspace.')
+    return JsonResponse({'workspace': {'id': workspace.id, 'status': workspace.status}})
+
+
+@require_http_methods(['DELETE'])
+def workspace_delete(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if membership.role != 'owner':
+        return JsonResponse({'error': 'Only the workspace owner can delete it.'}, status=403)
+    workspace = membership.workspace
+    # Deletion is permanent (cascades to every task, project, and message in
+    # the workspace) so it is only reachable from the archived state - the
+    # archive step is the confirmation / cooling-off period.
+    if workspace.status != 'archived':
+        return JsonResponse({'error': 'Archive this workspace before deleting it permanently.'}, status=409)
+    workspace_name = workspace.name
+    workspace.delete()
+    return JsonResponse({'deleted': workspace_id, 'workspace_name': workspace_name})
 
 
 INVITATION_ACTOR_DAILY_LIMIT = 30
@@ -1881,6 +2003,8 @@ def invitation_list(request, workspace_id):
     actor, error = membership_check(request, workspace_id)
     if error:
         return error
+    if request.method == 'POST' and actor.workspace.status != 'active':
+        return JsonResponse({'error': 'An archived workspace cannot invite new members.'}, status=409)
     if request.method == 'GET':
         invitations = WorkspaceInvitation.objects.filter(workspace_id=workspace_id)
         page, pagination = paginate_response(request, invitations)
@@ -2023,8 +2147,10 @@ def invitation_detail(request, workspace_id, invitation_id):
 
 @require_http_methods(['GET', 'POST'])
 def project_list(request, workspace_id):
-    membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
-    _, error = membership_check(request, workspace_id)
+    if request.method == 'POST':
+        _, error = require_permission(request, workspace_id, 'create_projects')
+    else:
+        _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     if request.method == 'GET':
@@ -2082,7 +2208,7 @@ def project_list(request, workspace_id):
 
 @require_http_methods(['PATCH', 'DELETE'])
 def project_detail(request, workspace_id, project_id):
-    _, error = require_workspace_leader(request, workspace_id)
+    _, error = require_permission(request, workspace_id, 'manage_projects')
     if error:
         return error
     project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
@@ -2155,8 +2281,10 @@ def project_detail(request, workspace_id, project_id):
 
 @require_http_methods(['GET', 'POST'])
 def lookup_value_list(request, workspace_id):
-    membership_check = require_workspace_leader if request.method == 'POST' else require_workspace_member
-    _, error = membership_check(request, workspace_id)
+    if request.method == 'POST':
+        _, error = require_permission(request, workspace_id, 'create_workstreams')
+    else:
+        _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     values = LookupValue.objects.filter(workspace_id=workspace_id)
@@ -2196,7 +2324,7 @@ def lookup_value_list(request, workspace_id):
 
 @require_http_methods(['PATCH', 'DELETE'])
 def lookup_value_detail(request, workspace_id, value_id):
-    _, error = require_workspace_leader(request, workspace_id)
+    _, error = require_permission(request, workspace_id, 'manage_workstreams')
     if error:
         return error
     value = LookupValue.objects.filter(id=value_id, workspace_id=workspace_id).first()

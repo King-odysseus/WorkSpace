@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .views import create_notification
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
@@ -2984,3 +2984,186 @@ class WorkspaceFileUploadTests(TestCase):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.delete(detail_url).status_code, 200)
         self.assertEqual(WorkspaceFile.objects.count(), 0)
+
+
+class WorkspaceLifecycleApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='life-owner@example.com', email='life-owner@example.com', password='secure-pass-123')
+        self.manager = User.objects.create_user(username='life-manager@example.com', email='life-manager@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='life-member@example.com', email='life-member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Lifecycle Co', slug='lifecycle-co')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+
+    def test_owner_cannot_leave_but_member_can(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse('workspace-leave', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Membership.objects.filter(workspace=self.workspace, user=self.owner).exists())
+
+        self.client.force_login(self.member)
+        response = self.client.post(reverse('workspace-leave', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Membership.objects.filter(workspace=self.workspace, user=self.member).exists())
+
+    def test_leaving_default_workspace_falls_back_without_losing_other_memberships(self):
+        other_workspace = Workspace.objects.create(name='Personal', slug='personal-ws')
+        Membership.objects.create(workspace=other_workspace, user=self.member, role='owner')
+        profile, _ = UserProfile.objects.get_or_create(user=self.member)
+        profile.default_workspace = self.workspace
+        profile.save(update_fields=['default_workspace'])
+
+        self.client.force_login(self.member)
+        response = self.client.post(reverse('workspace-leave', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+
+        # The membership in `other_workspace` must still exist - leaving one
+        # workspace must never touch unrelated memberships.
+        self.assertTrue(Membership.objects.filter(workspace=other_workspace, user=self.member).exists())
+        profile.refresh_from_db()
+        self.assertEqual(profile.default_workspace_id, other_workspace.id)
+
+    def test_only_owner_can_archive_and_restore(self):
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.post(reverse('workspace-archive', args=[self.workspace.id])).status_code, 403)
+
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse('workspace-archive', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.workspace.refresh_from_db()
+        self.assertEqual(self.workspace.status, 'archived')
+
+        response = self.client.post(reverse('workspace-restore', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.workspace.refresh_from_db()
+        self.assertEqual(self.workspace.status, 'active')
+
+    def test_archived_workspace_cannot_be_default_or_receive_invitations(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.owner)
+        profile.default_workspace = self.workspace
+        profile.save(update_fields=['default_workspace'])
+        self.client.force_login(self.owner)
+        self.client.post(reverse('workspace-archive', args=[self.workspace.id]))
+
+        response = self.client.get(reverse('auth-me'))
+        self.assertIsNone(response.json()['user']['default_workspace_id'])
+
+        response = self.client.patch(reverse('auth-me-profile'), data=json.dumps({'default_workspace_id': self.workspace.id}), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.post(reverse('invitation-list', args=[self.workspace.id]), data=json.dumps({'email': 'new@example.com', 'role': 'member'}), content_type='application/json')
+        self.assertEqual(response.status_code, 409)
+
+    def test_delete_requires_archive_first_and_is_owner_only(self):
+        self.client.force_login(self.owner)
+        response = self.client.delete(reverse('workspace-delete', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(Workspace.objects.filter(id=self.workspace.id).exists())
+
+        self.client.post(reverse('workspace-archive', args=[self.workspace.id]))
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.delete(reverse('workspace-delete', args=[self.workspace.id])).status_code, 403)
+
+        self.client.force_login(self.owner)
+        response = self.client.delete(reverse('workspace-delete', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Workspace.objects.filter(id=self.workspace.id).exists())
+
+
+class GranularPermissionApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='perm-owner@example.com', email='perm-owner@example.com', password='secure-pass-123')
+        self.manager = User.objects.create_user(username='perm-manager@example.com', email='perm-manager@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='perm-member@example.com', email='perm-member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Grants Co', slug='grants-co')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+
+    def test_manager_default_permissions_match_prior_leader_behaviour(self):
+        self.client.force_login(self.manager)
+        response = self.client.post(reverse('project-list', args=[self.workspace.id]), data=json.dumps({'name': 'Rollout'}), content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_owner_can_revoke_a_specific_manager_permission(self):
+        manager_membership = Membership.objects.get(workspace=self.workspace, user=self.manager)
+        allowed = sorted(set(manager_membership.effective_permissions()) - {'create_projects'})
+        self.client.force_login(self.owner)
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, self.manager.id]),
+            data=json.dumps({'permissions': allowed}), content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('create_projects', response.json()['member']['permissions'])
+
+        self.client.force_login(self.manager)
+        response = self.client.post(reverse('project-list', args=[self.workspace.id]), data=json.dumps({'name': 'Blocked'}), content_type='application/json')
+        self.assertEqual(response.status_code, 403)
+        # An untouched permission (create_tasks) must still work - revoking one
+        # grant must not silently wipe every other grant on the membership.
+        response = self.client.post(reverse('workspace-task-list', args=[self.workspace.id]), data=json.dumps({'title': 'Still allowed'}), content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_member_permissions_cannot_be_customised(self):
+        self.client.force_login(self.owner)
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, self.member.id]),
+            data=json.dumps({'permissions': ['create_tasks']}), content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_member_without_edit_team_tasks_cannot_edit_others_tasks(self):
+        task = Task.objects.create(workspace=self.workspace, code='GRA-1', title='Owner task', assignee=self.owner, bucket='Backlog', position=0)
+        self.client.force_login(self.member)
+        response = self.client.patch(reverse('task-detail', args=[task.id]), data=json.dumps({'status': 'in_progress'}), content_type='application/json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_member_view_reports_stays_available_by_default(self):
+        self.client.force_login(self.member)
+        response = self.client.get(reverse('report-summary', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+
+
+class WorkspaceAiSettingsPersistenceTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='ai-persist-owner@example.com', email='ai-persist-owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='ai-persist-member@example.com', email='ai-persist-member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='AI Persist Co', slug='ai-persist-co')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        self.url = reverse('workspace-ai-settings', args=[self.workspace.id])
+        blank_keys = {name: '' for name in ('OPENAI_API_KEY', 'AI_API_KEY', 'ANTHROPIC_API_KEY', 'KIMI_API_KEY', 'DEEPSEEK_API_KEY')}
+        environment = mock.patch.dict('os.environ', blank_keys)
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def patch(self, payload):
+        return self.client.patch(self.url, data=json.dumps(payload), content_type='application/json')
+
+    def test_member_access_toggle_survives_reload_and_response_is_authoritative(self):
+        self.client.force_login(self.owner)
+        response = self.patch({'ai_enabled': True, 'ai_user_ids': [self.member.id], 'ai_enabled_providers': []})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['settings']['ai_user_ids'], [self.member.id])
+
+        reread = self.client.get(self.url)
+        self.assertEqual(reread.json()['settings']['ai_user_ids'], [self.member.id])
+        self.assertEqual(WorkspaceSetting.objects.get(workspace=self.workspace).ai_user_ids, [self.member.id])
+
+    def test_rejected_provider_change_does_not_silently_drop_member_access(self):
+        setting = WorkspaceSetting.objects.get_or_create(workspace=self.workspace)[0]
+        setting.ai_user_ids = [self.member.id]
+        setting.save(update_fields=['ai_user_ids'])
+        self.client.force_login(self.owner)
+        # Enabling a provider with no API key on file must fail cleanly and
+        # must not touch ai_user_ids, even though both fields are in the payload.
+        response = self.patch({'ai_user_ids': [], 'ai_enabled_providers': ['openai']})
+        self.assertEqual(response.status_code, 400)
+        setting.refresh_from_db()
+        self.assertEqual(setting.ai_user_ids, [self.member.id])
+
+    def test_member_cannot_manage_ai_settings(self):
+        self.client.force_login(self.member)
+        response = self.patch({'ai_user_ids': [self.member.id]})
+        self.assertEqual(response.status_code, 403)

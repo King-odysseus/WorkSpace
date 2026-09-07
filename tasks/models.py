@@ -26,12 +26,20 @@ def private_screen_capture_storage():
 
 
 class Workspace(models.Model):
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('archived', 'Archived'),
+    ]
+
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=140, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     members = models.ManyToManyField(User, through='Membership', related_name='workspaces')
     next_task_number = models.PositiveBigIntegerField(default=1)
     calendar_feed_token = models.CharField(max_length=64, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
 
     class Meta:
         ordering = ['name']
@@ -69,6 +77,28 @@ class SavedView(models.Model):
         return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'filter': self.filter_value, 'search': self.search, 'project_scope': self.project_scope, 'created_at': self.created_at.isoformat()}
 
 
+# Granular capabilities a membership can hold, independent of the coarse
+# owner/manager/member role. Owners always have every key (never stored -
+# see Membership.effective_permissions). Managers get MANAGER_DEFAULT_PERMISSIONS
+# unless a per-membership override is stored; members get MEMBER_DEFAULT_PERMISSIONS
+# and are not exposed for per-permission editing (spec: "Members receive minimal
+# defaults", only manager grants are configurable).
+PERMISSION_KEYS = (
+    'create_tasks', 'edit_own_tasks', 'edit_team_tasks', 'assign_tasks',
+    'create_projects', 'manage_projects',
+    'create_workstreams', 'manage_workstreams',
+    'use_ai', 'manage_ai_access', 'manage_ai_providers',
+    'view_reports',
+)
+
+# The manager default mirrors every capability the old coarse owner-or-manager
+# ("leader") checks used to grant unconditionally, so introducing granular
+# permissions changes nothing for an existing workspace until an owner
+# deliberately narrows a specific manager's grant.
+MANAGER_DEFAULT_PERMISSIONS = frozenset(PERMISSION_KEYS)
+MEMBER_DEFAULT_PERMISSIONS = frozenset({'create_tasks', 'edit_own_tasks', 'use_ai', 'view_reports'})
+
+
 class Membership(models.Model):
     ROLE_CHOICES = [
         ('owner', 'Owner'),
@@ -79,10 +109,25 @@ class Membership(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='memberships')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_memberships')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='member')
+    # None means "use the role default"; a list is an explicit override, only
+    # meaningful (and only settable via the API) for role='manager'.
+    permissions = models.JSONField(null=True, blank=True, default=None)
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['workspace', 'user'], name='unique_workspace_member')]
+
+    def effective_permissions(self):
+        if self.role == 'owner':
+            return set(PERMISSION_KEYS)
+        if self.role == 'manager':
+            if self.permissions is not None:
+                return set(PERMISSION_KEYS) & set(self.permissions)
+            return set(MANAGER_DEFAULT_PERMISSIONS)
+        return set(MEMBER_DEFAULT_PERMISSIONS)
+
+    def has_permission(self, key):
+        return key in self.effective_permissions()
 
     def as_dict(self):
         profile = getattr(self.user, 'profile', None)
@@ -92,6 +137,7 @@ class Membership(models.Model):
             'first_name': self.user.first_name,
             'last_name': self.user.last_name,
             'role': self.role,
+            'permissions': sorted(self.effective_permissions()),
             'joined_at': self.joined_at.isoformat(),
             'avatar_url': profile.avatar_url if profile else '',
             'presence': profile.presence if profile else 'available',
