@@ -306,24 +306,26 @@ class TaskApiTests(TestCase):
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_assigned').count(), 1)
 
     def test_owner_can_create_and_read_plan_buckets(self):
+        project = Project.objects.create(workspace=self.workspace, name='Atlas')
         create_response = self.client.post(
             reverse('plan-bucket-list', args=[self.workspace.id]),
-            data=json.dumps({'name': 'Review queue'}),
+            data=json.dumps({'name': 'Review queue', 'project_id': project.id}),
             content_type='application/json',
         )
         self.assertEqual(create_response.status_code, 201)
         self.assertEqual(create_response.json()['bucket']['name'], 'Review queue')
-        list_response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]))
+        list_response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]), {'project_id': project.id})
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(list_response.json()['buckets'][0]['name'], 'Review queue')
         self.assertEqual(PlanBucket.objects.count(), 1)
 
     def test_owner_can_persist_bucket_order(self):
-        first = PlanBucket.objects.create(workspace=self.workspace, name='First', position=0)
-        second = PlanBucket.objects.create(workspace=self.workspace, name='Second', position=1)
+        project = Project.objects.create(workspace=self.workspace, name='Atlas')
+        first = PlanBucket.objects.create(workspace=self.workspace, project=project, name='First', position=0)
+        second = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Second', position=1)
         response = self.client.patch(
             reverse('plan-bucket-reorder', args=[self.workspace.id]),
-            data=json.dumps({'bucket_ids': [second.id, first.id]}),
+            data=json.dumps({'bucket_ids': [second.id, first.id], 'project_id': project.id}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200)
