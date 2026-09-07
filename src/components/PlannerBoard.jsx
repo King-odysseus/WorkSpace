@@ -99,6 +99,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const normalizedWorkstreams = useMemo(() => lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : projectFilter === 'all' ? Boolean(value.project_id) : (!value.project_id || String(value.project_id) === String(projectFilter)))).map(value => value.name), [lookupValues, isOperations, projectFilter])
   const workstreams = useMemo(() => [...new Set([...normalizedWorkstreams, ...tasks.filter(task => taskMatchesScope(task, projectFilter)).map(task => task.workstream).filter(Boolean)])].sort(), [normalizedWorkstreams, tasks, projectFilter])
   const phases = useMemo(() => [...new Set(tasks.map(task => task.phase || task.quarter).filter(Boolean))].sort(), [tasks])
+  const matchesWorkstream = task => workstream === 'all' || String(task.workstream || '').trim().toLocaleLowerCase() === String(workstream).trim().toLocaleLowerCase()
   const visibleTasks = useMemo(() => tasks.filter(task => {
     const search = searchQuery.trim().toLowerCase()
     const supporterIds = (task.supporters || []).map(item => String(item.id ?? item.user_id ?? item))
@@ -107,7 +108,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       && (priority === 'all' || task.priority === priority)
       && (assignee === 'all' || String(task.assignee_id || '') === assignee)
       && (supporter === 'all' || supporterIds.includes(supporter))
-      && (workstream === 'all' || task.workstream === workstream)
+      && matchesWorkstream(task)
       && (phase === 'all' || (task.phase || task.quarter) === phase)
       && taskMatchesScope(task, projectFilter)
       && (bucketFilter === 'all' || task.bucket === bucketFilter)
@@ -156,7 +157,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     onAddTask()
   }
   const persistedBuckets = buckets.filter(bucket => typeof bucket.id === 'number')
-  const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)))
+  const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)) && (workstream === 'all' || String(value.name).trim().toLocaleLowerCase() === String(workstream).trim().toLocaleLowerCase()))
   const moveBucket = (sourceId, targetId) => {
     if (!sourceId || !targetId || sourceId === targetId) return
     const next = persistedBuckets.map(bucket => bucket.id)
