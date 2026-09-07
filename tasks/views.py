@@ -830,8 +830,16 @@ def plan_bucket_list(request, workspace_id):
     _, error = membership_check(request, workspace_id)
     if error:
         return error
+    scope_project_id = request.GET.get('project_id') if request.method == 'GET' else None
+    scope_workstream_id = request.GET.get('workstream_id') if request.method == 'GET' else None
     if request.method == 'GET':
         buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)
+        if scope_project_id:
+            buckets = buckets.filter(project_id=scope_project_id, workstream__isnull=True)
+        elif scope_workstream_id:
+            buckets = buckets.filter(workstream_id=scope_workstream_id, project__isnull=True)
+        else:
+            buckets = buckets.filter(Q(project__isnull=False) | Q(workstream__isnull=False))
         return JsonResponse({'buckets': [bucket.as_dict() for bucket in buckets]})
     try:
         payload = json.loads(request.body or '{}')
@@ -840,8 +848,22 @@ def plan_bucket_list(request, workspace_id):
     name = str(payload.get('name', '')).strip()
     if not name or len(name) > 80:
         return JsonResponse({'error': 'Bucket name must be between 1 and 80 characters.'}, status=400)
+    project_id = payload.get('project_id')
+    workstream_id = payload.get('workstream_id')
+    if bool(project_id) == bool(workstream_id):
+        return JsonResponse({'error': 'Choose exactly one project or workstream for this bucket.'}, status=400)
+    if project_id:
+        project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
+        if project is None:
+            return JsonResponse({'error': 'Project was not found.'}, status=404)
+        scope = {'project_id': project.id, 'workstream_id': None}
+    else:
+        workstream = LookupValue.objects.filter(id=workstream_id, workspace_id=workspace_id, kind='workstream', project__isnull=True, is_active=True).first()
+        if workstream is None:
+            return JsonResponse({'error': 'Operations workstream was not found.'}, status=404)
+        scope = {'project_id': None, 'workstream_id': workstream.id}
     try:
-        bucket = PlanBucket.objects.create(workspace_id=workspace_id, name=name, position=PlanBucket.objects.filter(workspace_id=workspace_id).count())
+        bucket = PlanBucket.objects.create(workspace_id=workspace_id, name=name, position=PlanBucket.objects.filter(workspace_id=workspace_id, **scope).count(), **scope)
     except IntegrityError:
         return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
     record_activity(workspace_id, request.user, 'bucket_created', f'{request.user.get_full_name() or request.user.email} created the {name} bucket.')
@@ -860,7 +882,12 @@ def plan_bucket_reorder(request, workspace_id):
     order = payload.get('bucket_ids')
     if not isinstance(order, list) or not order:
         return JsonResponse({'error': 'bucket_ids must be a non-empty list.'}, status=400)
-    buckets = list(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True))
+    project_id = payload.get('project_id')
+    workstream_id = payload.get('workstream_id')
+    if bool(project_id) == bool(workstream_id):
+        return JsonResponse({'error': 'Choose exactly one project or workstream for this bucket order.'}, status=400)
+    scope = {'project_id': project_id, 'workstream_id': None} if project_id else {'project_id': None, 'workstream_id': workstream_id}
+    buckets = list(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True, **scope))
     by_id = {bucket.id: bucket for bucket in buckets}
     try:
         ids = [int(value) for value in order]
@@ -873,7 +900,7 @@ def plan_bucket_reorder(request, workspace_id):
         if bucket.position != position:
             bucket.position = position
             bucket.save(update_fields=['position'])
-    return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)]})
+    return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True, **scope)]})
 
 
 @require_http_methods(['PATCH', 'DELETE'])
@@ -885,6 +912,20 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
     if bucket is None:
         return JsonResponse({'error': 'Bucket was not found.'}, status=404)
     if request.method == 'DELETE':
+        if request.GET.get('permanent') == '1':
+            destination_id = request.GET.get('destination_bucket_id')
+            destination = PlanBucket.objects.filter(id=destination_id, workspace_id=workspace_id, project_id=bucket.project_id, workstream_id=bucket.workstream_id, is_active=True).first() if destination_id else None
+            if destination_id and destination is None:
+                return JsonResponse({'error': 'Choose an active bucket in the same scope for affected tasks.'}, status=400)
+            scoped_tasks = Task.objects.filter(workspace_id=workspace_id, bucket=bucket.name)
+            if bucket.project_id:
+                scoped_tasks = scoped_tasks.filter(project_id=bucket.project_id)
+            elif bucket.workstream_id:
+                scoped_tasks = scoped_tasks.filter(workstream_ref_id=bucket.workstream_id)
+            scoped_tasks.update(bucket=destination.name if destination else '')
+            bucket.delete()
+            record_activity(workspace_id, request.user, 'bucket_deleted', f'{request.user.get_full_name() or request.user.email} deleted the {bucket.name} bucket.')
+            return JsonResponse({'deleted': bucket_id})
         bucket.is_active = False
         bucket.save(update_fields=['is_active'])
         record_activity(workspace_id, request.user, 'bucket_archived', f'{request.user.get_full_name() or request.user.email} archived the {bucket.name} bucket.')

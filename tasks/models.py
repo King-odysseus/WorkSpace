@@ -47,6 +47,8 @@ class Workspace(models.Model):
 
 class PlanBucket(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='plan_buckets')
+    project = models.ForeignKey('Project', on_delete=models.CASCADE, null=True, blank=True, related_name='plan_buckets')
+    workstream = models.ForeignKey('LookupValue', on_delete=models.CASCADE, null=True, blank=True, related_name='plan_buckets')
     name = models.CharField(max_length=80)
     is_active = models.BooleanField(default=True)
     position = models.PositiveIntegerField(default=0)
@@ -54,10 +56,10 @@ class PlanBucket(models.Model):
 
     class Meta:
         ordering = ['position', 'id']
-        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='unique_plan_bucket_name')]
+        constraints = [models.UniqueConstraint(fields=['workspace', 'project', 'workstream', 'name'], name='unique_scoped_plan_bucket_name')]
 
     def as_dict(self):
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'is_active': self.is_active, 'position': self.position}
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'workstream_id': self.workstream_id, 'name': self.name, 'is_active': self.is_active, 'position': self.position}
 
 
 class SavedView(models.Model):

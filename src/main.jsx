@@ -1436,7 +1436,7 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     setLocalData(current => ({ ...current, events: current.events.filter(event => event.id !== eventId) }))
     onRefresh()
   }
-  const createBucket = async event => {
+  const createBucket = async (event, scope = null) => {
     event.preventDefault()
     if (bucketSubmitting) return
     if (!canManageMembers) {
@@ -1444,11 +1444,11 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
       return
     }
     const name = newBucketName.trim()
-    if (!name) return
+    if (!name || !scope) { setBucketError('Select a project or workstream before creating a bucket.'); return }
     setBucketError('')
     setBucketSubmitting(true)
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify({ name }) })
+      const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body: JSON.stringify({ name, ...scope }) })
       const responseData = await readJsonResponse(response, 'Bucket could not be created.')
       if (!response.ok) throw new Error(responseData.error || 'Bucket could not be created.')
       setLocalData(current => ({ ...current, buckets: current.buckets.some(bucket => bucket.id === responseData.bucket.id) ? current.buckets : [...current.buckets, responseData.bucket] }))
