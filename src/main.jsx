@@ -221,6 +221,7 @@ function App() {
   const [newDescription, setNewDescription] = useState("");
   const [newAssigneeId, setNewAssigneeId] = useState("");
   const [newProjectId, setNewProjectId] = useState("");
+  const [newWorkstreamId, setNewWorkstreamId] = useState("");
   const [newBucket, setNewBucket] = useState("Backlog");
   const [newDueDate, setNewDueDate] = useState("");
   const [newRecurrence, setNewRecurrence] = useState("none");
@@ -1211,6 +1212,7 @@ function App() {
       setNewBucket(template.bucket || "Backlog");
       setNewRecurrence(template.recurrence || "none");
       setNewProjectId(template.project_id || "");
+      setNewWorkstreamId(template.workstream_id || "");
       setNewAssigneeId(template.assignee_id || "");
     }
   };
@@ -1222,6 +1224,7 @@ function App() {
     setNewDescription("");
     setNewAssigneeId(assigneeId ? String(assigneeId) : "");
     setNewProjectId("");
+    setNewWorkstreamId("");
     setNewDueDate("");
     setNewBucket(requestedBucket || "Backlog");
     setNewRecurrence("none");
@@ -1411,6 +1414,7 @@ function App() {
           description: newDescription.trim(),
           assignee_id: newAssigneeId || null,
           project_id: newProjectId || null,
+          workstream_id: newWorkstreamId || null,
           bucket: newBucket,
           due_date: newDueDate || null,
           recurrence: newRecurrence,
@@ -1453,6 +1457,7 @@ function App() {
       setNewDescription("");
       setNewAssigneeId("");
       setNewProjectId("");
+      setNewWorkstreamId("");
       setNewBucket("Backlog");
       setNewDueDate("");
       setNewRecurrence("none");
@@ -2517,7 +2522,7 @@ function App() {
                 Project
                 <AppSelect
                   value={newProjectId}
-                  onChange={(event) => setNewProjectId(event.target.value)}
+                  onChange={(event) => { setNewProjectId(event.target.value); if (event.target.value) setNewWorkstreamId(""); }}
                 >
                   <option value="">General</option>
                   {workspaceData.projects.map((project) => (
@@ -2525,6 +2530,13 @@ function App() {
                       {project.name}
                     </option>
                   ))}
+                </AppSelect>
+              </label>
+              <label>
+                Workstream
+                <AppSelect value={newWorkstreamId} onChange={(event) => { setNewWorkstreamId(event.target.value); if (event.target.value) setNewProjectId(""); }}>
+                  <option value="">No workstream</option>
+                  {(workspaceData.lookupValues || []).filter((value) => value.kind === "workstream" && value.is_active && !value.project_id).map((workstream) => <option key={workstream.id} value={workstream.id}>{workstream.name}</option>)}
                 </AppSelect>
               </label>
               <label>
@@ -2684,7 +2696,8 @@ function WorkspaceView({
   const [chatChannel, setChatChannel] = useState("general");
   const [chatSearch, setChatSearch] = useState("");
   const [plannerFilter, setPlannerFilter] = useState("all");
-  const [plannerProjectFilter, setPlannerProjectFilter] = useState("all");
+  const [plannerProjectFilter, setPlannerProjectFilter] = useState(() => localStorage.getItem("workspace-project-filter") || "all");
+  useEffect(() => { localStorage.setItem("workspace-project-filter", plannerProjectFilter); }, [plannerProjectFilter]);
   const [reportsScope, setReportsScope] = useState("all");
   const [teamBoardScope, setTeamBoardScope] = useState("all");
   const [activitySearch, setActivitySearch] = useState("");

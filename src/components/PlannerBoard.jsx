@@ -58,7 +58,8 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [priority, setPriority] = useState('all')
   const [assignee, setAssignee] = useState('all')
   const [supporter, setSupporter] = useState('all')
-  const [workstream, setWorkstream] = useState('all')
+  const [workstream, setWorkstream] = useState(() => scopeMode === 'operations' ? localStorage.getItem('workspace-operations-workstream-filter') || 'all' : 'all')
+  useEffect(() => { if (scopeMode === 'operations') localStorage.setItem('workspace-operations-workstream-filter', workstream) }, [scopeMode, workstream])
   const [phase, setPhase] = useState('all')
   const [bucketFilter, setBucketFilter] = useState('all')
   const [dueFilter, setDueFilter] = useState('all')
@@ -230,7 +231,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     {canManageBuckets && activeWorkstreams.length > 0 && <div className="planner-manage-row">{activeWorkstreams.map(value => <span className="planner-manage-chip" key={value.id}>{value.name}<button type="button" onClick={() => onArchiveWorkstream?.(value)} aria-label={`Archive ${value.name}`}><Archive size={12} /></button></span>)}</div>}
     {workstreamError && <p className="auth-error" role="alert">{workstreamError}</p>}
     {canManageBuckets && <form className="planner-add-bucket" onSubmit={event => onCreateBucket(event, bucketScope)}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket name" maxLength="80" required disabled={!bucketScope} /><button type="submit" className="secondary-button" disabled={bucketSubmitting || !bucketScope}>{bucketSubmitting ? 'Adding…' : 'Add bucket'}</button>{!bucketScope && <span>Select a workstream or project before adding buckets.</span>}</form>}
-    {canManageBuckets && persistedBuckets.filter(bucket => bucket.name !== 'Backlog').length > 0 && <div className="planner-manage-row">{persistedBuckets.filter(bucket => bucket.name !== 'Backlog').map(bucket => <span className="planner-manage-chip" key={bucket.id}>{bucket.name}<button type="button" onClick={() => onArchiveBucket?.(bucket)} aria-label={`Archive ${bucket.name}`}><Archive size={12} /></button></span>)}</div>}
+    {canManageBuckets && persistedBuckets.length > 0 && <div className="planner-manage-row">{persistedBuckets.map(bucket => <span className="planner-manage-chip" key={bucket.id}>{bucket.name}<button type="button" onClick={() => onArchiveBucket?.(bucket)} aria-label={`Archive ${bucket.name}`}><Archive size={12} /></button></span>)}</div>}
     {bucketError && <p className="auth-error" role="alert">{bucketError}</p>}
     {view === 'gantt' ? ganttContent : view === 'table' ? tableContent : <div className="planner-board" aria-label="Planner board">
       {buckets.map(bucket => {
