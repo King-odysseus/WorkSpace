@@ -1503,6 +1503,17 @@ function WorkspaceView({ active, data, tasks, searchQuery, onSearchChange, onNav
     }
   }
 
+  const deleteBucket = async bucket => {
+    if (!canManageMembers || !(await onConfirm(`Delete ${bucket.name}? Tasks in this bucket will keep their task history but become unbucketed.`, { title: 'Delete bucket', confirmLabel: 'Delete bucket' }))) return
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/plan-buckets/${bucket.id}/?permanent=1`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+      const data = await readJsonResponse(response, 'Bucket could not be deleted.')
+      if (!response.ok) throw new Error(data.error || 'Bucket could not be deleted.')
+      setLocalData(current => ({ ...current, buckets: current.buckets.filter(item => item.id !== bucket.id) }))
+      onRefresh()
+    } catch (error) { setBucketError(error.message || 'Bucket could not be deleted.') }
+  }
+
   const archiveWorkstream = async value => {
     if (!canManageMembers || !(await onConfirm(`Archive ${value.name}? Existing tasks will keep the label but it will no longer appear for new tasks.`, { title: 'Archive workstream', confirmLabel: 'Archive workstream' }))) return
     setWorkstreamError('')
