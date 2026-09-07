@@ -454,6 +454,37 @@ function SettingsView({
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState("");
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+  };
+  const savePushSubscription = async (subscription) => {
+    const subscriptionJson = subscription.toJSON();
+    const response = await fetch("/api/push/subscriptions/", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": await getCsrfToken(),
+      },
+      body: JSON.stringify({
+        endpoint: subscriptionJson.endpoint,
+        keys: subscriptionJson.keys,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.error || "Push notifications could not be saved for this device.");
+  };
+  const subscriptionUsesPublicKey = (subscription) => {
+    const browserKey = new Uint8Array(subscription.options?.applicationServerKey || []);
+    const configuredKey = urlBase64ToUint8Array(pushPublicKey);
+    return browserKey.length === configuredKey.length && browserKey.every((value, index) => value === configuredKey[index]);
+  };
   useEffect(() => {
     fetch("/api/push/public-key/", { credentials: "include" })
       .then(async (response) => {
@@ -469,22 +500,38 @@ function SettingsView({
       .catch((error) => setPushError(error.message || "Push notification configuration could not be loaded."));
   }, []);
   useEffect(() => {
-    if (!pushSupported) return;
-    navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => setPushSubscribed(Boolean(subscription)))
-      .catch((error) =>
-        console.error("Push subscription state could not be checked", error),
-      );
-  }, [pushSupported]);
-  const urlBase64ToUint8Array = (base64String) => {
-    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, "+")
-      .replace(/_/g, "/");
-    const rawData = window.atob(base64);
-    return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-  };
+    if (!pushSupported || !pushConfigured || !pushPublicKey) return;
+    let current = true;
+    const reconcilePushSubscription = async () => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          if (current) setPushSubscribed(false);
+          return;
+        }
+        // A browser retains a subscription when the API record is lost, and it
+        // also retains the old application-server key after a VAPID rotation.
+        // Reconcile whenever Settings opens so either case repairs itself.
+        if (!subscriptionUsesPublicKey(subscription)) {
+          await subscription.unsubscribe();
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(pushPublicKey),
+          });
+        }
+        await savePushSubscription(subscription);
+        if (current) setPushSubscribed(true);
+      } catch (error) {
+        if (current) {
+          setPushSubscribed(false);
+          setPushError(error.message || "Push notifications could not be verified for this device.");
+        }
+      }
+    };
+    reconcilePushSubscription();
+    return () => { current = false; };
+  }, [pushSupported, pushConfigured, pushPublicKey]);
   const togglePushSubscription = async () => {
     if (!pushSupported || !pushConfigured || pushBusy) return;
     setPushBusy(true);
@@ -519,23 +566,11 @@ function SettingsView({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(pushPublicKey),
         });
-        const subscriptionJson = subscription.toJSON();
-        const response = await fetch("/api/push/subscriptions/", {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": await getCsrfToken(),
-          },
-          body: JSON.stringify({
-            endpoint: subscriptionJson.endpoint,
-            keys: subscriptionJson.keys,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
+        try {
+          await savePushSubscription(subscription);
+        } catch (error) {
           await subscription.unsubscribe();
-          throw new Error(data.error || "Push notifications could not be enabled on this device.");
+          throw error;
         }
         setPushSubscribed(true);
       }
