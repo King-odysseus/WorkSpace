@@ -443,12 +443,7 @@ function SettingsView({
     if (calendarSubscribeUrl)
       navigator.clipboard?.writeText(calendarSubscribeUrl);
   };
-  const requestBrowserPermission = async () => {
-    if (!("Notification" in window)) return;
-    const permission = await Notification.requestPermission();
-    setBrowserPermission(permission);
-  };
-  const pushSupported = "serviceWorker" in navigator && "PushManager" in window;
+  const pushSupported = "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
   const [pushPublicKey, setPushPublicKey] = useState("");
   const [pushConfigured, setPushConfigured] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
@@ -539,6 +534,12 @@ function SettingsView({
     try {
       if (!pushPublicKey)
         throw new Error("Push notifications are not configured for this workspace yet.");
+      if (!pushSubscribed) {
+        // Request permission directly from the click, before waiting on the worker.
+        const permission = await Notification.requestPermission();
+        setBrowserPermission(permission);
+        if (permission !== "granted") return;
+      }
       const registration = await navigator.serviceWorker.ready;
       if (pushSubscribed) {
         const subscription = await registration.pushManager.getSubscription();
@@ -559,9 +560,6 @@ function SettingsView({
         }
         setPushSubscribed(false);
       } else {
-        const permission = await Notification.requestPermission();
-        setBrowserPermission(permission);
-        if (permission !== "granted") return;
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(pushPublicKey),
@@ -1051,55 +1049,30 @@ function SettingsView({
                 <div>
                   <strong>Desktop notifications</strong>
                   <span>
-                    {browserPermission === "granted"
-                      ? "Enabled in this browser."
-                      : browserPermission === "denied"
-                        ? "Blocked - allow notifications for this site in your browser settings."
-                        : browserPermission === "unsupported"
-                          ? "Not supported in this browser."
-                          : "Get a native alert for calendar reminders."}
+                    {browserPermission === "denied"
+                      ? "Blocked - allow notifications for this site in your browser settings."
+                      : !pushSupported
+                        ? "Not supported in this browser."
+                        : pushSubscribed
+                          ? "Enabled on this device - alerts arrive even when WorkSpace is closed."
+                          : "Enable alerts on this device even when WorkSpace is closed."}
                   </span>
                 </div>
-                {browserPermission === "default" && (
+                {pushSupported && pushConfigured && browserPermission !== "denied" && (
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={requestBrowserPermission}
+                    disabled={pushBusy}
+                    onClick={togglePushSubscription}
                   >
-                    Enable
+                    {pushBusy ? "Working..." : pushSubscribed ? "Disable" : "Enable"}
                   </button>
                 )}
               </div>
-              {pushSupported && pushConfigured && (
-                <>
-                  <div className="settings-row settings-control-row">
-                    <div>
-                      <strong>Push notifications</strong>
-                      <span>
-                        {pushSubscribed
-                          ? "Enabled on this device - alerts arrive even when WorkSpace is closed."
-                          : "Get alerts on this device even when WorkSpace is closed."}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={pushBusy}
-                      onClick={togglePushSubscription}
-                    >
-                      {pushBusy
-                        ? "Working..."
-                        : pushSubscribed
-                          ? "Disable"
-                          : "Enable"}
-                    </button>
-                  </div>
-                  {pushError && <p className="settings-note" role="alert">{pushError}</p>}
-                </>
-              )}
-              {pushSupported && !pushConfigured && (
-                <p className="settings-note" role={pushError ? "alert" : undefined}>
-                  {pushError || "Push notifications are not configured for this workspace yet."}
+              {pushError && <p className="settings-note" role="alert">{pushError}</p>}
+              {pushSupported && !pushConfigured && !pushError && (
+                <p className="settings-note">
+                  Desktop notifications are not configured for this workspace yet.
                 </p>
               )}
               <p className="settings-note">
