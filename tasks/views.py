@@ -102,8 +102,8 @@ NOTIFICATION_KIND_PREFERENCE = {
 def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id='', group_key='', immediate=True):
     from .models import WorkspaceNotification
     preference_field = NOTIFICATION_KIND_PREFERENCE.get(kind)
-    if preference_field and recipient is not None:
-        preference = NotificationPreference.objects.filter(workspace_id=workspace_id, user=recipient).first()
+    preference = NotificationPreference.objects.filter(workspace_id=workspace_id, user=recipient).first() if recipient is not None else None
+    if preference_field:
         if preference is not None and not getattr(preference, preference_field):
             return None
     notification = WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '', group_key=group_key)
@@ -111,7 +111,7 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
     if kind in REMINDER_EMAIL_KINDS:
         send_reminder_email(recipient, title, body)
     if immediate:
-        send_push_to_user(recipient, title, body)
+        send_push_to_user(recipient, title, body, sound=preference.notification_sound if preference else True)
     return notification
 
 
@@ -1854,7 +1854,7 @@ def notification_preference_detail(request, workspace_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'manager_activity']
+    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'notification_sound', 'manager_activity']
     updated_fields = []
     for field in fields:
         if field in payload:

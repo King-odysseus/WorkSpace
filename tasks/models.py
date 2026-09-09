@@ -1136,6 +1136,7 @@ class NotificationPreference(models.Model):
     channel_messages = models.BooleanField(default=True)
     task_updates = models.BooleanField(default=True)
     calendar_reminders = models.BooleanField(default=True)
+    notification_sound = models.BooleanField(default=True)
     # Manager activity: owners/managers are notified when teammates create,
     # complete, delete, or materially update shared records. Default on so
     # oversight is not silently lost, but each leader can opt out.
@@ -1152,6 +1153,7 @@ class NotificationPreference(models.Model):
             'channel_messages': self.channel_messages,
             'task_updates': self.task_updates,
             'calendar_reminders': self.calendar_reminders,
+            'notification_sound': self.notification_sound,
             'manager_activity': self.manager_activity,
         }
 

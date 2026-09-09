@@ -15,12 +15,12 @@ from pywebpush import WebPushException, webpush
 logger = logging.getLogger(__name__)
 
 
-def send_push_to_user(user, title, body='', url='/'):
+def send_push_to_user(user, title, body='', url='/', sound=True):
     if user is None or not settings.WEB_PUSH_CONFIGURED:
         return 0
     from .models import PushSubscription
 
-    payload = json.dumps({'title': title, 'body': body, 'url': url})
+    payload = json.dumps({'title': title, 'body': body, 'url': url, 'sound': sound})
     sent = 0
     for subscription in PushSubscription.objects.filter(user=user):
         try:

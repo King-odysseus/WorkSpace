@@ -2,8 +2,8 @@
 
 ## 2026-09-09 - Windows
 
-- Updated background push handling so minimized or backgrounded browser windows request the native notification sound. The header notification badge is red when unread notifications exist and green when clear.
-- Key files: `public/sw.js`, `src/main.jsx`, `src/lib/notification-worker.test.js`.
+- Added a Notification sound setting. Enabled sound now uses the native browser notification path whether WorkSpace is open, backgrounded, or minimized. The header notification badge is red when unread notifications exist and green when clear.
+- Key files: `tasks/models.py`, `tasks/migrations/0063_notificationpreference_notification_sound.py`, `tasks/views.py`, `tasks/push.py`, `public/sw.js`, `src/main.jsx`, `src/components/SettingsView.jsx`.
 - Other OS action: run `npm run build` and reload the installed app so it receives the updated service worker.
 - Done on: Windows.
 

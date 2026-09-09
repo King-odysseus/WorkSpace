@@ -256,6 +256,11 @@ function SettingsView({
       "Assignments, comments, and status changes.",
     ],
     ["calendar_reminders", "Calendar reminders", "Upcoming event reminders."],
+    [
+      "notification_sound",
+      "Notification sound",
+      "Play the browser notification sound whether WorkSpace is open, backgrounded, or minimized.",
+    ],
     ...(canManageMembers
       ? [
           [

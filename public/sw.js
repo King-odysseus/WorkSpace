@@ -97,14 +97,11 @@ self.addEventListener('push', event => {
   try { data = { ...data, ...event.data.json() } } catch { /* use default */ }
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    // A browser can leave a tab visible while its window sits behind another
-    // application. Only suppress the native sound while WorkSpace is actually
-    // focused, so minimized and backgrounded windows still request it.
-    const foreground = clients.some(client => client.visibilityState === 'visible' && client.focused)
-    // The foreground app plays its own chime. Let the OS sound the notification
-    // when minimized/closed, subject to the user's system sound settings.
+    // Native notifications are the single sound source in every app state.
+    // Using the same path while visible, backgrounded, or minimized prevents
+    // duplicate foreground chimes and makes the setting reliable.
     const notification = self.registration.showNotification(data.title, {
-      body: data.body, icon: '/icon-192.png', silent: foreground, data: { url: data.url || '/' },
+      body: data.body, icon: '/icon-192.png', silent: data.sound === false, data: { url: data.url || '/' },
     })
     const badge = (async () => {
       try {

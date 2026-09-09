@@ -28,7 +28,7 @@ async function setup(permission = 'default', saveStatus = 201) {
   const api = mockApi({
     '/api/push/public-key/': { public_key: 'AQID', configured: true },
     '/api/push/subscriptions/': { status: saveStatus, body: saveStatus === 201 ? {} : { error: 'Subscription could not be saved.' } },
-    '/notification-preferences/': { preferences: {} },
+    '/notification-preferences/': { preferences: { notification_sound: true } },
     '/calendar-feed-token/': {},
   })
   render(<SettingsView currentWorkspace={{ role: 'member' }} currentUserName="Test" currentUserEmail="test@example.test" members={[]} notifications={[]} workspaceId={1} />)
@@ -62,4 +62,13 @@ it('does not subscribe when permission is denied', async () => {
   fireEvent.click(within(row).getByRole('button', { name: 'Enable' }))
   expect(await screen.findByText(/Blocked - allow notifications/)).toBeInTheDocument()
   expect(subscribe).not.toHaveBeenCalled()
+})
+
+it('saves the Notification sound choice from notification settings', async () => {
+  const { api } = await setup()
+  const row = screen.getByText('Notification sound').closest('.settings-row')
+  fireEvent.click(within(row).getByRole('button', { name: 'On' }))
+  await waitFor(() => expectRequest(api, '/notification-preferences/', 'PATCH'))
+  const [, request] = expectRequest(api, '/notification-preferences/', 'PATCH')
+  expect(JSON.parse(request.body)).toEqual({ notification_sound: false })
 })
