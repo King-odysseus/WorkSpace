@@ -59,6 +59,19 @@ class CheckInCommentApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(CheckInComment.objects.count(), 0)
 
+    def test_other_thread_participants_are_notified_of_a_new_comment(self):
+        CheckInComment.objects.create(check_in=self.check_in, author=self.manager, body='Earlier reply from the manager.')
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            self.comment_url(),
+            data=json.dumps({'body': 'Following up on the manager\'s note.'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(WorkspaceNotification.objects.filter(recipient=self.member, kind='check_in_comment').exists())
+        self.assertTrue(WorkspaceNotification.objects.filter(recipient=self.manager, kind='check_in_comment').exists())
+        self.assertFalse(WorkspaceNotification.objects.filter(recipient=self.owner, kind='check_in_comment').exists())
+
     def test_comments_are_scoped_to_the_workspace_check_in(self):
         other_workspace = Workspace.objects.create(name='Elsewhere', slug='elsewhere-check-in-comments')
         other_check_in = CheckIn.objects.create(workspace=other_workspace, user=self.member, date='2026-09-06')

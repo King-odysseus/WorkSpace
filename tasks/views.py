@@ -88,6 +88,7 @@ NOTIFICATION_KIND_PREFERENCE = {
     'follow_up_completed': 'task_updates',
     'follow_up_comment': 'task_updates',
     'check_in_blocker': 'task_updates',
+    'check_in_comment': 'task_updates',
     'calendar_reminder': 'calendar_reminders',
     'due_soon_reminder': 'task_updates',
     'overdue_reminder': 'task_updates',
@@ -2901,8 +2902,15 @@ def check_in_comment_list(request, workspace_id, check_in_id):
     comment = CheckInComment.objects.create(check_in=check_in, author=request.user, body=body)
     actor_name = request.user.get_full_name() or request.user.email
     record_activity(workspace_id, request.user, 'check_in_comment', f'{actor_name} commented on {check_in.user.get_full_name() or check_in.user.email}\'s check-in.')
-    if check_in.user_id != request.user.id:
-        create_notification(workspace_id, check_in.user, 'check_in_comment', f'{actor_name} commented on your check-in', body[:120], target_type='check_in', target_id=check_in.id)
+    # Notify the check-in owner plus anyone else already in this comment thread
+    # (not just the owner) so the discussion reaches the whole team, not one person.
+    participant_ids = set(CheckInComment.objects.filter(check_in=check_in).exclude(author_id=request.user.id).values_list('author_id', flat=True))
+    participant_ids.add(check_in.user_id)
+    participant_ids.discard(request.user.id)
+    recipients = User.objects.filter(id__in=participant_ids)
+    for recipient in recipients:
+        title = 'commented on your check-in' if recipient.id == check_in.user_id else 'commented on a check-in you replied to'
+        create_notification(workspace_id, recipient, 'check_in_comment', f'{actor_name} {title}', body[:120], target_type='check_in', target_id=check_in.id)
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
