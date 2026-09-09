@@ -243,7 +243,6 @@ def user_profile(request):
     if 'default_workspace_id' in payload:
         default_workspace_id = payload.get('default_workspace_id')
         if default_workspace_id in (None, ''):
-            profile, _ = UserProfile.objects.get_or_create(user=request.user)
             profile.default_workspace = None
             profile.save(update_fields=['default_workspace', 'updated_at'])
         else:
@@ -256,7 +255,10 @@ def user_profile(request):
                 return JsonResponse({'error': 'You can only choose a workspace you belong to.'}, status=403)
             if membership.workspace.status != 'active':
                 return JsonResponse({'error': 'An archived workspace cannot be set as your default.'}, status=400)
-            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            # Reuse the profile fetched above rather than re-fetching: a second
+            # get_or_create returns a different instance, and user_payload reads
+            # the one cached on request.user, so the saved default would be
+            # reported back as null.
             profile.default_workspace_id = membership.workspace_id
             profile.save(update_fields=['default_workspace', 'updated_at'])
     request.user.first_name = first_name
