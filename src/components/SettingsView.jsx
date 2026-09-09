@@ -1,3 +1,4 @@
+import { urlBase64ToUint8Array, savePushSubscription } from "../lib/push-subscriptions.js";
 import { AppSelect } from "./ui/select.jsx";
 // The Settings area: appearance, notification preferences, profile, workspace
 // access, reusable templates, and outbound integrations (webhooks + the calendar
@@ -449,32 +450,6 @@ function SettingsView({
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState("");
-  const urlBase64ToUint8Array = (base64String) => {
-    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, "+")
-      .replace(/_/g, "/");
-    const rawData = window.atob(base64);
-    return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-  };
-  const savePushSubscription = async (subscription) => {
-    const subscriptionJson = subscription.toJSON();
-    const response = await fetch("/api/push/subscriptions/", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": await getCsrfToken(),
-      },
-      body: JSON.stringify({
-        endpoint: subscriptionJson.endpoint,
-        keys: subscriptionJson.keys,
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.error || "Push notifications could not be saved for this device.");
-  };
   const subscriptionUsesPublicKey = (subscription) => {
     const browserKey = new Uint8Array(subscription.options?.applicationServerKey || []);
     const configuredKey = urlBase64ToUint8Array(pushPublicKey);
@@ -499,6 +474,7 @@ function SettingsView({
     let current = true;
     const reconcilePushSubscription = async () => {
       try {
+        if (current) setBrowserPermission(Notification.permission);
         const registration = await navigator.serviceWorker.ready;
         let subscription = await registration.pushManager.getSubscription();
         if (!subscription) {
@@ -525,7 +501,11 @@ function SettingsView({
       }
     };
     reconcilePushSubscription();
-    return () => { current = false; };
+    window.addEventListener("workspace:push-changed", reconcilePushSubscription);
+    return () => {
+      current = false;
+      window.removeEventListener("workspace:push-changed", reconcilePushSubscription);
+    };
   }, [pushSupported, pushConfigured, pushPublicKey]);
   const togglePushSubscription = async () => {
     if (!pushSupported || !pushConfigured || pushBusy) return;
@@ -559,6 +539,7 @@ function SettingsView({
           await subscription.unsubscribe();
         }
         setPushSubscribed(false);
+        window.dispatchEvent(new Event("workspace:push-changed"));
       } else {
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -571,6 +552,7 @@ function SettingsView({
           throw error;
         }
         setPushSubscribed(true);
+        window.dispatchEvent(new Event("workspace:push-changed"));
       }
     } catch (error) {
       // Leave state as-is so the user can retry from the same button, but do not

@@ -95,7 +95,28 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => {
   let data = { title: 'WorkSpace', body: '' }
   try { data = { ...data, ...event.data.json() } } catch { /* use default */ }
-  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/icon-192.png', data: { url: data.url || '/' } }))
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const visible = clients.some(client => client.visibilityState === 'visible')
+    // The foreground app plays its own chime. Let the OS sound the notification
+    // when minimized/closed, subject to the user's system sound settings.
+    const notification = self.registration.showNotification(data.title, {
+      body: data.body, icon: '/icon-192.png', silent: visible, data: { url: data.url || '/' },
+    })
+    const badge = (async () => {
+      try {
+        const response = await fetch('/api/notifications/summary/', { credentials: 'include', cache: 'no-store' })
+        if (!response.ok) return
+        const { unread_count } = await response.json()
+        if (unread_count > 0) await self.navigator.setAppBadge?.(unread_count)
+        else await self.navigator.clearAppBadge?.()
+      } catch (error) {
+        console.warn('Push badge could not be updated.', error)
+      }
+    })()
+    clients.forEach(client => client.postMessage({ type: 'NOTIFICATIONS_CHANGED' }))
+    await Promise.all([notification, badge])
+  })())
 })
 
 self.addEventListener('notificationclick', event => {

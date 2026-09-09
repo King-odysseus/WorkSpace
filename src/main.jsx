@@ -145,6 +145,8 @@ const ScreenShareControl = lazy(() =>
 import ImportView from "./components/ImportView.jsx";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
+import { startNotificationAlerts } from "./lib/notification-alerts.js";
+import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt.jsx";
 import {
   CookieConsent,
   HelpView,
@@ -245,6 +247,11 @@ function App() {
     error: "",
   });
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(null);
+  useEffect(() => {
+    setNotificationUnreadCount(null);
+    if (session.user?.id) return startNotificationAlerts(data => setNotificationUnreadCount(data.unread_count));
+  }, [session.user?.id]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceNotice, setWorkspaceNotice] = useState("");
@@ -1300,6 +1307,7 @@ function App() {
       );
       if (!response.ok)
         return toast.error("Notifications could not be marked as read.");
+      window.dispatchEvent(new Event("workspace:notifications-changed"));
       setWorkspaceData((current) => ({
         ...current,
         notifications: current.notifications.map((notification) => ({
@@ -1329,6 +1337,7 @@ function App() {
       );
       if (!response.ok)
         return toast.error("Notification could not be marked as read.");
+      window.dispatchEvent(new Event("workspace:notifications-changed"));
       setWorkspaceData((current) => ({
         ...current,
         notifications: current.notifications.map((notification) =>
@@ -2038,10 +2047,8 @@ function App() {
                 aria-label="Open notifications"
               >
                 <Bell size={20} />
-                {workspaceData.notifications.some(
-                  (notification) => !notification.read,
-                ) && (
-                  <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-danger ring-2 ring-surface" />
+                {notificationUnreadCount > 0 && (
+                  <span aria-label={`${notificationUnreadCount} unread notifications`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface">{notificationUnreadCount}</span>
                 )}
               </button>
               {notificationOpen && (
@@ -2230,6 +2237,7 @@ function App() {
             </div>
           </div>
         </header>
+        <NotificationPermissionPrompt key={session.user.id} unreadCount={notificationUnreadCount} />
         <main
           id="main-content"
           className="main-content flex-1 overflow-y-auto min-w-0"
@@ -4512,7 +4520,7 @@ function WorkspaceView({
                 >
                   <span className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                     {notification.title}
-                    {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                    <span className="text-xs font-normal text-text-muted">{notification.read ? "Read" : "Unread"}</span>
                   </span>
                   <span className="text-xs text-text-muted">{notification.body || "Workspace update"}</span>
                   <span className="text-xs text-text-muted">{formatRelativeActivityTime(notification.created_at)}</span>

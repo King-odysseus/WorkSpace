@@ -10,18 +10,20 @@ afterEach(() => {
 })
 
 async function setup(permission = 'default', saveStatus = 201) {
-  const requestPermission = vi.fn().mockResolvedValue('granted')
+  const requestPermission = vi.fn(async () => { Notification.permission = 'granted'; return 'granted' })
   vi.stubGlobal('Notification', { permission, requestPermission })
   vi.stubGlobal('PushManager', function () {})
   const subscription = {
     endpoint: 'https://push.example.test/device',
+    options: { applicationServerKey: new Uint8Array([1, 2, 3]).buffer },
     toJSON: () => ({ endpoint: 'https://push.example.test/device', keys: { p256dh: 'key', auth: 'auth' } }),
     unsubscribe: vi.fn().mockResolvedValue(true),
   }
-  const subscribe = vi.fn().mockResolvedValue(subscription)
+  const getSubscription = vi.fn().mockResolvedValue(null)
+  const subscribe = vi.fn(async () => { getSubscription.mockResolvedValue(subscription); return subscription })
   Object.defineProperty(navigator, 'serviceWorker', {
     configurable: true,
-    value: { ready: Promise.resolve({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null), subscribe } }) },
+    value: { ready: Promise.resolve({ pushManager: { getSubscription, subscribe } }) },
   })
   const api = mockApi({
     '/api/push/public-key/': { public_key: 'AQID', configured: true },

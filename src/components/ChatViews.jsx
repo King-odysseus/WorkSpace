@@ -288,7 +288,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) },
         body: JSON.stringify({ target_type: targetType, target_id: String(targetId) }),
       })
-      if (response.ok) onRefresh()
+      if (response.ok) {
+        window.dispatchEvent(new Event('workspace:notifications-changed'))
+        onRefresh()
+      }
     } catch (readError) { console.warn('Chat notifications could not be marked read.', readError) }
   }
   const toggleReaction = async (message, emoji) => {
