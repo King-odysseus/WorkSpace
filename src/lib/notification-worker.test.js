@@ -2,9 +2,13 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { expect, it, vi } from 'vitest'
 
-it.each(['visible', 'hidden'])('updates the service-worker badge on push with a %s app', async visibilityState => {
+it.each([
+  ['focused visible', 'visible', true, true],
+  ['visible but backgrounded', 'visible', false, false],
+  ['minimized', 'hidden', false, false],
+])('updates the service-worker badge on push with a %s app', async (_, visibilityState, focused, silent) => {
   const handlers = {}
-  const client = { visibilityState, postMessage: vi.fn() }
+  const client = { visibilityState, focused, postMessage: vi.fn() }
   const self = {
     addEventListener: (name, handler) => { handlers[name] = handler },
     clients: { matchAll: vi.fn().mockResolvedValue([client]) },
@@ -17,7 +21,7 @@ it.each(['visible', 'hidden'])('updates the service-worker badge on push with a 
   handlers.push({ data: { json: () => ({ title: 'New message', body: 'Hello' }) }, waitUntil: promise => { work = promise } })
   await work
   expect(self.navigator.setAppBadge).toHaveBeenCalledWith(31)
-  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent: visibilityState === 'visible' }))
+  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent }))
   expect(client.postMessage).toHaveBeenCalledWith({ type: 'NOTIFICATIONS_CHANGED' })
 })
 
