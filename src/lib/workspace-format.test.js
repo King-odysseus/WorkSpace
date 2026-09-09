@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapTaskFromApi, sortMembersByRecentActivity, taskDueLabel, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { effectivePresence, mapTaskFromApi, sortMembersByRecentActivity, taskDueLabel, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -86,6 +86,21 @@ describe('readJsonResponse', () => {
     await expect(readJsonResponse(response, 'Bucket could not be archived.')).rejects.toThrow(
       'Bucket could not be archived. (server returned 405)',
     )
+  })
+})
+
+describe('effectivePresence', () => {
+  it('shows the self-reported presence while last_seen_at is fresh', () => {
+    expect(effectivePresence({ presence: 'busy', last_seen_at: new Date().toISOString() })).toBe('busy')
+  })
+
+  it('overrides a stale self-reported presence with offline', () => {
+    const elevenHoursAgo = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString()
+    expect(effectivePresence({ presence: 'available', last_seen_at: elevenHoursAgo })).toBe('offline')
+  })
+
+  it('treats a member who has never been seen as offline', () => {
+    expect(effectivePresence({ presence: 'available', last_seen_at: '' })).toBe('offline')
   })
 })
 

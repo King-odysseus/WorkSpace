@@ -46,6 +46,7 @@ import {
   BREAK_PRESET_LABEL,
   PRESENCE_LABEL,
   PRESENCE_OPTIONS,
+  effectivePresence,
   formatLastSeen,
   formatShiftClock,
   formatShiftDuration,
@@ -58,7 +59,7 @@ import {
 function MemberProfilePopup({ member, onClose, onMessage }) {
   if (!member) return null;
   const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
-  return <div className="modal-backdrop" onMouseDown={onClose}><section className="modal member-profile-popup" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Workspace member</p><h2>{name}</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Close profile"><X size={18} /></button></div><div className="member-profile-summary"><Avatar name={name} avatarUrl={member.avatar_url} presence={member.presence} /><div><strong>{name}</strong><span>{member.job_role || member.role || "Member"}{member.company ? ` · ${member.company}` : ""}</span><small>{member.email}</small></div></div><Button type="button" onClick={() => onMessage(member)}><MessageSquare size={15} /> Send message</Button></section></div>;
+  return <div className="modal-backdrop" onMouseDown={onClose}><section className="modal member-profile-popup" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Workspace member</p><h2>{name}</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Close profile"><X size={18} /></button></div><div className="member-profile-summary"><Avatar name={name} avatarUrl={member.avatar_url} presence={effectivePresence(member)} /><div><strong>{name}</strong><span>{member.job_role || member.role || "Member"}{member.company ? ` · ${member.company}` : ""}</span><small>{member.email}</small></div></div><Button type="button" onClick={() => onMessage(member)}><MessageSquare size={15} /> Send message</Button></section></div>;
 }
 
 function TeamBoardView({
@@ -268,7 +269,7 @@ function TeamBoardView({
                   <Avatar
                     name={memberName(member)}
                     avatarUrl={member.avatar_url}
-                    presence={member.presence}
+                    presence={effectivePresence(member)}
                     small
                   />
                   <div>
@@ -360,7 +361,7 @@ function TeamBoardView({
             <Avatar
               name={memberName(member)}
               avatarUrl={member.avatar_url}
-              presence={member.presence}
+              presence={effectivePresence(member)}
               small
             />
             <div>
@@ -2782,7 +2783,7 @@ function TodayDashboard({
                   <Avatar
                     name={memberName(member)}
                     avatarUrl={member.avatar_url}
-                    presence={member.presence}
+                    presence={effectivePresence(member)}
                     small
                   />
                   <div>

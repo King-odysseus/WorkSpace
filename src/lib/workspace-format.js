@@ -115,6 +115,20 @@ function formatLastSeen(value) {
   return `Last seen ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
 }
 
+// A member's chosen presence is self-reported and sticky (see UserProfile.presence
+// on the backend) - it can say "Available" for days after they stop using the app.
+// last_seen_at is stamped by real traffic, so treat a member as offline whenever
+// it has gone stale, regardless of what they last picked. Kept well above
+// LastSeenMiddleware.REFRESH_AFTER (2min) so an active member never flickers
+// offline between stamps.
+const PRESENCE_STALE_AFTER_MS = 10 * 60 * 1000;
+
+function effectivePresence(member) {
+  const lastSeenAt = member?.last_seen_at ? new Date(member.last_seen_at).getTime() : 0;
+  const isStale = !lastSeenAt || Date.now() - lastSeenAt > PRESENCE_STALE_AFTER_MS;
+  return isStale ? 'offline' : (member?.presence || 'available');
+}
+
 function sortMembersByRecentActivity(members, currentUserId, limit = 8) {
   return [...members]
     .filter(member => String(member.id) !== String(currentUserId))
@@ -192,6 +206,7 @@ export {
   mapTaskFromApi,
   formatRelativeActivityTime,
   formatLastSeen,
+  effectivePresence,
   sortMembersByRecentActivity,
   formatCalendarDate,
   toDateTimeLocal,

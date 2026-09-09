@@ -26,7 +26,7 @@ const AISettingsPanel = lazy(() =>
   })),
 );
 import { WorkspaceViewHeading } from "./workspace-ui.jsx";
-import { getCsrfToken } from "../lib/workspace-format.js";
+import { effectivePresence, getCsrfToken } from "../lib/workspace-format.js";
 
 // Mirrors tasks/models.py PERMISSION_KEYS - keep in sync with the backend list.
 const PERMISSION_LABELS = [
@@ -1620,7 +1620,7 @@ function SettingsView({
                             .join(" ") || member.email
                         }
                         avatarUrl={member.avatar_url}
-                        presence={member.presence}
+                        presence={effectivePresence(member)}
                         small
                       />
                       <div>
