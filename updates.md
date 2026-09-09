@@ -2,7 +2,7 @@
 
 ## 2026-09-09 - Windows
 
-- Added a Notification sound setting. Enabled sound now uses the native browser notification path whether WorkSpace is open, backgrounded, or minimized. The header notification badge is red when unread notifications exist and green when clear.
+- Added a Notification sound setting. Enabled sound now uses the native browser notification path whether WorkSpace is open, backgrounded, or minimized. The header bell shows a red unread count only; the installed-app badge shows the unread count and clears when there are none.
 - Key files: `tasks/models.py`, `tasks/migrations/0063_notificationpreference_notification_sound.py`, `tasks/views.py`, `tasks/push.py`, `public/sw.js`, `src/main.jsx`, `src/components/SettingsView.jsx`.
 - Other OS action: run `npm run build` and reload the installed app so it receives the updated service worker.
 - Done on: Windows.

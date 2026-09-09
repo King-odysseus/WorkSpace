@@ -2047,13 +2047,8 @@ function App() {
                 aria-label="Open notifications"
               >
                 <Bell size={20} />
-                {notificationUnreadCount !== null && (
-                  <span
-                    aria-label={notificationUnreadCount > 0 ? `${notificationUnreadCount} unread notifications` : "No unread notifications"}
-                    className={`absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ring-2 ring-surface ${notificationUnreadCount > 0 ? "bg-danger" : "bg-success"}`}
-                  >
-                    {notificationUnreadCount > 0 ? notificationUnreadCount : ""}
-                  </span>
+                {notificationUnreadCount > 0 && (
+                  <span aria-label={`${notificationUnreadCount} unread notifications`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface">{notificationUnreadCount}</span>
                 )}
               </button>
               {notificationOpen && (
