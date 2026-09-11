@@ -157,6 +157,19 @@ def notify_managers(workspace_id, actor, verb, object_label, target_type='', tar
         )
 
 
+def task_activity_recipients(task, actor):
+    recipient_ids = set(TaskComment.objects.filter(task=task).exclude(author_id=actor.id).values_list('author_id', flat=True))
+    recipient_ids.update(task.supporters.exclude(id=actor.id).values_list('id', flat=True))
+    if task.assignee_id and task.assignee_id != actor.id:
+        recipient_ids.add(task.assignee_id)
+    return User.objects.filter(id__in=recipient_ids)
+
+
+def notify_task_activity(task, actor, kind, title, body, immediate=False):
+    for recipient in task_activity_recipients(task, actor):
+        create_notification(task.workspace_id, recipient, kind, title, body, target_type='task', target_id=task.id, immediate=immediate)
+
+
 def parse_task_labels(value):
     if value is None:
         return [], None
@@ -1593,8 +1606,7 @@ def task_detail(request, task_id):
     actor_name = request.user.get_full_name() or request.user.email
     if previous_status != task.status:
         record_activity(task.workspace_id, request.user, 'task_status', f'{actor_name} moved {task.title} to {task.get_status_display()}.')
-        if task.assignee and task.assignee != request.user:
-            create_notification(task.workspace_id, task.assignee, 'task_status', f'Task status changed: {task.title}', task.get_status_display(), target_type='task', target_id=task.id)
+        notify_task_activity(task, request.user, 'task_status', f'Task status changed: {task.title}', task.get_status_display(), immediate=True)
     if previous_title != task.title:
         record_activity(task.workspace_id, request.user, 'task_title', f'{actor_name} renamed task {previous_title} to {task.title}.')
     if previous_priority != task.priority:
@@ -1657,12 +1669,9 @@ def task_comment_list(request, task_id):
         return JsonResponse({'error': 'Comment must be between 1 and 4000 characters.'}, status=400)
     comment = TaskComment.objects.create(task=task, author=request.user, body=body)
     record_activity(task.workspace_id, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.')
-    comment_recipient_ids = set()
-    if task.assignee and task.assignee != request.user:
-        comment_recipient_ids.add(task.assignee.id)
-        create_notification(task.workspace_id, task.assignee, 'task_comment', f'New comment on {task.title}', body[:120], target_type='task', target_id=task.id)
+    notify_task_activity(task, request.user, 'task_comment', f'New comment on {task.title}', body[:120])
     notify_managers(task.workspace_id, request.user, 'commented on task', task.title, target_type='task', target_id=task.id)
-    notify_mentions(task.workspace_id, request.user, body, 'task', task.id, exclude_user_ids=comment_recipient_ids)
+    notify_mentions(task.workspace_id, request.user, body, 'task', task.id, exclude_user_ids={recipient.id for recipient in task_activity_recipients(task, request.user)})
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
@@ -1757,6 +1766,7 @@ def task_attachment_list(request, task_id):
         return JsonResponse({'error': 'This file type is not supported.'}, status=400)
     attachment = TaskAttachment.objects.create(task=task, uploaded_by=request.user, file=uploaded_file, original_name=uploaded_file.name[:255])
     record_activity(task.workspace_id, request.user, 'task_attachment', f'{request.user.get_full_name() or request.user.email} attached {attachment.original_name} to {task.title}.')
+    notify_task_activity(task, request.user, 'task_attachment', f'New attachment on {task.title}', attachment.original_name, immediate=True)
     return JsonResponse({'attachment': attachment.as_dict()}, status=201)
 
 

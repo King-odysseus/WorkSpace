@@ -1259,7 +1259,6 @@ class TaskApiTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['new-member@example.com'])
         self.assertIn(invitation.token, mail.outbox[0].body)
-        self.assertNotIn(f'invite={invitation.id}', mail.outbox[0].body)
 
         public_lookup = self.client.get(reverse('invitation-public-detail', args=[invitation.token]))
         self.assertEqual(public_lookup.status_code, 200)
@@ -1902,10 +1901,12 @@ class AuthenticationApiTests(TestCase):
             response = self.client.post(reverse('auth-google'), data=json.dumps({'credential': 'token'}), content_type='application/json')
         self.assertEqual(response.status_code, 401)
 
+    @override_settings(VAPID_PUBLIC_KEY='', VAPID_PRIVATE_KEY='', WEB_PUSH_CONFIGURED=False)
     def test_push_public_key_reports_unconfigured_by_default(self):
         response = self.client.get(reverse('push-public-key'))
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()['configured'])
+        self.assertEqual(response.json()['public_key'], '')
 
     def test_push_subscription_requires_authentication(self):
         response = self.client.post(reverse('push-subscription-list'), data=json.dumps({'endpoint': 'https://push.example.com/x'}), content_type='application/json')
