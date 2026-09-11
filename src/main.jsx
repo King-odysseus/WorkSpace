@@ -1375,6 +1375,22 @@ function App() {
       setActive("Check-ins");
       return;
     }
+    if (["project", "risk_issue"].includes(notification.target_type)) {
+      const targetProject = localData.projects.find(
+        (project) => String(project.id) === String(notification.target_id),
+      );
+      if (targetProject) {
+        setSelectedProjectWorkspace(targetProject);
+        setProjectOperation(notification.target_type === "risk_issue" ? "risks" : "");
+      } else {
+        setPendingProjectNotification({
+          id: String(notification.target_id),
+          operation: notification.target_type === "risk_issue" ? "risks" : "",
+        });
+      }
+      setActive("Projects");
+      return;
+    }
     if (notification.target_type === "calendar_event") {
       const targetEvent = localData.events.find(
         (event) => String(event.id) === String(notification.target_id),
@@ -2791,6 +2807,7 @@ function WorkspaceView({
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
+  const [pendingProjectNotification, setPendingProjectNotification] = useState(null);
   const [projectOperation, setProjectOperation] = useState("");
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
   const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
@@ -2941,6 +2958,18 @@ function WorkspaceView({
     [data],
   );
   useEffect(() => setSavedViews(data.savedViews || []), [data.savedViews]);
+
+  useEffect(() => {
+    if (active !== "Projects" || !pendingProjectNotification) return;
+    const targetProject = localData.projects.find(
+      (project) => String(project.id) === String(pendingProjectNotification.id),
+    );
+    if (targetProject) {
+      setSelectedProjectWorkspace(targetProject);
+      setProjectOperation(pendingProjectNotification.operation);
+      setPendingProjectNotification(null);
+    }
+  }, [active, localData.projects, pendingProjectNotification]);
 
   useEffect(() => {
     if (active !== "Calendar" || !pendingEventId) return;
