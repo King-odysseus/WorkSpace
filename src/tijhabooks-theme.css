@@ -1812,7 +1812,8 @@ html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, va
 .planner-task-card.blocked { border-color: #E36B43; }
 .planner-card-heading { display: flex; align-items: flex-start; gap: 5px; }
 .planner-drag-handle, .planner-card-menu { display: grid; place-items: center; padding: 2px; border: 0; background: transparent; color: var(--workspace-text-soft); }
-.planner-drag-handle:disabled { opacity: .25; }
+.planner-drag-handle { cursor: grab; }
+.planner-drag-handle.is-inactive { opacity: .25; cursor: default; }
 .planner-card-title { flex: 1; border: 0; background: transparent; color: var(--workspace-text); font: 700 12px/1.35 'DM Sans'; text-align: left; cursor: pointer; }
 .planner-card-meta, .planner-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; color: var(--workspace-text-soft); font-size: 9px; }
 .planner-priority { padding: 3px 6px; border-radius: 999px; background: var(--workspace-surface-soft); text-transform: capitalize; }

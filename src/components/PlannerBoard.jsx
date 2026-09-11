@@ -31,7 +31,7 @@ function PlannerTaskCard({ task, buckets, canReorder, onOpen, onDelete, onMove, 
     }}
   >
     <div className="planner-card-heading">
-      <button type="button" className="planner-drag-handle" disabled={!canReorder} aria-label={`Drag ${task.title}`}><GripVertical size={15} /></button>
+      <span className={`planner-drag-handle${canReorder ? '' : ' is-inactive'}`} aria-hidden="true"><GripVertical size={15} /></span>
       <button type="button" className="planner-card-title" onClick={() => onOpen(task)}>{task.title}</button>
       {canReorder ? <button type="button" className="planner-card-menu" onClick={() => onDelete(task.id)} aria-label={`Archive ${task.title}`} title="Archive task"><Archive size={14} /></button> : <button type="button" className="planner-card-menu" onClick={() => onOpen(task)} aria-label={`Open ${task.title}`}><MoreHorizontal size={16} /></button>}
     </div>
