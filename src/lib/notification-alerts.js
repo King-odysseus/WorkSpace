@@ -12,6 +12,9 @@ export async function updateAppBadge(count) {
 export function startNotificationAlerts(onSummary = () => {}) {
   let stopped = false
   let pending = false
+  let stream = null
+  let streamReconnect = null
+  let latestUnreadId = 0
   const originalTitle = document.title
   const refresh = async () => {
     if (stopped || pending) return
@@ -24,12 +27,34 @@ export function startNotificationAlerts(onSummary = () => {}) {
       // Baseline existing history silently. The service worker is the only
       // sound source, so a foreground alert cannot chime twice.
       onSummary(data)
+      latestUnreadId = data.latest_unread_id || 0
       document.title = data.unread_count ? `(${data.unread_count}) ${originalTitle}` : originalTitle
       await updateAppBadge(data.unread_count)
     } catch (error) {
       if (!stopped) console.warn('Notification alerts could not be refreshed.', error)
     } finally {
       pending = false
+    }
+  }
+  const openStream = () => {
+    if (stopped || !window.EventSource) return
+    stream?.close()
+    stream = new EventSource(`/api/notifications/stream/?since=${latestUnreadId}`, { withCredentials: true })
+    stream.onmessage = event => {
+      try {
+        const data = JSON.parse(event.data)
+        latestUnreadId = data.latest_unread_id || latestUnreadId
+        onSummary(data)
+        document.title = data.unread_count ? `(${data.unread_count}) ${originalTitle}` : originalTitle
+        updateAppBadge(data.unread_count)
+      } catch (error) {
+        console.warn('Notification stream payload could not be read.', error)
+      }
+      openStream()
+    }
+    stream.onerror = () => {
+      stream?.close()
+      if (!stopped && !streamReconnect) streamReconnect = window.setTimeout(() => { streamReconnect = null; openStream() }, 15000)
     }
   }
   const onMessage = event => {
@@ -40,9 +65,12 @@ export function startNotificationAlerts(onSummary = () => {}) {
   navigator.serviceWorker?.addEventListener('message', onMessage)
   const timer = window.setInterval(refresh, 15000)
   refresh()
+  openStream()
   return () => {
     stopped = true
     window.clearInterval(timer)
+    if (streamReconnect) window.clearTimeout(streamReconnect)
+    stream?.close()
     document.removeEventListener('visibilitychange', refresh)
     window.removeEventListener('workspace:notifications-changed', refresh)
     navigator.serviceWorker?.removeEventListener('message', onMessage)

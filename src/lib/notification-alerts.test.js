@@ -47,3 +47,18 @@ it('ignores an outstanding response after logout and cleans up sound and badge',
   expect(navigator.setAppBadge).not.toHaveBeenCalled()
   expect(document.title).toBe('WorkSpace')
 })
+
+it('opens a notification stream and reconnects from the newest unread ID', async () => {
+  class FakeEventSource {
+    static instances = []
+    constructor(url) { this.url = url; this.close = vi.fn(); FakeEventSource.instances.push(this) }
+  }
+  vi.stubGlobal('EventSource', FakeEventSource)
+  const onSummary = vi.fn()
+  stop = startNotificationAlerts(onSummary)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(FakeEventSource.instances[0].url).toContain('since=0')
+  FakeEventSource.instances[0].onmessage({ data: JSON.stringify({ unread_count: 26, latest_unread_id: 26 }) })
+  expect(onSummary).toHaveBeenLastCalledWith({ unread_count: 26, latest_unread_id: 26 })
+  expect(FakeEventSource.instances.at(-1).url).toContain('since=26')
+})

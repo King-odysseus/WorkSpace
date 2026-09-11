@@ -3,7 +3,7 @@ from django.urls import path
 from .auth_views import auth_csrf, auth_google, auth_login, auth_logout, auth_me, push_public_key, push_subscription_list, user_avatar, user_avatar_download, user_presence, user_profile
 from .views import activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_feed_token, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_list, chat_message_reaction, check_in_comment_list, check_in_list, direct_conversation_list, direct_message_list, direct_message_reaction, follow_up_comment_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_decline, invitation_detail, invitation_list, invitation_public_detail, invitation_resend, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_expense_detail, project_expense_list, project_list, project_resource_detail, project_resource_list, project_stakeholder_detail, project_stakeholder_list, project_template_apply, project_template_detail, project_template_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, task_template_apply, task_template_detail, task_template_list, work_shift_list, workspace_archive, workspace_delete, workspace_leave, workspace_restore, workspace_search, workspace_webhook_detail, workspace_webhook_list
 from .pulse import workspace_pulse
-from .notification_status import notification_summary
+from .notification_status import notification_stream, notification_summary
 from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .import_templates import import_template
@@ -11,6 +11,7 @@ from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace
 
 urlpatterns = [
     path('notifications/summary/', notification_summary, name='notification-summary'),
+    path('notifications/stream/', notification_stream, name='notification-stream'),
     path('health/', health, name='health'),
     path('auth/me/', auth_me, name='auth-me'),
     path('auth/csrf/', auth_csrf, name='auth-csrf'),

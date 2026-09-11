@@ -29,3 +29,19 @@ class NotificationSummaryTests(TestCase):
         self.assertIn('no-store', response['Cache-Control'])
         WorkspaceNotification.objects.filter(recipient=user).update(read_at=timezone.now())
         self.assertEqual(self.client.get(reverse('notification-summary')).json(), {'unread_count': 0, 'latest_unread_id': 0})
+
+    def test_stream_requires_login(self):
+        self.assertEqual(self.client.get(reverse('notification-stream')).status_code, 401)
+
+    def test_stream_emits_new_notification_summary(self):
+        user = User.objects.create_user(username='stream-user')
+        workspace = Workspace.objects.create(name='Stream', slug='stream')
+        Membership.objects.create(workspace=workspace, user=user)
+        notification = WorkspaceNotification.objects.create(workspace=workspace, recipient=user, kind='mention', title='New')
+        self.client.force_login(user)
+        response = self.client.get(f"{reverse('notification-stream')}?since=0")
+        body = b''.join(response.streaming_content).decode()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/event-stream')
+        self.assertIn(f'id: {notification.id}', body)
+        self.assertIn('"unread_count": 1', body)
