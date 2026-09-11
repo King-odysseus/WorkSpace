@@ -1365,6 +1365,7 @@ function App() {
     project: "Projects",
     risk_issue: "Projects",
     workstream: "Planner",
+    workspace: "Today",
   };
   const openNotification = async (notification) => {
     setNotificationOpen(false);
