@@ -47,7 +47,7 @@ export default function ImportView({ workspaceId, role }) {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Commit failed.')
       setPreview(null); setFile(null)
-      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: { message: `Import complete: ${data.result.created} created, ${data.result.updated} updated.` } }))
+      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `Import complete: ${data.result.created} created, ${data.result.updated} updated.` }))
     } catch (requestError) { setError(requestError.message) } finally { setBusy(false) }
   }
 
