@@ -367,6 +367,27 @@ class TaskApiTests(TestCase):
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=original_assignee, kind='task_assigned').count(), 0)
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='task_assigned').count(), 1)
 
+    def test_task_status_activity_notifies_supporters_and_prior_commenters(self):
+        assignee = User.objects.create_user(username='assignee@example.com', email='assignee@example.com', password='secure-pass-123')
+        supporter = User.objects.create_user(username='supporter@example.com', email='supporter@example.com', password='secure-pass-123')
+        commenter = User.objects.create_user(username='commenter@example.com', email='commenter@example.com', password='secure-pass-123')
+        for member in (assignee, supporter, commenter):
+            Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        task = Task.objects.create(workspace=self.workspace, title='Coordinate launch', assignee=assignee)
+        TaskSupporter.objects.create(task=task, user=supporter, added_by=self.user)
+        TaskComment.objects.create(task=task, author=commenter, body='I am tracking this.')
+
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'status': 'in_progress'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        recipients = set(WorkspaceNotification.objects.filter(kind='task_status').values_list('recipient_id', flat=True))
+        self.assertEqual(recipients, {assignee.id, supporter.id, commenter.id})
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='task_status').count(), 0)
+
     def test_owner_can_create_and_read_plan_buckets(self):
         project = Project.objects.create(workspace=self.workspace, name='Atlas')
         create_response = self.client.post(
