@@ -1375,6 +1375,15 @@ function App() {
       setActive("Check-ins");
       return;
     }
+    if (notification.target_type === "follow_up") {
+      const targetFollowUp = localData.followUps.find(
+        (followUp) => String(followUp.id) === String(notification.target_id),
+      );
+      if (targetFollowUp) setSelectedFollowUp(targetFollowUp);
+      else setPendingFollowUpId(String(notification.target_id));
+      setActive("Follow-up");
+      return;
+    }
     if (notification.target_type === "task") {
       const targetTask = tasks.find(
         (task) => String(task.id) === String(notification.target_id),
@@ -2775,6 +2784,7 @@ function WorkspaceView({
     useState(null);
   const [projectOperation, setProjectOperation] = useState("");
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
+  const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
@@ -2921,6 +2931,18 @@ function WorkspaceView({
     [data],
   );
   useEffect(() => setSavedViews(data.savedViews || []), [data.savedViews]);
+
+  useEffect(() => {
+    if (active === "Follow-up" && pendingFollowUpId) {
+      const targetFollowUp = localData.followUps.find(
+        (followUp) => String(followUp.id) === String(pendingFollowUpId),
+      );
+      if (targetFollowUp) {
+        setSelectedFollowUp(targetFollowUp);
+        setPendingFollowUpId(null);
+      }
+    }
+  }, [active, localData.followUps, pendingFollowUpId]);
 
   useEffect(() => {
     if (active !== "Check-ins") return undefined;
