@@ -85,6 +85,11 @@ const AssistantFlyout = lazy(() =>
     default: module.AssistantFlyout,
   })),
 );
+const FilesWorkspaceView = lazy(() =>
+  import("./components/WorkspaceTools.jsx").then((module) => ({
+    default: module.FilesWorkspaceView,
+  })),
+);
 import { Calendar as DatePicker } from "./components/ui/calendar.jsx";
 import {
   Dialog,
@@ -2632,6 +2637,7 @@ function App() {
           task={selectedTask}
           workspaceId={activeWorkspaceId}
           members={workspaceData.members}
+          currentUserId={currentUserId}
           projects={workspaceData.projects}
           buckets={workspaceData.buckets}
           canManageTasks={["owner", "manager"].includes(currentWorkspace?.role)}
@@ -5591,7 +5597,13 @@ function WorkspaceView({
     );
   }
 
-  if (active === "Files") return null;
+  if (active === "Files") {
+    return (
+      <Suspense fallback={null}>
+        <FilesWorkspaceView workspaceId={workspaceId} currentUserId={currentUserId} />
+      </Suspense>
+    );
+  }
 
   if (active === "Channels" || active === "Chats") {
     return (
