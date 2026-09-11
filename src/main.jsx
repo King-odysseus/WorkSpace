@@ -5163,6 +5163,8 @@ function WorkspaceView({
           <CheckInDetailDialog
             checkIn={selectedCheckInDetail}
             workspaceId={workspaceId}
+            members={localData.members}
+            currentUserId={currentUserId}
             canComment={canCommentCheckIns}
             canEdit={selectedCheckInDetail.user_id === currentUserId}
             onClose={() => setSelectedCheckInDetail(null)}
