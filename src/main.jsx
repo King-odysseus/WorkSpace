@@ -151,6 +151,7 @@ import ImportView from "./components/ImportView.jsx";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
+import { notificationDestinations, resolveNotificationTarget } from "./lib/notification-navigation.js";
 import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt.jsx";
 import {
   CookieConsent,
@@ -1356,23 +1357,18 @@ function App() {
       toast.error(error.message || "Notification could not be marked as read.");
     }
   };
-  const notificationDestinations = {
-    follow_up: "Follow-up",
-    chat_channel: "Channels",
-    direct_conversation: "Chats",
-    calendar_event: "Calendar",
-    check_in: "Check-ins",
-    screen_share_session: "Screen sharing",
-    project: "Projects",
-    risk_issue: "Projects",
-    workstream: "Planner",
-    workspace: "Today",
-  };
   const openNotification = async (notification) => {
     setNotificationOpen(false);
     markNotificationRead(notification.id);
+    const resolved = resolveNotificationTarget(notification, {
+      tasks,
+      events: workspaceData.events,
+      followUps: workspaceData.followUps,
+      projects: workspaceData.projects,
+      lookupValues: workspaceData.lookupValues,
+    });
     if (notification.target_type === "screen_share_session") {
-      setScreenShareNotificationId(String(notification.target_id));
+      setScreenShareNotificationId(resolved.targetId);
       setActive("Screen sharing");
       return;
     }
@@ -1382,25 +1378,21 @@ function App() {
       return;
     }
     if (notification.target_type === "workstream") {
-      const targetWorkstream = localData.lookupValues.find(
-        (value) => value.kind === "workstream" && String(value.id) === String(notification.target_id),
-      );
+      const targetWorkstream = resolved.action === "open" ? resolved.target : null;
       if (targetWorkstream) setPlannerProjectFilter("operations");
       setPendingWorkstreamNotification(notification.target_id);
       setActive("Planner");
       return;
     }
     if (["project", "risk_issue"].includes(notification.target_type)) {
-      const targetProject = notification.target_type === "project" && localData.projects.find(
-        (project) => String(project.id) === String(notification.target_id),
-      );
+      const targetProject = resolved.action === "open" ? resolved.target : null;
       if (targetProject) {
         setSelectedProjectWorkspace(targetProject);
         setProjectOperation(notification.target_type === "risk_issue" ? "risks" : "");
       } else {
         setPendingProjectNotification({
-          id: String(notification.target_id),
-          operation: notification.target_type === "risk_issue" ? "risks" : "",
+          id: resolved.targetId,
+          operation: resolved.operation || "",
           targetType: notification.target_type,
         });
       }
@@ -1408,27 +1400,21 @@ function App() {
       return;
     }
     if (notification.target_type === "calendar_event") {
-      const targetEvent = localData.events.find(
-        (event) => String(event.id) === String(notification.target_id),
-      );
+      const targetEvent = resolved.action === "open" ? resolved.target : null;
       if (targetEvent) setSelectedEvent(targetEvent);
       else setPendingEventId(String(notification.target_id));
       setActive("Calendar");
       return;
     }
     if (notification.target_type === "follow_up") {
-      const targetFollowUp = localData.followUps.find(
-        (followUp) => String(followUp.id) === String(notification.target_id),
-      );
+      const targetFollowUp = resolved.action === "open" ? resolved.target : null;
       if (targetFollowUp) setSelectedFollowUp(targetFollowUp);
       else setPendingFollowUpId(String(notification.target_id));
       setActive("Follow-up");
       return;
     }
     if (notification.target_type === "task") {
-      const targetTask = tasks.find(
-        (task) => String(task.id) === String(notification.target_id),
-      );
+      const targetTask = resolved.action === "open" ? resolved.target : null;
       if (targetTask) {
         setSelectedTask(targetTask);
         return;
