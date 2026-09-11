@@ -215,6 +215,7 @@ function App() {
   const [taskError, setTaskError] = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const notifRef = useRef(null);
@@ -1370,6 +1371,11 @@ function App() {
   const openNotification = async (notification) => {
     setNotificationOpen(false);
     markNotificationRead(notification.id);
+    if (notification.target_type === "screen_share_session") {
+      setScreenShareNotificationId(String(notification.target_id));
+      setActive("Screen sharing");
+      return;
+    }
     if (notification.target_type === "check_in") {
       setPendingCheckInId(String(notification.target_id));
       setActive("Check-ins");
@@ -1768,6 +1774,7 @@ function App() {
         <ScreenShareControl
           workspaceId={workspaceId}
           currentUserId={session.user.id}
+          targetSessionId={screenShareNotificationId}
         />
       </Suspense>
       {aiFlyoutOpen && (
@@ -2404,6 +2411,7 @@ function App() {
                 onActionError={(message) => toast.error(message)}
                 onRefresh={() => setWorkspaceReload((current) => current + 1)}
                 onConfirm={confirmAction}
+                screenShareNotificationId={screenShareNotificationId}
               />
             )}
             {active === "Today" && (
@@ -2768,6 +2776,7 @@ function WorkspaceView({
   onActionError,
   onRefresh,
   onConfirm,
+  screenShareNotificationId,
 }) {
   const today = toDateKey(new Date());
   const [localData, setLocalData] = useState(data);
@@ -4679,6 +4688,7 @@ function WorkspaceView({
           members={localData.members}
           currentUserId={currentUserId}
           role={currentWorkspace?.role}
+          targetSessionId={screenShareNotificationId}
         />
       </Suspense>
     );

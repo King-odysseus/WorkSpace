@@ -19,7 +19,7 @@ async function apiRequest(url, options = {}) {
 
 const formatDateTime = value => value ? new Date(value).toLocaleString() : '-'
 
-export function ScreenShareControl({ workspaceId, currentUserId }) {
+export function ScreenShareControl({ workspaceId, currentUserId, targetSessionId = null }) {
   const [pending, setPending] = useState(null)
   const [activeSession, setActiveSession] = useState(null)
   const [error, setError] = useState('')
@@ -39,12 +39,13 @@ export function ScreenShareControl({ workspaceId, currentUserId }) {
     try {
       const data = await apiRequest(`/api/workspaces/${workspaceId}/screen-sharing/sessions/?scope=mine`)
       const mine = data.sessions.filter(item => String(item.employee_id) === String(currentUserId))
-      setPending(mine.find(item => item.status === 'pending') || null)
+      const target = targetSessionId && mine.find(item => String(item.id) === String(targetSessionId))
+      setPending(target || mine.find(item => item.status === 'pending') || null)
       if (!streamRef.current) setActiveSession(null)
     } catch (_) {
       // The main workspace error surface handles connectivity; this control stays quiet.
     }
-  }, [workspaceId, currentUserId])
+  }, [workspaceId, currentUserId, targetSessionId])
 
   useEffect(() => {
     loadSessions()
@@ -242,7 +243,7 @@ export function ScreenShareControl({ workspaceId, currentUserId }) {
   </>
 }
 
-export default function ScreenSharingView({ workspaceId, members = [], currentUserId, role }) {
+export default function ScreenSharingView({ workspaceId, members = [], currentUserId, role, targetSessionId = null }) {
   const canLead = ['owner', 'manager'].includes(role)
   const [policy, setPolicy] = useState(null)
   const [draftPolicy, setDraftPolicy] = useState(null)
@@ -318,6 +319,12 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
   const deleteCapture = async capture => {
     setCaptureToDelete(capture)
   }
+
+  useEffect(() => {
+    if (!targetSessionId) return
+    const target = sessions.find(session => String(session.id) === String(targetSessionId))
+    if (target) loadCaptures(target)
+  }, [sessions, targetSessionId])
 
   const confirmDeleteCapture = async () => {
     const capture = captureToDelete
