@@ -24,7 +24,7 @@ workflows for running a team workspace.
 
 ### Global search
 
-- The search field in the header filters tasks across the current workspace.
+- The search field in the header searches tasks, risks/issues, follow-ups, check-ins, and chat across the current workspace.
 - On smaller screens, use the search field inside the relevant page.
 
 ## 2. Today

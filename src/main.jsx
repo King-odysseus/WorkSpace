@@ -215,11 +215,41 @@ function App() {
     new Promise((resolve) => setConfirmState({ message, resolve, ...options }));
   const [taskError, setTaskError] = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
+  const taskModalRef = useRef(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const notifRef = useRef(null);
+  useEffect(() => {
+    if (!showModal) return undefined;
+    const previouslyFocused = document.activeElement;
+    const onKeyDown = (event) => {
+      const dialog = taskModalRef.current;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setShowModal(false);
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = [...dialog.querySelectorAll("button, input, textarea, select, [href], [tabindex]:not([tabindex='-1'])")].filter((element) => !element.disabled);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
+  }, [showModal]);
   const searchRef = useRef(null);
   const profileMenuRef = useRef(null);
   const workspaceMenuRef = useRef(null);
@@ -2525,6 +2555,7 @@ function App() {
         <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}>
           <form
             className="modal"
+            ref={taskModalRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-task-title"
