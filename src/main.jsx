@@ -1364,6 +1364,11 @@ function App() {
   const openNotification = (notification) => {
     setNotificationOpen(false);
     markNotificationRead(notification.id);
+    if (notification.target_type === "check_in") {
+      setPendingCheckInId(String(notification.target_id));
+      setActive("Check-ins");
+      return;
+    }
     if (notification.target_type === "task") {
       const targetTask = tasks.find(
         (task) => String(task.id) === String(notification.target_id),
@@ -2707,6 +2712,7 @@ function WorkspaceView({
   const [calendarFilter, setCalendarFilter] = useState("all");
   const [calendarTaskScope, setCalendarTaskScope] = useState("all");
   const [checkInDate, setCheckInDate] = useState(today);
+  const [pendingCheckInId, setPendingCheckInId] = useState(null);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
@@ -2918,6 +2924,13 @@ function WorkspaceView({
           ...current,
           checkIns: responseData.check_ins,
         }));
+        const targetCheckIn = responseData.check_ins.find(
+          (checkIn) => String(checkIn.id) === String(pendingCheckInId),
+        );
+        if (targetCheckIn) {
+          setSelectedCheckInDetail(targetCheckIn);
+          setPendingCheckInId(null);
+        }
       })
       .catch((error) => {
         if (isCurrent) setCheckInError(error.message);
@@ -2928,7 +2941,7 @@ function WorkspaceView({
     return () => {
       isCurrent = false;
     };
-  }, [active, checkInDate, workspaceId]);
+  }, [active, checkInDate, workspaceId, pendingCheckInId]);
 
   const openComposer = (type) => {
     setComposerType(type);

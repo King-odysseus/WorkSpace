@@ -2856,6 +2856,12 @@ def check_in_list(request, workspace_id):
     if completed_error or next_steps_error or blockers_error:
         return JsonResponse({'error': completed_error or next_steps_error or blockers_error}, status=400)
 
+    existing_check_in = CheckIn.objects.filter(
+        workspace_id=workspace_id,
+        user=request.user,
+        date=check_in_date,
+    ).first()
+    previous_blockers = existing_check_in.blockers if existing_check_in else ''
     check_in, created = CheckIn.objects.update_or_create(
         workspace_id=workspace_id,
         user=request.user,
@@ -2869,12 +2875,26 @@ def check_in_list(request, workspace_id):
     actor_name = request.user.get_full_name() or request.user.email
     action = 'submitted' if created else 'updated'
     record_activity(workspace_id, request.user, 'check_in_submitted', f'{actor_name} {action} a daily check-in for {check_in.date.isoformat()}.')
-    notify_managers(workspace_id, request.user, f'{action} a check-in', check_in.date.isoformat(), target_type='check_in', target_id=check_in.id, dedup_key=f'check_in:{check_in.id}' if created else '')
-    if check_in.blockers:
-        leaders = Membership.objects.filter(workspace_id=workspace_id, role__in=['owner', 'manager']).select_related('user')
+    if created:
+        notify_managers(
+            workspace_id, request.user, 'submitted a check-in', check_in.date.isoformat(),
+            target_type='check_in', target_id=check_in.id,
+            immediate=True, dedup_key=f'check_in:{check_in.id}:{check_in.date.isoformat()}',
+        )
+    if blockers != previous_blockers:
+        leaders = Membership.objects.filter(workspace_id=workspace_id, role__in=['owner', 'manager']).exclude(user=request.user).select_related('user')
         for leader in leaders:
-            if leader.user != request.user:
-                create_notification(workspace_id, leader.user, 'check_in_blocker', f'{actor_name} reported a blocker', check_in.blockers[:120], target_type='check_in', target_id=check_in.id)
+            if blockers:
+                title = f'{actor_name} reported a blocker'
+                body = blockers[:120]
+            else:
+                title = f'{actor_name} cleared a blocker'
+                body = 'The blocker was removed from this check-in.'
+            create_notification(
+                workspace_id, leader.user, 'check_in_blocker', title, body,
+                target_type='check_in', target_id=check_in.id,
+                group_key=f'check_in:{check_in.id}',
+            )
     return JsonResponse({'check_in': check_in.as_dict()}, status=201 if created else 200)
 
 
