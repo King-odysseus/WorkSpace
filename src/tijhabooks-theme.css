@@ -850,6 +850,12 @@ html[data-theme='dark'] .dependency-warning { color: #FCD34D; background: rgb(24
 .attachment-upload { display: flex; align-items: center; justify-content: center; margin-top: 12px; padding: 10px; border: 1px dashed #B8C1CC; border-radius: 9px; color: #6B7280; cursor: pointer; font-size: 12px; }
 .attachment-upload input { display: none; }
 html[data-theme='dark'] .attachment-row { border-color: #28516F; }
+.attachment-row a { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.attachment-row a span { overflow: hidden; text-overflow: ellipsis; }
+.attachment-thumb { flex: none; width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: #EEF0F3; }
+.chat-shared-image { display: block; width: fit-content; max-width: min(320px, 100%); margin: .55rem 0; border-radius: 10px; overflow: hidden; line-height: 0; }
+.chat-shared-image img { display: block; max-width: 100%; max-height: 260px; object-fit: contain; background: #EEF0F3; }
+html[data-theme='dark'] :is(.attachment-thumb, .chat-shared-image img) { background: #16324B; }
 html[data-theme='dark'] .attachment-upload { border-color: #527896; color: #B9CCDD; }
 .chat-reply { margin-left: 28px; padding-left: 12px; border-left: 2px solid #E2E2E6; }
 .chat-reply-button { border: 0; background: transparent; color: #1D4ED8; cursor: pointer; font-size: 11px; font-weight: 700; padding: 0; }

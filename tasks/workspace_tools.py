@@ -13,13 +13,14 @@ from urllib.parse import urlparse
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings as django_settings
 from django.db import transaction
-from django.http import FileResponse, JsonResponse
+from django.http import JsonResponse
 from django.http import HttpResponse, HttpResponseRedirect
 from openpyxl import Workbook, load_workbook
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .models import Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
+from .file_responses import stored_file_response
 from .sanitize import sanitize_document_content
 from .views import require_workspace_member
 
@@ -604,7 +605,7 @@ def workspace_file_download(request, file_id):
         if item.cloudinary_url:
             return HttpResponseRedirect(item.cloudinary_url)
         return JsonResponse({'error': 'File not found.'}, status=404)
-    return FileResponse(item.file.open('rb'), as_attachment=True, filename=item.original_name)
+    return stored_file_response(request, item.file.open('rb'), item.original_name)
 
 
 @require_http_methods(['DELETE'])

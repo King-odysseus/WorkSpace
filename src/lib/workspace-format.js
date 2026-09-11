@@ -190,7 +190,14 @@ async function readJsonResponse(response, fallbackMessage) {
   return response.json()
 }
 
+// Must match INLINE_IMAGE_EXTENSIONS in tasks/file_responses.py, which is what
+// lets these URLs render in an <img> or open in a tab instead of downloading.
+function isImageFileName(name) {
+  return /\.(png|jpe?g|gif|webp)$/i.test(String(name || ''))
+}
+
 export {
+  isImageFileName,
   PRESENCE_LABEL,
   PRESENCE_OPTIONS,
   WORK_SHIFT_TOAST,

@@ -14,13 +14,14 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import EmptyPage, Paginator
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
 from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
+from .file_responses import stored_file_response
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
 
@@ -1787,7 +1788,7 @@ def task_attachment_download(request, attachment_id):
         attachment_file = attachment.file.open('rb')
     except FileNotFoundError:
         return JsonResponse({'error': 'Attachment file is unavailable.'}, status=404)
-    return FileResponse(attachment_file, as_attachment=True, filename=attachment.original_name)
+    return stored_file_response(request, attachment_file, attachment.original_name)
 
 
 @require_http_methods(['GET', 'PATCH'])
