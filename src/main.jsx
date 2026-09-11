@@ -1375,6 +1375,15 @@ function App() {
       setActive("Check-ins");
       return;
     }
+    if (notification.target_type === "workstream") {
+      const targetWorkstream = localData.lookupValues.find(
+        (value) => value.kind === "workstream" && String(value.id) === String(notification.target_id),
+      );
+      if (targetWorkstream) setPlannerProjectFilter("operations");
+      setPendingWorkstreamNotification(notification.target_id);
+      setActive("Planner");
+      return;
+    }
     if (["project", "risk_issue"].includes(notification.target_type)) {
       const targetProject = localData.projects.find(
         (project) => String(project.id) === String(notification.target_id),
@@ -2808,6 +2817,7 @@ function WorkspaceView({
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
   const [pendingProjectNotification, setPendingProjectNotification] = useState(null);
+  const [pendingWorkstreamNotification, setPendingWorkstreamNotification] = useState(null);
   const [projectOperation, setProjectOperation] = useState("");
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
   const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
@@ -2958,6 +2968,12 @@ function WorkspaceView({
     [data],
   );
   useEffect(() => setSavedViews(data.savedViews || []), [data.savedViews]);
+
+  useEffect(() => {
+    if (active === "Planner" && pendingWorkstreamNotification && localData.lookupValues.some((value) => value.kind === "workstream" && String(value.id) === String(pendingWorkstreamNotification))) {
+      setPendingWorkstreamNotification(null);
+    }
+  }, [active, localData.lookupValues, pendingWorkstreamNotification]);
 
   useEffect(() => {
     if (active !== "Projects" || !pendingProjectNotification) return;
@@ -3760,6 +3776,7 @@ function WorkspaceView({
           lookupValues={localData.lookupValues || []}
           projectFilter="operations"
           scopeMode="operations"
+          initialWorkstream={localData.lookupValues.find((value) => value.kind === "workstream" && String(value.id) === String(pendingWorkstreamNotification))?.name || "all"}
           onSearchChange={onSearchChange}
           members={availableMembers}
           searchQuery={searchQuery}

@@ -53,12 +53,12 @@ function PlannerTaskCard({ task, buckets, canReorder, onOpen, onDelete, onMove, 
   </article>
 }
 
-export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket }) {
+export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, initialWorkstream = 'all' }) {
   const [status, setStatus] = useState('all')
   const [priority, setPriority] = useState('all')
   const [assignee, setAssignee] = useState('all')
   const [supporter, setSupporter] = useState('all')
-  const [workstream, setWorkstream] = useState(() => scopeMode === 'operations' ? localStorage.getItem('workspace-operations-workstream-filter') || 'all' : 'all')
+  const [workstream, setWorkstream] = useState(() => initialWorkstream !== 'all' ? initialWorkstream : scopeMode === 'operations' ? localStorage.getItem('workspace-operations-workstream-filter') || 'all' : 'all')
   useEffect(() => { if (scopeMode === 'operations') localStorage.setItem('workspace-operations-workstream-filter', workstream) }, [scopeMode, workstream])
   const [phase, setPhase] = useState('all')
   const [bucketFilter, setBucketFilter] = useState('all')
