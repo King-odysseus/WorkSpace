@@ -1657,9 +1657,12 @@ def task_comment_list(request, task_id):
         return JsonResponse({'error': 'Comment must be between 1 and 4000 characters.'}, status=400)
     comment = TaskComment.objects.create(task=task, author=request.user, body=body)
     record_activity(task.workspace_id, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.')
+    comment_recipient_ids = set()
     if task.assignee and task.assignee != request.user:
+        comment_recipient_ids.add(task.assignee.id)
         create_notification(task.workspace_id, task.assignee, 'task_comment', f'New comment on {task.title}', body[:120], target_type='task', target_id=task.id)
     notify_managers(task.workspace_id, request.user, 'commented on task', task.title, target_type='task', target_id=task.id)
+    notify_mentions(task.workspace_id, request.user, body, 'task', task.id, exclude_user_ids=comment_recipient_ids)
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
@@ -2929,9 +2932,12 @@ def check_in_comment_list(request, workspace_id, check_in_id):
     participant_ids.add(check_in.user_id)
     participant_ids.discard(request.user.id)
     recipients = User.objects.filter(id__in=participant_ids)
+    comment_recipient_ids = set()
     for recipient in recipients:
+        comment_recipient_ids.add(recipient.id)
         title = 'commented on your check-in' if recipient.id == check_in.user_id else 'commented on a check-in you replied to'
         create_notification(workspace_id, recipient, 'check_in_comment', f'{actor_name} {title}', body[:120], target_type='check_in', target_id=check_in.id)
+    notify_mentions(workspace_id, request.user, body, 'check_in', check_in.id, exclude_user_ids=comment_recipient_ids - {check_in.user_id})
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
@@ -2962,16 +2968,17 @@ def shared_chat_items(workspace_id, payload):
     return documents, files
 
 
-def notify_mentions(workspace_id, actor, text, target_type, target_id, recipients=None):
-    tokens = {token.lower() for token in re.findall(r'@([A-Za-z0-9_.-]+)', text)}
+def notify_mentions(workspace_id, actor, text, target_type, target_id, recipients=None, exclude_user_ids=None):
+    tokens = {re.sub(r'[^a-z0-9]', '', token.lower()) for token in re.findall(r'@([A-Za-z0-9_.-]+)', text)}
     if not tokens:
         return
+    excluded = set(exclude_user_ids or [])
     members = recipients or Membership.objects.filter(workspace_id=workspace_id).select_related('user')
     for member in members:
-        aliases = {member.user.email.split('@')[0].lower(), member.user.first_name.lower(), member.user.last_name.lower()}
-        if 'channel' in tokens or tokens.intersection(aliases):
-            if member.user != actor:
-                create_notification(workspace_id, member.user, 'mention', f'{actor.get_full_name() or actor.email} mentioned you', text[:120], target_type=target_type, target_id=target_id)
+        email_name = member.user.email.split('@')[0].lower()
+        aliases = {re.sub(r'[^a-z0-9]', '', alias) for alias in (email_name, member.user.first_name, member.user.last_name)}
+        if ('channel' in tokens or tokens.intersection(aliases)) and member.user != actor and member.user.id not in excluded:
+            create_notification(workspace_id, member.user, 'mention', f'{actor.get_full_name() or actor.email} mentioned you', text[:120], target_type=target_type, target_id=target_id)
 
 
 def reaction_summary(reaction_model, message_ids, user):
@@ -3299,6 +3306,7 @@ def follow_up_comment_list(request, follow_up_id):
             target_type='follow_up',
             target_id=follow_up.id,
         )
+    notify_mentions(follow_up.workspace_id, request.user, body, 'follow_up', follow_up.id, exclude_user_ids=recipient_ids)
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 

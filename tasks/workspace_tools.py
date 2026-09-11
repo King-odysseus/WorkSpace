@@ -540,6 +540,8 @@ def workspace_document_comment_list(request, workspace_id, document_id):
         return JsonResponse({'error': 'Comment must be between 1 and 4,000 characters.'}, status=400)
     parent = document.comments.filter(id=payload.get('parent_id')).first() if payload.get('parent_id') else None
     comment = WorkspaceDocumentComment.objects.create(document=document, author=request.user, parent=parent, body=body, anchor=payload.get('anchor') if isinstance(payload.get('anchor'), dict) else {})
+    from .views import notify_mentions
+    notify_mentions(workspace_id, request.user, body, 'document', document.id, exclude_user_ids={document.created_by_id})
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 
