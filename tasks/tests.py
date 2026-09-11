@@ -19,6 +19,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .automation import run_workspace_automation
 from .views import create_notification
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
@@ -1126,6 +1127,95 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='check_in_submitted').count(), 1)
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_blocker').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='manager_activity').count(), 1)
+
+    def test_check_in_update_does_not_repeat_manager_or_unchanged_blocker_alerts(self):
+        teammate = User.objects.create_user(username='checkin-member@example.com', email='checkin-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+        url = reverse('check-in-list', args=[self.workspace.id])
+        payload = {'date': '2026-09-02', 'completed': 'First update', 'blockers': 'Waiting on approval.'}
+        self.client.post(url, data=json.dumps(payload), content_type='application/json')
+        self.client.post(url, data=json.dumps({**payload, 'completed': 'Second update'}), content_type='application/json')
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='manager_activity').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_blocker').count(), 1)
+
+    def test_check_in_blocker_change_alerts_and_clear_alert(self):
+        teammate = User.objects.create_user(username='checkin-member@example.com', email='checkin-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(teammate)
+        url = reverse('check-in-list', args=[self.workspace.id])
+        self.client.post(url, data=json.dumps({'date': '2026-09-02', 'completed': 'Update', 'blockers': 'First blocker'}), content_type='application/json')
+        self.client.post(url, data=json.dumps({'date': '2026-09-02', 'completed': 'Update', 'blockers': 'Second blocker'}), content_type='application/json')
+        self.client.post(url, data=json.dumps({'date': '2026-09-02', 'completed': 'Update', 'blockers': ''}), content_type='application/json')
+        notifications = WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_blocker').order_by('created_at')
+        self.assertEqual(notifications.count(), 3)
+        self.assertEqual(notifications.last().title, 'checkin-member@example.com cleared a blocker')
+
+    def test_check_in_manager_notifications_exclude_submitter(self):
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('check-in-list', args=[self.workspace.id]),
+            data=json.dumps({'date': '2026-09-02', 'completed': 'Owner update'}),
+            content_type='application/json',
+        )
+        self.assertFalse(WorkspaceNotification.objects.filter(recipient=self.user).exists())
+
+    def test_check_in_settings_are_restricted_and_validated(self):
+        url = reverse('workspace-check-in-settings', args=[self.workspace.id])
+        member = User.objects.create_user(username='settings-member@example.com', email='settings-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        self.client.force_login(member)
+        self.assertFalse(self.client.get(url).json()['can_manage'])
+        self.assertEqual(self.client.patch(url, data=json.dumps({'check_in_reminder_hour': 10}), content_type='application/json').status_code, 403)
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.patch(url, data=json.dumps({'check_in_reminder_hour': 24}), content_type='application/json').status_code, 400)
+        saved = self.client.patch(url, data=json.dumps({'check_in_reminder_hour': 10}), content_type='application/json')
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()['settings']['check_in_reminder_hour'], 10)
+
+    def test_check_in_automation_reminds_missing_members_and_deduplicates(self):
+        teammate = User.objects.create_user(username='automation-member@example.com', email='automation-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        setting = WorkspaceSetting.objects.create(workspace=self.workspace, check_in_reminder_hour=timezone.localtime(timezone.now()).hour)
+        counts = run_workspace_automation(self.workspace.id)
+        self.assertEqual(counts['check_in_reminders'], 2)
+        self.assertEqual(counts['check_in_summary'], 1)
+        self.assertEqual(run_workspace_automation(self.workspace.id)['check_in_reminders'], 0)
+        self.assertEqual(WorkspaceNotification.objects.filter(kind='check_in_reminder').count(), 2)
+        self.assertEqual(WorkspaceNotification.objects.filter(kind='check_in_summary').count(), 1)
+        setting.delete()
+
+    def test_mentions_match_exact_normalized_email_name_and_do_not_duplicate_comment_alerts(self):
+        teammate = User.objects.create_user(username='jane.doe@example.com', email='jane.doe@example.com', password='secure-pass-123', first_name='Jane')
+        other = User.objects.create_user(username='john@example.com', email='john@example.com', password='secure-pass-123', first_name='John')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        Membership.objects.create(workspace=self.workspace, user=other, role='member')
+        task = Task.objects.create(workspace=self.workspace, title='Mention task', assignee=self.user)
+        self.client.post(reverse('task-comment-list', args=[task.id]), data=json.dumps({'body': 'Thanks @jane.doe.'}), content_type='application/json')
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='mention').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='task_comment').count(), 0)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=other, kind='mention').count(), 0)
+        self.client.post(reverse('task-comment-list', args=[task.id]), data=json.dumps({'body': 'Thanks @johnny.'}), content_type='application/json')
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=other, kind='mention').count(), 0)
+
+    def test_mentions_work_in_check_in_follow_up_and_document_comments(self):
+        teammate = User.objects.create_user(username='comment-target@example.com', email='comment-target@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(self.user)
+        check_in = CheckIn.objects.create(workspace=self.workspace, user=teammate, date='2026-09-02')
+        follow_up = FollowUp.objects.create(workspace=self.workspace, created_by=self.user, note='Follow up')
+        document = WorkspaceDocument.objects.create(workspace=self.workspace, created_by=self.user, title='Doc', content={})
+        responses = [
+            self.client.post(reverse('check-in-comment-list', args=[self.workspace.id, check_in.id]), data=json.dumps({'body': 'Please see @comment-target.'}), content_type='application/json'),
+            self.client.post(reverse('follow-up-comment-list', args=[follow_up.id]), data=json.dumps({'body': 'Please see @comment-target.'}), content_type='application/json'),
+            self.client.post(reverse('workspace-document-comment-list', args=[self.workspace.id, document.id]), data=json.dumps({'body': 'Please see @comment-target.'}), content_type='application/json'),
+        ]
+        self.assertEqual([response.status_code for response in responses], [201, 201, 201])
+        self.assertEqual(
+            set(WorkspaceNotification.objects.filter(recipient=teammate, kind='mention').values_list('target_type', flat=True)),
+            {'check_in', 'follow_up', 'document'},
+        )
 
     def test_check_in_rejects_oversized_text(self):
         response = self.client.post(
