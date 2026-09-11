@@ -1375,6 +1375,15 @@ function App() {
       setActive("Check-ins");
       return;
     }
+    if (notification.target_type === "calendar_event") {
+      const targetEvent = localData.events.find(
+        (event) => String(event.id) === String(notification.target_id),
+      );
+      if (targetEvent) setSelectedEvent(targetEvent);
+      else setPendingEventId(String(notification.target_id));
+      setActive("Calendar");
+      return;
+    }
     if (notification.target_type === "follow_up") {
       const targetFollowUp = localData.followUps.find(
         (followUp) => String(followUp.id) === String(notification.target_id),
@@ -2789,6 +2798,7 @@ function WorkspaceView({
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [pendingEventId, setPendingEventId] = useState(null);
   const [savedViews, setSavedViews] = useState(data.savedViews || []);
   const canCommentCheckIns = Boolean(currentWorkspace?.permissions?.includes("comment_check_ins"));
   const [form, setForm] = useState({
@@ -2931,6 +2941,17 @@ function WorkspaceView({
     [data],
   );
   useEffect(() => setSavedViews(data.savedViews || []), [data.savedViews]);
+
+  useEffect(() => {
+    if (active !== "Calendar" || !pendingEventId) return;
+    const targetEvent = localData.events.find(
+      (event) => String(event.id) === String(pendingEventId),
+    );
+    if (targetEvent) {
+      setSelectedEvent(targetEvent);
+      setPendingEventId(null);
+    }
+  }, [active, localData.events, pendingEventId]);
 
   useEffect(() => {
     if (active === "Follow-up" && pendingFollowUpId) {
