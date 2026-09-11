@@ -3047,7 +3047,7 @@ function WorkspaceView({
   }, [active, workspaceId, localData.events, localData.followUps, localData.lookupValues, localData.projects, pendingEventId, pendingFollowUpId, pendingProjectNotification, pendingWorkstreamNotification, onActionError]);
 
   useEffect(() => {
-    if (active !== "Projects" || !pendingProjectNotification) return;
+    if (active !== "Projects" || !pendingProjectNotification || pendingProjectNotification.targetType === "risk_issue") return;
     const targetProject = localData.projects.find(
       (project) => String(project.id) === String(pendingProjectNotification.id),
     );
