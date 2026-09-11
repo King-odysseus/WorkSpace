@@ -12,7 +12,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from .models import Membership, NotificationDelivery, Task
+from .models import CheckIn, Membership, NotificationDelivery, Task, WorkspaceSetting
 from .reporting import (
     BLOCKED_STATUS,
     COMPLETED_STATUS,
@@ -99,7 +99,33 @@ def run_workspace_automation(workspace_id):
     counts = {
         'due_soon': 0, 'overdue': 0, 'blocked': 0, 'stale': 0,
         'operations_digest': 0, 'project_digest': 0,
+        'check_in_reminders': 0, 'check_in_summary': 0,
     }
+
+    setting = WorkspaceSetting.objects.filter(workspace_id=workspace_id).first()
+    reminder_hour = setting.check_in_reminder_hour if setting else 9
+    if timezone.localtime(now).hour == reminder_hour:
+        members = list(Membership.objects.filter(workspace_id=workspace_id).select_related('user'))
+        checked_in_ids = set(CheckIn.objects.filter(workspace_id=workspace_id, date=today).values_list('user_id', flat=True))
+        missing_members = [membership for membership in members if membership.user_id not in checked_in_ids]
+        for membership in missing_members:
+            if deliver_once(
+                workspace_id, membership.user, 'check_in_reminder',
+                'Daily check-in reminder', 'You have not submitted today\'s check-in yet.',
+                target_type='check_in', target_id='',
+                dedup_key=f'check_in_reminder:{today.isoformat()}:{membership.user_id}',
+            ):
+                counts['check_in_reminders'] += 1
+        checked_count = len(members) - len(missing_members)
+        for leader in _leaders(workspace_id):
+            if deliver_once(
+                workspace_id, leader.user, 'check_in_summary',
+                f'{checked_count} of {len(members)} checked in',
+                f'{len(missing_members)} team member(s) have not submitted today\'s check-in.',
+                target_type='workspace', target_id=workspace_id,
+                dedup_key=f'check_in_summary:{today.isoformat()}:{leader.user_id}',
+            ):
+                counts['check_in_summary'] += 1
 
     for task in due_soon:
         if _deliver_task_reminder(

@@ -114,6 +114,32 @@ def _provider_endpoint(provider, base_url):
 
 
 @require_http_methods(['GET', 'PATCH'])
+def workspace_check_in_settings(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    setting = _setting(workspace_id)
+    if request.method == 'GET':
+        return JsonResponse({'settings': setting.as_dict(), 'can_manage': membership.role in {'owner', 'manager'}})
+    if membership.role not in {'owner', 'manager'}:
+        return JsonResponse({'error': 'Owner or manager access is required.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if 'check_in_reminder_hour' not in payload:
+        return JsonResponse({'error': 'Reminder hour is required.'}, status=400)
+    try:
+        reminder_hour = int(payload['check_in_reminder_hour'])
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Reminder hour must be an integer from 0 to 23.'}, status=400)
+    if not 0 <= reminder_hour <= 23:
+        return JsonResponse({'error': 'Reminder hour must be an integer from 0 to 23.'}, status=400)
+    setting.check_in_reminder_hour = reminder_hour
+    setting.save(update_fields=['check_in_reminder_hour', 'updated_at'])
+    return JsonResponse({'settings': setting.as_dict(), 'can_manage': True})
+
+
 def workspace_ai_settings(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
     if error:

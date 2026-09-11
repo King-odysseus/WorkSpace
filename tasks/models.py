@@ -1211,6 +1211,7 @@ class WorkspaceSetting(models.Model):
     screen_capture_retention_days = models.PositiveSmallIntegerField(default=7)
     screen_sharing_policy = models.TextField(default='Screen sharing is optional and starts only after the employee accepts a request and chooses a screen or window in the browser. WorkSpace captures screenshots only while sharing is active, never captures audio or webcam data, and lets the employee stop at any time. Authorised workspace leaders can view, download, or delete captures; every such action is audited. Captures expire automatically after the configured retention period.')
     screen_sharing_policy_version = models.PositiveIntegerField(default=1)
+    check_in_reminder_hour = models.PositiveSmallIntegerField(default=9)
     updated_at = models.DateTimeField(auto_now=True)
 
     def as_dict(self):
@@ -1229,6 +1230,7 @@ class WorkspaceSetting(models.Model):
             'screen_capture_retention_days': self.screen_capture_retention_days,
             'screen_sharing_policy': self.screen_sharing_policy,
             'screen_sharing_policy_version': self.screen_sharing_policy_version,
+            'check_in_reminder_hour': self.check_in_reminder_hour,
             'updated_at': self.updated_at.isoformat(),
         }
 

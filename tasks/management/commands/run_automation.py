@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Run idempotent due-soon, overdue, blocked, stale and digest reminders for every workspace.'
+    help = 'Run idempotent task, check-in and digest reminders for every workspace.'
 
     def add_arguments(self, parser):
         parser.add_argument('--workspace-id', type=int, help='Run for a single workspace instead of all.')
@@ -19,6 +19,7 @@ class Command(BaseCommand):
         totals = {
             'due_soon': 0, 'overdue': 0, 'blocked': 0, 'stale': 0,
             'operations_digest': 0, 'project_digest': 0,
+            'check_in_reminders': 0, 'check_in_summary': 0,
         }
         for workspace_id in workspace_ids:
             try:
@@ -33,5 +34,6 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             'Automation complete: {due_soon} due-soon, {overdue} overdue, {blocked} blocked, '
-            '{stale} stale, {operations_digest} operations digest(s), {project_digest} project digest(s).'.format(**totals)
+            '{stale} stale, {check_in_reminders} check-in reminder(s), {check_in_summary} check-in summary(s), '
+            '{operations_digest} operations digest(s), {project_digest} project digest(s).'.format(**totals)
         ))

@@ -74,6 +74,8 @@ function SettingsView({
 }) {
   const [section, setSection] = useState("appearance");
   const [notificationPrefs, setNotificationPrefs] = useState(null);
+  const [checkInSettings, setCheckInSettings] = useState(null);
+  const [checkInSettingsError, setCheckInSettingsError] = useState("");
   const [prefsError, setPrefsError] = useState("");
   const [browserPermission, setBrowserPermission] = useState(() =>
     "Notification" in window ? Notification.permission : "unsupported",
@@ -292,6 +294,40 @@ function SettingsView({
       isCurrent = false;
     };
   }, [workspaceId]);
+  useEffect(() => {
+    if (!workspaceId || !canManageMembers) return undefined;
+    let isCurrent = true;
+    fetch(`/api/workspaces/${workspaceId}/check-in-settings/`, { credentials: "include" })
+      .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (!isCurrent) return;
+        if (!ok) throw new Error(data.error || "Check-in settings could not be loaded.");
+        setCheckInSettings(data.settings);
+      })
+      .catch((error) => {
+        if (isCurrent) setCheckInSettingsError(error.message);
+      });
+    return () => { isCurrent = false; };
+  }, [workspaceId, canManageMembers]);
+  const updateCheckInReminderHour = async (value) => {
+    const previous = checkInSettings;
+    setCheckInSettings((current) => ({ ...current, check_in_reminder_hour: Number(value) }));
+    setCheckInSettingsError("");
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/check-in-settings/`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": await getCsrfToken() },
+        body: JSON.stringify({ check_in_reminder_hour: Number(value) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Check-in settings could not be saved.");
+      setCheckInSettings(data.settings);
+    } catch (error) {
+      setCheckInSettings(previous);
+      setCheckInSettingsError(error.message);
+    }
+  };
   const updatePreference = async (key, value) => {
     const previous = notificationPrefs;
     setNotificationPrefs((current) => ({ ...current, [key]: value }));
@@ -1032,6 +1068,24 @@ function SettingsView({
                   {prefsError}
                 </p>
               )}
+              {canManageMembers && checkInSettings && (
+                <div className="settings-row settings-control-row">
+                  <div>
+                    <strong>Daily check-in reminder</strong>
+                    <span>Send reminders at this workspace’s local time.</span>
+                  </div>
+                  <select
+                    value={checkInSettings.check_in_reminder_hour}
+                    onChange={(event) => updateCheckInReminderHour(event.target.value)}
+                    aria-label="Daily check-in reminder hour"
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour}>{`${String(hour).padStart(2, "0")}:00`}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {checkInSettingsError && <p className="auth-error" role="alert">{checkInSettingsError}</p>}
               <div className="settings-row settings-control-row">
                 <div>
                   <strong>Desktop notifications</strong>
