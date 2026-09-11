@@ -1366,7 +1366,7 @@ function App() {
     risk_issue: "Projects",
     workstream: "Planner",
   };
-  const openNotification = (notification) => {
+  const openNotification = async (notification) => {
     setNotificationOpen(false);
     markNotificationRead(notification.id);
     if (notification.target_type === "check_in") {
@@ -1378,7 +1378,21 @@ function App() {
       const targetTask = tasks.find(
         (task) => String(task.id) === String(notification.target_id),
       );
-      if (targetTask) setSelectedTask(targetTask);
+      if (targetTask) {
+        setSelectedTask(targetTask);
+        return;
+      }
+      try {
+        const response = await fetch(`/api/tasks/${notification.target_id}/`, {
+          credentials: "include",
+          headers: { "X-Workspace-Id": String(activeWorkspaceId) },
+        });
+        if (!response.ok) throw new Error("Task could not be loaded.");
+        const payload = await response.json();
+        setSelectedTask(payload.task);
+      } catch {
+        toast.error("Task could not be opened.");
+      }
       return;
     }
     const destination = notificationDestinations[notification.target_type];
