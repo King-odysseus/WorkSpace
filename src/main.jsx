@@ -722,11 +722,14 @@ function App() {
     const workspaceRole = session.user.workspaces.find(
       (workspace) => workspace.id === workspaceId,
     )?.role;
+    let refreshInFlight = false;
     const refreshCollaboration = () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
       const auditRequest = ["owner", "manager"].includes(workspaceRole)
         ? read(`/api/workspaces/${workspaceId}/audit-logs/`, { audit_logs: [] })
         : Promise.resolve({ audit_logs: [] });
-      return Promise.all([
+      const refreshRequest = Promise.all([
         readAllTasks(),
         read(`/api/workspaces/${workspaceId}/members/?page_size=500`, {
           members: [],
@@ -846,6 +849,9 @@ function App() {
             error.message,
           );
         });
+      return refreshRequest.finally(() => {
+        refreshInFlight = false;
+      });
     };
 
     // A full refresh refetches ~20 collections, so don't run one on a timer.
