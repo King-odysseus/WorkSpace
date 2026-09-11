@@ -96,6 +96,10 @@ NOTIFICATION_KIND_PREFERENCE = {
     'blocked_alert': 'task_updates',
     'stale_update_reminder': 'task_updates',
     'workspace_digest': 'task_updates',
+    # Screen-sharing requests and responses are workflow events, so they use
+    # the existing operational preference rather than a dedicated category.
+    'screen_share_request': 'task_updates',
+    'screen_share_response': 'task_updates',
     'manager_activity': 'manager_activity',
 }
 

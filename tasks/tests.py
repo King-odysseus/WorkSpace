@@ -2729,6 +2729,11 @@ class ScreenSharingApiTests(TestCase):
         self.assertEqual(session.policy_text, self.setting.screen_sharing_policy)
         self.assertTrue(AuditLog.objects.filter(action='screen_share_accepted', actor=self.employee).exists())
 
+    def test_task_updates_preference_controls_screen_sharing_notifications(self):
+        NotificationPreference.objects.create(workspace=self.workspace, user=self.employee, task_updates=False)
+        session = self.request_session()
+        self.assertFalse(WorkspaceNotification.objects.filter(recipient=self.employee, kind='screen_share_request', target_id=str(session.id)).exists())
+
     def test_members_cannot_request_or_list_other_employee_sessions(self):
         session = self.request_session()
         self.login(self.viewer)
