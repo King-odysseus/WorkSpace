@@ -1391,7 +1391,7 @@ function App() {
       return;
     }
     if (["project", "risk_issue"].includes(notification.target_type)) {
-      const targetProject = localData.projects.find(
+      const targetProject = notification.target_type === "project" && localData.projects.find(
         (project) => String(project.id) === String(notification.target_id),
       );
       if (targetProject) {
@@ -1401,6 +1401,7 @@ function App() {
         setPendingProjectNotification({
           id: String(notification.target_id),
           operation: notification.target_type === "risk_issue" ? "risks" : "",
+          targetType: notification.target_type,
         });
       }
       setActive("Projects");
@@ -2983,6 +2984,67 @@ function WorkspaceView({
       setPendingWorkstreamNotification(null);
     }
   }, [active, localData.lookupValues, pendingWorkstreamNotification]);
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    let current = true;
+    const read = async (url) => {
+      const response = await fetch(url, { credentials: "include" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Notification target could not be loaded.");
+      return payload;
+    };
+    const loadMissingTarget = async () => {
+      try {
+        if (active === "Follow-up" && pendingFollowUpId && !localData.followUps.some((item) => String(item.id) === String(pendingFollowUpId))) {
+          const payload = await read(`/api/workspaces/${workspaceId}/follow-ups/`);
+          const target = (payload.follow_ups || []).find((item) => String(item.id) === String(pendingFollowUpId));
+          if (current && target) setLocalData((data) => ({ ...data, followUps: [...data.followUps.filter((item) => String(item.id) !== String(target.id)), target] }));
+          return;
+        }
+        if (active === "Calendar" && pendingEventId && !localData.events.some((item) => String(item.id) === String(pendingEventId))) {
+          const payload = await read(`/api/workspaces/${workspaceId}/calendar-events/`);
+          const target = (payload.events || []).find((item) => String(item.id) === String(pendingEventId));
+          if (current && target) setLocalData((data) => ({ ...data, events: [...data.events.filter((item) => String(item.id) !== String(target.id)), target] }));
+          return;
+        }
+        if (active === "Planner" && pendingWorkstreamNotification && !localData.lookupValues.some((item) => item.kind === "workstream" && String(item.id) === String(pendingWorkstreamNotification))) {
+          const payload = await read(`/api/workspaces/${workspaceId}/lookup-values/`);
+          const target = (payload.lookup_values || []).find((item) => item.kind === "workstream" && String(item.id) === String(pendingWorkstreamNotification));
+          if (current && target) setLocalData((data) => ({ ...data, lookupValues: [...data.lookupValues.filter((item) => item.id !== target.id), target] }));
+          return;
+        }
+        if (active === "Projects" && pendingProjectNotification) {
+          const { id, operation, targetType } = pendingProjectNotification;
+          if (targetType === "risk_issue") {
+            const payload = await read(`/api/workspaces/${workspaceId}/risks-issues/`);
+            const risk = (payload.records || []).find((item) => String(item.id) === String(id));
+            if (!risk?.project_id) return;
+            const project = localData.projects.find((item) => String(item.id) === String(risk.project_id));
+            if (project && current) {
+              setSelectedProjectWorkspace(project);
+              setProjectOperation(operation);
+              setPendingProjectNotification(null);
+            } else {
+              const projects = await read(`/api/workspaces/${workspaceId}/projects/?page_size=500`);
+              const targetProject = (projects.projects || []).find((item) => String(item.id) === String(risk.project_id));
+              if (current && targetProject) {
+                setLocalData((data) => ({ ...data, projects: [...data.projects.filter((item) => String(item.id) !== String(targetProject.id)), targetProject] }));
+              }
+            }
+          } else if (!localData.projects.some((item) => String(item.id) === String(id))) {
+            const payload = await read(`/api/workspaces/${workspaceId}/projects/?page_size=500`);
+            const target = (payload.projects || []).find((item) => String(item.id) === String(id));
+            if (current && target) setLocalData((data) => ({ ...data, projects: [...data.projects.filter((item) => String(item.id) !== String(target.id)), target] }));
+          }
+        }
+      } catch (error) {
+        if (current) onActionError(error.message || "Notification target could not be loaded.");
+      }
+    };
+    loadMissingTarget();
+    return () => { current = false; };
+  }, [active, workspaceId, localData.events, localData.followUps, localData.lookupValues, localData.projects, pendingEventId, pendingFollowUpId, pendingProjectNotification, pendingWorkstreamNotification, onActionError]);
 
   useEffect(() => {
     if (active !== "Projects" || !pendingProjectNotification) return;
