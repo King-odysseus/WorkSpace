@@ -21,7 +21,7 @@ it.each([
   handlers.push({ data: { json: () => ({ title: 'New message', body: 'Hello' }) }, waitUntil: promise => { work = promise } })
   await work
   expect(self.navigator.setAppBadge).toHaveBeenCalledWith(31)
-  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent: false }))
+  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent: false, requireInteraction: false }))
   expect(client.postMessage).toHaveBeenCalledWith({ type: 'NOTIFICATIONS_CHANGED' })
 })
 
@@ -52,5 +52,5 @@ it('still shows a push notification if the badge request fails with the app clos
   let work
   handlers.push({ data: { json: () => ({ title: 'New message' }) }, waitUntil: promise => { work = promise } })
   await work
-  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent: false }))
+  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent: false, requireInteraction: false }))
 })

@@ -101,7 +101,7 @@ self.addEventListener('push', event => {
     // Using the same path while visible, backgrounded, or minimized prevents
     // duplicate foreground chimes and makes the setting reliable.
     const notification = self.registration.showNotification(data.title, {
-      body: data.body, icon: '/icon-192.png', silent: data.sound === false, data: { url: data.url || '/' },
+      body: data.body, icon: '/icon-192.png', silent: data.sound === false, requireInteraction: false, data: { url: data.url || '/' },
     })
     const badge = (async () => {
       try {
