@@ -865,8 +865,10 @@ def plan_bucket_list(request, workspace_id):
             buckets = buckets.filter(project_id=scope_project_id, workstream__isnull=True)
         elif scope_workstream_id:
             buckets = buckets.filter(workstream_id=scope_workstream_id, project__isnull=True)
-        else:
-            buckets = buckets.filter(Q(project__isnull=False) | Q(workstream__isnull=False))
+        # With no scope given, return every bucket, including the workspace-wide
+        # default that has neither a project nor a workstream. The client fetches
+        # once and narrows the list itself, so excluding unscoped buckets here
+        # left a freshly created workspace reporting no buckets at all.
         return JsonResponse({'buckets': [bucket.as_dict() for bucket in buckets]})
     try:
         payload = json.loads(request.body or '{}')

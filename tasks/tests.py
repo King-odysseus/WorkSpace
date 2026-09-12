@@ -3519,3 +3519,43 @@ class AuditRemediationApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.membership.refresh_from_db()
         self.assertEqual(self.membership.role, 'manager')
+
+
+class PlanBucketListScopeTests(TestCase):
+    """The unscoped bucket list is what the client fetches once and narrows
+    itself, so it has to be complete. Regression: workspace creation still
+    makes a workspace-wide Backlog bucket with no project or workstream, and
+    the unscoped branch used to filter those out, so a fresh workspace
+    reported no buckets and the Planner board rendered empty."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='owner')
+        self.client.login(username='owner@example.com', password='secure-pass-123')
+
+    def test_unscoped_list_includes_the_workspace_wide_backlog(self):
+        PlanBucket.objects.create(workspace=self.workspace, name='Backlog', position=0)
+        response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([bucket['name'] for bucket in response.json()['buckets']], ['Backlog'])
+
+    def test_unscoped_list_returns_scoped_buckets_too(self):
+        project = Project.objects.create(workspace=self.workspace, name='Atlas')
+        workstream = LookupValue.objects.create(workspace=self.workspace, kind='workstream', name='Ops')
+        PlanBucket.objects.create(workspace=self.workspace, name='Backlog', position=0)
+        PlanBucket.objects.create(workspace=self.workspace, project=project, name='Sprint', position=0)
+        PlanBucket.objects.create(workspace=self.workspace, workstream=workstream, name='Rota', position=0)
+        response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(sorted(bucket['name'] for bucket in response.json()['buckets']), ['Backlog', 'Rota', 'Sprint'])
+
+    def test_scoped_list_still_narrows(self):
+        project = Project.objects.create(workspace=self.workspace, name='Atlas')
+        other = Project.objects.create(workspace=self.workspace, name='Borealis')
+        PlanBucket.objects.create(workspace=self.workspace, name='Backlog', position=0)
+        PlanBucket.objects.create(workspace=self.workspace, project=project, name='Sprint', position=0)
+        PlanBucket.objects.create(workspace=self.workspace, project=other, name='Intake', position=0)
+        response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]) + f'?project_id={project.id}')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([bucket['name'] for bucket in response.json()['buckets']], ['Sprint'])
