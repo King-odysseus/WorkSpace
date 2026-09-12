@@ -90,6 +90,11 @@ NOTIFICATION_KIND_PREFERENCE = {
     'follow_up_comment': 'task_updates',
     'check_in_blocker': 'task_updates',
     'check_in_comment': 'task_updates',
+    'check_in_submitted': 'task_updates',
+    'risk_issue_assigned': 'task_updates',
+    'document_shared': 'task_updates',
+    'document_comment': 'task_updates',
+    'invitation_response': 'manager_activity',
     'calendar_reminder': 'calendar_reminders',
     'due_soon_reminder': 'task_updates',
     'overdue_reminder': 'task_updates',
@@ -1682,7 +1687,7 @@ def task_comment_list(request, task_id):
         return JsonResponse({'error': 'Comment must be between 1 and 4000 characters.'}, status=400)
     comment = TaskComment.objects.create(task=task, author=request.user, body=body)
     record_activity(task.workspace_id, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.')
-    notify_task_activity(task, request.user, 'task_comment', f'New comment on {task.title}', body[:120])
+    notify_task_activity(task, request.user, 'task_comment', f'New comment on {task.title}', body[:120], immediate=True)
     notify_managers(task.workspace_id, request.user, 'commented on task', task.title, target_type='task', target_id=task.id)
     notify_mentions(task.workspace_id, request.user, body, 'task', task.id, exclude_user_ids={recipient.id for recipient in task_activity_recipients(task, request.user)})
     return JsonResponse({'comment': comment.as_dict()}, status=201)
@@ -2032,7 +2037,12 @@ def member_detail(request, workspace_id, user_id):
     if actor.role == 'manager' and membership.role != 'member':
         return JsonResponse({'error': 'Managers can only manage regular members.'}, status=403)
     if request.method == 'DELETE':
+        removed_name = membership.user.get_full_name() or membership.user.email
         membership.delete()
+        # Notify the remaining leaders. The removed user cannot be told in-app:
+        # the notification list is workspace scoped, so once membership is gone
+        # that row would be unreachable.
+        notify_managers(workspace_id, request.user, 'removed a member', removed_name, target_type='workspace', target_id=workspace_id)
         return JsonResponse({'removed': user_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -2041,11 +2051,13 @@ def member_detail(request, workspace_id, user_id):
     unknown_fields = set(payload) - {'role', 'permissions'}
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
+    role_changed = False
     if 'role' in payload:
         if payload['role'] not in {'manager', 'member'}:
             return JsonResponse({'error': 'Role must be manager or member.'}, status=400)
         if payload['role'] == 'manager' and actor.role != 'owner':
             return JsonResponse({'error': 'Only the workspace owner can grant manager access.'}, status=403)
+        role_changed = membership.role != payload['role']
         membership.role = payload['role']
     if 'permissions' in payload:
         # Only a manager's grants are configurable - members always get the
@@ -2058,6 +2070,16 @@ def member_detail(request, workspace_id, user_id):
                 return JsonResponse({'error': f'permissions must be a list drawn from: {", ".join(PERMISSION_KEYS)}.'}, status=400)
         membership.permissions = permissions
     membership.save(update_fields=['role', 'permissions'])
+    if role_changed and membership.user_id != request.user.id:
+        # Deliberately absent from NOTIFICATION_KIND_PREFERENCE so this is never
+        # silenced: the target is still a member and needs to know their access
+        # level changed.
+        create_notification(
+            workspace_id, membership.user, 'membership_change',
+            f'Your role in this workspace is now {membership.role}',
+            f'Changed by {actor.user.get_full_name() or actor.user.email}.',
+            target_type='workspace', target_id=workspace_id,
+        )
     return JsonResponse({'member': membership.as_dict()})
 
 
@@ -2280,7 +2302,15 @@ def invitation_accept(request, invitation_id):
         membership, member_created = Membership.objects.get_or_create(workspace=invitation.workspace, user=request.user, defaults={'role': invitation.role})
         invitation.status = 'accepted'
         invitation.save(update_fields=['status'])
-    record_activity(invitation.workspace_id, request.user, 'invitation_accepted', f'{request.user.get_full_name() or request.user.email} accepted an invitation to join as a {invitation.role}.')
+    actor_name = request.user.get_full_name() or request.user.email
+    record_activity(invitation.workspace_id, request.user, 'invitation_accepted', f'{actor_name} accepted an invitation to join as a {invitation.role}.')
+    if invitation.invited_by_id and invitation.invited_by_id != request.user.id:
+        create_notification(
+            invitation.workspace_id, invitation.invited_by, 'invitation_response',
+            f'{actor_name} accepted your invitation',
+            f'{actor_name} joined {invitation.workspace.name} as a {invitation.role}.',
+            target_type='workspace', target_id=invitation.workspace_id,
+        )
     return JsonResponse({'workspace': {'id': invitation.workspace_id, 'name': invitation.workspace.name, 'slug': invitation.workspace.slug}, 'membership': membership.as_dict()})
 
 
@@ -2292,7 +2322,15 @@ def invitation_decline(request, invitation_id):
             return error
         invitation.status = 'declined'
         invitation.save(update_fields=['status'])
-    record_activity(invitation.workspace_id, request.user, 'invitation_declined', f'{request.user.get_full_name() or request.user.email} declined an invitation to join.')
+    actor_name = request.user.get_full_name() or request.user.email
+    record_activity(invitation.workspace_id, request.user, 'invitation_declined', f'{actor_name} declined an invitation to join.')
+    if invitation.invited_by_id and invitation.invited_by_id != request.user.id:
+        create_notification(
+            invitation.workspace_id, invitation.invited_by, 'invitation_response',
+            f'{actor_name} declined your invitation',
+            f'{actor_name} declined to join {invitation.workspace.name}.',
+            target_type='workspace', target_id=invitation.workspace_id,
+        )
     return JsonResponse({'invitation': {'id': invitation.id, 'status': invitation.status}})
 
 
@@ -2630,6 +2668,14 @@ def risk_issue_list(request, workspace_id):
     record = RiskIssue.objects.create(workspace_id=workspace_id, project=project, kind=kind, title=title, detail=str(payload.get('detail', '') or '').strip(), severity=severity, likelihood=payload.get('likelihood') or None, impact=payload.get('impact') or None, mitigation=str(payload.get('mitigation', '') or '').strip(), escalation=str(payload.get('escalation', '') or '').strip(), status=status, owner=owner, owner_name=str(payload.get('owner', '') or '').strip(), due_date=due_date, task=task, expense=expense, created_by=request.user)
     record_activity(workspace_id, request.user, f'{kind}_created', f'{request.user.get_full_name() or request.user.email} created {kind} {record.title}.')
     notify_managers(workspace_id, request.user, f'created {kind}', record.title, target_type='risk_issue', target_id=record.id, dedup_key=f'created_{kind}:{record.id}')
+    if owner is not None and owner.id != request.user.id:
+        actor_name = request.user.get_full_name() or request.user.email
+        create_notification(
+            workspace_id, owner, 'risk_issue_assigned',
+            f'You own the {kind}: {record.title}',
+            f'Assigned by {actor_name}.',
+            target_type='risk_issue', target_id=record.id,
+        )
     return JsonResponse({'record': record.as_dict()}, status=201)
 
 
@@ -2673,6 +2719,7 @@ def risk_issue_detail(request, workspace_id, record_id):
     for field in ('likelihood', 'impact'):
         if field in payload:
             setattr(record, field, int(payload[field]) if payload[field] not in (None, '') else None)
+    previous_owner_id = record.owner_id
     if 'owner_id' in payload:
         record.owner = User.objects.filter(id=payload['owner_id'], workspace_memberships__workspace_id=workspace_id).first() if payload['owner_id'] else None
         if payload['owner_id'] and record.owner is None:
@@ -2694,6 +2741,14 @@ def risk_issue_detail(request, workspace_id, record_id):
         record.expense = expense
     record.save()
     notify_managers(workspace_id, request.user, f'updated {record.kind}', record.title, target_type='risk_issue', target_id=record.id)
+    if record.owner_id != previous_owner_id and record.owner is not None and record.owner_id != request.user.id:
+        actor_name = request.user.get_full_name() or request.user.email
+        create_notification(
+            workspace_id, record.owner, 'risk_issue_assigned',
+            f'You own the {record.kind}: {record.title}',
+            f'Assigned by {actor_name}.',
+            target_type='risk_issue', target_id=record.id,
+        )
     return JsonResponse({'record': record.as_dict()})
 
 
@@ -2915,6 +2970,18 @@ def check_in_list(request, workspace_id):
             workspace_id, request.user, 'submitted a check-in', check_in.date.isoformat(),
             target_type='check_in', target_id=check_in.id,
             immediate=True, dedup_key=f'check_in:{check_in.id}:{check_in.date.isoformat()}',
+        )
+        # A receipt for the submitter. notify_managers never notifies the actor
+        # and only targets owners and managers, so in a workspace with a single
+        # leader a check-in produced no notification for anyone and the bell
+        # stayed empty. Bell only, so it does not also push at the person who
+        # just submitted it.
+        create_notification(
+            workspace_id, request.user, 'check_in_submitted',
+            f'Check-in submitted for {check_in.date.isoformat()}',
+            'Your update is saved and visible to the team.',
+            target_type='check_in', target_id=check_in.id,
+            immediate=False,
         )
     if blockers != previous_blockers:
         leaders = Membership.objects.filter(workspace_id=workspace_id, role__in=['owner', 'manager']).exclude(user=request.user).select_related('user')

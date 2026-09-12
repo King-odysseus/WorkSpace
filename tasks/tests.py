@@ -1174,13 +1174,31 @@ class TaskApiTests(TestCase):
         self.assertEqual(notifications.last().title, 'checkin-member@example.com cleared a blocker')
 
     def test_check_in_manager_notifications_exclude_submitter(self):
+        # The manager-activity broadcast must not loop back to the person who
+        # submitted, but the submitter does get their own receipt so the bell
+        # is not empty when they are the only leader in the workspace.
         self.client.force_login(self.user)
         self.client.post(
             reverse('check-in-list', args=[self.workspace.id]),
             data=json.dumps({'date': '2026-09-02', 'completed': 'Owner update'}),
             content_type='application/json',
         )
-        self.assertFalse(WorkspaceNotification.objects.filter(recipient=self.user).exists())
+        self.assertFalse(WorkspaceNotification.objects.filter(recipient=self.user, kind='manager_activity').exists())
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_submitted').count(), 1)
+
+    def test_a_solo_owner_sees_their_own_check_in_in_the_notification_feed(self):
+        # Reported bug: in a workspace whose only member is the owner, a
+        # check-in produced no notification at all, so neither the bell nor the
+        # notifications page ever showed one.
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('check-in-list', args=[self.workspace.id]),
+            data=json.dumps({'date': '2026-09-02', 'completed': 'Solo update'}),
+            content_type='application/json',
+        )
+        feed = self.client.get(reverse('notification-list', args=[self.workspace.id])).json()['notifications']
+        self.assertEqual([row['kind'] for row in feed], ['check_in_submitted'])
+        self.assertEqual(feed[0]['target_type'], 'check_in')
 
     def test_check_in_settings_are_restricted_and_validated(self):
         url = reverse('workspace-check-in-settings', args=[self.workspace.id])
@@ -3559,3 +3577,220 @@ class PlanBucketListScopeTests(TestCase):
         response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]) + f'?project_id={project.id}')
         self.assertEqual(response.status_code, 200)
         self.assertEqual([bucket['name'] for bucket in response.json()['buckets']], ['Sprint'])
+
+
+class DocumentNotificationTests(TestCase):
+    """Document collaboration used to be silent: sharing a document told the
+    recipient nothing, and a comment only reached people named in the text, so
+    the document owner and everyone else in the thread never heard about a
+    reply. These cover the notification fan out and the guard against a
+    recipient being told twice about the same comment."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        self.other = User.objects.create_user(username='other@example.com', email='other@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief', created_by=self.owner)
+
+    def _login(self, user):
+        self.client.login(username=user.email, password='secure-pass-123')
+
+    def _share(self, permission='view'):
+        self._login(self.owner)
+        return self.client.post(
+            reverse('workspace-document-share-list', args=[self.workspace.id, self.document.id]),
+            data=json.dumps({'user_id': self.member.id, 'permission': permission}),
+            content_type='application/json',
+        )
+
+    def _comment(self, user, body):
+        self._login(user)
+        return self.client.post(
+            reverse('workspace-document-comment-list', args=[self.workspace.id, self.document.id]),
+            data=json.dumps({'body': body}),
+            content_type='application/json',
+        )
+
+    def _grant_comment_access(self):
+        """A member with no share is view only, so commenting tests need the
+        share in place first. The shares themselves notify, so clear those to
+        keep each assertion about the comment fan out alone."""
+        WorkspaceDocumentShare.objects.create(document=self.document, user=self.member, permission='comment', shared_by=self.owner)
+        WorkspaceDocumentShare.objects.create(document=self.document, user=self.other, permission='comment', shared_by=self.owner)
+        WorkspaceNotification.objects.all().delete()
+
+    def _kinds_for(self, user):
+        return list(WorkspaceNotification.objects.filter(workspace=self.workspace, recipient=user).values_list('kind', flat=True))
+
+    def test_sharing_a_document_notifies_the_recipient(self):
+        response = self._share('comment')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self._kinds_for(self.member), ['document_shared'])
+        notification = WorkspaceNotification.objects.get(workspace=self.workspace, recipient=self.member)
+        self.assertIn('Launch Brief', notification.title)
+        self.assertEqual(notification.target_type, 'document')
+        self.assertEqual(str(notification.target_id), str(self.document.id))
+
+    def test_re_sharing_the_same_permission_does_not_notify_again(self):
+        self._share('view')
+        self._share('view')
+        self.assertEqual(self._kinds_for(self.member), ['document_shared'])
+
+    def test_changing_a_permission_notifies_again(self):
+        self._share('view')
+        self._share('edit')
+        self.assertEqual(self._kinds_for(self.member), ['document_shared', 'document_shared'])
+
+    def test_sharing_with_yourself_does_not_notify(self):
+        self._login(self.owner)
+        response = self.client.post(
+            reverse('workspace-document-share-list', args=[self.workspace.id, self.document.id]),
+            data=json.dumps({'user_id': self.owner.id, 'permission': 'edit'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self._kinds_for(self.owner), [])
+
+    def test_a_comment_notifies_the_document_owner(self):
+        self._grant_comment_access()
+        response = self._comment(self.member, 'Ready for review.')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self._kinds_for(self.owner), ['document_comment'])
+
+    def test_a_reply_notifies_the_earlier_commenter_and_the_owner(self):
+        self._grant_comment_access()
+        self._comment(self.member, 'First pass done.')
+        self._comment(self.other, 'Second pass done.')
+        WorkspaceNotification.objects.all().delete()
+        self._comment(self.owner, 'Thanks both.')
+        self.assertEqual(self._kinds_for(self.member), ['document_comment'])
+        self.assertEqual(self._kinds_for(self.other), ['document_comment'])
+        self.assertEqual(self._kinds_for(self.owner), [])
+
+    def test_a_comment_does_not_double_notify_a_mentioned_owner(self):
+        # The owner both owns the document and is named in the text, so the
+        # reply notification already covers them and the mention is skipped.
+        # One notification either way is the guarantee that matters.
+        self._grant_comment_access()
+        response = self._comment(self.member, '@owner please confirm the dates.')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self._kinds_for(self.owner), ['document_comment'])
+
+    def test_a_comment_mentions_a_member_who_is_not_in_the_thread(self):
+        self._grant_comment_access()
+        response = self._comment(self.member, '@other can you take a look?')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self._kinds_for(self.other), ['mention'])
+
+    def test_a_comment_does_not_notify_the_author(self):
+        self._comment(self.owner, 'Opening this up.')
+        self.assertEqual(self._kinds_for(self.owner), [])
+
+
+class NotificationCoverageTests(TestCase):
+    """Actions that changed shared state used to complete silently. These pin
+    the fan out for each one: the person who needs to know is told, the person
+    who did it is not told about their own action, and a push goes out straight
+    away when the event is worth interrupting someone for."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.manager = User.objects.create_user(username='manager@example.com', email='manager@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        self.manager_membership = Membership.objects.create(workspace=self.workspace, user=self.manager, role='manager')
+        self.member_membership = Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+
+    def _login(self, user):
+        self.client.force_login(user)
+
+    def _kinds_for(self, user):
+        return list(WorkspaceNotification.objects.filter(workspace=self.workspace, recipient=user).values_list('kind', flat=True))
+
+    def test_role_change_notifies_the_member(self):
+        self._login(self.owner)
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, self.member.id]),
+            data=json.dumps({'role': 'manager'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._kinds_for(self.member), ['membership_change'])
+        self.assertIn('manager', WorkspaceNotification.objects.get(recipient=self.member).title)
+
+    def test_an_unchanged_role_does_not_notify(self):
+        self._login(self.owner)
+        self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, self.member.id]),
+            data=json.dumps({'role': 'member', 'permissions': []}),
+            content_type='application/json',
+        )
+        self.assertEqual(self._kinds_for(self.member), [])
+
+    def test_member_removal_notifies_the_remaining_leaders(self):
+        self._login(self.owner)
+        response = self.client.delete(reverse('member-detail', args=[self.workspace.id, self.member.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._kinds_for(self.manager), ['manager_activity'])
+        self.assertIn('member@example.com', WorkspaceNotification.objects.get(recipient=self.manager).title)
+
+    def test_invitation_acceptance_notifies_the_inviter(self):
+        invitee = User.objects.create_user(username='invitee@example.com', email='invitee@example.com', password='secure-pass-123')
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='invitee@example.com', role='member', invited_by=self.owner)
+        self._login(invitee)
+        response = self.client.post(reverse('invitation-accept', args=[invitation.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._kinds_for(self.owner), ['invitation_response'])
+        self.assertIn('accepted', WorkspaceNotification.objects.get(recipient=self.owner).title)
+
+    def test_invitation_decline_notifies_the_inviter(self):
+        invitee = User.objects.create_user(username='decliner@example.com', email='decliner@example.com', password='secure-pass-123')
+        invitation = WorkspaceInvitation.objects.create(workspace=self.workspace, email='decliner@example.com', role='member', invited_by=self.owner)
+        self._login(invitee)
+        response = self.client.post(reverse('invitation-decline', args=[invitation.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._kinds_for(self.owner), ['invitation_response'])
+        self.assertIn('declined', WorkspaceNotification.objects.get(recipient=self.owner).title)
+
+    def _create_risk(self, **extra):
+        self._login(self.owner)
+        payload = {'kind': 'risk', 'title': 'Supplier delay', 'severity': 'high', **extra}
+        return self.client.post(reverse('risk-issue-list', args=[self.workspace.id]), data=json.dumps(payload), content_type='application/json')
+
+    def test_creating_a_risk_with_an_owner_notifies_that_owner(self):
+        response = self._create_risk(owner_id=self.member.id)
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('risk_issue_assigned', self._kinds_for(self.member))
+
+    def test_reassigning_a_risk_notifies_the_new_owner(self):
+        record_id = self._create_risk(owner_id=self.member.id).json()['record']['id']
+        WorkspaceNotification.objects.all().delete()
+        self._login(self.owner)
+        response = self.client.patch(
+            reverse('risk-issue-detail', args=[self.workspace.id, record_id]),
+            data=json.dumps({'owner_id': self.manager.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        # The manager is both the new owner and a workspace leader, so they get
+        # the assignment as well as the leader broadcast for the update.
+        self.assertIn('risk_issue_assigned', self._kinds_for(self.manager))
+        self.assertEqual(self._kinds_for(self.member), [])
+
+    def test_task_comment_pushes_to_the_assignee_straight_away(self):
+        task = Task.objects.create(workspace=self.workspace, title='Prepare brief', assignee=self.member)
+        self._login(self.owner)
+        with mock.patch('tasks.views.send_push_to_user') as push:
+            response = self.client.post(
+                reverse('task-comment-list', args=[task.id]),
+                data=json.dumps({'body': 'Please pick this up today.'}),
+                content_type='application/json',
+            )
+        self.assertEqual(response.status_code, 201)
+        push.assert_called_once()
+        self.assertEqual(push.call_args.args[0], self.member)

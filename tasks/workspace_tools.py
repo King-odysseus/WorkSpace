@@ -499,7 +499,17 @@ def workspace_document_share_list(request, workspace_id, document_id):
     member = Membership.objects.filter(workspace_id=workspace_id, user_id=user_id).select_related('user').first()
     if not member:
         return JsonResponse({'error': 'Choose a member of this workspace.'}, status=400)
+    previous = WorkspaceDocumentShare.objects.filter(document=document, user=member.user).values_list('permission', flat=True).first()
     share, _ = WorkspaceDocumentShare.objects.update_or_create(document=document, user=member.user, defaults={'permission': permission, 'shared_by': request.user})
+    if member.user_id != request.user.id and previous != permission:
+        from .views import create_notification
+        actor_name = request.user.get_full_name() or request.user.email
+        create_notification(
+            workspace_id, member.user, 'document_shared',
+            f'{actor_name} shared "{document.title}" with you',
+            f'You have {permission} access.' if previous is None else f'Your access is now {permission}.',
+            target_type='document', target_id=document.id,
+        )
     return JsonResponse({'share': share.as_dict()}, status=201)
 
 
@@ -541,8 +551,28 @@ def workspace_document_comment_list(request, workspace_id, document_id):
         return JsonResponse({'error': 'Comment must be between 1 and 4,000 characters.'}, status=400)
     parent = document.comments.filter(id=payload.get('parent_id')).first() if payload.get('parent_id') else None
     comment = WorkspaceDocumentComment.objects.create(document=document, author=request.user, parent=parent, body=body, anchor=payload.get('anchor') if isinstance(payload.get('anchor'), dict) else {})
-    from .views import notify_mentions
-    notify_mentions(workspace_id, request.user, body, 'document', document.id, exclude_user_ids={document.created_by_id})
+    from .views import create_notification, notify_mentions
+    # The document owner and everyone already in the thread hear about a new
+    # reply. Mentions exclude them so a comment cannot land twice for one
+    # recipient: once as a reply and once as an @mention.
+    recipient_ids = set(document.comments.exclude(author=request.user).values_list('author_id', flat=True))
+    if document.created_by_id:
+        recipient_ids.add(document.created_by_id)
+    recipient_ids.discard(request.user.id)
+    recipient_ids.discard(None)
+    if recipient_ids:
+        actor_name = request.user.get_full_name() or request.user.email
+        # Scoped through Membership so someone who has since left the workspace
+        # does not keep receiving notifications for a document they lost access to.
+        members = Membership.objects.filter(workspace_id=workspace_id, user_id__in=recipient_ids).select_related('user')
+        for member in members:
+            create_notification(
+                workspace_id, member.user, 'document_comment',
+                f'{actor_name} commented on "{document.title}"',
+                body[:120],
+                target_type='document', target_id=document.id,
+            )
+    notify_mentions(workspace_id, request.user, body, 'document', document.id, exclude_user_ids=recipient_ids)
     return JsonResponse({'comment': comment.as_dict()}, status=201)
 
 

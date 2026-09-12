@@ -2185,7 +2185,7 @@ function App() {
                           </button>
                         ))
                     ) : (
-                      <EmptyState text="No notifications yet." />
+                      <EmptyState text="No notifications yet. Updates from your teammates land here, and your own check-ins and actions are listed under Activity." />
                     )}
                   </div>
                   <div className="border-t border-border-light px-4 py-2.5">
@@ -4745,7 +4745,7 @@ function WorkspaceView({
               ))}
             </div>
           ) : (
-            <EmptyState text="No notifications yet." />
+            <EmptyState text="No notifications yet. Updates from your teammates land here, and your own check-ins and actions are listed under Activity." />
           )}
         </Card>
         {pagination && pagination.total_pages > 1 && (
