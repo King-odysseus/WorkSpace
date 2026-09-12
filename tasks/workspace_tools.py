@@ -590,7 +590,12 @@ def workspace_document_comment_detail(request, workspace_id, document_id, commen
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    if payload.get('resolved', True):
+    # Resolution is the only thing this endpoint changes, so an explicit value is
+    # required. Defaulting a missing field to true meant an empty PATCH silently
+    # resolved the comment.
+    if 'resolved' not in payload:
+        return JsonResponse({'error': 'resolved is required.'}, status=400)
+    if payload['resolved']:
         from django.utils import timezone
         comment.resolved_at = timezone.now()
         comment.resolved_by = request.user

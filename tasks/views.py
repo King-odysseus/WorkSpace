@@ -992,7 +992,11 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
         name = str(payload['name']).strip()
         if not name or len(name) > 80:
             return JsonResponse({'error': 'Bucket name must be between 1 and 80 characters.'}, status=400)
-        if PlanBucket.objects.filter(workspace_id=workspace_id, name=name, is_active=True).exclude(id=bucket.id).exists():
+        # Names only have to be unique within a scope. A project bucket and a
+        # workstream bucket may share a name, as may two buckets in different
+        # projects. Checking the whole workspace rejected renames the scoped
+        # constraint would have accepted.
+        if PlanBucket.objects.filter(workspace_id=workspace_id, name=name, is_active=True, project_id=bucket.project_id, workstream_id=bucket.workstream_id).exclude(id=bucket.id).exists():
             return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
         bucket.name = name
     if 'position' in payload:
@@ -1004,7 +1008,12 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
         if not isinstance(payload['is_active'], bool):
             return JsonResponse({'error': 'is_active must be a boolean.'}, status=400)
         bucket.is_active = payload['is_active']
-    bucket.save()
+    try:
+        bucket.save()
+    except IntegrityError:
+        # The scoped constraint is the authority when a name is taken by an
+        # archived bucket, which the active-only check above does not see.
+        return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
     return JsonResponse({'bucket': bucket.as_dict()})
 
 

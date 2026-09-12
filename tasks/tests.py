@@ -426,6 +426,37 @@ class TaskApiTests(TestCase):
         bucket.refresh_from_db()
         self.assertEqual(bucket.name, 'Next up')
 
+    def test_renaming_a_bucket_into_another_scopes_name_is_allowed(self):
+        # The name check used to span the whole workspace, so renaming a bucket
+        # in one scope to a name that only existed in a different scope was
+        # rejected for a conflict that the per scope uniqueness rule does not
+        # have. The database constraint is on (workspace, project, workstream,
+        # name), so a name only collides within its own scope.
+        project = Project.objects.create(workspace=self.workspace, name='Atlas')
+        project_bucket = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Review queue', position=0)
+        unscoped = PlanBucket.objects.create(workspace=self.workspace, name='Later', position=1)
+        response = self.client.patch(
+            reverse('plan-bucket-detail', args=[self.workspace.id, unscoped.id]),
+            data=json.dumps({'name': 'Review queue'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        unscoped.refresh_from_db()
+        self.assertEqual(unscoped.name, 'Review queue')
+        project_bucket.refresh_from_db()
+        self.assertEqual(project_bucket.name, 'Review queue')
+
+    def test_renaming_a_bucket_still_rejects_a_name_in_the_same_scope(self):
+        project = Project.objects.create(workspace=self.workspace, name='Atlas')
+        PlanBucket.objects.create(workspace=self.workspace, project=project, name='Review queue', position=0)
+        other = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Later', position=1)
+        response = self.client.patch(
+            reverse('plan-bucket-detail', args=[self.workspace.id, other.id]),
+            data=json.dumps({'name': 'Review queue'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 409)
+
     def test_owner_can_archive_a_plan_bucket(self):
         bucket = PlanBucket.objects.create(workspace=self.workspace, name='Retired', position=1)
         response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]))
@@ -3847,3 +3878,45 @@ class PushDeepLinkTests(TestCase):
         self.assertEqual(response.status_code, 200)
         notification.refresh_from_db()
         self.assertIsNotNone(notification.read_at)
+
+
+class DocumentCommentResolutionTests(TestCase):
+    """Resolving a comment is the only thing the detail endpoint changes, so it
+    must be asked for explicitly. A PATCH with an empty body used to resolve the
+    comment, which is the opposite of what an empty body should mean."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief', created_by=self.owner)
+        self.comment = WorkspaceDocumentComment.objects.create(document=self.document, author=self.owner, body='Please check this.')
+        self.client.login(username=self.owner.email, password='secure-pass-123')
+        self.url = reverse('workspace-document-comment-detail', args=[self.workspace.id, self.document.id, self.comment.id])
+
+    def _patch(self, payload):
+        return self.client.patch(self.url, data=json.dumps(payload), content_type='application/json')
+
+    def test_an_empty_patch_does_not_resolve_the_comment(self):
+        response = self._patch({})
+        self.assertEqual(response.status_code, 400)
+        self.comment.refresh_from_db()
+        self.assertIsNone(self.comment.resolved_at)
+        self.assertIsNone(self.comment.resolved_by)
+
+    def test_an_explicit_true_resolves_the_comment(self):
+        response = self._patch({'resolved': True})
+        self.assertEqual(response.status_code, 200)
+        self.comment.refresh_from_db()
+        self.assertIsNotNone(self.comment.resolved_at)
+        self.assertEqual(self.comment.resolved_by_id, self.owner.id)
+
+    def test_an_explicit_false_reopens_the_comment(self):
+        self.comment.resolved_at = timezone.now()
+        self.comment.resolved_by = self.owner
+        self.comment.save()
+        response = self._patch({'resolved': False})
+        self.assertEqual(response.status_code, 200)
+        self.comment.refresh_from_db()
+        self.assertIsNone(self.comment.resolved_at)
+        self.assertIsNone(self.comment.resolved_by)
