@@ -3441,3 +3441,81 @@ class ManagerOversightTests(TestCase):
         self.assertNotIn('clocked_in', member_entry)
         self.assertNotIn('on_break', member_entry)
         self.assertNotIn('clock_in_at', member_entry)
+
+
+class AuditRemediationApiTests(TestCase):
+    """Regression coverage for the audit remediation batch: the missing method
+    guard on the AI settings view, non integer id query params that used to
+    raise ValueError and 500, and a manager being able to promote a regular
+    member to manager."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.manager = User.objects.create_user(username='manager@example.com', email='manager@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.manager, role='manager')
+        self.membership = Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+
+    def _login(self, user):
+        self.client.login(username=user.email, password='secure-pass-123')
+
+    def test_ai_settings_rejects_unsupported_methods(self):
+        self._login(self.owner)
+        url = reverse('workspace-ai-settings', args=[self.workspace.id])
+        for method in ('put', 'delete'):
+            response = getattr(self.client, method)(url, data=json.dumps({}), content_type='application/json')
+            self.assertEqual(response.status_code, 405)
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_non_integer_id_filters_return_400_not_500(self):
+        self._login(self.owner)
+        urls = [
+            reverse('risk-issue-list', args=[self.workspace.id]) + '?project_id=abc',
+            reverse('plan-bucket-list', args=[self.workspace.id]) + '?project_id=abc',
+            reverse('plan-bucket-list', args=[self.workspace.id]) + '?workstream_id=abc',
+            reverse('lookup-value-list', args=[self.workspace.id]) + '?project_id=abc',
+        ]
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 400)
+
+    def test_integer_id_filters_still_return_data(self):
+        self._login(self.owner)
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        RiskIssue.objects.create(workspace=self.workspace, kind='risk', title='Slip', project=project)
+        LookupValue.objects.create(workspace=self.workspace, kind='workstream', name='Ops', project=project)
+        self.assertEqual(self.client.get(reverse('risk-issue-list', args=[self.workspace.id]) + f'?project_id={project.id}').status_code, 200)
+        self.assertEqual(self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]) + f'?project_id={project.id}').status_code, 200)
+        self.assertEqual(self.client.get(reverse('lookup-value-list', args=[self.workspace.id]) + f'?project_id={project.id}').status_code, 200)
+
+    def test_manager_cannot_promote_a_member_to_manager(self):
+        self._login(self.manager)
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, self.member.id]),
+            data=json.dumps({'role': 'manager'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.role, 'member')
+
+    def test_manager_can_still_edit_a_regular_member(self):
+        self._login(self.manager)
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, self.member.id]),
+            data=json.dumps({'role': 'member'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_owner_can_promote_a_member_to_manager(self):
+        self._login(self.owner)
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, self.member.id]),
+            data=json.dumps({'role': 'manager'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.role, 'manager')

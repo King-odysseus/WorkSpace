@@ -140,6 +140,7 @@ def workspace_check_in_settings(request, workspace_id):
     return JsonResponse({'settings': setting.as_dict(), 'can_manage': True})
 
 
+@require_http_methods(['GET', 'PATCH'])
 def workspace_ai_settings(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
     if error:

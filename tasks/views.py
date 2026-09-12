@@ -850,9 +850,16 @@ def plan_bucket_list(request, workspace_id):
     _, error = membership_check(request, workspace_id)
     if error:
         return error
-    scope_project_id = request.GET.get('project_id') if request.method == 'GET' else None
-    scope_workstream_id = request.GET.get('workstream_id') if request.method == 'GET' else None
+    scope_project_id = None
+    scope_workstream_id = None
     if request.method == 'GET':
+        try:
+            if request.GET.get('project_id'):
+                scope_project_id = int(request.GET['project_id'])
+            if request.GET.get('workstream_id'):
+                scope_workstream_id = int(request.GET['workstream_id'])
+        except ValueError:
+            return JsonResponse({'error': 'Project and workstream filters must be integers.'}, status=400)
         buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)
         if scope_project_id:
             buckets = buckets.filter(project_id=scope_project_id, workstream__isnull=True)
@@ -2035,6 +2042,8 @@ def member_detail(request, workspace_id, user_id):
     if 'role' in payload:
         if payload['role'] not in {'manager', 'member'}:
             return JsonResponse({'error': 'Role must be manager or member.'}, status=400)
+        if payload['role'] == 'manager' and actor.role != 'owner':
+            return JsonResponse({'error': 'Only the workspace owner can grant manager access.'}, status=403)
         membership.role = payload['role']
     if 'permissions' in payload:
         # Only a manager's grants are configurable - members always get the
@@ -2450,7 +2459,11 @@ def lookup_value_list(request, workspace_id):
         if request.GET.get('kind'):
             values = values.filter(kind=request.GET['kind'])
         if request.GET.get('project_id'):
-            values = values.filter(Q(project_id=request.GET['project_id']) | Q(project__isnull=True))
+            try:
+                project_filter_id = int(request.GET['project_id'])
+            except ValueError:
+                return JsonResponse({'error': 'Project filter must be an integer.'}, status=400)
+            values = values.filter(Q(project_id=project_filter_id) | Q(project__isnull=True))
         if request.GET.get('active', 'true').lower() != 'all':
             values = values.filter(is_active=request.GET.get('active', 'true').lower() not in {'false', '0', 'no'})
         return JsonResponse({'lookup_values': [value.as_dict() for value in values]})
@@ -2572,7 +2585,10 @@ def risk_issue_list(request, workspace_id):
     records = RiskIssue.objects.filter(workspace_id=workspace_id).select_related('owner', 'project')
     if request.method == 'GET':
         if request.GET.get('project_id'):
-            records = records.filter(project_id=request.GET['project_id'])
+            try:
+                records = records.filter(project_id=int(request.GET['project_id']))
+            except ValueError:
+                return JsonResponse({'error': 'Project filter must be an integer.'}, status=400)
         if request.GET.get('scope') == 'workspace':
             records = records.filter(project__isnull=True)
         if request.GET.get('kind'):
