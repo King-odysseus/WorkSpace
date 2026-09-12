@@ -108,6 +108,21 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const scopedBuckets = bucketScope
     ? buckets.filter(bucket => bucketScope.project_id ? String(bucket.project_id) === String(bucketScope.project_id) : String(bucket.workstream_id) === String(bucketScope.workstream_id))
     : buckets.filter(bucket => !isOperations || !bucket.project_id)
+  // A project scope draws that project's own lanes, but its tasks need not sit in
+  // them: moving a task to a project leaves it in whatever lane it was already in -
+  // the shared Backlog, or one left behind by the project it came from. A task whose
+  // lane has no column is drawn nowhere, so without these the scope that claims the
+  // task is the one scope that hides it. The lane is borrowed for display only, so
+  // it carries a name rather than an id and stays out of the reorder controls.
+  if (bucketScope && bucketScope.project_id) {
+    const drawn = new Set(scopedBuckets.map(bucket => bucket.name))
+    for (const task of tasks) {
+      const name = String(task.bucket || 'Backlog')
+      if (drawn.has(name) || !taskMatchesScope(task, projectFilter)) continue
+      drawn.add(name)
+      scopedBuckets.push({ id: `scope-lane:${bucketScope.project_id}:${name}`, name, project_id: bucketScope.project_id, workstream_id: null })
+    }
+  }
   // Bucket names only have to be unique within their scope and a task names its lane
   // by name alone, so a name shared by two scopes would draw the same column twice.
   buckets = [...new Map(scopedBuckets.map(bucket => [bucket.name, bucket])).values()]

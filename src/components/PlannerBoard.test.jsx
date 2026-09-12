@@ -143,3 +143,45 @@ it('does not guess a project for a lane two projects both name', () => {
   expect(screen.queryByText('Design UI')).not.toBeInTheDocument()
   expect(columnNames(container)).toEqual(['Design'])
 })
+
+it('draws a borrowed lane for a project task that sits outside the project lanes', () => {
+  // Moving a task to a project leaves it in whatever lane it was already in, and a
+  // lane with no column draws the task nowhere - so the scope that claimed the task
+  // used to be the one scope that hid it.
+  const { container } = renderPlanner({
+    buckets: workspaceBuckets,
+    scopeMode: 'projects',
+    projectFilter: '2',
+    tasks: [{ id: 91, title: 'Design UI', bucket: 'Backlog', project_id: 2, status: 'todo', priority: 'normal' }],
+  })
+
+  expect(screen.getByText('Design UI')).toBeInTheDocument()
+  expect(columnNames(container)).toEqual(['Prototyping', 'Backlog'])
+})
+
+it('shows a project task when the project owns no lanes at all', () => {
+  const { container } = renderPlanner({
+    buckets: [{ id: 2, name: 'Backlog', project_id: null }],
+    scopeMode: 'projects',
+    projectFilter: '2',
+    tasks: [{ id: 91, title: 'Design UI', bucket: 'Backlog', project_id: 2, status: 'todo', priority: 'normal' }],
+  })
+
+  expect(screen.getByText('Design UI')).toBeInTheDocument()
+  expect(columnNames(container)).toEqual(['Backlog'])
+})
+
+it('leaves a borrowed lane out of the reorder controls', () => {
+  // The lane belongs to another scope, so it is drawn here but must not be nudged
+  // around as though it were this project's own.
+  const { container } = renderPlanner({
+    buckets: [{ id: 19, name: 'Design', project_id: 2 }],
+    scopeMode: 'projects',
+    projectFilter: '8',
+    canManageBuckets: true,
+    tasks: [{ id: 91, title: 'Design UI', bucket: 'Design', project_id: 8, status: 'todo', priority: 'normal' }],
+  })
+
+  expect(columnNames(container)).toEqual(['Design'])
+  expect(container.querySelectorAll('.planner-bucket-move')).toHaveLength(0)
+})
