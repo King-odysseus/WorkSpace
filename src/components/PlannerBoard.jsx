@@ -99,7 +99,40 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const isOperations = scopeMode === 'operations' || (scopeMode === 'switch' && projectFilter === 'operations')
   const selectedWorkstream = lookupValues.find(value => value.kind === 'workstream' && !value.project_id && value.name === workstream)
   const bucketScope = isOperations ? (selectedWorkstream ? { workstream_id: selectedWorkstream.id } : null) : (projectFilter !== 'all' ? { project_id: projectFilter } : null)
-  buckets = buckets.filter(bucket => bucketScope && (bucketScope.project_id ? String(bucket.project_id) === String(bucketScope.project_id) : String(bucket.workstream_id) === String(bucketScope.workstream_id)))
+  // Every lane the workspace holds, before this view narrows the list below.
+  const workspaceBuckets = buckets
+  // A bucket scope narrows the board to one project or one workstream. With nothing
+  // chosen there is nothing to narrow to, so fall back to the lanes that mode owns:
+  // operations work lives outside projects, while "all projects" spans every lane -
+  // an empty lane list puts every task in no column at all.
+  const scopedBuckets = bucketScope
+    ? buckets.filter(bucket => bucketScope.project_id ? String(bucket.project_id) === String(bucketScope.project_id) : String(bucket.workstream_id) === String(bucketScope.workstream_id))
+    : buckets.filter(bucket => !isOperations || !bucket.project_id)
+  // Bucket names only have to be unique within their scope and a task names its lane
+  // by name alone, so a name shared by two scopes would draw the same column twice.
+  buckets = [...new Map(scopedBuckets.map(bucket => [bucket.name, bucket])).values()]
+
+  // A task filed into a project's lane counts as that project even when the task
+  // itself carries no project - the lane is the only project signal it has, and
+  // scoping the planner to the project would otherwise hide it. A name two
+  // projects both use says nothing, so it resolves to no project rather than a
+  // guess.
+  const projectByBucketName = useMemo(() => {
+    const map = new Map()
+    for (const bucket of workspaceBuckets) {
+      if (!bucket.project_id) continue
+      const name = String(bucket.name)
+      map.set(name, map.has(name) && String(map.get(name)) !== String(bucket.project_id) ? null : bucket.project_id)
+    }
+    return map
+  }, [workspaceBuckets])
+  const matchesPlannerScope = task => {
+    if (taskMatchesScope(task, projectFilter)) return true
+    if (projectFilter === 'all' || projectFilter === 'operations') return false
+    const viaBucket = projectByBucketName.get(String(task.bucket || 'Backlog'))
+    return Boolean(viaBucket) && String(viaBucket) === String(projectFilter)
+  }
+
   const normalizedWorkstreams = useMemo(() => lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : projectFilter === 'all' ? Boolean(value.project_id) : (!value.project_id || String(value.project_id) === String(projectFilter)))).map(value => value.name), [lookupValues, isOperations, projectFilter])
   const workstreams = useMemo(() => [...new Set([...normalizedWorkstreams, ...tasks.filter(task => taskMatchesScope(task, projectFilter)).map(task => task.workstream).filter(Boolean)])].sort(), [normalizedWorkstreams, tasks, projectFilter])
   const phases = useMemo(() => [...new Set(tasks.map(task => task.phase || task.quarter).filter(Boolean))].sort(), [tasks])
@@ -114,12 +147,12 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       && (supporter === 'all' || supporterIds.includes(supporter))
       && matchesWorkstream(task)
       && (phase === 'all' || (task.phase || task.quarter) === phase)
-      && taskMatchesScope(task, projectFilter)
+      && matchesPlannerScope(task)
       && (bucketFilter === 'all' || task.bucket === bucketFilter)
       && (!dateFrom || (task.due_date && task.due_date >= dateFrom))
       && (!dateTo || (task.due_date && task.due_date <= dateTo))
       && (dueFilter === 'all' || (dueFilter === 'overdue' && task.due_date && task.due_date < today && task.status !== 'done') || (dueFilter === 'today' && task.due_date === today) || (dueFilter === 'none' && !task.due_date))
-  }), [tasks, searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, today])
+  }), [tasks, searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, today, projectByBucketName])
 
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(visibleTasks.length / pageSize))
@@ -164,6 +197,9 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)) && (workstream === 'all' || String(value.name).trim().toLocaleLowerCase() === String(workstream).trim().toLocaleLowerCase()))
   const moveBucket = (sourceId, targetId) => {
     if (!sourceId || !targetId || sourceId === targetId) return
+    // The board falls back to every lane when no scope is chosen, but a save has to
+    // send one scope's lanes in their new order - a mixed list is rejected outright.
+    if (!bucketScope) return
     const next = persistedBuckets.map(bucket => bucket.id)
     const sourceIndex = next.indexOf(Number(sourceId))
     const targetIndex = next.indexOf(Number(targetId))
@@ -173,6 +209,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     onBucketReorder(next)
   }
   const nudgeBucket = (bucketId, direction) => {
+    if (!bucketScope) return
     const next = persistedBuckets.map(bucket => bucket.id)
     const sourceIndex = next.indexOf(bucketId)
     const targetIndex = sourceIndex + direction
@@ -243,7 +280,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     {view === 'gantt' ? ganttContent : view === 'table' ? tableContent : <div className="planner-board" aria-label="Planner board">
       {buckets.map(bucket => {
         const persistedIndex = persistedBuckets.findIndex(item => item.id === bucket.id)
-        const bucketDraggable = canManageBuckets && typeof bucket.id === 'number' && bucket.name !== 'Backlog'
+        const bucketDraggable = canManageBuckets && Boolean(bucketScope) && typeof bucket.id === 'number' && bucket.name !== 'Backlog'
         return <section className={`planner-column ${dropBucketId === bucket.id ? 'is-drop-target' : ''} ${draggedBucketId === bucket.id ? 'is-dragging' : ''}`} key={bucket.id}
           onDragEnter={event => { if (draggedTaskId || (draggedBucketId && bucket.name !== 'Backlog')) { event.preventDefault(); setDropBucketId(bucket.id) } }}
           onDragOver={event => { if (draggedTaskId || (draggedBucketId && bucket.name !== 'Backlog')) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
@@ -267,6 +304,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
         <div className="planner-column-tasks">{orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || String(task.assignee_id || '') === String(currentUserId)} onOpen={onOpenTask} onDelete={onDeleteTask} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}{!orderedFor(bucket.name).length && <div className="planner-empty">Drop tasks here</div>}</div>
         <button type="button" className="planner-column-add" onClick={() => addToBucket(bucket.name)}><Plus size={14} /> Add task</button>
       </section>})}
+      {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}
     </div>}
   </section>
 }
