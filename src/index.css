@@ -461,6 +461,7 @@ h6 {
   letter-spacing: 0 !important;
 }
 
+.workspace-view,
 .today-dashboard {
   --dashboard-surface: #FFFFFF;
   --dashboard-surface-soft: #F6F7F9;
@@ -480,6 +481,7 @@ h6 {
   font-family: 'Roboto', sans-serif;
 }
 
+html[data-theme='dark'] .workspace-view,
 html[data-theme='dark'] .today-dashboard {
   --dashboard-surface: #17183E;
   --dashboard-surface-soft: #1D1E48;
@@ -953,5 +955,708 @@ html[data-theme='dark'] .today-panel-heading > svg {
   .today-clock-panel {
     padding: 17px;
     border-radius: 18px !important;
+  }
+}
+
+/* =============================================================================
+   Shared workspace views
+   The same final-layer design system as Today, extended across the rest of the
+   product. These rules intentionally override the older neumorphic cascade.
+   ============================================================================= */
+.workspace-view {
+  gap: 20px;
+  color: var(--dashboard-text);
+  font-family: 'Roboto', sans-serif;
+}
+
+.workspace-view > .workspace-view-heading {
+  align-items: center;
+  gap: 24px;
+}
+
+.workspace-view > .workspace-view-heading .eyebrow {
+  width: fit-content;
+  margin: 0 0 9px;
+  padding: 5px 10px;
+  border: 1px solid rgb(196 154 108 / 24%);
+  border-radius: 999px;
+  background: rgb(196 154 108 / 10%);
+  color: #8A633D;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.workspace-view > .workspace-view-heading h1 {
+  margin: 0;
+  color: var(--dashboard-text) !important;
+  font: 800 30px/1.12 'Montserrat', sans-serif !important;
+  letter-spacing: 0 !important;
+}
+
+.workspace-view > .workspace-view-heading .subtitle {
+  max-width: 64ch;
+  margin: 7px 0 0;
+  color: var(--dashboard-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workspace-view [data-slot='button'] {
+  width: auto !important;
+  min-width: 0;
+  max-width: max-content;
+}
+
+.workspace-view [data-slot='button'][class~='size-8'] {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px;
+  padding: 0 !important;
+}
+
+.workspace-view [data-slot='button'][class~='size-9'] {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px;
+  padding: 0 !important;
+}
+
+.workspace-view :is(
+  .workspace-card,
+  .workspace-side-card,
+  .calendar-week,
+  .project-card,
+  .planner-column,
+  .planner-gantt,
+  .planner-table-scroll,
+  .report-panel,
+  .report-stat,
+  .activity-history,
+  .follow-up-list,
+  .team-board-column,
+  .team-access-panel,
+  .team-member-card,
+  .time-clock-panel,
+  .my-task-group,
+  .task-list-view,
+  .chat-panel,
+  .chat-conversation-list,
+  .chat-feed,
+  .project-record-card,
+  .document-canvas,
+  .presentation-canvas,
+  .spreadsheet-canvas,
+  .slide-rail,
+  .document-review-panel
+) {
+  border: 1px solid var(--dashboard-border) !important;
+  border-radius: 20px !important;
+  background: var(--dashboard-surface) !important;
+  box-shadow: var(--dashboard-shadow) !important;
+  color: var(--dashboard-text);
+}
+
+.workspace-view :is(
+  .my-task-toolbar,
+  .team-board-toolbar,
+  .planner-commandbar,
+  .planner-bulk-bar,
+  .project-toolbar,
+  .activity-toolbar,
+  .report-toolbar,
+  .checkin-toolbar,
+  .follow-up-toolbar,
+  .planner-saved-views-bar
+) {
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--dashboard-border) !important;
+  border-radius: 18px !important;
+  background: var(--dashboard-surface) !important;
+  box-shadow: var(--dashboard-shadow) !important;
+  color: var(--dashboard-muted);
+}
+
+.workspace-view :is(
+  .my-task-summary,
+  .team-board-metrics,
+  .report-metrics,
+  .project-summary
+) {
+  gap: 12px;
+  margin: 0;
+}
+
+.workspace-view :is(
+  .my-task-summary,
+  .team-board-metrics,
+  .report-metrics,
+  .project-summary
+) > :is(button, div),
+.workspace-view .report-metrics > .report-stat {
+  min-width: 0;
+  border: 1px solid var(--dashboard-border) !important;
+  border-radius: 18px !important;
+  background: var(--dashboard-surface) !important;
+  box-shadow: var(--dashboard-shadow) !important;
+  color: var(--dashboard-muted);
+}
+
+.workspace-view :is(.my-task-summary, .team-board-metrics) > button {
+  display: grid !important;
+  min-height: 88px;
+  align-content: center;
+  gap: 5px;
+  padding: 17px 18px;
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.workspace-view :is(.my-task-summary, .team-board-metrics) > button:hover,
+.workspace-view :is(.my-task-summary, .team-board-metrics) > button.active {
+  border-color: rgb(196 154 108 / 48%) !important;
+  box-shadow: var(--dashboard-shadow-hover) !important;
+  transform: translateY(-2px);
+}
+
+.workspace-view :is(
+  .my-task-summary,
+  .team-board-metrics,
+  .project-summary
+) strong {
+  color: var(--dashboard-text);
+  font: 800 24px/1 'Montserrat', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-view :is(.my-task-summary, .team-board-metrics, .project-summary) span {
+  color: var(--dashboard-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.workspace-view .report-stat {
+  gap: 7px;
+  padding: 18px 20px;
+}
+
+.workspace-view .report-stat strong {
+  color: var(--dashboard-text) !important;
+  font: 800 25px/1 'Montserrat', sans-serif !important;
+}
+
+.workspace-view .report-stat span,
+.workspace-view .report-stat em {
+  color: var(--dashboard-muted);
+}
+
+.workspace-view :is(
+  .my-task-group-heading h2,
+  .team-member-heading h2,
+  .team-column-heading h2,
+  .drawer-section-heading h3,
+  .calendar-side-heading h3,
+  .activity-day h3,
+  .report-panel h3,
+  .workspace-side-card h3,
+  .workspace-card h3,
+  .project-card h3,
+  .project-risk-issues-heading h2
+) {
+  color: var(--dashboard-text) !important;
+  font-family: 'Montserrat', sans-serif !important;
+}
+
+.workspace-view :is(
+  .my-task-row,
+  .team-task-row,
+  .follow-up-row,
+  .directory-row,
+  .channel-row,
+  .activity-item,
+  .notification-row,
+  .chat-message,
+  .planner-task-card,
+  .agenda-event-row,
+  .calendar-task-deadline,
+  .compact-row,
+  .report-member-row,
+  .audit-row,
+  .settings-row,
+  .time-clock-row
+) {
+  border: 1px solid transparent !important;
+  border-radius: 14px !important;
+  background: var(--dashboard-surface-soft) !important;
+  color: var(--dashboard-muted);
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+.workspace-view :is(
+  .my-task-row,
+  .team-task-row,
+  .follow-up-row,
+  .directory-row,
+  .channel-row,
+  .activity-item,
+  .notification-row,
+  .chat-message,
+  .planner-task-card,
+  .agenda-event-row,
+  .calendar-task-deadline,
+  .compact-row,
+  .report-member-row,
+  .audit-row,
+  .settings-row,
+  .time-clock-row
+):hover {
+  border-color: var(--dashboard-border) !important;
+  background: var(--dashboard-surface) !important;
+}
+
+.workspace-view :is(
+  .my-task-row,
+  .team-task-row,
+  .follow-up-row,
+  .directory-row,
+  .channel-row,
+  .activity-item,
+  .notification-row,
+  .chat-message,
+  .planner-task-card,
+  .agenda-event-row,
+  .calendar-task-deadline,
+  .compact-row,
+  .report-member-row,
+  .audit-row,
+  .settings-row,
+  .time-clock-row
+) + :is(
+  .my-task-row,
+  .team-task-row,
+  .follow-up-row,
+  .directory-row,
+  .channel-row,
+  .activity-item,
+  .notification-row,
+  .chat-message,
+  .planner-task-card,
+  .agenda-event-row,
+  .calendar-task-deadline,
+  .compact-row,
+  .report-member-row,
+  .audit-row,
+  .settings-row,
+  .time-clock-row
+) {
+  margin-top: 7px;
+}
+
+.workspace-view .my-task-row {
+  min-height: 62px;
+  padding: 10px 12px;
+}
+
+.workspace-view .team-task-row {
+  padding: 11px;
+}
+
+.workspace-view .follow-up-row,
+.workspace-view .directory-row,
+.workspace-view .settings-row {
+  padding: 13px 14px;
+}
+
+.workspace-view .activity-list {
+  padding: 0;
+}
+
+.workspace-view .activity-item {
+  margin: 0 0 8px;
+  padding: 11px 12px;
+}
+
+.workspace-view .chat-message {
+  padding: 13px 14px;
+}
+
+.workspace-view .planner-task-card {
+  padding: 12px;
+}
+
+.workspace-view .agenda-event-row,
+.workspace-view .calendar-task-deadline {
+  padding: 12px 14px;
+}
+
+.workspace-view :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea) {
+  border: 1px solid var(--dashboard-border) !important;
+  border-radius: 12px !important;
+  background: var(--dashboard-surface-soft) !important;
+  color: var(--dashboard-text) !important;
+  font-family: 'Roboto', sans-serif !important;
+}
+
+.workspace-view :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea):focus {
+  border-color: rgb(196 154 108 / 70%) !important;
+  box-shadow: 0 0 0 3px rgb(196 154 108 / 16%) !important;
+  outline: 0 !important;
+}
+
+.workspace-view :is(input, textarea)::placeholder {
+  color: #98A2B3;
+}
+
+.workspace-view :is(
+  .project-status,
+  .project-health,
+  .status-pill,
+  .priority-pill,
+  .scope-badge,
+  .calendar-summary-badge,
+  .invitation-status-badge,
+  .my-task-priority,
+  .planner-priority,
+  .planner-column-heading span,
+  .project-task-stats span
+) {
+  border-radius: 999px !important;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.workspace-view .project-card {
+  min-height: 210px;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.workspace-view .project-card:hover {
+  border-color: rgb(196 154 108 / 42%) !important;
+  box-shadow: var(--dashboard-shadow-hover) !important;
+  transform: translateY(-2px);
+}
+
+.workspace-view .project-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 13px;
+  background: rgb(11 11 69 / 7%);
+  color: #0B0B45;
+}
+
+.workspace-view .project-progress-track,
+.workspace-view .team-member-progress,
+.workspace-view .report-bar-row > div {
+  overflow: hidden;
+  height: 7px;
+  border-radius: 999px !important;
+  background: #E9ECF2 !important;
+}
+
+.workspace-view .project-progress-track span,
+.workspace-view .team-member-progress i,
+.workspace-view .report-bar-row i {
+  border-radius: inherit;
+  background: linear-gradient(90deg, #C49A6C, #E36B43) !important;
+}
+
+.workspace-view .calendar-layout,
+.workspace-view .report-grid,
+.workspace-view .team-member-grid,
+.workspace-view .team-board-columns,
+.workspace-view .project-grid,
+.workspace-view .checkin-grid {
+  gap: 16px;
+}
+
+.workspace-view .calendar-toolbar {
+  border-bottom: 1px solid var(--dashboard-border) !important;
+  background: var(--dashboard-surface) !important;
+  color: var(--dashboard-text);
+}
+
+.workspace-view .calendar-filter-row {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.workspace-view .calendar-view-switcher,
+.workspace-view .planner-view-toggle {
+  padding: 4px;
+  border: 1px solid var(--dashboard-border) !important;
+  border-radius: 999px !important;
+  background: var(--dashboard-surface-soft) !important;
+}
+
+.workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button {
+  border-radius: 999px !important;
+  color: var(--dashboard-muted);
+}
+
+.workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button[data-state='active'],
+.workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button.active {
+  background: #0B0B45 !important;
+  color: #FFFFFF !important;
+}
+
+.workspace-view .calendar-day,
+.workspace-view .calendar-time-corner,
+.workspace-view .calendar-time-day,
+.workspace-view .calendar-time-label,
+.workspace-view .calendar-time-slot {
+  border-color: var(--dashboard-border) !important;
+}
+
+.workspace-view .calendar-day.is-today,
+.workspace-view .calendar-time-day.is-today {
+  background: rgb(196 154 108 / 8%) !important;
+}
+
+.workspace-view .event-pill {
+  border: 1px solid transparent !important;
+  border-left: 3px solid #C49A6C !important;
+  border-radius: 11px !important;
+  background: #FAF8F5 !important;
+  color: var(--dashboard-text) !important;
+}
+
+.workspace-view .event-pill:hover:not(:disabled) {
+  border-color: rgb(196 154 108 / 35%) !important;
+  background: #F5EDE2 !important;
+}
+
+.workspace-view .planner-view-wrapper {
+  gap: 16px;
+}
+
+.workspace-view .planner-view .planner-board {
+  gap: 12px;
+}
+
+.workspace-view .planner-column {
+  background: var(--dashboard-surface-soft) !important;
+}
+
+.workspace-view .planner-task-card {
+  background: var(--dashboard-surface) !important;
+  box-shadow: 0 4px 14px rgb(16 24 40 / 6%) !important;
+}
+
+.workspace-view .planner-gantt-header,
+.workspace-view .planner-task-table th {
+  background: var(--dashboard-surface-soft) !important;
+  color: var(--dashboard-muted) !important;
+}
+
+.workspace-view :is(.planner-gantt, .planner-table-scroll) {
+  border-radius: 18px !important;
+}
+
+.workspace-view .report-risk-list button,
+.workspace-view .project-detail-links button {
+  border: 1px solid var(--dashboard-border) !important;
+  border-radius: 14px !important;
+  background: var(--dashboard-surface-soft) !important;
+  box-shadow: none !important;
+}
+
+.workspace-view .report-risk-list button:hover,
+.workspace-view .project-detail-links button:hover {
+  border-color: rgb(196 154 108 / 45%) !important;
+  background: var(--dashboard-surface) !important;
+  transform: translateY(-1px);
+}
+
+.workspace-view .time-clock-totals div {
+  border: 1px solid var(--dashboard-border);
+  border-radius: 14px;
+  background: var(--dashboard-surface-soft);
+}
+
+.workspace-view .empty-workspace {
+  min-height: 180px;
+  color: var(--dashboard-muted);
+}
+
+.workspace-view .empty-workspace-icon {
+  border-radius: 14px;
+  background: rgb(196 154 108 / 12%);
+  color: #8A633D;
+}
+
+html[data-theme='dark'] .workspace-view > .workspace-view-heading .eyebrow,
+html[data-theme='dark'] .workspace-view .empty-workspace-icon {
+  color: #E0BE96;
+}
+
+html[data-theme='dark'] .workspace-view .project-icon {
+  background: rgb(196 154 108 / 14%);
+  color: #E0BE96;
+}
+
+html[data-theme='dark'] .workspace-view .project-progress-track,
+html[data-theme='dark'] .workspace-view .team-member-progress,
+html[data-theme='dark'] .workspace-view .report-bar-row > div {
+  background: #292A58 !important;
+}
+
+html[data-theme='dark'] .workspace-view .event-pill {
+  background: #1D1E48 !important;
+}
+
+html[data-theme='dark'] .workspace-view .event-pill:hover:not(:disabled) {
+  background: #252653 !important;
+}
+
+html[data-theme='dark'] .workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button.active {
+  background: #C49A6C !important;
+  color: #17183E !important;
+}
+
+html[data-theme='dark'] .workspace-view :is(
+  .project-health.at-risk,
+  .project-task-stats span.risk
+) {
+  background: rgb(227 107 67 / 18%) !important;
+  color: #FFAB88 !important;
+}
+
+html[data-theme='dark'] .workspace-view :is(
+  .project-health.off-track,
+  .project-task-stats span.danger
+) {
+  background: rgb(196 61 75 / 19%) !important;
+  color: #FF9BA7 !important;
+}
+
+html[data-theme='dark'] .workspace-view :is(
+  .project-health.on-track,
+  .project-status.active
+) {
+  background: rgb(61 139 110 / 19%) !important;
+  color: #81D2B4 !important;
+}
+
+@media (max-width: 1060px) {
+  .workspace-view :is(.my-task-summary, .team-board-metrics, .report-metrics) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-view .project-grid,
+  .workspace-view .checkin-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .workspace-view .report-grid,
+  .workspace-view .calendar-layout,
+  .workspace-view .chat-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-view .project-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-view :is(.report-toolbar, .activity-toolbar, .team-board-toolbar, .project-toolbar) {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .workspace-view :is(.report-updated, .activity-count, .project-toolbar > span) {
+    width: 100%;
+    margin-left: 0;
+    padding-bottom: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .workspace-view {
+    gap: 16px;
+  }
+
+  .workspace-view > .workspace-view-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .workspace-view > .workspace-view-heading h1 {
+    font-size: 26px !important;
+  }
+
+  .workspace-view > .workspace-view-heading [data-slot='button'] {
+    align-self: flex-start;
+  }
+
+  .workspace-view :is(.my-task-toolbar, .team-board-toolbar, .planner-commandbar, .project-toolbar, .activity-toolbar, .report-toolbar, .follow-up-toolbar, .planner-bulk-bar) {
+    border-radius: 16px !important;
+  }
+
+  .workspace-view :is(.my-task-summary, .team-board-metrics, .report-metrics, .project-summary) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-view :is(.team-member-grid, .team-board-columns, .project-grid, .checkin-grid) {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-view :is(.workspace-card, .workspace-side-card, .calendar-week, .project-card, .planner-column, .planner-gantt, .planner-table-scroll, .report-panel, .report-stat, .activity-history, .follow-up-list, .team-board-column, .team-access-panel, .team-member-card, .time-clock-panel, .my-task-group, .task-list-view, .chat-panel, .chat-conversation-list, .chat-feed) {
+    border-radius: 18px !important;
+  }
+
+  .workspace-view .project-card {
+    min-height: 0;
+  }
+
+  .workspace-view .time-clock-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .workspace-view .operations-workstream-create {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-view .operations-workstream-create > div,
+  .workspace-view .operations-workstream-create input,
+  .workspace-view .operations-workstream-create .secondary-button {
+    width: 100%;
+  }
+
+  .workspace-view :is(.my-task-summary, .team-board-metrics, .report-metrics, .project-summary) {
+    gap: 9px;
+  }
+
+  .workspace-view :is(.my-task-summary, .team-board-metrics) > button,
+  .workspace-view .report-stat {
+    min-height: 80px;
+    padding: 14px;
+  }
+
+  .workspace-view :is(.my-task-summary, .team-board-metrics, .project-summary) strong,
+  .workspace-view .report-stat strong {
+    font-size: 21px;
+  }
+
+  .workspace-view .follow-up-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .workspace-view .follow-up-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
