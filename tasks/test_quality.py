@@ -518,3 +518,57 @@ class QualityHttpApiTests(TestCase):
         preview = self.client.post(reverse('import-preview', args=[self.workspace.id]), {'import_type': 'tasks', 'workbook': SimpleUploadedFile('tasks.csv', tasks_csv)})
         self.assertEqual(preview.status_code, 200)
         self.assertEqual(preview.json()['preview']['summary']['creates'], 1)
+
+    def _round_trip(self, import_type, filename, content, column_map=None):
+        """Preview then commit the same upload, the way the import screen does."""
+        self.client.force_login(self.owner)
+        url = reverse('import-preview', args=[self.workspace.id])
+        form = {'import_type': import_type, 'workbook': SimpleUploadedFile(filename, content)}
+        if column_map:
+            form['column_map'] = column_map
+        preview = self.client.post(url, form)
+        self.assertEqual(preview.status_code, 200, preview.content)
+        data = preview.json()['preview']
+        commit_form = {'import_type': import_type, 'workbook': SimpleUploadedFile(filename, content), 'preview_id': data['preview_id'], 'preview_checksum': data['checksum']}
+        if column_map:
+            commit_form['column_map'] = column_map
+        return data, self.client.post(reverse('import-commit', args=[self.workspace.id]), commit_form)
+
+    def test_projects_import_without_a_timezone_column_previews_and_commits(self):
+        # Regression: timezone is a required model field and commit runs
+        # full_clean(), but the plan never validated it. A sheet with no
+        # timezone column previewed as a clean create and then failed the whole
+        # commit, so a preview that reported no exceptions could not be applied.
+        data, commit = self._round_trip('projects', 'projects.csv', b'Name,Description,Status\nApollo,Launch project,active\n')
+        self.assertEqual(data['summary']['creates'], 1)
+        self.assertEqual(data['summary']['exceptions'], 0)
+        self.assertEqual(commit.status_code, 200, commit.content)
+        project = Project.objects.get(name='Apollo')
+        self.assertTrue(project.timezone)
+
+    def test_projects_import_reports_an_unknown_timezone_as_an_exception(self):
+        # The project API rejects a name that is not an IANA zone, so the plan
+        # has to reject it too rather than let the commit accept what the API
+        # would not.
+        data, commit = self._round_trip('projects', 'projects.csv', b'Name,Description,Status,Timezone\nBorealis,Launch project,active,Mars/Olympus\n')
+        self.assertEqual(data['summary']['exceptions'], 1)
+        self.assertEqual(data['exceptions'][0]['field'], 'timezone')
+        self.assertEqual(commit.status_code, 200, commit.content)
+        self.assertFalse(Project.objects.filter(name='Borealis').exists())
+
+    def test_projects_import_accepts_lowercase_headers_that_xlsx_accepts(self):
+        # A csv is read with the same header matching as an xlsx, so a sheet
+        # that imports as .xlsx cannot silently import nothing as .csv.
+        data, commit = self._round_trip('projects', 'projects.csv', b'name,description,status,timezone\nComet,Lowercase headers,active,Europe/London\n')
+        self.assertEqual(data['summary']['creates'], 1)
+        self.assertEqual(commit.status_code, 200, commit.content)
+        self.assertTrue(Project.objects.filter(name='Comet').exists())
+
+    def test_stakeholder_import_reports_an_over_long_role(self):
+        Project.objects.create(workspace=self.workspace, name='Apollo')
+        role = 'x' * 161
+        data, commit = self._round_trip('stakeholders', 'stakeholders.csv', f'Project,Name,Role,Email,Influence,Interest,Notes\nApollo,Pat Sponsor,{role},pat@example.com,high,medium,Key approver\n'.encode())
+        self.assertEqual(data['summary']['exceptions'], 1)
+        self.assertEqual(data['exceptions'][0]['field'], 'role')
+        self.assertEqual(commit.status_code, 200, commit.content)
+        self.assertFalse(ProjectStakeholder.objects.filter(email='pat@example.com').exists())

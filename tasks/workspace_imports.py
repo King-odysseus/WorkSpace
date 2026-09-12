@@ -4,7 +4,9 @@ import csv
 import io
 import json
 from datetime import date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from django.conf import settings
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -23,23 +25,29 @@ STAKEHOLDER_COLUMNS = {
 }
 
 
+def _column_indexes(headers, columns):
+    normalized = [str(header or '').strip().lower() for header in headers]
+    return {key: next((index for index, header in enumerate(normalized) if header == expected.lower()), None) for key, expected in columns.items()}
+
+
 def _rows_from_file(content, filename, sheet_name, columns, column_map=None):
     columns = {key: (column_map or {}).get(key, header) for key, header in columns.items()}
     if filename.lower().endswith('.csv'):
-        text = content.decode('utf-8-sig')
-        reader = csv.DictReader(io.StringIO(text))
-        return [{key: row.get(header, '') for key, header in columns.items()} for row in reader]
-    from openpyxl import load_workbook
-    workbook = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
-    worksheet = workbook[sheet_name] if sheet_name in workbook.sheetnames else workbook.active
-    values = list(worksheet.iter_rows(values_only=True))
-    if not values:
+        # Read with csv.reader instead of DictReader so the header lookup can be
+        # as forgiving as the xlsx one. DictReader matches the header text
+        # exactly, so the same sheet that imported fine as .xlsx (where matching
+        # ignores case and surrounding whitespace) came in with every field
+        # empty as .csv, with no error to explain it.
+        rows = list(csv.reader(io.StringIO(content.decode('utf-8-sig'))))
+    else:
+        from openpyxl import load_workbook
+        workbook = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+        worksheet = workbook[sheet_name] if sheet_name in workbook.sheetnames else workbook.active
+        rows = list(worksheet.iter_rows(values_only=True))
+    if not rows:
         return []
-    headers = [str(value or '').strip() for value in values[0]]
-    indexes = {}
-    for key, expected in columns.items():
-        indexes[key] = next((index for index, header in enumerate(headers) if header.lower() == expected.lower()), None)
-    return [{key: (row[index] if index is not None and index < len(row) else '') for key, index in indexes.items()} for row in values[1:] if any(value not in (None, '') for value in row)]
+    indexes = _column_indexes(rows[0], columns)
+    return [{key: (row[index] if index is not None and index < len(row) else '') for key, index in indexes.items()} for row in rows[1:] if any(value not in (None, '') for value in row)]
 
 
 def _parse_date(value, field, row, exceptions):
@@ -108,7 +116,18 @@ def build_project_plan(workspace, content, filename, column_map=None):
             except (TypeError, ValueError, json.JSONDecodeError):
                 exceptions.append({'row': row_number, 'field': 'configuration', 'message': 'Configuration JSON must be a JSON object.'})
                 continue
-        normalized.append({'row': row_number, 'action': 'update' if matches else 'create', 'existing_id': matches[0].id if matches else None, 'name': name, 'description': str(values.get('description') or '').strip(), 'status': status, **parsed, 'timezone': str(values.get('timezone') or '').strip(), 'due_soon_days': due_soon_days, 'configuration': configuration})
+        # Commit runs full_clean(), and timezone is a required model field, so a
+        # blank cell used to preview as a clean create and then fail the whole
+        # commit. A missing timezone means "not specified", which is what the
+        # model default and the project API both fall back to. An unrecognised
+        # name is reported here because the API rejects it too.
+        timezone_name = str(values.get('timezone') or '').strip() or settings.TIME_ZONE
+        try:
+            ZoneInfo(timezone_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            exceptions.append({'row': row_number, 'field': 'timezone', 'message': f'Unknown timezone "{timezone_name}".'})
+            continue
+        normalized.append({'row': row_number, 'action': 'update' if matches else 'create', 'existing_id': matches[0].id if matches else None, 'name': name, 'description': str(values.get('description') or '').strip(), 'status': status, **parsed, 'timezone': timezone_name, 'due_soon_days': due_soon_days, 'configuration': configuration})
     return {'kind': 'projects', 'summary': {'total_rows': len(rows), 'creates': sum(item['action'] == 'create' for item in normalized), 'updates': sum(item['action'] == 'update' for item in normalized), 'exceptions': len(exceptions)}, 'normalized': normalized, 'exceptions': exceptions}
 
 
@@ -140,6 +159,12 @@ def build_stakeholder_plan(workspace, content, filename, column_map=None):
         if not name or len(name) > 160:
             exceptions.append({'row': row_number, 'field': 'name', 'message': 'Stakeholder name is required and must be 160 characters or fewer.'})
             continue
+        # role is capped at 160 on the model and commit runs full_clean(), so an
+        # over-long role has to be reported here rather than failing the commit.
+        role = str(values.get('role') or '').strip()
+        if len(role) > 160:
+            exceptions.append({'row': row_number, 'field': 'role', 'message': 'Stakeholder role must be 160 characters or fewer.'})
+            continue
         email = str(values.get('email') or '').strip()
         if email:
             try:
@@ -160,7 +185,7 @@ def build_stakeholder_plan(workspace, content, filename, column_map=None):
         match_query = {'project': project}
         match_query['email__iexact' if email else 'name__iexact'] = email or name
         existing = ProjectStakeholder.objects.filter(**match_query).first()
-        normalized.append({'row': row_number, 'action': 'update' if existing else 'create', 'existing_id': existing.id if existing else None, 'project_id': project.id, 'name': name, 'role': str(values.get('role') or '').strip(), 'email': email, 'influence': influence, 'interest': interest, 'notes': str(values.get('notes') or '').strip()})
+        normalized.append({'row': row_number, 'action': 'update' if existing else 'create', 'existing_id': existing.id if existing else None, 'project_id': project.id, 'name': name, 'role': role, 'email': email, 'influence': influence, 'interest': interest, 'notes': str(values.get('notes') or '').strip()})
     return {'kind': 'stakeholders', 'summary': {'total_rows': len(rows), 'creates': sum(item['action'] == 'create' for item in normalized), 'updates': sum(item['action'] == 'update' for item in normalized), 'exceptions': len(exceptions)}, 'normalized': normalized, 'exceptions': exceptions}
 
 
