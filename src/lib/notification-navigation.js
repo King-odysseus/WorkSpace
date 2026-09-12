@@ -13,6 +13,24 @@ export const notificationDestinations = {
 
 const sameId = (left, right) => String(left) === String(right)
 
+// A push carries a deep link so tapping it lands on the record the notification
+// is about. Both entry points use this: a cold start reads it off
+// window.location, an already-running window receives the same url in an
+// OPEN_NOTIFICATION message from the service worker. Accepts a full url or a
+// bare query string.
+export function parseNotificationDeepLink(value) {
+  const text = String(value || '')
+  const query = text.includes('?') ? text.slice(text.indexOf('?')) : text
+  const params = new URLSearchParams(query)
+  const id = params.get('notification')
+  if (!id) return null
+  return {
+    id,
+    target_type: params.get('target_type') || '',
+    target_id: params.get('target_id') || '',
+  }
+}
+
 export function resolveNotificationTarget(notification, { tasks = [], events = [], followUps = [], projects = [], lookupValues = [] } = {}) {
   const targetId = String(notification.target_id || '')
   const targetType = notification.target_type

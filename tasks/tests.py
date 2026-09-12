@@ -20,7 +20,7 @@ from django.test.utils import CaptureQueriesContext
 
 from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .automation import run_workspace_automation
-from .views import create_notification
+from .views import create_notification, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
 
@@ -3794,3 +3794,56 @@ class NotificationCoverageTests(TestCase):
         self.assertEqual(response.status_code, 201)
         push.assert_called_once()
         self.assertEqual(push.call_args.args[0], self.member)
+
+
+class PushDeepLinkTests(TestCase):
+    """A push used to carry no url, so the service worker could only open the
+    app shell, and tapping a notification in an already open window just
+    focused it without going anywhere. The payload now names the notification
+    and its target."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='member@example.com', email='member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        self.client.force_login(self.owner)
+
+    def test_push_carries_a_deep_link_to_the_target(self):
+        task = Task.objects.create(workspace=self.workspace, title='Prepare brief', assignee=self.member)
+        notification_id = None
+        with mock.patch('tasks.views.send_push_to_user') as push:
+            response = self.client.post(
+                reverse('task-comment-list', args=[task.id]),
+                data=json.dumps({'body': 'Please pick this up today.'}),
+                content_type='application/json',
+            )
+            notification_id = WorkspaceNotification.objects.get(recipient=self.member, kind='task_comment').id
+        self.assertEqual(response.status_code, 201)
+        push.assert_called_once()
+        self.assertEqual(push.call_args.args[0], self.member)
+        self.assertEqual(push.call_args.kwargs['url'], f'/?notification={notification_id}&target_type=task&target_id={task.id}')
+
+    def test_a_notification_without_a_target_still_deep_links_to_itself(self):
+        notification = create_notification(self.workspace.id, self.member, 'manager_activity', 'Something happened')
+        self.assertEqual(notification_deep_link(notification.id), f'/?notification={notification.id}')
+
+    def test_notification_read_rejects_a_non_numeric_id(self):
+        response = self.client.patch(
+            reverse('notification-list', args=[self.workspace.id]),
+            data=json.dumps({'notification_id': 'not-a-number'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_notification_read_still_marks_a_real_notification(self):
+        notification = create_notification(self.workspace.id, self.owner, 'manager_activity', 'Something happened')
+        response = self.client.patch(
+            reverse('notification-list', args=[self.workspace.id]),
+            data=json.dumps({'notification_id': notification.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        notification.refresh_from_db()
+        self.assertIsNotNone(notification.read_at)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveNotificationTarget } from './notification-navigation.js'
+import { parseNotificationDeepLink, resolveNotificationTarget } from './notification-navigation.js'
 
 const notification = (target_type, target_id) => ({ target_type, target_id })
 
@@ -26,5 +26,25 @@ describe('resolveNotificationTarget', () => {
   it('routes screen-sharing and workspace notifications to their destinations', () => {
     expect(resolveNotificationTarget(notification('screen_share_session', 'abc'))).toEqual({ action: 'pending', targetType: 'screen_share_session', targetId: 'abc' })
     expect(resolveNotificationTarget(notification('workspace', 1))).toEqual({ action: 'destination', targetType: 'workspace', destination: 'Today' })
+  })
+})
+
+describe('parseNotificationDeepLink', () => {
+  it('reads the notification and its target from a full url', () => {
+    expect(parseNotificationDeepLink('/?notification=7&target_type=task&target_id=42')).toEqual({ id: '7', target_type: 'task', target_id: '42' })
+  })
+
+  it('reads a bare query string the same way', () => {
+    expect(parseNotificationDeepLink('?notification=7&target_type=check_in&target_id=3')).toEqual({ id: '7', target_type: 'check_in', target_id: '3' })
+  })
+
+  it('returns null when there is no notification to open', () => {
+    expect(parseNotificationDeepLink('')).toBeNull()
+    expect(parseNotificationDeepLink('/?view=Today')).toBeNull()
+    expect(parseNotificationDeepLink(undefined)).toBeNull()
+  })
+
+  it('keeps the notification when the target params are missing', () => {
+    expect(parseNotificationDeepLink('/?notification=7')).toEqual({ id: '7', target_type: '', target_id: '' })
   })
 })

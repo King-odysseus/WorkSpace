@@ -151,7 +151,7 @@ import ImportView from "./components/ImportView.jsx";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
-import { notificationDestinations, resolveNotificationTarget } from "./lib/notification-navigation.js";
+import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
 import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt.jsx";
 import {
   CookieConsent,
@@ -1471,6 +1471,35 @@ function App() {
     const destination = notificationDestinations[notification.target_type];
     if (destination) setActive(destination);
   };
+  // Tapping a push opens its deep link, which arrives either as a cold start
+  // with the query string or as an OPEN_NOTIFICATION message to a window that
+  // is already running. Both funnel through openNotification so a tap lands on
+  // the same record however the app happened to be started.
+  const handledDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (!activeWorkspaceId) return undefined;
+    const openDeepLink = (value) => {
+      const deepLink = parseNotificationDeepLink(value);
+      if (deepLink) openNotification(deepLink);
+    };
+    if (!handledDeepLinkRef.current) {
+      handledDeepLinkRef.current = true;
+      if (new URLSearchParams(window.location.search).has("notification")) {
+        openDeepLink(window.location.search);
+        // Drop only the deep link params, so a refresh does not reopen the same
+        // notification while an ?invite= or ?view= link in the same url survives.
+        const remaining = new URLSearchParams(window.location.search);
+        ["notification", "target_type", "target_id"].forEach((key) => remaining.delete(key));
+        const query = remaining.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+      }
+    }
+    const onServiceWorkerMessage = (event) => {
+      if (event.data?.type === "OPEN_NOTIFICATION") openDeepLink(event.data.url);
+    };
+    navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
+  }, [activeWorkspaceId]);
   const searchResultDestinations = {
     follow_up: "Follow-up",
     chat_channel: "Channels",

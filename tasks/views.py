@@ -2,6 +2,7 @@ import json
 import re
 import secrets
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone as datetime_timezone
@@ -109,6 +110,19 @@ NOTIFICATION_KIND_PREFERENCE = {
 }
 
 
+def notification_deep_link(notification_id, target_type='', target_id=''):
+    """The app deep links by query string (see the ?view= handling in
+    src/main.jsx). A push carries the notification and its target so tapping it
+    lands on the record the notification is about rather than the default view.
+    The service worker reads only ``url``; the app parses the rest."""
+    params = {'notification': str(notification_id)}
+    if target_type:
+        params['target_type'] = str(target_type)
+    if target_id:
+        params['target_id'] = str(target_id)
+    return f'/?{urlencode(params)}'
+
+
 def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id='', group_key='', immediate=True):
     from .models import WorkspaceNotification
     preference_field = NOTIFICATION_KIND_PREFERENCE.get(kind)
@@ -121,7 +135,11 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
     if kind in REMINDER_EMAIL_KINDS:
         send_reminder_email(recipient, title, body)
     if immediate:
-        send_push_to_user(recipient, title, body, sound=preference.notification_sound if preference else True)
+        send_push_to_user(
+            recipient, title, body,
+            url=notification_deep_link(notification.id, target_type, target_id),
+            sound=preference.notification_sound if preference else True,
+        )
     return notification
 
 
@@ -1865,7 +1883,12 @@ def notification_list(request, workspace_id):
     if target_type and target_id:
         WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, target_type=target_type, target_id=target_id, read_at__isnull=True).update(read_at=timezone.now())
         return JsonResponse({'updated': 'target'})
-    notification_id = payload.get('notification_id')
+    # A deep link is user supplied, so a non numeric id must be a 404 rather
+    # than a ValueError raised out of the id lookup.
+    try:
+        notification_id = int(payload.get('notification_id'))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Notification was not found.'}, status=404)
     notification = WorkspaceNotification.objects.filter(id=notification_id, workspace_id=workspace_id, recipient=request.user).first()
     if notification is None:
         return JsonResponse({'error': 'Notification was not found.'}, status=404)

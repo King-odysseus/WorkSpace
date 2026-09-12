@@ -125,8 +125,13 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
       const existing = clients.find(client => 'focus' in client)
-      if (existing) return existing.focus()
-      return self.clients.openWindow(targetUrl)
+      if (!existing) return self.clients.openWindow(targetUrl)
+      // Focusing an open window is not enough on its own: without this message
+      // the user just lands back on whatever page they were already looking at,
+      // so the notification appears to do nothing. The page listens for this and
+      // routes to the same place a fresh load of targetUrl would.
+      existing.postMessage({ type: 'OPEN_NOTIFICATION', url: targetUrl })
+      return existing.focus()
     })
   )
 })
