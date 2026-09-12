@@ -458,15 +458,7 @@ def _score_kpi(actual, target, direction):
     return {'target': target, 'actual': actual, 'met': met, 'score': round(min(score, 100.0), 1)}
 
 
-def project_health(workspace_id, project, today=None):
-    """Compute a project's health (on-track / at-risk / off-track / completed).
-
-    Canonical server-side equivalent of the frontend heuristic, driven by the
-    configured thresholds. Returns health plus the contributing metrics.
-    """
-    today = today or timezone.localdate()
-    due_soon_days, _stale_days, _kpi = get_workspace_setting(workspace_id)
-    tasks = list(Task.objects.filter(workspace_id=workspace_id, project_ref_id=project.id))
+def _project_health_from_tasks(project, tasks, today, due_soon_days):
     applicable = [t for t in tasks if t.status not in EXCLUDED_STATUSES and getattr(t, 'state', 'active') != 'archived']
     completed = [t for t in applicable if t.status == COMPLETED_STATUS]
     blocked = [t for t in applicable if t.status == BLOCKED_STATUS]
@@ -500,3 +492,33 @@ def project_health(workspace_id, project, today=None):
             'on_hold_tasks': len(on_hold),
         },
     }
+
+
+def project_health(workspace_id, project, today=None):
+    """Compute a project's health (on-track / at-risk / off-track / completed).
+
+    Canonical server-side equivalent of the frontend heuristic, driven by the
+    configured thresholds. Returns health plus the contributing metrics.
+    """
+    today = today or timezone.localdate()
+    due_soon_days, _stale_days, _kpi = get_workspace_setting(workspace_id)
+    tasks = list(Task.objects.filter(workspace_id=workspace_id, project_ref_id=project.id))
+    return _project_health_from_tasks(project, tasks, today, due_soon_days)
+
+
+def project_health_for_projects(workspace_id, projects, today=None):
+    """Health for a whole list of projects in one task query.
+
+    The projects list needs the same answer for every project on the page, and
+    asking project_health() once per project would issue a task query each time.
+    Reusing one fetch keeps the two paths on identical arithmetic, which is the
+    point: a project cannot read on-track here and at-risk there.
+    """
+    today = today or timezone.localdate()
+    due_soon_days, _stale_days, _kpi = get_workspace_setting(workspace_id)
+    projects = list(projects)
+    project_ids = [project.id for project in projects]
+    grouped = {project_id: [] for project_id in project_ids}
+    for task in Task.objects.filter(workspace_id=workspace_id, project_ref_id__in=project_ids):
+        grouped.setdefault(task.project_ref_id, []).append(task)
+    return {project.id: _project_health_from_tasks(project, grouped.get(project.id, []), today, due_soon_days) for project in projects}

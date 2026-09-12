@@ -5413,43 +5413,30 @@ function WorkspaceView({
   }
 
   if (active === "Projects") {
+    // The project list arrives with the server's own health and task counts.
+    // This used to be worked out here instead, from a fixed seven day due-soon
+    // window and with no notion of on-hold or cancelled tasks, while the reports
+    // screen used the workspace settings. The same project could read at-risk on
+    // one screen and on-track on another. The counts are still named the way the
+    // card below reads them.
+    //
+    // The fallback covers the projects that reach this list from a single
+    // project response (create, edit) in the moment before the list is refetched,
+    // since that response carries no metrics. A project with no tasks and no due
+    // date is on track, and a completed one is completed, so the fallback is not
+    // a guess for those cases.
     const withStats = localData.projects.map((project) => {
-      const projectTasks = tasks.filter(
-        (task) => String(task.project_id || "") === String(project.id),
-      );
-      const completed = projectTasks.filter(
-        (task) => task.status === "done",
-      ).length;
-      const blocked = projectTasks.filter(
-        (task) => task.status === "blocked",
-      ).length;
-      const overdue = projectTasks.filter(
-        (task) =>
-          task.status !== "done" && task.due_date && task.due_date < today,
-      ).length;
-      const completion = projectTasks.length
-        ? Math.round((completed / projectTasks.length) * 100)
-        : 0;
-      const dueSoon =
-        project.due_date &&
-        project.due_date >= today &&
-        project.due_date <= toDateKey(new Date(Date.now() + 7 * 86400000));
-      const health =
-        project.status === "completed"
-          ? "completed"
-          : (project.due_date && project.due_date < today) || overdue
-            ? "off-track"
-            : blocked || dueSoon
-              ? "at-risk"
-              : "on-track";
+      const metrics = project.metrics || {};
       return {
         ...project,
-        taskCount: projectTasks.length,
-        completed,
-        blocked,
-        overdue,
-        completion,
-        health,
+        health:
+          project.health ||
+          (project.status === "completed" ? "completed" : "on-track"),
+        taskCount: metrics.total_tasks ?? 0,
+        completed: metrics.completed_tasks ?? 0,
+        blocked: metrics.blocked_tasks ?? 0,
+        overdue: metrics.overdue_tasks ?? 0,
+        completion: metrics.completion_rate ?? 0,
       };
     });
     const visibleProjects = withStats

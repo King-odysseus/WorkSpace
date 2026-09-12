@@ -765,25 +765,34 @@ function MyTasksView({
 }
 
 function ProjectProgress({ project, tasks }) {
-  const projectTasks = tasks.filter(
-    (task) => String(task.project_id || "") === String(project.id),
-  );
-  const completedTasks = projectTasks.filter(
-    (task) => task.status === "done",
-  ).length;
-  const completionPercent = projectTasks.length
-    ? Math.round((completedTasks / projectTasks.length) * 100)
-    : 0;
+  // The project list carries the server's counts, which leave out cancelled and
+  // archived tasks. Those are the numbers the health badge and the stat row on
+  // this same card are drawn from, so counting separately here made the bar
+  // disagree with both of them. Counting from tasks is the fallback for a
+  // project that arrived without metrics.
+  const metrics = project.metrics;
+  const projectTasks = metrics
+    ? null
+    : tasks.filter((task) => String(task.project_id || "") === String(project.id));
+  const totalTasks = metrics ? metrics.applicable_tasks : projectTasks.length;
+  const completedTasks = metrics
+    ? metrics.completed_tasks
+    : projectTasks.filter((task) => task.status === "done").length;
+  const completionPercent = metrics
+    ? metrics.completion_rate
+    : totalTasks
+      ? Math.round((completedTasks / totalTasks) * 100)
+      : 0;
 
   return (
     <div
       className="project-progress"
-      aria-label={`${completedTasks} of ${projectTasks.length} project tasks completed`}
+      aria-label={`${completedTasks} of ${totalTasks} project tasks completed`}
     >
       <div className="project-progress-label">
         <span>
-          {projectTasks.length
-            ? `${completedTasks} of ${projectTasks.length} tasks complete`
+          {totalTasks
+            ? `${completedTasks} of ${totalTasks} tasks complete`
             : "No tasks linked yet"}
         </span>
         <strong>{completionPercent}%</strong>

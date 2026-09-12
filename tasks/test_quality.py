@@ -40,6 +40,7 @@ from .reporting import (
     build_report,
     compute_kpis,
     project_health,
+    project_health_for_projects,
     scope_queryset,
     task_progress,
 )
@@ -168,6 +169,42 @@ class ReportingCalculationTests(TestCase):
 
         Task.objects.create(workspace=self.workspace, project_ref=project, title='Overdue', status='todo', due_date=today - timedelta(days=1))
         self.assertEqual(project_health(self.workspace.id, project, today=today)['health'], 'off-track')
+
+    def test_project_health_for_projects_matches_the_single_project_answer(self):
+        """The projects page answers for a whole page at once.
+
+        It used to answer from its own rules, with a fixed seven day due-soon
+        window and no notion of on hold or cancelled tasks, so a workspace that
+        had configured a different window could read the same project two ways.
+        The batch answer has to be the single project answer, and it has to cost
+        one task query for the page rather than one per project.
+        """
+        today = date(2026, 1, 15)
+        WorkspaceSetting.objects.create(workspace=self.workspace, due_soon_days=2)
+        due_later = Project.objects.create(workspace=self.workspace, name='Due later', status='active', due_date=today + timedelta(days=5))
+        parked = Project.objects.create(workspace=self.workspace, name='Parked', status='active')
+        slipping = Project.objects.create(workspace=self.workspace, name='Slipping', status='active')
+        Task.objects.create(workspace=self.workspace, project_ref=parked, title='Waiting on legal', status='on_hold')
+        Task.objects.create(workspace=self.workspace, project_ref=slipping, title='Late', status='todo', due_date=today - timedelta(days=1))
+        Task.objects.create(workspace=self.workspace, project_ref=slipping, title='Finished', status='done')
+        Task.objects.create(workspace=self.workspace, project_ref=slipping, title='Withdrawn', status='cancelled')
+
+        projects = [due_later, parked, slipping]
+        with self.assertNumQueries(2):
+            batch = project_health_for_projects(self.workspace.id, projects, today=today)
+        singles = {project.id: project_health(self.workspace.id, project, today=today) for project in projects}
+        self.assertEqual(batch, singles)
+
+        # Five days out is inside the frontend's old fixed window but outside
+        # this workspace's, and on hold is enough to be at risk on its own.
+        self.assertEqual(batch[due_later.id]['health'], 'on-track')
+        self.assertEqual(batch[parked.id]['health'], 'at-risk')
+        self.assertEqual(batch[slipping.id]['health'], 'off-track')
+        # Withdrawn work is neither counted as outstanding nor held against the
+        # completion rate, which is the other half of the old disagreement.
+        self.assertEqual(batch[slipping.id]['metrics']['total_tasks'], 3)
+        self.assertEqual(batch[slipping.id]['metrics']['applicable_tasks'], 2)
+        self.assertEqual(batch[slipping.id]['metrics']['completion_rate'], 50)
 
     def test_progress_group_filters_are_replayable(self):
         project = Project.objects.create(workspace=self.workspace, name='Alpha')

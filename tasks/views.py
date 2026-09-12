@@ -2393,7 +2393,19 @@ def project_list(request, workspace_id):
         page, pagination = paginate_response(request, projects)
         if page is None:
             return pagination
-        return JsonResponse({'projects': [project.as_dict() for project in page.object_list], 'pagination': pagination})
+        # The projects page used to work out health and the task counts itself,
+        # from a hardcoded seven day due-soon window and with no notion of
+        # on-hold or cancelled tasks, while the reports endpoint had its own
+        # version driven by the workspace settings. The same project could
+        # therefore read at-risk on one screen and on-track on another. The
+        # canonical calculation is sent with the list so the page has one source.
+        from .reporting import project_health_for_projects
+        health = project_health_for_projects(workspace_id, page.object_list)
+        payloads = []
+        for project in page.object_list:
+            entry = health[project.id]
+            payloads.append({**project.as_dict(), 'health': entry['health'], 'metrics': entry['metrics']})
+        return JsonResponse({'projects': payloads, 'pagination': pagination})
 
     try:
         payload = json.loads(request.body or '{}')
