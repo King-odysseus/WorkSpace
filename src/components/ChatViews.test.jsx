@@ -73,6 +73,31 @@ it('keeps an open chat thread on screen while the workspace reloads it', async (
   expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/messages/')).length).toBeGreaterThan(1)
 })
 
+it('reads the chat list dot from recent activity rather than self-reported presence', async () => {
+  // Presence is sticky: someone who picked "Available" days ago still reports it,
+  // so a dot driven by that field alone shows a teammate as green while they are
+  // offline. Every other surface already resolves presence against last_seen_at.
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const staleData = {
+    ...dataFor(),
+    members: [{
+      id: 9,
+      first_name: 'Dana',
+      last_name: 'Reed',
+      presence: 'available',
+      last_seen_at: new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString(),
+    }],
+  }
+
+  renderChat(staleData)
+
+  expect(await screen.findByTitle('Offline')).toHaveClass('presence-offline')
+})
+
 it('shows no messages yet rather than the previous conversation', async () => {
   mockApi({
     '/documents/': { documents: [] },
