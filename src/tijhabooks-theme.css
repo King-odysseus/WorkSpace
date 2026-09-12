@@ -3656,3 +3656,23 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   to { opacity:1; transform:translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) { .app-update-banner { animation:none; } }
+
+/* Dialogs open in the middle of the page, and every form in one is a single
+   column. The detail panel used to slide in from the right edge, which covered
+   half the workspace and left its fields split two across - a form with an odd
+   number of fields ended up with a ragged half-empty row. */
+.drawer-backdrop {
+  justify-content: center;
+  align-items: center;
+  padding: 32px 20px;
+}
+.task-drawer {
+  width: min(620px, calc(100vw - 40px));
+  height: auto;
+  max-height: calc(100vh - 64px);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgb(7 26 46 / 24%);
+}
+.drawer-task-form {
+  grid-template-columns: 1fr;
+}
