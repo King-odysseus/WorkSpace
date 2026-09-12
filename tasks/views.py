@@ -976,6 +976,45 @@ def plan_bucket_reorder(request, workspace_id):
     return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True, **scope)]})
 
 
+def ensure_backlog_bucket(workspace_id):
+    """Return the workspace's default unscoped Backlog bucket, reviving it if it
+    was archived and creating it when it is missing.
+
+    A task whose bucket names no bucket renders in no planner column at all, so
+    every path that removes a bucket has to leave its tasks on a real bucket
+    rather than blanking the name.
+    """
+    bucket = PlanBucket.objects.filter(workspace_id=workspace_id, name='Backlog', project__isnull=True, workstream__isnull=True).first()
+    if bucket is None:
+        return PlanBucket.objects.create(workspace_id=workspace_id, name='Backlog', position=0)
+    if not bucket.is_active:
+        bucket.is_active = True
+        bucket.save(update_fields=['is_active'])
+    return bucket
+
+
+def tasks_in_bucket_scope(workspace_id, name, project_id=None, workstream_id=None):
+    """The tasks a bucket owns, found by the name they carry.
+
+    A task records its bucket as a plain name and the planner pairs the two by
+    name, so the name is the only link between them. That name is unique only
+    within a scope, so a task carrying a scope of its own belongs to its own
+    scope's bucket, while a task carrying no scope belongs to this bucket only
+    when no other scope claims the name. A task's project lives in project_ref -
+    its `project` is free text.
+    """
+    tasks = Task.objects.filter(workspace_id=workspace_id, bucket=name)
+    if not project_id and not workstream_id:
+        return tasks
+    in_scope = Q(project_ref_id=project_id) if project_id else Q(workstream_ref_id=workstream_id)
+    shared_name = PlanBucket.objects.filter(workspace_id=workspace_id, name=name, is_active=True).exclude(
+        project_id=project_id, workstream_id=workstream_id,
+    ).exists()
+    if not shared_name:
+        in_scope |= Q(project_ref__isnull=True, workstream_ref__isnull=True)
+    return tasks.filter(in_scope)
+
+
 @require_http_methods(['PATCH', 'DELETE'])
 def plan_bucket_detail(request, workspace_id, bucket_id):
     _, error = require_workspace_leader(request, workspace_id)
@@ -987,16 +1026,17 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
     if request.method == 'DELETE':
         if request.GET.get('permanent') == '1':
             destination_id = request.GET.get('destination_bucket_id')
+            if destination_id and str(destination_id) == str(bucket.id):
+                return JsonResponse({'error': 'Choose a different bucket to move affected tasks into.'}, status=400)
             destination = PlanBucket.objects.filter(id=destination_id, workspace_id=workspace_id, project_id=bucket.project_id, workstream_id=bucket.workstream_id, is_active=True).first() if destination_id else None
             if destination_id and destination is None:
                 return JsonResponse({'error': 'Choose an active bucket in the same scope for affected tasks.'}, status=400)
-            scoped_tasks = Task.objects.filter(workspace_id=workspace_id, bucket=bucket.name)
-            if bucket.project_id:
-                scoped_tasks = scoped_tasks.filter(project_id=bucket.project_id)
-            elif bucket.workstream_id:
-                scoped_tasks = scoped_tasks.filter(workstream_ref_id=bucket.workstream_id)
-            scoped_tasks.update(bucket=destination.name if destination else '')
+            # Resolve the landing bucket after the delete, so deleting Backlog
+            # itself revives a fresh one instead of filing tasks under the name
+            # of the row we are about to remove.
+            affected = tasks_in_bucket_scope(workspace_id, bucket.name, bucket.project_id, bucket.workstream_id)
             bucket.delete()
+            affected.update(bucket=destination.name if destination else ensure_backlog_bucket(workspace_id).name)
             record_activity(workspace_id, request.user, 'bucket_deleted', f'{request.user.get_full_name() or request.user.email} deleted the {bucket.name} bucket.')
             return JsonResponse({'deleted': bucket_id})
         bucket.is_active = False
@@ -1009,6 +1049,7 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     if set(payload) - {'name', 'position', 'is_active'}:
         return JsonResponse({'error': 'Unsupported bucket fields.'}, status=400)
+    previous_name = bucket.name
     if 'name' in payload:
         name = str(payload['name']).strip()
         if not name or len(name) > 80:
@@ -1035,6 +1076,11 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
         # The scoped constraint is the authority when a name is taken by an
         # archived bucket, which the active-only check above does not see.
         return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
+    if bucket.name != previous_name:
+        # Tasks store the bucket by name, so a rename that skips this leaves
+        # them pointing at a bucket that no longer exists - and a task whose
+        # bucket names nothing renders in no planner column.
+        tasks_in_bucket_scope(workspace_id, previous_name, bucket.project_id, bucket.workstream_id).update(bucket=bucket.name)
     return JsonResponse({'bucket': bucket.as_dict()})
 
 

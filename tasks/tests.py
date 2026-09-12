@@ -493,6 +493,90 @@ class TaskApiTests(TestCase):
         self.assertFalse(bucket.is_active)
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='bucket_archived').count(), 1)
 
+    def test_deleting_a_bucket_files_its_tasks_on_the_backlog(self):
+        # Removing a bucket used to blank the bucket name on its tasks, and a task
+        # whose bucket names nothing renders in no planner column at all.
+        bucket = PlanBucket.objects.create(workspace=self.workspace, name='Prototyping', position=1)
+        Task.objects.create(workspace=self.workspace, title='Design UI', bucket='Prototyping')
+        Task.objects.create(workspace=self.workspace, title='Design copy', bucket='Prototyping')
+        response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]) + '?permanent=1')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(PlanBucket.objects.filter(id=bucket.id).exists())
+        self.assertEqual(list(Task.objects.values_list('bucket', flat=True)), ['Backlog', 'Backlog'])
+        self.assertTrue(PlanBucket.objects.filter(workspace=self.workspace, name='Backlog', project__isnull=True, workstream__isnull=True).exists())
+
+    def test_deleting_the_backlog_itself_leaves_its_tasks_on_a_backlog(self):
+        backlog = PlanBucket.objects.create(workspace=self.workspace, name='Backlog', position=0)
+        Task.objects.create(workspace=self.workspace, title='Unsorted', bucket='Backlog')
+        response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, backlog.id]) + '?permanent=1')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(PlanBucket.objects.filter(id=backlog.id).exists())
+        self.assertEqual(Task.objects.get(title='Unsorted').bucket, 'Backlog')
+        self.assertTrue(PlanBucket.objects.filter(workspace=self.workspace, name='Backlog', is_active=True).exists())
+
+    def test_deleting_a_bucket_moves_its_tasks_to_the_chosen_destination(self):
+        bucket = PlanBucket.objects.create(workspace=self.workspace, name='Prototyping', position=1)
+        destination = PlanBucket.objects.create(workspace=self.workspace, name='Next up', position=2)
+        Task.objects.create(workspace=self.workspace, title='Design UI', bucket='Prototyping')
+        response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]) + f'?permanent=1&destination_bucket_id={destination.id}')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(Task.objects.get(title='Design UI').bucket, 'Next up')
+
+    def test_deleting_a_project_bucket_also_moves_its_tasks_that_carry_no_project(self):
+        # Tasks created before the planner copied a bucket's project onto its task
+        # have no project of their own, and they are still that bucket's tasks.
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        bucket = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Prototyping', position=0)
+        Task.objects.create(workspace=self.workspace, title='Design UI', bucket='Prototyping')
+        response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]) + '?permanent=1')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(Task.objects.get(title='Design UI').bucket, 'Backlog')
+
+    def test_deleting_a_bucket_leaves_a_same_named_bucket_in_another_scope_alone(self):
+        first = Project.objects.create(workspace=self.workspace, name='Launch')
+        second = Project.objects.create(workspace=self.workspace, name='Support')
+        doomed = PlanBucket.objects.create(workspace=self.workspace, project=first, name='Review queue', position=0)
+        PlanBucket.objects.create(workspace=self.workspace, project=second, name='Review queue', position=0)
+        Task.objects.create(workspace=self.workspace, title='Launch review', bucket='Review queue', project_ref=first)
+        Task.objects.create(workspace=self.workspace, title='Support review', bucket='Review queue', project_ref=second)
+        response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, doomed.id]) + '?permanent=1')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(Task.objects.get(title='Launch review').bucket, 'Backlog')
+        self.assertEqual(Task.objects.get(title='Support review').bucket, 'Review queue')
+
+    def test_renaming_a_bucket_takes_its_tasks_with_it(self):
+        bucket = PlanBucket.objects.create(workspace=self.workspace, name='Later', position=1)
+        Task.objects.create(workspace=self.workspace, title='Deferred', bucket='Later')
+        response = self.client.patch(
+            reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]),
+            data=json.dumps({'name': 'Next up'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(Task.objects.get(title='Deferred').bucket, 'Next up')
+
+    def test_renaming_a_project_bucket_takes_its_tasks_that_carry_no_project_with_it(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        bucket = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Prototyping', position=0)
+        Task.objects.create(workspace=self.workspace, title='Design UI', bucket='Prototyping')
+        response = self.client.patch(
+            reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]),
+            data=json.dumps({'name': 'Design'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(Task.objects.get(title='Design UI').bucket, 'Design')
+
+    def test_deleting_a_bucket_can_be_refused_a_destination_inside_a_different_scope(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        bucket = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Prototyping', position=0)
+        elsewhere = PlanBucket.objects.create(workspace=self.workspace, name='Next up', position=1)
+        Task.objects.create(workspace=self.workspace, title='Design UI', bucket='Prototyping')
+        response = self.client.delete(reverse('plan-bucket-detail', args=[self.workspace.id, bucket.id]) + f'?permanent=1&destination_bucket_id={elsewhere.id}')
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(PlanBucket.objects.filter(id=bucket.id).exists())
+        self.assertEqual(Task.objects.get(title='Design UI').bucket, 'Prototyping')
+
     def test_plan_bucket_detail_rejects_unsupported_methods(self):
         # Guards the stacked-decorator regression that made PATCH and DELETE
         # unreachable: only the two documented methods may be accepted.
