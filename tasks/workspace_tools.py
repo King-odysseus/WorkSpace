@@ -669,7 +669,13 @@ def workspace_file_download(request, file_id):
         if item.cloudinary_url:
             return HttpResponseRedirect(item.cloudinary_url)
         return JsonResponse({'error': 'File not found.'}, status=404)
-    return stored_file_response(request, item.file.open('rb'), item.original_name)
+    try:
+        stored = item.file.open('rb')
+    except (FileNotFoundError, OSError):
+        # The row survives a redeploy but the file it names does not: uploads live
+        # on the container's disk unless Cloudinary is configured.
+        return JsonResponse({'error': 'File is no longer stored. Upload it again.'}, status=404)
+    return stored_file_response(request, stored, item.original_name)
 
 
 @require_http_methods(['DELETE'])

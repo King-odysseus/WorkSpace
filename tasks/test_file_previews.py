@@ -56,3 +56,10 @@ class FilePreviewTests(TestCase):
         response = self.client.get(f'/api/workspace-files/{item.id}/download/')
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response['Content-Disposition'].startswith('inline'))
+
+    def test_workspace_file_missing_from_disk_reports_404(self):
+        item = WorkspaceFile.objects.create(workspace=self.workspace, file=SimpleUploadedFile('gone.png', b'data'), original_name='gone.png', mime_type='image/png', size=4, uploaded_by=self.user)
+        item.file.storage.delete(item.file.name)
+        response = self.client.get(f'/api/workspace-files/{item.id}/download/')
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('no longer stored', response.json()['error'])
