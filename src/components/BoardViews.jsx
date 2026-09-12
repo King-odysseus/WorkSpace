@@ -2534,12 +2534,16 @@ function TodayDashboard({
       task.completed_at &&
       toDateKey(task.completed_at) === today,
   );
+  // Matches on the user id, the way MyTasksView does. This compared the
+  // displayed name against member.email, which only ever matched for someone
+  // with no first or last name, so the lookup usually fell through to "" and
+  // every unassigned task satisfied "" === "" and showed up as yours. The name
+  // fallback is kept behind the same !assignee_id guard as MyTasksView so an
+  // unassigned task cannot be claimed by a name comparison.
   const myTasks = tasks.filter(
     (task) =>
-      String(task.assignee_id || "") ===
-        String(
-          members.find((member) => member.email === currentUserName)?.id || "",
-        ) || task.member === currentUserName,
+      String(task.assignee_id || "") === String(currentUserId) ||
+      (!task.assignee_id && task.member === currentUserName),
   );
   const myQueue = myTasks
     .filter(isOpen)
