@@ -754,6 +754,11 @@ def task_list(request, workspace_id=None):
     if not bucket or len(bucket) > 80:
         return JsonResponse({'error': 'Bucket must be between 1 and 80 characters.'}, status=400)
     plan_bucket = PlanBucket.objects.filter(workspace_id=workspace_id, name=bucket, is_active=True).first()
+    if plan_bucket is None:
+        # The lane this task names is missing or archived, and a task naming no
+        # live lane renders in no planner column at all. Put the lane back rather
+        # than filing the task somewhere it cannot be seen.
+        plan_bucket = ensure_bucket_named(workspace_id, bucket)
     workstream_ref = None
     if payload.get('workstream_id'):
         workstream_ref = LookupValue.objects.filter(id=payload['workstream_id'], workspace_id=workspace_id, kind='workstream').first()
@@ -976,21 +981,31 @@ def plan_bucket_reorder(request, workspace_id):
     return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True, **scope)]})
 
 
-def ensure_backlog_bucket(workspace_id):
-    """Return the workspace's default unscoped Backlog bucket, reviving it if it
-    was archived and creating it when it is missing.
+def ensure_bucket_named(workspace_id, name):
+    """Return an active unscoped bucket with this name, reviving or creating it.
 
     A task whose bucket names no bucket renders in no planner column at all, so
-    every path that removes a bucket has to leave its tasks on a real bucket
-    rather than blanking the name.
+    every path that could leave a task pointing at a missing lane has to put the
+    lane back first - a delete that removes one, and a task created or moved into
+    a name no bucket carries.
+
+    Only an unscoped bucket can be guessed at: neither a project nor a workstream
+    is recoverable from a name alone, and an unscoped lane is the one every
+    planner mode can draw.
     """
-    bucket = PlanBucket.objects.filter(workspace_id=workspace_id, name='Backlog', project__isnull=True, workstream__isnull=True).first()
+    bucket = PlanBucket.objects.filter(workspace_id=workspace_id, name=name, project__isnull=True, workstream__isnull=True).first()
     if bucket is None:
-        return PlanBucket.objects.create(workspace_id=workspace_id, name='Backlog', position=0)
+        position = 0 if name == 'Backlog' else PlanBucket.objects.filter(workspace_id=workspace_id, project__isnull=True, workstream__isnull=True).count()
+        return PlanBucket.objects.create(workspace_id=workspace_id, name=name, position=position)
     if not bucket.is_active:
         bucket.is_active = True
         bucket.save(update_fields=['is_active'])
     return bucket
+
+
+def ensure_backlog_bucket(workspace_id):
+    """Return the workspace's default unscoped Backlog bucket."""
+    return ensure_bucket_named(workspace_id, 'Backlog')
 
 
 def tasks_in_bucket_scope(workspace_id, name, project_id=None, workstream_id=None):
@@ -1633,6 +1648,10 @@ def task_detail(request, task_id):
         bucket = str(payload['bucket']).strip()
         if not bucket or len(bucket) > 80:
             return JsonResponse({'error': 'Bucket must be between 1 and 80 characters.'}, status=400)
+        # Same reason as on create: a task naming no live lane is a task no
+        # planner column draws, so the lane has to exist before the move.
+        if not PlanBucket.objects.filter(workspace_id=task.workspace_id, name=bucket, is_active=True).exists():
+            ensure_bucket_named(task.workspace_id, bucket)
         task.bucket = bucket
 
     if 'due_date' in payload and payload['due_date']:

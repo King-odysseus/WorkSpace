@@ -1,11 +1,13 @@
 import json
 import base64
+import importlib
 import tempfile
 from io import StringIO
 from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
+from django.apps import apps as django_apps
 from django.conf import settings
 from django.core import mail
 from django.core.management import call_command
@@ -576,6 +578,67 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertTrue(PlanBucket.objects.filter(id=bucket.id).exists())
         self.assertEqual(Task.objects.get(title='Design UI').bucket, 'Prototyping')
+
+    def test_creating_a_task_in_a_missing_bucket_creates_the_bucket(self):
+        # The bucket name is the only link between a task and its lane, so a name
+        # no lane carries would file the task into no planner column at all -
+        # which is how a workspace whose Backlog was deleted lost every task in it.
+        self.assertFalse(PlanBucket.objects.filter(workspace=self.workspace).exists())
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Unsorted', 'bucket': 'Backlog'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        bucket = PlanBucket.objects.get(workspace=self.workspace, name='Backlog')
+        self.assertTrue(bucket.is_active)
+        self.assertIsNone(bucket.project_id)
+        self.assertIsNone(bucket.workstream_id)
+
+    def test_creating_a_task_in_an_archived_bucket_revives_it(self):
+        PlanBucket.objects.create(workspace=self.workspace, name='Backlog', position=0, is_active=False)
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Unsorted', 'bucket': 'Backlog'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(PlanBucket.objects.filter(workspace=self.workspace, name='Backlog', is_active=True).count(), 1)
+
+    def test_moving_a_task_into_a_missing_bucket_creates_the_bucket(self):
+        task = Task.objects.create(workspace=self.workspace, title='Design UI', bucket='Backlog')
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'bucket': 'Next up'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(PlanBucket.objects.filter(workspace=self.workspace, name='Next up', is_active=True).exists())
+
+    def test_restoring_buckets_gives_orphaned_tasks_a_lane_and_blank_names_a_backlog(self):
+        # The repair that runs on deploy against a workspace already broken this
+        # way: a deleted Backlog left its tasks naming a lane that is gone, and a
+        # permanently deleted one blanked the name outright.
+        migration = importlib.import_module('tasks.migrations.0066_restore_buckets_for_orphaned_tasks')
+        Task.objects.create(workspace=self.workspace, title='Unsorted', bucket='Backlog')
+        Task.objects.create(workspace=self.workspace, title='Blanked', bucket='')
+        Task.objects.create(workspace=self.workspace, title='In a real lane', bucket='This week')
+        PlanBucket.objects.create(workspace=self.workspace, name='This week', position=0)
+        migration.restore_missing_buckets(django_apps, None)
+        self.assertTrue(PlanBucket.objects.filter(workspace=self.workspace, name='Backlog', is_active=True).exists())
+        self.assertEqual(Task.objects.get(title='Blanked').bucket, 'Backlog')
+        # A lane that was already there is left as the user had it.
+        self.assertEqual(PlanBucket.objects.filter(workspace=self.workspace, name='This week').count(), 1)
+
+    def test_restoring_buckets_revives_an_archived_lane_instead_of_adding_another(self):
+        migration = importlib.import_module('tasks.migrations.0066_restore_buckets_for_orphaned_tasks')
+        PlanBucket.objects.create(workspace=self.workspace, name='Backlog', position=0, is_active=False)
+        Task.objects.create(workspace=self.workspace, title='Unsorted', bucket='Backlog')
+        migration.restore_missing_buckets(django_apps, None)
+        self.assertEqual(PlanBucket.objects.filter(workspace=self.workspace, name='Backlog').count(), 1)
+        self.assertTrue(PlanBucket.objects.get(workspace=self.workspace, name='Backlog').is_active)
 
     def test_plan_bucket_detail_rejects_unsupported_methods(self):
         # Guards the stacked-decorator regression that made PATCH and DELETE
