@@ -9,7 +9,7 @@ function Card({ className, ...props }) {
         // Matches the app's existing .workspace-card shadow exactly (kept
         // instead of shadcn's default so the swap to <Card> doesn't flatten
         // the depth every panel already had).
-        'bg-card text-card-foreground flex flex-col gap-4 rounded-2xl py-5 shadow-[0_8px_24px_rgb(7_26_46_/0.06)] dark:shadow-[0_10px_28px_rgb(2_5_31_/0.25)]',
+        'bg-card text-card-foreground flex flex-col gap-4 rounded-[18px] py-5 shadow-[0_8px_24px_rgb(7_26_46_/0.06)] dark:shadow-[0_10px_28px_rgb(2_5_31_/0.25)]',
         className
       )}
       {...props}

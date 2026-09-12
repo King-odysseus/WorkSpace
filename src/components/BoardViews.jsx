@@ -5,9 +5,11 @@
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import {
+  AlarmClock,
   Archive,
   ArrowUpRight,
   Brush,
+  CalendarClock,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -16,6 +18,7 @@ import {
   ChevronRight,
   Clock3,
   Copy,
+  CircleSlash,
   Filter,
   Hash,
   MessageSquare,
@@ -2669,27 +2672,53 @@ function TodayDashboard({
         </div>
       </section>
       <section className="today-metrics">
-        <button onClick={() => onNavigate("My tasks")}>
-          <strong>{dueToday.length}</strong>
-          <span>Due today</span>
-        </button>
         <button
-          className={overdue.length ? "attention" : ""}
+          className="today-metric today-metric-due"
           onClick={() => onNavigate("My tasks")}
         >
-          <strong>{overdue.length}</strong>
-          <span>Overdue</span>
+          <span className="today-metric-icon" aria-hidden="true">
+            <CalendarClock size={19} />
+          </span>
+          <span className="today-metric-copy">
+            <strong>{dueToday.length}</strong>
+            <span>Due today</span>
+          </span>
         </button>
         <button
-          className={blocked.length ? "attention" : ""}
+          className={`today-metric today-metric-overdue${overdue.length ? " attention" : ""}`}
+          onClick={() => onNavigate("My tasks")}
+        >
+          <span className="today-metric-icon" aria-hidden="true">
+            <AlarmClock size={19} />
+          </span>
+          <span className="today-metric-copy">
+            <strong>{overdue.length}</strong>
+            <span>Overdue</span>
+          </span>
+        </button>
+        <button
+          className={`today-metric today-metric-blocked${blocked.length ? " attention" : ""}`}
           onClick={() => onNavigate("Team board")}
         >
-          <strong>{blocked.length}</strong>
-          <span>Blocked</span>
+          <span className="today-metric-icon" aria-hidden="true">
+            <CircleSlash size={19} />
+          </span>
+          <span className="today-metric-copy">
+            <strong>{blocked.length}</strong>
+            <span>Blocked</span>
+          </span>
         </button>
-        <button onClick={() => onNavigate("My tasks")}>
-          <strong>{completedToday.length}</strong>
-          <span>Completed today</span>
+        <button
+          className="today-metric today-metric-completed"
+          onClick={() => onNavigate("My tasks")}
+        >
+          <span className="today-metric-icon" aria-hidden="true">
+            <CheckCircle2 size={19} />
+          </span>
+          <span className="today-metric-copy">
+            <strong>{completedToday.length}</strong>
+            <span>Completed today</span>
+          </span>
         </button>
       </section>
       <div className="today-grid">
