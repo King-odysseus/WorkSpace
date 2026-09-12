@@ -2785,7 +2785,7 @@ function App() {
           task={selectedTask}
           workspaceId={activeWorkspaceId}
           members={workspaceData.members}
-          currentUserId={currentUserId}
+          currentUserId={session.user.id}
           projects={workspaceData.projects}
           buckets={workspaceData.buckets}
           canManageTasks={["owner", "manager"].includes(currentWorkspace?.role)}
