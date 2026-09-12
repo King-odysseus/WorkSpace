@@ -36,7 +36,7 @@
 .screen-share-video-source { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .screen-share-consent-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem; background: rgb(11 11 69 / 0.62); backdrop-filter: blur(6px); }
 .screen-share-consent-card { width: min(680px, 100%); max-height: 92vh; overflow: auto; display: grid; grid-template-columns: auto 1fr; gap: 1rem; padding: 1.5rem; }
-.screen-share-consent-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 999px; color: var(--primary, #1d4ed8); background: #eff6ff; }
+.screen-share-consent-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 999px; color: var(--primary); background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
 .screen-share-consent-card h2 { margin: .2rem 0 1rem; font-size: 1.35rem; }
 .screen-share-policy-copy { white-space: pre-wrap; line-height: 1.6; color: var(--text-secondary, #475467); }
 .screen-share-request-message { margin: .5rem 0 1rem; font-weight: 600; }
@@ -76,7 +76,7 @@
 .import-panel, .import-preview-panel { padding: 1.25rem; }
 .import-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
 .import-type-option { display: grid; gap: .35rem; text-align: left; padding: 1rem; border: 1px solid var(--border, #e4e7ec); border-radius: .7rem; color: var(--text-secondary, #667085); background: transparent; }
-.import-type-option.is-selected { border-color: var(--primary, #1d4ed8); color: var(--text-primary, #101828); background: #eff6ff; box-shadow: 0 0 0 1px var(--primary, #1d4ed8); }
+.import-type-option.is-selected { border-color: var(--primary, #1d4ed8); color: var(--text-primary, #101828); background: color-mix(in srgb, var(--color-primary) 12%, transparent); box-shadow: 0 0 0 1px var(--primary); }
 .import-type-option span { font-size: .8rem; line-height: 1.4; }
 .import-template-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border, #e4e7ec); }
 .import-template-actions label { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; }
@@ -195,6 +195,24 @@ html[data-theme='dark'] {
   --color-border: #2a2a5c;
   --color-border-light: #20204a;
   --shadow-elevated: 0 12px 40px -12px rgb(0 0 0 / 0.6);
+}
+
+/* Aliases for the shadcn-style variable names that the screen-share, import,
+   chat and AI-provider rules further down were written against. None of them
+   were ever defined, so each var() either fell back to a hardcoded light-only
+   colour or, where no fallback was given, resolved to nothing at all (invalid
+   at computed-value time). That left mentions unhighlighted and the AI-provider
+   switch with no visible track. Point them at the theme-aware --color-* set so
+   they follow data-theme like the rest of the app. */
+:root {
+  --primary: var(--color-primary);
+  --accent: var(--color-accent);
+  --border: var(--color-border);
+  --surface: var(--color-surface);
+  --surface-secondary: var(--color-surface-secondary);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
 }
 
 /* Sidebar nav scrollbar - the page-wide thin light-grey scrollbar (Tailwind's
