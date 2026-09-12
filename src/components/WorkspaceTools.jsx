@@ -603,6 +603,7 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('')
   const [dirty, setDirty] = useState(false)
+  const [failedSave, setFailedSave] = useState(null)
   const [busy, setBusy] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -649,6 +650,7 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
     setSpreadsheetData(document.content || { sheets: [] })
     setActiveSlide(0)
     setDirty(false)
+    setFailedSave(null)
     setStatus('Saved')
     setCommentsOpen(false)
     setShareOpen(false)
@@ -666,11 +668,17 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
     } catch (error) { setStatus(error.message || 'Document opened, but collaboration details could not be loaded.') }
   }
 
+  const draftContent = useMemo(() => selected ? (selected.kind === 'presentation' ? { ...selected.content, slides } : selected.kind === 'spreadsheet' ? { ...selected.content, sheets: spreadsheetData.sheets } : { ...selected.content, html: cleanHtml(documentHtml), text: cleanHtml(documentHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }) : null, [selected, slides, spreadsheetData, documentHtml])
+
+  // Identifies exactly what a save would send. Autosave keys its retry off this
+  // so a failed attempt does not immediately schedule the same attempt again.
+  const saveSignature = useMemo(() => selected && draftContent ? `${selected.id}:${JSON.stringify([selected.title, draftContent])}` : null, [selected, draftContent])
+
   const saveDocument = useCallback(async () => {
     if (!selected || busy) return
     setBusy(true)
     setStatus('Saving…')
-    const content = selected.kind === 'presentation' ? { ...selected.content, slides } : selected.kind === 'spreadsheet' ? { ...selected.content, sheets: spreadsheetData.sheets } : { ...selected.content, html: cleanHtml(documentHtml), text: cleanHtml(documentHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
+    const content = draftContent
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/documents/${selected.id}/`, { method: 'PATCH', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ title: selected.title, content, base_updated_at: selected.updated_at }) })
       const data = await readJsonResponse(response, 'Changes could not be saved.')
@@ -686,16 +694,23 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
       setDocuments(current => current.map(item => item.id === data.document.id ? data.document : item))
       setDirty(false)
       setConflict(null)
+      setFailedSave(null)
       setStatus('Saved')
-    } catch (error) { setStatus(error.message || 'Save failed.') } finally { setBusy(false) }
-  }, [busy, documentHtml, selected, slides, spreadsheetData, workspaceId])
+    } catch (error) { setStatus(error.message || 'Save failed.'); setFailedSave(saveSignature) } finally { setBusy(false) }
+  }, [busy, draftContent, saveSignature, selected, workspaceId])
 
+  // Autosave used to retry without end. A failed save leaves dirty set, which
+  // re-ran this effect, and because saveDocument changes identity with busy every
+  // attempt scheduled the next one: the endpoint was hit about once a second and
+  // the status flipped between saving and failed while the edits never landed.
+  // Keying the attempt to the content means a failure waits for the next edit or
+  // for the Save button instead of looping.
   useEffect(() => {
-    if (!dirty || !selected || conflict) return undefined
+    if (!dirty || !selected || conflict || saveSignature === failedSave) return undefined
     setStatus('Unsaved changes')
     const timer = window.setTimeout(saveDocument, 1200)
     return () => window.clearTimeout(timer)
-  }, [dirty, documentHtml, slides, spreadsheetData, selected?.title, conflict, saveDocument])
+  }, [dirty, saveSignature, selected, conflict, failedSave, saveDocument])
 
   const createDocument = async kind => {
     setBusy(true)
