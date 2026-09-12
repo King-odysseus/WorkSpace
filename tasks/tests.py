@@ -89,6 +89,33 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.json()['task']['project_id'], project.id)
         self.assertEqual(response.json()['task']['project'], 'Launch')
 
+    def test_create_task_inherits_scope_from_a_scoped_plan_bucket(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        PlanBucket.objects.create(workspace=self.workspace, project=project, name='Prototyping', position=0)
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Design the prototype', 'bucket': 'Prototyping'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(response.status_code, 201)
+        task = Task.objects.get(id=response.json()['task']['id'])
+        self.assertEqual(task.project_ref, project)
+        self.assertEqual(response.json()['task']['project_id'], project.id)
+
+    def test_create_task_rejects_a_bucket_from_another_project_scope(self):
+        project = Project.objects.create(workspace=self.workspace, name='Launch')
+        other_project = Project.objects.create(workspace=self.workspace, name='Support')
+        PlanBucket.objects.create(workspace=self.workspace, project=project, name='Prototyping', position=0)
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Wrong scope', 'project_id': other_project.id, 'bucket': 'Prototyping'}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Task.objects.filter(title='Wrong scope').exists())
+
     def test_task_priority_is_persisted_and_validated(self):
         response = self.client.post(
             reverse('task-list'),

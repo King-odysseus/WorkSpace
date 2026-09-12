@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import { TodayDashboard } from './BoardViews.jsx'
+import { MyTasksView, TodayDashboard } from './BoardViews.jsx'
 
 const noop = vi.fn()
 
@@ -56,4 +56,28 @@ it('does not treat an unassigned task as yours when the name lookup fails', () =
   ])
 
   expect(within(myDayPanel()).getByText('Your day is clear.')).toBeInTheDocument()
+})
+
+it('shows an assigned task in My tasks and keeps unassigned work out of the queue', () => {
+  render(
+    <MyTasksView
+      tasks={[
+        { id: 1, title: 'Assigned to me', status: 'todo', assignee_id: 7, member: 'Nate Foster', priority: 'normal', tag: 'Ops', bucket: 'Backlog' },
+        { id: 2, title: 'Nobody owns this', status: 'todo', assignee_id: null, member: 'Unassigned', priority: 'normal', tag: 'Ops', bucket: 'Backlog' },
+      ]}
+      currentUserId={7}
+      currentUserName="Nate Foster"
+      projects={[]}
+      buckets={[{ id: 1, name: 'Backlog' }]}
+      onAddTask={noop}
+      onOpenTask={noop}
+      onComplete={noop}
+      onStatusChange={noop}
+      onDelete={noop}
+      canManageTasks={false}
+    />,
+  )
+
+  expect(screen.getByText('Assigned to me')).toBeInTheDocument()
+  expect(screen.queryByText('Nobody owns this')).not.toBeInTheDocument()
 })

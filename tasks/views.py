@@ -753,6 +753,26 @@ def task_list(request, workspace_id=None):
     bucket = str(payload.get('bucket', 'Backlog')).strip()
     if not bucket or len(bucket) > 80:
         return JsonResponse({'error': 'Bucket must be between 1 and 80 characters.'}, status=400)
+    plan_bucket = PlanBucket.objects.filter(workspace_id=workspace_id, name=bucket, is_active=True).first()
+    workstream_ref = None
+    if payload.get('workstream_id'):
+        workstream_ref = LookupValue.objects.filter(id=payload['workstream_id'], workspace_id=workspace_id, kind='workstream').first()
+        if workstream_ref is None:
+            return JsonResponse({'error': 'Workstream was not found in this workspace.'}, status=404)
+    if plan_bucket and plan_bucket.project_id:
+        if project_ref is not None and project_ref.id != plan_bucket.project_id:
+            return JsonResponse({'error': 'The selected bucket belongs to a different project.'}, status=400)
+        if workstream_ref is not None:
+            return JsonResponse({'error': 'A project bucket cannot be combined with a workstream.'}, status=400)
+        project_ref = project_ref or plan_bucket.project
+    elif plan_bucket and plan_bucket.workstream_id:
+        if workstream_ref is not None and workstream_ref.id != plan_bucket.workstream_id:
+            return JsonResponse({'error': 'The selected bucket belongs to a different workstream.'}, status=400)
+        if project_ref is not None:
+            return JsonResponse({'error': 'A workstream bucket cannot be combined with a project.'}, status=400)
+        workstream_ref = workstream_ref or plan_bucket.workstream
+    elif project_ref is not None and workstream_ref is not None and workstream_ref.project_id != project_ref.id:
+        return JsonResponse({'error': 'Choose a project or an operations workstream, not both.'}, status=400)
     labels, labels_error = parse_task_labels(payload.get('labels'))
     if labels_error:
         return JsonResponse({'error': labels_error}, status=400)
@@ -783,7 +803,7 @@ def task_list(request, workspace_id=None):
         workspace = Workspace.objects.get(id=workspace_id)
         code = reserve_task_code(workspace)
         task = Task(
-            workspace_id=workspace_id, code=code, assignee=assignee, project_ref=project_ref,
+            workspace_id=workspace_id, code=code, assignee=assignee, project_ref=project_ref, workstream_ref=workstream_ref,
             title=title, description=str(payload.get('description', '')).strip(),
             assignee_name=str(payload.get('assignee_name', '')).strip(), project=str(payload.get('project', '')).strip(),
             recurrence=recurrence, priority=priority, due_date=due_date, start_date=start_date,
@@ -792,13 +812,14 @@ def task_list(request, workspace_id=None):
             state=payload.get('state', 'active'), bucket=bucket,
             position=(max_position + 1) if max_position is not None else 0, labels=labels or [],
         )
-        for field_name, kind in (('workstream_id', 'workstream'), ('phase_id', 'phase')):
-            if payload.get(field_name):
-                lookup = LookupValue.objects.filter(id=payload[field_name], workspace_id=workspace_id, kind=kind).first()
-                if lookup is None:
-                    return JsonResponse({'error': f'{kind.title()} was not found in this workspace.'}, status=404)
-                setattr(task, f'{kind}_ref', lookup)
-                setattr(task, kind, lookup.name)
+        if workstream_ref is not None:
+            task.workstream = workstream_ref.name
+        if payload.get('phase_id'):
+            phase_ref = LookupValue.objects.filter(id=payload['phase_id'], workspace_id=workspace_id, kind='phase').first()
+            if phase_ref is None:
+                return JsonResponse({'error': 'Phase was not found in this workspace.'}, status=404)
+            task.phase_ref = phase_ref
+            task.phase = phase_ref.name
         try:
             task.full_clean()
         except ValidationError as validation_error:

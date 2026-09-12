@@ -1298,17 +1298,25 @@ function App() {
       setNewAssigneeId(template.assignee_id || "");
     }
   };
-  const openTaskModal = (assigneeId) => {
+  const openTaskModal = (assigneeId, options = {}) => {
     const requestedBucket = sessionStorage.getItem("workspace-new-task-bucket");
     sessionStorage.removeItem("workspace-new-task-bucket");
     setNewTask("");
     setNewTaskTemplate("");
     setNewDescription("");
     setNewAssigneeId(assigneeId ? String(assigneeId) : "");
-    setNewProjectId("");
+    setNewProjectId(options.projectId ? String(options.projectId) : "");
     setNewWorkstreamId("");
     setNewDueDate("");
-    setNewBucket(requestedBucket || "Backlog");
+    const requestedProjectId = options.projectId
+      ? String(options.projectId)
+      : "";
+    const matchingBucket = requestedProjectId
+      ? workspaceData.buckets.find(
+          (bucket) => String(bucket.project_id || "") === requestedProjectId,
+        )
+      : null;
+    setNewBucket(requestedBucket || matchingBucket?.name || "Backlog");
     setNewRecurrence("none");
     setNewPriority("normal");
     setTaskError("");
@@ -2676,7 +2684,8 @@ function App() {
                 Project
                 <AppSelect
                   value={newProjectId}
-                  onChange={(event) => { setNewProjectId(event.target.value); if (event.target.value) setNewWorkstreamId(""); }}
+                  disabled={Boolean(newWorkstreamId)}
+                  onChange={(event) => { setNewProjectId(event.target.value); if (event.target.value) { setNewWorkstreamId(""); setNewBucket("Backlog"); } }}
                 >
                   <option value="">General</option>
                   {workspaceData.projects.map((project) => (
@@ -2688,7 +2697,7 @@ function App() {
               </label>
               <label>
                 Workstream
-                <AppSelect value={newWorkstreamId} onChange={(event) => { setNewWorkstreamId(event.target.value); if (event.target.value) setNewProjectId(""); }}>
+                <AppSelect value={newWorkstreamId} disabled={Boolean(newProjectId)} onChange={(event) => { setNewWorkstreamId(event.target.value); if (event.target.value) { setNewProjectId(""); setNewBucket("Backlog"); } }}>
                   <option value="">No workstream</option>
                   {(workspaceData.lookupValues || []).filter((value) => value.kind === "workstream" && value.is_active && !value.project_id).map((workstream) => <option key={workstream.id} value={workstream.id}>{workstream.name}</option>)}
                 </AppSelect>
@@ -2710,16 +2719,36 @@ function App() {
               Planner bucket
               <AppSelect
                 value={newBucket}
-                onChange={(event) => setNewBucket(event.target.value)}
+                onChange={(event) => {
+                  const bucket = workspaceData.buckets.find(
+                    (item) => String(item.name) === String(event.target.value),
+                  );
+                  setNewBucket(event.target.value);
+                  if (bucket?.project_id) {
+                    setNewProjectId(String(bucket.project_id));
+                    setNewWorkstreamId("");
+                  } else if (bucket?.workstream_id) {
+                    setNewWorkstreamId(String(bucket.workstream_id));
+                    setNewProjectId("");
+                  }
+                }}
               >
-                {(workspaceData.buckets.length
-                  ? workspaceData.buckets
-                  : [{ id: "backlog", name: "Backlog" }]
-                ).map((bucket) => (
-                  <option key={bucket.id} value={bucket.name}>
-                    {bucket.name}
-                  </option>
-                ))}
+                {(
+                  workspaceData.buckets.length
+                    ? workspaceData.buckets
+                    : [{ id: "backlog", name: "Backlog" }]
+                )
+                  .filter((bucket) => {
+                    if (!bucket.project_id && !bucket.workstream_id) return true;
+                    if (newProjectId) return String(bucket.project_id || "") === String(newProjectId);
+                    if (newWorkstreamId) return String(bucket.workstream_id || "") === String(newWorkstreamId);
+                    return true;
+                  })
+                  .map((bucket) => (
+                    <option key={bucket.id} value={bucket.name}>
+                      {bucket.name}
+                    </option>
+                  ))}
               </AppSelect>
             </label>
             <label>
@@ -4084,7 +4113,13 @@ function WorkspaceView({
           onStatusChange={onStatusChange}
           onOpenTask={onOpenTask}
           onDeleteTask={onDelete}
-          onAddTask={onAddTask}
+          onAddTask={() => {
+            const projectId =
+              plannerProjectFilter && plannerProjectFilter !== "all"
+                ? plannerProjectFilter
+                : "";
+            onAddTask(null, { projectId });
+          }}
           onTaskMove={onBucketChange}
           onBucketReorder={reorderBuckets}
           newBucketName={newBucketName}
