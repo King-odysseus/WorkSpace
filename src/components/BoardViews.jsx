@@ -59,6 +59,34 @@ import {
   toDateKey,
 } from "../lib/workspace-format.js";
 
+// The Today dashboard counts tasks the workspace over, and the Team board lists
+// them. The same words sat in both places with two hand-written filters each, so the
+// number and the list behind it were free to disagree - and did: an overdue task
+// nobody had picked up was counted by the dashboard, then not shown by the personal
+// queue the count linked to, and not shown by the board either because its people
+// view only lists tasks a member owns. Both surfaces read their filter from here now,
+// so a count and the list it opens are the same question asked twice.
+const BOARD_FOCUS = {
+  "due-today": (task, today) =>
+    task.status !== "done" && task.due_date === today,
+  overdue: (task, today) =>
+    task.status !== "done" && Boolean(task.due_date && task.due_date < today),
+  blocked: (task) => task.status === "blocked",
+  unassigned: (task) => task.status !== "done" && !task.assignee_id,
+  completed: (task, today) =>
+    task.status === "done" &&
+    Boolean(task.completed_at) &&
+    toDateKey(task.completed_at) === today,
+};
+
+const BOARD_FOCUS_LABEL = {
+  "due-today": "Due today",
+  overdue: "Overdue",
+  blocked: "Blocked",
+  unassigned: "Unassigned",
+  completed: "Completed today",
+};
+
 function MemberProfilePopup({ member, onClose, onMessage }) {
   if (!member) return null;
   const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
@@ -71,6 +99,8 @@ function TeamBoardView({
   projects = [],
   scope = "all",
   onScopeChange,
+  focus = "all",
+  onFocusChange,
   invitations,
   canManageMembers,
   onInvite,
@@ -99,21 +129,21 @@ function TeamBoardView({
   ];
   const priorities = ["urgent", "high", "normal", "low"];
   const scopedTasks = tasks.filter((task) => taskMatchesScope(task, scope));
+  const matching = (key) =>
+    scopedTasks.filter((task) => BOARD_FOCUS[key](task, today));
   const openTasks = scopedTasks.filter((task) => task.status !== "done");
-  const blocked = scopedTasks.filter((task) => task.status === "blocked");
-  const overdue = scopedTasks.filter(
-    (task) => task.due_date && task.due_date < today && task.status !== "done",
-  );
-  const unassigned = openTasks.filter((task) => !task.assignee_id);
-  const filtered = scopedTasks.filter(
-    (task) =>
-      !query.trim() ||
-      [task.title, task.member, task.tag, task.bucket]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()),
-  );
+  const blocked = matching("blocked");
+  const overdue = matching("overdue");
+  const unassigned = matching("unassigned");
+  const focused = focus === "all" ? [] : matching(focus);
+  const matchesQuery = (task) =>
+    !query.trim() ||
+    [task.title, task.member, task.tag, task.bucket]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query.trim().toLowerCase());
+  const filtered = scopedTasks.filter(matchesQuery);
   const memberName = (member) =>
     [member.first_name, member.last_name].filter(Boolean).join(" ") ||
     member.email;
@@ -200,31 +230,26 @@ function TeamBoardView({
         onAction={onInvite}
       />
       <div className="team-board-metrics">
-        <button onClick={() => setMode("people")}>
+        <button
+          className={focus === "all" ? "active" : ""}
+          onClick={() => onFocusChange("all")}
+        >
           <strong>{openTasks.length}</strong>
           <span>Open tasks</span>
         </button>
-        <button
-          className={blocked.length ? "attention" : ""}
-          onClick={() => setMode("status")}
-        >
-          <strong>{blocked.length}</strong>
-          <span>Blocked</span>
-        </button>
-        <button
-          className={overdue.length ? "attention" : ""}
-          onClick={() => setMode("people")}
-        >
-          <strong>{overdue.length}</strong>
-          <span>Overdue</span>
-        </button>
-        <button
-          className={unassigned.length ? "attention" : ""}
-          onClick={() => setMode("people")}
-        >
-          <strong>{unassigned.length}</strong>
-          <span>Unassigned</span>
-        </button>
+        {["blocked", "overdue", "unassigned"].map((key) => {
+          const count = { blocked, overdue, unassigned }[key].length;
+          return (
+            <button
+              key={key}
+              className={`${count ? "attention " : ""}${focus === key ? "active" : ""}`}
+              onClick={() => onFocusChange(focus === key ? "all" : key)}
+            >
+              <strong>{count}</strong>
+              <span>{BOARD_FOCUS_LABEL[key]}</span>
+            </button>
+          );
+        })}
       </div>
       <div className="team-board-toolbar">
         <WorkScopeSelector
@@ -242,8 +267,11 @@ function TeamBoardView({
           ].map(([value, label]) => (
             <button
               key={value}
-              className={mode === value ? "active" : ""}
-              onClick={() => setMode(value)}
+              className={focus === "all" && mode === value ? "active" : ""}
+              onClick={() => {
+                setMode(value);
+                onFocusChange("all");
+              }}
             >
               {label}
             </button>
@@ -256,7 +284,27 @@ function TeamBoardView({
           aria-label="Search team tasks"
         />
       </div>
-      {mode === "people" && (
+      {focus !== "all" && (
+        <div className="team-board-columns">
+          <section className="team-board-column">
+            <div className="team-column-heading team-focus-heading">
+              <h2>{BOARD_FOCUS_LABEL[focus]}</h2>
+              <span>{focused.filter(matchesQuery).length}</span>
+              <button
+                type="button"
+                className="text-button team-focus-clear"
+                onClick={() => onFocusChange("all")}
+              >
+                Clear <X size={13} />
+              </button>
+            </div>
+            <div className="team-task-list">
+              {taskList(focused.filter(matchesQuery))}
+            </div>
+          </section>
+        </div>
+      )}
+      {focus === "all" && mode === "people" && (
         <div className="team-member-grid">
           {members.map((member) => {
             const memberTasks = tasksForMember(member);
@@ -318,7 +366,7 @@ function TeamBoardView({
           {!members.length && <EmptyState text="No team members yet." />}
         </div>
       )}
-      {mode === "status" && (
+      {focus === "all" && mode === "status" && (
         <div className="team-board-columns">
           {statuses.map(([value, label]) => (
             <section className="team-board-column" key={value}>
@@ -335,7 +383,7 @@ function TeamBoardView({
           ))}
         </div>
       )}
-      {mode === "priority" && (
+      {focus === "all" && mode === "priority" && (
         <div className="team-board-columns">
           {priorities.map((value) => (
             <section className="team-board-column" key={value}>
@@ -2524,6 +2572,7 @@ function TodayDashboard({
   onInvite,
   onOpenTask,
   onNavigate,
+  onOpenBoard,
   onComplete,
   onStatusChange,
   onSubmitShift,
@@ -2531,21 +2580,14 @@ function TodayDashboard({
 }) {
   const [profileMember, setProfileMember] = useState(null);
   const isOpen = (task) => task.status !== "done";
-  const dueToday = tasks.filter(
-    (task) => task.due_date === today && isOpen(task),
-  );
-  const overdue = tasks.filter(
-    (task) => task.due_date && task.due_date < today && isOpen(task),
-  );
-  const blocked = tasks.filter(
-    (task) => task.status === "blocked" && isOpen(task),
-  );
-  const completedToday = tasks.filter(
-    (task) =>
-      task.status === "done" &&
-      task.completed_at &&
-      toDateKey(task.completed_at) === today,
-  );
+  // Counted through BOARD_FOCUS so each headline number is the same question the
+  // Team board answers when the card opens it.
+  const countMatching = (key) =>
+    tasks.filter((task) => BOARD_FOCUS[key](task, today));
+  const dueToday = countMatching("due-today");
+  const overdue = countMatching("overdue");
+  const blocked = countMatching("blocked");
+  const completedToday = countMatching("completed");
   // Matches on the user id, the way MyTasksView does. This compared the
   // displayed name against member.email, which only ever matched for someone
   // with no first or last name, so the lookup usually fell through to "" and
@@ -2674,7 +2716,7 @@ function TodayDashboard({
       <section className="today-metrics">
         <button
           className="today-metric today-metric-due"
-          onClick={() => onNavigate("My tasks")}
+          onClick={() => onOpenBoard("due-today")}
         >
           <span className="today-metric-icon" aria-hidden="true">
             <CalendarClock size={19} />
@@ -2686,7 +2728,7 @@ function TodayDashboard({
         </button>
         <button
           className={`today-metric today-metric-overdue${overdue.length ? " attention" : ""}`}
-          onClick={() => onNavigate("My tasks")}
+          onClick={() => onOpenBoard("overdue")}
         >
           <span className="today-metric-icon" aria-hidden="true">
             <AlarmClock size={19} />
@@ -2698,7 +2740,7 @@ function TodayDashboard({
         </button>
         <button
           className={`today-metric today-metric-blocked${blocked.length ? " attention" : ""}`}
-          onClick={() => onNavigate("Team board")}
+          onClick={() => onOpenBoard("blocked")}
         >
           <span className="today-metric-icon" aria-hidden="true">
             <CircleSlash size={19} />
@@ -2710,7 +2752,7 @@ function TodayDashboard({
         </button>
         <button
           className="today-metric today-metric-completed"
-          onClick={() => onNavigate("My tasks")}
+          onClick={() => onOpenBoard("completed")}
         >
           <span className="today-metric-icon" aria-hidden="true">
             <CheckCircle2 size={19} />

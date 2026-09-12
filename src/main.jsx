@@ -208,6 +208,14 @@ function App() {
   useEffect(() => {
     localStorage.setItem("workspace-last-page", active);
   }, [active]);
+  // The board's exception filter lives here rather than in the board because the
+  // dashboard's headline cards are what set it - Today and the board are rendered by
+  // two different components. Leaving the board clears it, so arriving later from the
+  // sidebar cannot land you on a filtered board with no memory of why.
+  const [teamBoardFocus, setTeamBoardFocus] = useState("all");
+  useEffect(() => {
+    if (active !== "Team board") setTeamBoardFocus("all");
+  }, [active]);
   const [tasks, setTasks] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
@@ -2421,6 +2429,8 @@ function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 onNavigate={setActive}
+                teamBoardFocus={teamBoardFocus}
+                onTeamBoardFocusChange={setTeamBoardFocus}
                 theme={theme}
                 onSetTheme={setTheme}
                 sidebarCollapsed={sidebarCollapsed}
@@ -2495,6 +2505,10 @@ function App() {
                 onInvite={() => openComposer("invite")}
                 onOpenTask={setSelectedTask}
                 onNavigate={setActive}
+                onOpenBoard={(focus) => {
+                  setTeamBoardFocus(focus);
+                  setActive("Team board");
+                }}
                 onComplete={completeTask}
                 onStatusChange={changeTaskStatus}
               />
@@ -2820,6 +2834,8 @@ function WorkspaceView({
   searchQuery,
   onSearchChange,
   onNavigate,
+  teamBoardFocus,
+  onTeamBoardFocusChange,
   theme,
   onSetTheme,
   sidebarCollapsed,
@@ -6020,6 +6036,8 @@ function WorkspaceView({
           projects={localData.projects}
           scope={teamBoardScope}
           onScopeChange={setTeamBoardScope}
+          focus={teamBoardFocus}
+          onFocusChange={onTeamBoardFocusChange}
           invitations={localData.invitations}
           canManageMembers={canManageMembers}
           onInvite={() => openComposer("invite")}

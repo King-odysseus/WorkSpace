@@ -1,10 +1,17 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import { MyTasksView, TodayDashboard } from './BoardViews.jsx'
+import { MyTasksView, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
+import { toDateKey } from '../lib/workspace-format.js'
 
 const noop = vi.fn()
 
-const renderDashboard = tasks =>
+const dayOffset = days => {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return toDateKey(date)
+}
+
+const renderDashboard = (tasks, onOpenBoard = noop) =>
   render(
     <TodayDashboard
       today="2026-09-12"
@@ -24,10 +31,35 @@ const renderDashboard = tasks =>
       onInvite={noop}
       onOpenTask={noop}
       onNavigate={noop}
+      onOpenBoard={onOpenBoard}
       onComplete={noop}
       onStatusChange={noop}
       onSubmitShift={noop}
       onChangePresence={noop}
+    />,
+  )
+
+const renderBoard = ({ tasks, focus = 'all', onFocusChange = noop }) =>
+  render(
+    <TeamBoardView
+      tasks={tasks}
+      members={[{ id: 9, first_name: 'Dana', last_name: 'Reed', role: 'member' }]}
+      projects={[]}
+      scope="all"
+      onScopeChange={noop}
+      focus={focus}
+      onFocusChange={onFocusChange}
+      invitations={[]}
+      canManageMembers={false}
+      onInvite={noop}
+      onComplete={noop}
+      onStatusChange={noop}
+      onOpenTask={noop}
+      onUpdateMemberRole={noop}
+      onRemoveMember={noop}
+      onCancelInvitation={noop}
+      onResendInvitation={noop}
+      onNavigate={noop}
     />,
   )
 
@@ -80,4 +112,59 @@ it('shows an assigned task in My tasks and keeps unassigned work out of the queu
 
   expect(screen.getByText('Assigned to me')).toBeInTheDocument()
   expect(screen.queryByText('Nobody owns this')).not.toBeInTheDocument()
+})
+
+it('opens the board on the tasks its headline number counted, not the personal queue', () => {
+  // The overdue count covered the whole workspace but the card opened My tasks,
+  // which only ever holds work assigned to you. A task nobody had picked up was
+  // counted, then not shown - the count and the view behind it disagreed.
+  const onOpenBoard = vi.fn()
+  const { container } = renderDashboard(
+    [
+      {
+        id: 1,
+        title: 'Late and unowned',
+        status: 'todo',
+        assignee_id: null,
+        member: 'Unassigned',
+        priority: 'high',
+        tag: 'Ops',
+        due_date: '2026-09-04',
+      },
+    ],
+    onOpenBoard,
+  )
+
+  expect(container.querySelector('.today-metric-overdue strong').textContent).toBe('1')
+  fireEvent.click(container.querySelector('.today-metric-overdue'))
+  expect(onOpenBoard).toHaveBeenCalledWith('overdue')
+})
+
+it('lists exactly the tasks a focus counts, including ones nobody owns', () => {
+  // The board's own Unassigned tile counted tasks no member card could ever show,
+  // because the people view lists a task only under the member who owns it.
+  const tasks = [
+    { id: 1, title: 'Late and unowned', status: 'todo', assignee_id: null, member: 'Unassigned', priority: 'high', due_date: dayOffset(-3) },
+    { id: 2, title: 'Late for Dana', status: 'todo', assignee_id: 9, member: 'Dana Reed', priority: 'normal', due_date: dayOffset(-1) },
+    { id: 3, title: 'Someday', status: 'todo', assignee_id: 9, member: 'Dana Reed', priority: 'low', due_date: dayOffset(20) },
+  ]
+  renderBoard({ tasks, focus: 'overdue' })
+
+  expect(screen.getByText('Late and unowned')).toBeInTheDocument()
+  expect(screen.getByText('Late for Dana')).toBeInTheDocument()
+  expect(screen.queryByText('Someday')).not.toBeInTheDocument()
+})
+
+it('clears the focus when the tile that set it is pressed again', () => {
+  const onFocusChange = vi.fn()
+  const { container } = renderBoard({
+    tasks: [
+      { id: 1, title: 'Late', status: 'todo', assignee_id: null, member: 'Unassigned', priority: 'high', due_date: dayOffset(-3) },
+    ],
+    focus: 'overdue',
+    onFocusChange,
+  })
+
+  fireEvent.click(container.querySelector('.team-board-metrics button.active'))
+  expect(onFocusChange).toHaveBeenCalledWith('all')
 })

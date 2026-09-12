@@ -1712,6 +1712,12 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .team-board-column { min-height: 190px; padding: 18px; }
 .team-column-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .team-column-heading span { color: var(--workspace-text-soft); font-size: 10px; }
+/* The focused exception list is a single column, and its heading carries three things
+   where the others carry two - the label, the count, and the way out. The shared rule
+   spreads all three across the full width, which leaves the count floating alone in
+   the middle of the page. */
+.team-focus-heading { justify-content: flex-start; gap: 8px; }
+.team-focus-heading .team-focus-clear { margin-left: auto; }
 .team-access-panel { margin-top: 14px; }
 .team-access-row { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--workspace-border); }
 .team-online-panel .team-access-row { width: 100%; border-inline: 0; border-top: 0; background: transparent; text-align: left; cursor: pointer; }
