@@ -1857,7 +1857,7 @@ function App() {
       {/* ── Sidebar ── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col bg-navy text-text-on-navy transition-all duration-200 lg:relative",
+          "workspace-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-navy text-text-on-navy transition-all duration-200 lg:relative",
           "w-64",
           railCollapsed && "lg:w-[4.5rem]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
@@ -1879,10 +1879,10 @@ function App() {
           />
           {!railCollapsed && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-bold tracking-tight">
+              <p className="sidebar-brand-name truncate text-base font-bold tracking-tight">
                 WorkSpace
               </p>
-              <p className="truncate text-[11px] uppercase tracking-wider text-white/40">
+              <p className="sidebar-brand-meta truncate text-[11px] uppercase tracking-wider text-white/40">
                 Team Manager
               </p>
             </div>
@@ -1903,11 +1903,11 @@ function App() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-2.5 py-4">
+        <nav className="workspace-sidebar-nav flex-1 overflow-y-auto px-2.5 py-4">
           {navGroups.map((group) => (
-            <div className="mb-7 last:mb-0" key={group.heading}>
+            <div className="sidebar-nav-group mb-7 last:mb-0" key={group.heading}>
               {!railCollapsed && (
-                <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-white/30">
+                <p className="sidebar-nav-heading mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-white/30">
                   {group.heading}
                 </p>
               )}
@@ -1923,9 +1923,9 @@ function App() {
                       title={railCollapsed ? label : undefined}
                       aria-current={active === label ? "page" : undefined}
                       className={cn(
-                        "group flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-[15px] font-medium transition-all",
+                        "sidebar-nav-item group flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-[15px] font-medium transition-all",
                         active === label
-                          ? "bg-white/10 text-white"
+                          ? "sidebar-nav-item-active bg-white/10 text-white"
                           : "text-white/60 hover:bg-white/5 hover:text-white",
                         railCollapsed && "justify-center py-3",
                       )}
@@ -1958,15 +1958,15 @@ function App() {
         {!railCollapsed && (
           <div className="sidebar-upgrade-card mx-3 mb-3 rounded-xl bg-gradient-to-br from-primary/30 to-accent/10 p-3.5">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
-              <Sparkles size={14} /> Make your week flow
+              <Sparkles size={14} /> Work with clarity
             </p>
             <p className="mt-0.5 text-[11px] leading-snug text-white/55">
-              Set your priorities and stay ahead of what's due.
+              Keep priorities, people, and progress in one place.
             </p>
           </div>
         )}
 
-        <div className="border-t border-white/10 px-2.5 py-2.5">
+        <div className="sidebar-settings-wrap border-t border-white/10 px-2.5 py-2.5">
           <button
             type="button"
             onClick={() => {
@@ -1976,7 +1976,7 @@ function App() {
             title={railCollapsed ? "Settings" : undefined}
             aria-current={active === "Settings" ? "page" : undefined}
             className={cn(
-              "flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-[15px] font-medium transition-all",
+              "sidebar-nav-item flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-[15px] font-medium transition-all",
               active === "Settings"
                 ? "bg-white/10 text-white"
                 : "text-white/60 hover:bg-white/5 hover:text-white",
@@ -2014,8 +2014,8 @@ function App() {
       </button>
 
       {/* ── Main ── */}
-      <div className="flex flex-1 flex-col min-w-0">
-        <header className="relative z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface/95 px-4 backdrop-blur lg:px-6">
+      <div className="workspace-main-shell flex flex-1 flex-col min-w-0">
+        <header className="workspace-topbar relative z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface/95 px-4 backdrop-blur lg:px-6">
           <div className="flex min-w-0 items-center gap-2 lg:hidden">
             <img
               src="/tijha-logo.png"
@@ -2027,7 +2027,7 @@ function App() {
             </span>
           </div>
 
-          <h1 className="hidden text-base font-bold tracking-tight text-navy lg:block">
+          <h1 className="workspace-topbar-title hidden text-base font-bold tracking-tight text-navy lg:block">
             {active}
           </h1>
 
@@ -2089,7 +2089,7 @@ function App() {
           )}
 
           <div className="hidden flex-1 justify-center md:flex" ref={searchRef}>
-            <div className="relative w-full max-w-md">
+            <div className="workspace-search relative w-full max-w-md">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <input
                 type="search"
@@ -2367,11 +2367,11 @@ function App() {
         <NotificationPermissionPrompt key={session.user.id} unreadCount={notificationUnreadCount} />
         <main
           id="main-content"
-          className="main-content flex-1 overflow-y-auto min-w-0"
+          className="main-content workspace-main-content flex-1 overflow-y-auto min-w-0"
           tabIndex="-1"
         >
           {/* Bottom padding clears the fixed mobile pill nav; desktop has none. */}
-          <div className="page-content pb-28 lg:pb-0">
+          <div className="page-content workspace-page-content pb-28 lg:pb-0">
             {session.user.pending_invitations?.map((invitation) => (
               <div className="workspace-status" key={invitation.id}>
                 <span>
@@ -3891,7 +3891,7 @@ function WorkspaceView({
     ];
     const availableMembers = localData.members.filter((member) => member.id);
     return (
-      <section className="workspace-view planner-view-wrapper">
+      <section className="workspace-view page-view planner-view-wrapper">
         <PlannerBoard
           buckets={buckets}
           tasks={tasks}
@@ -4032,7 +4032,7 @@ function WorkspaceView({
       }
     };
     return (
-      <section className="workspace-view planner-view-wrapper">
+      <section className="workspace-view page-view planner-view-wrapper">
         <div className="planner-saved-views-bar">
           <AppSelect
             value={selectedSavedView}
@@ -4188,8 +4188,8 @@ function WorkspaceView({
       [member.first_name, member.last_name].filter(Boolean).join(" ") ||
       member.email;
     return (
-      <section className="workspace-view">
-        <WorkspaceViewHeading title="Reports" subtitle={subtitle} />
+      <section className="workspace-view page-view reports-view">
+        <WorkspaceViewHeading title="Reports" subtitle={subtitle} meta="Workspace intelligence" />
         <div className="report-toolbar">
           <WorkScopeSelector
             compact
@@ -4580,7 +4580,7 @@ function WorkspaceView({
             });
     };
     return (
-      <section className="workspace-view">
+      <section className="workspace-view page-view activity-view">
         <WorkspaceViewHeading
           title="Activity"
           subtitle="A complete recent history of workspace changes."
@@ -4733,7 +4733,7 @@ function WorkspaceView({
   if (active === "Notifications") {
     const pagination = notificationPagination;
     return (
-      <section className="workspace-view">
+      <section className="workspace-view page-view notifications-view">
         <WorkspaceViewHeading
           title="Notifications"
           subtitle="Your workspace notification history."
@@ -4902,10 +4902,11 @@ function WorkspaceView({
       </div>
     );
     return (
-      <section className="workspace-view">
+      <section className="workspace-view page-view calendar-view">
         <WorkspaceViewHeading
           title={title}
           subtitle="Plan meetings, focus time, deadlines, and reminders in one place."
+          meta="Schedule"
           action="Add event"
           onAction={() => openComposer("calendar")}
         />
@@ -5496,7 +5497,7 @@ function WorkspaceView({
         risks: "Risks & issues",
       }[projectOperation];
       return (
-        <section className="workspace-view project-detail-view">
+        <section className="workspace-view page-view project-detail-view">
           <button
             type="button"
             className="text-button project-back-button"
@@ -5602,7 +5603,7 @@ function WorkspaceView({
       );
     }
     return (
-      <section className="workspace-view projects-view">
+      <section className="workspace-view page-view projects-view">
         <WorkspaceViewHeading
           title={title}
           subtitle={subtitle}
@@ -5849,7 +5850,7 @@ function WorkspaceView({
         (followUpFilter === "overdue" && isOverdueFollowUp(followUp)),
     );
     return (
-      <section className="workspace-view">
+      <section className="workspace-view page-view follow-up-view">
         <WorkspaceViewHeading
           title={title}
           subtitle={subtitle}
@@ -6042,7 +6043,7 @@ function WorkspaceView({
         !normalizedSearch || taskSearchText(task).includes(normalizedSearch),
     );
   return (
-    <section className="workspace-view">
+    <section className="workspace-view page-view task-list-page">
       <WorkspaceViewHeading
         title={title}
         subtitle={subtitle}

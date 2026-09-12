@@ -877,7 +877,7 @@ function SettingsView({
     (notification) => !notification.read,
   ).length;
   return (
-    <section className="workspace-view settings-view">
+    <section className="workspace-view page-view settings-view">
       <WorkspaceViewHeading
         title="Settings"
         subtitle="Control your workspace, account, and notification preferences."
