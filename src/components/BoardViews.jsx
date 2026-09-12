@@ -192,7 +192,7 @@ function TeamBoardView({
       <p className="today-muted">No tasks in this view.</p>
     );
   return (
-    <section className="workspace-view page-view team-board-view">
+    <section className="workspace-view team-board-view">
       <WorkspaceViewHeading
         title="Team board"
         subtitle="See ownership, workload, and exceptions across the workspace."
@@ -575,7 +575,7 @@ function MyTasksView({
     ["completed", "Completed"],
   ];
   return (
-    <section className="workspace-view page-view my-tasks-view">
+    <section className="workspace-view my-tasks-view">
       <WorkspaceViewHeading
         title="My tasks"
         subtitle="A focused queue of work assigned to you."
@@ -2634,8 +2634,8 @@ function TodayDashboard({
           ? "In progress"
           : task.priority;
   return (
-    <section className="today-dashboard penpot-dashboard">
-      <section className="today-hero dashboard-greeting-band">
+    <section className="today-dashboard">
+      <section className="today-hero">
         <div>
           <p className="eyebrow">{todayLabel}</p>
           <h1>
@@ -2645,7 +2645,7 @@ function TodayDashboard({
             Here is what needs your attention in {workspaceName}.
           </p>
         </div>
-        <div className="today-actions dashboard-actions">
+        <div className="today-actions">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button>
@@ -2671,7 +2671,7 @@ function TodayDashboard({
           </DropdownMenu>
         </div>
       </section>
-      <section className="today-metrics dashboard-metric-strip">
+      <section className="today-metrics">
         <button
           className="today-metric today-metric-due"
           onClick={() => onNavigate("My tasks")}
@@ -2721,8 +2721,8 @@ function TodayDashboard({
           </span>
         </button>
       </section>
-      <div className="today-grid dashboard-primary-grid">
-        <div className="today-panel my-day-panel dashboard-focus-panel">
+      <div className="today-grid">
+        <div className="today-panel my-day-panel">
           <div className="today-panel-heading">
             <div>
               <h2>My day</h2>
@@ -2789,7 +2789,7 @@ function TodayDashboard({
             </div>
           )}
         </div>
-        <aside className="today-side-stack dashboard-side-stack">
+        <aside className="today-side-stack">
           <ClockInCard
             shifts={workShifts}
             currentUserId={currentUserId}
@@ -2914,7 +2914,7 @@ function TodayDashboard({
           </div>
         </aside>
       </div>
-      <div className="today-lower-grid dashboard-secondary-grid">
+      <div className="today-lower-grid">
         <div className="today-panel">
           <div className="today-panel-heading">
             <div>

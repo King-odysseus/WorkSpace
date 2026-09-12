@@ -9,21 +9,11 @@ import { Calendar as DatePicker } from './ui/calendar.jsx'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog.jsx'
-import { Brush, CalendarDays, Plus, Sparkles } from 'lucide-react'
+import { Brush, CalendarDays, Plus } from 'lucide-react'
 import { formatCalendarDate, toDateKey } from '../lib/workspace-format.js'
 
-function WorkspaceViewHeading({ title, subtitle, action, onAction, icon: Icon = Sparkles, meta }) {
-  return <header className="workspace-view-heading penpot-page-header">
-    <div className="penpot-page-heading-copy">
-      <span className="penpot-page-icon" aria-hidden="true"><Icon size={19} /></span>
-      <div>
-        <p className="eyebrow">{meta || "Workspace operations"}</p>
-        <h1>{title}</h1>
-        <p className="subtitle">{subtitle}</p>
-      </div>
-    </div>
-    {action && <Button className="penpot-page-action" onClick={onAction}><Plus size={17} /> {action}</Button>}
-  </header>
+function WorkspaceViewHeading({ title, subtitle, action, onAction }) {
+  return <div className="workspace-view-heading"><div><p className="eyebrow">Workspace operations</p><h1>{title}</h1><p className="subtitle">{subtitle}</p></div>{action && <Button onClick={onAction}><Plus size={17} /> {action}</Button>}</div>
 }
 
 function SelectField({ label, name, value, onChange, options }) {
