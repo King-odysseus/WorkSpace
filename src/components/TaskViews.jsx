@@ -7,7 +7,7 @@ import { Archive, Check, X } from 'lucide-react'
 import { DateField } from './workspace-ui.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
-import { getCsrfToken, isImageFileName, readJsonResponse, taskDueLabel } from '../lib/workspace-format.js'
+import { getCsrfToken, isImageFileName, readJsonResponse, taskDueLabel, toDateKey } from '../lib/workspace-format.js'
 
 function TaskCard({ task, onComplete, onStatusChange, onDelete, onOpenTask, onBucketChange, bucketOptions = [], canDelete = true, canEdit = task.can_edit ?? true, draggable = false }) { return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button type="button" className={`task-check ${task.status === 'done' ? 'checked' : ''}`} disabled={!canEdit} onClick={() => onComplete(task.id)} aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} ${task.title}`}>{task.status === 'done' && <Check size={12} />}</button><div className="task-copy"><button type="button" className="task-title-button" onClick={() => onOpenTask(task)}>{task.title}</button><div><AppSelect disabled={!canEdit} className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></AppSelect>{bucketOptions.length > 1 && <AppSelect disabled={!canEdit} className="task-bucket-select" value={task.bucket || ''} onChange={event => onBucketChange?.(task.id, event.target.value)} aria-label={`Move ${task.title} to bucket`}>{bucketOptions.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</AppSelect>}<span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span>{canDelete && <button type="button" className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Archive ${task.title}`} title="Archive task"><Archive size={16} /></button>}</div> }
 
@@ -26,7 +26,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const selectedAssignee = members.find(member => String(member.id) === String(taskFields.assignee_id))
   const assigneeLabel = selectedAssignee ? ([selectedAssignee.first_name, selectedAssignee.last_name].filter(Boolean).join(' ') || selectedAssignee.email) : 'Unassigned'
   const projectLabel = projects.find(project => String(project.id) === String(taskFields.project_id))?.name || 'General'
-  const dueLabel = taskFields.due_date ? taskDueLabel(taskFields.due_date, new Date().toISOString().slice(0, 10)) : 'No due date'
+  const dueLabel = taskFields.due_date ? taskDueLabel(taskFields.due_date, toDateKey(new Date())) : 'No due date'
   const request = async (path, options = {}) => {
     try {
       return await fetch(path, { ...options, credentials: 'include', headers: { ...(options.headers || {}), 'X-Workspace-Id': String(workspaceId) } })
