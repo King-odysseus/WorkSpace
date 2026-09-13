@@ -1687,6 +1687,51 @@ html[data-theme='dark'] .nav-item.active {
   transform: translateY(-1px);
 }
 
+.sidebar-edge-toggle {
+  position: fixed;
+  top: 50%;
+  left: var(--sidebar-edge-left, 16rem);
+  z-index: 50;
+  display: none;
+  width: 28px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+  border-right: 1px solid rgb(255 255 255 / 10%);
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: var(--navy);
+  color: rgb(255 255 255 / 65%);
+  box-shadow: 0 6px 18px rgb(2 5 31 / 16%), inset 0 1px 0 rgb(255 255 255 / 8%);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: left .2s ease, background-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.sidebar-edge-toggle:hover {
+  background: var(--brand-navy-soft);
+  color: #FFFFFF;
+  transform: translate(2px, -50%);
+}
+
+.sidebar-edge-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1024px) {
+  .sidebar-edge-toggle { display: flex; }
+}
+
+.sidebar-edge-toggle.is-hidden { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-edge-toggle { transition: none; }
+}
+
 .top-search {
   width: 220px;
   min-height: 40px;

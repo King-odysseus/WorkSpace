@@ -2220,24 +2220,22 @@ function App() {
       {/* ── Desktop collapse edge pill - sits on the right edge of the sidebar ── */}
       <button
         type="button"
-        hidden={workspaceLoading || Boolean(workspaceError)}
         onClick={() => setSidebarCollapsed((current) => !current)}
-        className={`${workspaceLoading || workspaceError ? "hidden" : "hidden lg:flex"} fixed z-50 top-1/2 -translate-y-1/2 h-12 w-6 items-center justify-center rounded-r-lg bg-navy text-white/50 hover:text-white hover:bg-navy-soft transition-colors shadow-md`}
+        className={cn(
+          "sidebar-edge-toggle",
+          (workspaceLoading || Boolean(workspaceError)) && "is-hidden",
+        )}
         style={{
-          left: sidebarCollapsed ? "4.5rem" : "16rem",
-          borderTop: "1px solid rgba(255,255,255,0.1)",
-          borderRight: "1px solid rgba(255,255,255,0.1)",
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
-          borderLeft: "none",
-          transition: "left 0.2s",
+          "--sidebar-edge-left": sidebarCollapsed ? "4.5rem" : "16rem",
         }}
+        aria-expanded={!sidebarCollapsed}
         aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {sidebarCollapsed ? (
-          <ChevronRight size={12} />
+          <ChevronRight size={14} />
         ) : (
-          <ChevronLeft size={12} />
+          <ChevronLeft size={14} />
         )}
       </button>
 
