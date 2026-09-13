@@ -148,6 +148,7 @@ import {
   TaskDetailDrawer,
 } from "./components/TaskViews.jsx";
 import SettingsView from "./components/SettingsView.jsx";
+import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.jsx";
 const ScreenSharingView = lazy(() => import("./components/ScreenSharing.jsx"));
 const ScreenShareControl = lazy(() =>
   import("./components/ScreenSharing.jsx").then((module) => ({
@@ -241,6 +242,7 @@ function App() {
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const notifRef = useRef(null);
   useEffect(() => {
     if (!showModal) return undefined;
@@ -1693,6 +1695,11 @@ function App() {
     currentWorkspace?.role,
   );
   const canManageTasks = ["owner", "manager"].includes(currentWorkspace?.role);
+  const canCreateWorkspace = session.user.workspaces.some(
+    (workspace) => workspace.role === "owner",
+  );
+  const canOpenWorkspaceMenu =
+    session.user.workspaces.length > 1 || canCreateWorkspace;
   const workspaceMenu = (
     <div className="absolute left-0 top-full z-[60] mt-2 w-56 animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
       {session.user.workspaces.map((workspace) => (
@@ -1716,6 +1723,22 @@ function App() {
           )}
         </button>
       ))}
+      {canCreateWorkspace && (
+        <>
+          <div className="my-1 h-px bg-border" />
+          <button
+            type="button"
+            onClick={() => {
+              setWorkspaceMenuOpen(false);
+              setCreateWorkspaceOpen(true);
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-secondary hover:text-foreground"
+          >
+            <Plus size={14} className="shrink-0" />
+            <span>Create workspace</span>
+          </button>
+        </>
+      )}
     </div>
   );
   const teamMembers = workspaceData.members.map((member) => ({
@@ -1783,6 +1806,11 @@ function App() {
     } catch (error) {
       toast.error(error.message || "Default workspace could not be saved.");
     }
+  };
+  const handleWorkspaceCreated = (data) => {
+    if (data?.user) setSession((current) => ({ ...current, user: data.user }));
+    if (data?.workspace?.id) setActiveWorkspaceId(data.workspace.id);
+    setWorkspaceNotice(`${data?.workspace?.name || "Workspace"} created.`);
   };
   const todayTasks = tasks.filter(
     (task) => !task.due_date || task.due_date <= today,
@@ -2013,21 +2041,17 @@ function App() {
               <button
                 type="button"
                 onClick={() =>
-                  session.user.workspaces.length > 1 &&
+                  canOpenWorkspaceMenu &&
                   setWorkspaceMenuOpen((current) => !current)
                 }
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg",
-                  session.user.workspaces.length > 1 &&
+                  canOpenWorkspaceMenu &&
                     "transition-colors hover:bg-white/10",
                 )}
-                aria-haspopup={
-                  session.user.workspaces.length > 1 ? "true" : undefined
-                }
+                aria-haspopup={canOpenWorkspaceMenu ? "true" : undefined}
                 aria-expanded={
-                  session.user.workspaces.length > 1
-                    ? workspaceMenuOpen
-                    : undefined
+                  canOpenWorkspaceMenu ? workspaceMenuOpen : undefined
                 }
                 aria-label={`Workspace: ${currentWorkspace?.name || "Workspace"}`}
                 title={currentWorkspace?.name || "Workspace"}
@@ -2052,21 +2076,17 @@ function App() {
                   <button
                     type="button"
                     onClick={() =>
-                      session.user.workspaces.length > 1 &&
+                      canOpenWorkspaceMenu &&
                       setWorkspaceMenuOpen((current) => !current)
                     }
                     className={cn(
                       "flex w-full items-center gap-1.5 rounded-lg text-left",
-                      session.user.workspaces.length > 1 &&
+                      canOpenWorkspaceMenu &&
                         "transition-colors hover:opacity-80",
                     )}
-                    aria-haspopup={
-                      session.user.workspaces.length > 1 ? "true" : undefined
-                    }
+                    aria-haspopup={canOpenWorkspaceMenu ? "true" : undefined}
                     aria-expanded={
-                      session.user.workspaces.length > 1
-                        ? workspaceMenuOpen
-                        : undefined
+                      canOpenWorkspaceMenu ? workspaceMenuOpen : undefined
                     }
                   >
                     <span className="min-w-0 flex-1">
@@ -2077,7 +2097,7 @@ function App() {
                         Team Manager
                       </span>
                     </span>
-                    {session.user.workspaces.length > 1 && (
+                    {canOpenWorkspaceMenu && (
                       <ChevronDown
                         size={14}
                         className="shrink-0 text-white/40"
@@ -2095,7 +2115,7 @@ function App() {
             header no longer does and the sidebar brand block is desktop only.
             Close button sits outside the switcher so it survives on phones. */}
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3 lg:hidden">
-          {session.user.workspaces.length > 1 ? (
+          {canOpenWorkspaceMenu ? (
             <div className="relative min-w-0" ref={workspaceMenuRefMobile}>
               <button
                 type="button"
@@ -2940,6 +2960,11 @@ function App() {
           onSubmit={submitInvite}
         />
       )}
+      <CreateWorkspaceDialog
+        open={createWorkspaceOpen}
+        onOpenChange={setCreateWorkspaceOpen}
+        onCreated={handleWorkspaceCreated}
+      />
       {selectedTask && (
         <TaskDetailDrawer
           task={selectedTask}

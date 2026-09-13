@@ -25,6 +25,19 @@ AVATAR_MAX_BYTES = 5 * 1024 * 1024
 AVATAR_ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
 
 
+def _create_owned_workspace(user, name):
+    base_slug = slugify(name) or 'workspace'
+    slug = f'{base_slug}-{user.id}'
+    suffix = 2
+    while Workspace.objects.filter(slug=slug).exists():
+        slug = f'{base_slug}-{user.id}-{suffix}'
+        suffix += 1
+    workspace = Workspace.objects.create(name=name, slug=slug)
+    membership = Membership.objects.create(workspace=workspace, user=user, role='owner')
+    PlanBucket.objects.create(workspace=workspace, name='Backlog', position=0)
+    return workspace, membership
+
+
 def user_payload(user):
     profile = getattr(user, 'profile', None)
     workspaces = [
@@ -122,11 +135,38 @@ def auth_me(request):
     with transaction.atomic():
         user = User.objects.create_user(username=username, email=email, password=password, first_name=first_name)
         if not join_only:
-            workspace = Workspace.objects.create(name=workspace_name, slug=f'{slugify(workspace_name)}-{user.id}')
-            Membership.objects.create(workspace=workspace, user=user, role='owner')
-            PlanBucket.objects.create(workspace=workspace, name='Backlog', position=0)
+            _create_owned_workspace(user, workspace_name)
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     return JsonResponse({'authenticated': True, 'user': user_payload(user)}, status=201)
+
+
+@require_http_methods(['POST'])
+def workspace_create(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    payload, error = parse_json(request)
+    if error:
+        return error
+    name = str(payload.get('name', '')).strip()
+    if not name:
+        return JsonResponse({'error': 'Workspace name is required.'}, status=400)
+    if len(name) > 120:
+        return JsonResponse({'error': 'Workspace name must be 120 characters or fewer.'}, status=400)
+    if not Membership.objects.filter(user=request.user, role='owner').exists():
+        return JsonResponse({'error': 'Only workspace owners can create another workspace.'}, status=403)
+    with transaction.atomic():
+        workspace, membership = _create_owned_workspace(request.user, name)
+    return JsonResponse({
+        'workspace': {
+            'id': workspace.id,
+            'name': workspace.name,
+            'slug': workspace.slug,
+            'role': membership.role,
+            'status': workspace.status,
+            'permissions': sorted(membership.effective_permissions()),
+        },
+        'user': user_payload(request.user),
+    }, status=201)
 
 
 @require_http_methods(['POST'])
@@ -310,9 +350,7 @@ def auth_google(request):
             user = User.objects.create_user(username=email, email=email, first_name=first_name, last_name=last_name)
             user.set_unusable_password()
             user.save(update_fields=['password'])
-            workspace = Workspace.objects.create(name=workspace_name, slug=f'{slugify(workspace_name)}-{user.id}')
-            Membership.objects.create(workspace=workspace, user=user, role='owner')
-            PlanBucket.objects.create(workspace=workspace, name='Backlog', position=0)
+            _create_owned_workspace(user, workspace_name)
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     return JsonResponse({'authenticated': True, 'user': user_payload(user)})
 
