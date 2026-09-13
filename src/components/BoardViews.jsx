@@ -186,11 +186,14 @@ function TeamBoardView({
         <article className={`team-task-row ${task.status}`} key={task.id}>
           <button
             type="button"
+            role="checkbox"
+            aria-checked={task.status === "done"}
             className={`check ${task.status === "done" ? "checked" : ""}`}
             onClick={() => onComplete(task.id)}
             aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`}
+            title={task.status === "done" ? "Reopen task" : "Mark task complete"}
           >
-            {task.status === "done" && <Check size={12} />}
+            <Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" />
           </button>
           <div>
             <button type="button" onClick={() => onOpenTask(task)}>
@@ -738,11 +741,14 @@ function MyTasksView({
                 >
                   <button
                     type="button"
+                    role="checkbox"
+                    aria-checked={task.status === "done"}
                     className={`check ${task.status === "done" ? "checked" : ""}`}
                     onClick={() => onComplete(task.id)}
                     aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`}
+                    title={task.status === "done" ? "Reopen task" : "Mark task complete"}
                   >
-                    {task.status === "done" && <Check size={12} />}
+                    <Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" />
                   </button>
                   <div className="my-task-row-copy">
                     <button type="button" onClick={() => onOpenTask(task)}>
@@ -2786,10 +2792,16 @@ function TodayDashboard({
                   key={task.id}
                 >
                   <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={task.status === "done"}
                     className={`check ${task.status === "done" ? "checked" : ""}`}
                     onClick={() => onComplete(task.id)}
-                    aria-label={`Complete ${task.title}`}
-                  />
+                    aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`}
+                    title={task.status === "done" ? "Reopen task" : "Mark task complete"}
+                  >
+                    <Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" />
+                  </button>
                   <div className="today-task-copy">
                     <button onClick={() => onOpenTask(task)}>
                       {task.title}

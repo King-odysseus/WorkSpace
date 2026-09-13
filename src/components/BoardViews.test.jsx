@@ -114,6 +114,52 @@ it('shows an assigned task in My tasks and keeps unassigned work out of the queu
   expect(screen.queryByText('Nobody owns this')).not.toBeInTheDocument()
 })
 
+it('presents task completion as a labelled checkbox with the correct next action', () => {
+  const onComplete = vi.fn()
+  const { rerender } = render(
+    <MyTasksView
+      tasks={[{ id: 3, title: 'Review copy', status: 'todo', assignee_id: 7, member: 'Nate Foster', priority: 'normal', tag: 'Ops', bucket: 'Backlog' }]}
+      currentUserId={7}
+      currentUserName="Nate Foster"
+      projects={[]}
+      buckets={[{ id: 1, name: 'Backlog' }]}
+      onAddTask={noop}
+      onOpenTask={noop}
+      onComplete={onComplete}
+      onStatusChange={noop}
+      onDelete={noop}
+      canManageTasks
+    />,
+  )
+
+  const completion = screen.getByRole('checkbox', { name: 'Complete Review copy' })
+  expect(completion).toHaveAttribute('aria-checked', 'false')
+  expect(completion).toHaveAttribute('title', 'Mark task complete')
+  fireEvent.click(completion)
+  expect(onComplete).toHaveBeenCalledWith(3)
+
+  rerender(
+    <MyTasksView
+      tasks={[{ id: 3, title: 'Review copy', status: 'done', assignee_id: 7, member: 'Nate Foster', priority: 'normal', tag: 'Ops', bucket: 'Backlog' }]}
+      currentUserId={7}
+      currentUserName="Nate Foster"
+      projects={[]}
+      buckets={[{ id: 1, name: 'Backlog' }]}
+      onAddTask={noop}
+      onOpenTask={noop}
+      onComplete={onComplete}
+      onStatusChange={noop}
+      onDelete={noop}
+      canManageTasks
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: /Completed 1/ }))
+  const completed = screen.getByRole('checkbox', { name: 'Reopen Review copy' })
+  expect(completed).toHaveAttribute('aria-checked', 'true')
+  expect(completed).toHaveAttribute('title', 'Reopen task')
+})
+
 it('opens the board on the tasks its headline number counted, not the personal queue', () => {
   // The overdue count covered the whole workspace but the card opened My tasks,
   // which only ever holds work assigned to you. A task nobody had picked up was
