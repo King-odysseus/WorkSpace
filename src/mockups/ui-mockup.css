@@ -311,7 +311,7 @@ html[data-theme='dark'] .send-button { color: #071a2e; background: #d9a66b; }
 .ai-toast {
   position: fixed;
   z-index: 80;
-  left: 24px;
+  right: 24px;
   bottom: 24px;
   display: flex;
   width: auto;
@@ -324,7 +324,7 @@ html[data-theme='dark'] .send-button { color: #071a2e; background: #d9a66b; }
   border-radius: 14px;
   background: var(--surface);
   box-shadow: 0 12px 30px -22px rgb(7 26 46 / 44%), 0 1px 3px rgb(7 26 46 / 8%);
-  transform-origin: 0 100%;
+  transform-origin: 100% 100%;
   animation: toast-in 220ms ease-out both;
 }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -424,7 +424,7 @@ html[data-theme='dark'] .ai-flyout-tab { color: #071a2e; background: #d9a66b; }
   .conversation-header { min-height: 68px; padding: 12px 14px; }
   .message-scroll { padding-inline: 14px; }
   .chat-composer { padding: 11px 12px 13px; }
-  .ai-toast { left: 16px; bottom: 16px; }
+  .ai-toast { right: 16px; bottom: 16px; }
   .ai-flyout-tab { right: 0; }
   .ai-panel { right: 16px; bottom: 16px; height: min(570px, calc(100vh - 32px)); }
 }
@@ -450,7 +450,7 @@ html[data-theme='dark'] .ai-flyout-tab { color: #071a2e; background: #d9a66b; }
   .message-body > p { font-size: 11px; }
   .message-actions { opacity: 1; }
   .composer-tools .icon-button:nth-child(3) { display: none; }
-  .ai-toast { left: 12px; bottom: 12px; max-width: calc(100vw - 104px); }
+  .ai-toast { right: 12px; bottom: 12px; max-width: calc(100vw - 24px); }
   .ai-panel { right: 10px; bottom: 10px; width: calc(100vw - 20px); height: min(560px, calc(100vh - 20px)); border-radius: 18px; }
   .ai-flyout-tab { right: 0; }
 }
