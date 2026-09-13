@@ -3366,12 +3366,11 @@ def online_user_ids(user_ids):
 def read_through_at(watermarks, reader_ids):
     """The moment every reader had finished, or None while any of them has not.
 
-    None is what holds a group or a channel on a single tick until the last
-    reader catches up. A thread with nobody else in it is read by definition.
+    None is what holds a group or a channel short of the read tick until the last
+    reader catches up. A thread with nobody else in it stays there too: with no
+    other reader there is nobody who could have read the message.
     """
-    if not reader_ids:
-        return timezone.now()
-    if any(reader_id not in watermarks for reader_id in reader_ids):
+    if not reader_ids or any(reader_id not in watermarks for reader_id in reader_ids):
         return None
     return min(watermarks.values())
 
@@ -3416,8 +3415,10 @@ def channel_receipt_context(messages, user):
 def receipt_flags(message, user, context):
     """(delivered, read) for one message, and only ever for the author's own.
 
-    Everyone else's messages report false for both, so these fields cannot be
-    read as a report on who else has seen somebody else's message.
+    Two flags carry three states: read is the blue pair, delivered is the grey
+    pair, and neither leaves the message on the single tick that means the server
+    has it. Everyone else's messages report false for both, so these fields cannot
+    be read as a report on who else has seen somebody else's message.
     """
     if message.author_id != user.id or context is None:
         return False, False

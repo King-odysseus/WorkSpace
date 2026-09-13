@@ -4650,6 +4650,25 @@ class ChatReceiptApiTests(TestCase):
         self.assertTrue(entry['delivered'])
         self.assertFalse(entry['read'])
 
+    def test_a_channel_with_nobody_else_in_it_never_reaches_the_read_tick(self):
+        """A workspace you are alone in has nobody who could have read the message."""
+        solo = Workspace.objects.create(name='Solo Receipt Workspace', slug='solo-receipt-workspace')
+        Membership.objects.create(workspace=solo, user=self.author, role='owner')
+        self.client.force_login(self.author)
+        response = self.client.post(
+            reverse('chat-message-list', args=[solo.id]),
+            data=json.dumps({'channel': 'general', 'message': 'Alone in here'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        message_id = response.json()['message']['id']
+
+        self.client.force_login(self.author)
+        listed = self.client.get(reverse('chat-message-list', args=[solo.id])).json()['messages']
+        entry = next(item for item in listed if item['id'] == message_id)
+        self.assertFalse(entry['delivered'], 'nobody else is around to receive it')
+        self.assertFalse(entry['read'], 'nobody else could have read it')
+
     def test_two_ticks_once_the_reader_has_opened_the_thread(self):
         message_id = self.post_direct(self.conversation)
         self.set_last_seen(self.reader, 0)

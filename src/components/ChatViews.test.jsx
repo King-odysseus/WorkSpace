@@ -221,8 +221,9 @@ it('opens the full mention picker immediately and filters as the user types', as
   expect(input).toHaveValue('@priya ')
 })
 
-// The tick is the only sign an author gets that a message landed, so it is drawn
-// from the server's receipt flags and never inferred locally from presence.
+// The ticks are the only sign an author gets that a message landed. Two flags
+// carry three states, and the tick count is the part that matters, so these
+// assert on the number of paths the icon draws rather than the label alone.
 const tickedMessage = (delivered, read, overrides = {}) => ({
   id: 1,
   author_id: currentUserId,
@@ -251,29 +252,36 @@ const renderThreadWith = async messages => {
   await openConversation()
 }
 
-it('shows one tick while the other side is around', async () => {
+const drawnTicks = () => {
+  const receipt = document.querySelector('.chat-receipt')
+  return receipt ? receipt.querySelectorAll('path').length : 0
+}
+
+it('sends a single tick while nobody else has the message', async () => {
+  await renderThreadWith([tickedMessage(false, false)])
+
+  expect(await screen.findByLabelText('Sent')).toBeInTheDocument()
+  expect(drawnTicks()).toBe(1)
+})
+
+it('shows a second tick once the other side is around', async () => {
   await renderThreadWith([tickedMessage(true, false)])
 
   expect(await screen.findByLabelText('Delivered')).toBeInTheDocument()
-  expect(screen.queryByLabelText('Read')).not.toBeInTheDocument()
+  expect(drawnTicks()).toBe(2)
+  expect(document.querySelector('.chat-receipt-read')).not.toBeInTheDocument()
 })
 
-it('shows two ticks once the other side has read', async () => {
+it('shows two ticks in colour once the other side has read', async () => {
   await renderThreadWith([tickedMessage(true, true)])
 
   expect(await screen.findByLabelText('Read')).toBeInTheDocument()
-})
-
-it('shows no tick at all while the other side is away', async () => {
-  await renderThreadWith([tickedMessage(false, false)])
-
-  expect(screen.queryByLabelText('Delivered')).not.toBeInTheDocument()
-  expect(screen.queryByLabelText('Read')).not.toBeInTheDocument()
+  expect(drawnTicks()).toBe(2)
+  expect(document.querySelector('.chat-receipt-read')).toBeInTheDocument()
 })
 
 it('never ticks a message the viewer did not send', async () => {
   await renderThreadWith([tickedMessage(true, true, { author_id: 9, author_name: 'Dana Reed' })])
 
-  expect(screen.queryByLabelText('Delivered')).not.toBeInTheDocument()
-  expect(screen.queryByLabelText('Read')).not.toBeInTheDocument()
+  expect(document.querySelector('.chat-receipt')).not.toBeInTheDocument()
 })
