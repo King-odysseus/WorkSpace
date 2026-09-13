@@ -1703,11 +1703,6 @@ function App() {
     currentWorkspace?.role,
   );
   const canManageTasks = ["owner", "manager"].includes(currentWorkspace?.role);
-  const canCreateWorkspace = session.user.workspaces.some(
-    (workspace) => workspace.role === "owner",
-  );
-  const canOpenWorkspaceMenu =
-    session.user.workspaces.length > 1 || canCreateWorkspace;
   const workspaceMenu = (
     <div className="absolute left-0 top-full z-[60] mt-2 w-56 animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
       {session.user.workspaces.map((workspace) => (
@@ -1731,22 +1726,20 @@ function App() {
           )}
         </button>
       ))}
-      {canCreateWorkspace && (
-        <>
-          <div className="my-1 h-px bg-border" />
-          <button
-            type="button"
-            onClick={() => {
-              setWorkspaceMenuOpen(false);
-              setCreateWorkspaceOpen(true);
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-secondary hover:text-foreground"
-          >
-            <Plus size={14} className="shrink-0" />
-            <span>Create workspace</span>
-          </button>
-        </>
+      {session.user.workspaces.length > 0 && (
+        <div className="my-1 h-px bg-border" />
       )}
+      <button
+        type="button"
+        onClick={() => {
+          setWorkspaceMenuOpen(false);
+          setCreateWorkspaceOpen(true);
+        }}
+        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-secondary hover:text-foreground"
+      >
+        <Plus size={14} className="shrink-0" />
+        <span>Create workspace</span>
+      </button>
     </div>
   );
   const teamMembers = workspaceData.members.map((member) => ({
@@ -2056,19 +2049,10 @@ function App() {
             <div className="relative" ref={workspaceMenuRef}>
               <button
                 type="button"
-                onClick={() =>
-                  canOpenWorkspaceMenu &&
-                  setWorkspaceMenuOpen((current) => !current)
-                }
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg",
-                  canOpenWorkspaceMenu &&
-                    "transition-colors hover:bg-white/10",
-                )}
-                aria-haspopup={canOpenWorkspaceMenu ? "true" : undefined}
-                aria-expanded={
-                  canOpenWorkspaceMenu ? workspaceMenuOpen : undefined
-                }
+                onClick={() => setWorkspaceMenuOpen((current) => !current)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+                aria-haspopup="true"
+                aria-expanded={workspaceMenuOpen}
                 aria-label={`Workspace: ${currentWorkspace?.name || "Workspace"}`}
                 title={currentWorkspace?.name || "Workspace"}
               >
@@ -2087,42 +2071,29 @@ function App() {
                 alt="TijhaBooks"
                 className="h-7 w-7 shrink-0 rounded-lg object-contain"
               />
-              {session.user.workspaces.length > 0 && (
-                <div className="relative min-w-0 flex-1" ref={workspaceMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      canOpenWorkspaceMenu &&
-                      setWorkspaceMenuOpen((current) => !current)
-                    }
-                    className={cn(
-                      "flex w-full items-center gap-1.5 rounded-lg text-left",
-                      canOpenWorkspaceMenu &&
-                        "transition-colors hover:opacity-80",
-                    )}
-                    aria-haspopup={canOpenWorkspaceMenu ? "true" : undefined}
-                    aria-expanded={
-                      canOpenWorkspaceMenu ? workspaceMenuOpen : undefined
-                    }
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-base font-bold tracking-tight">
-                        {currentWorkspace?.name || "Workspace"}
-                      </span>
-                      <span className="block truncate text-[11px] uppercase tracking-wider text-white/40">
-                        Team Manager
-                      </span>
+              <div className="relative min-w-0 flex-1" ref={workspaceMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceMenuOpen((current) => !current)}
+                  className="flex w-full items-center gap-1.5 rounded-lg text-left transition-colors hover:opacity-80"
+                  aria-haspopup="true"
+                  aria-expanded={workspaceMenuOpen}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-bold tracking-tight">
+                      {currentWorkspace?.name || "Workspace"}
                     </span>
-                    {canOpenWorkspaceMenu && (
-                      <ChevronDown
-                        size={14}
-                        className="shrink-0 text-white/40"
-                      />
-                    )}
-                  </button>
-                  {workspaceMenuOpen && workspaceMenu}
-                </div>
-              )}
+                    <span className="block truncate text-[11px] uppercase tracking-wider text-white/40">
+                      Team Manager
+                    </span>
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    className="shrink-0 text-white/40"
+                  />
+                </button>
+                {workspaceMenuOpen && workspaceMenu}
+              </div>
             </>
           )}
         </div>
@@ -2131,27 +2102,21 @@ function App() {
             header no longer does and the sidebar brand block is desktop only.
             Close button sits outside the switcher so it survives on phones. */}
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3 lg:hidden">
-          {canOpenWorkspaceMenu ? (
-            <div className="relative min-w-0" ref={workspaceMenuRefMobile}>
-              <button
-                type="button"
-                onClick={() => setWorkspaceMenuOpen((current) => !current)}
-                className="flex min-w-0 items-center gap-1.5 rounded-lg py-1 text-sm font-bold text-white/70 transition-colors hover:text-white"
-                aria-haspopup="true"
-                aria-expanded={workspaceMenuOpen}
-              >
-                <span className="truncate">
-                  {currentWorkspace?.name || "Workspace"}
-                </span>
-                <ChevronDown size={14} className="shrink-0" />
-              </button>
-              {workspaceMenuOpen && workspaceMenu}
-            </div>
-          ) : (
-            <span className="min-w-0 truncate text-sm font-bold text-white/60">
-              {currentWorkspace?.name || "Workspace"}
-            </span>
-          )}
+          <div className="relative min-w-0" ref={workspaceMenuRefMobile}>
+            <button
+              type="button"
+              onClick={() => setWorkspaceMenuOpen((current) => !current)}
+              className="flex min-w-0 items-center gap-1.5 rounded-lg py-1 text-sm font-bold text-white/70 transition-colors hover:text-white"
+              aria-haspopup="true"
+              aria-expanded={workspaceMenuOpen}
+            >
+              <span className="truncate">
+                {currentWorkspace?.name || "Workspace"}
+              </span>
+              <ChevronDown size={14} className="shrink-0" />
+            </button>
+            {workspaceMenuOpen && workspaceMenu}
+          </div>
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
@@ -2631,6 +2596,7 @@ function App() {
                 defaultWorkspaceId={session.user.default_workspace_id}
                 onSetDefaultWorkspace={setDefaultWorkspace}
                 onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+                onSwitchWorkspace={setActiveWorkspaceId}
                 onProfileUpdated={updateSessionUser}
                 canManageMembers={["owner", "manager"].includes(
                   currentWorkspace?.role,
@@ -3054,6 +3020,7 @@ function WorkspaceView({
   defaultWorkspaceId,
   onSetDefaultWorkspace,
   onCreateWorkspace,
+  onSwitchWorkspace,
   onProfileUpdated,
   canManageMembers,
   canManageTasks,
@@ -5166,6 +5133,7 @@ function WorkspaceView({
         defaultWorkspaceId={defaultWorkspaceId}
         onSetDefaultWorkspace={onSetDefaultWorkspace}
         onCreateWorkspace={onCreateWorkspace}
+        onSwitchWorkspace={onSwitchWorkspace}
         taskTemplates={localData.taskTemplates || []}
         projectTemplates={localData.projectTemplates || []}
         projects={localData.projects}

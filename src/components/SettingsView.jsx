@@ -11,6 +11,7 @@ import {
   Camera,
   ClipboardList,
   Copy,
+  Layers,
   Link2,
   Plus,
   Sparkles,
@@ -29,7 +30,7 @@ const AISettingsPanel = lazy(() =>
     default: module.AISettingsPanel,
   })),
 );
-import { WorkspaceViewHeading } from "./workspace-ui.jsx";
+import { EmptyState, WorkspaceViewHeading } from "./workspace-ui.jsx";
 import { effectivePresence, getCsrfToken } from "../lib/workspace-format.js";
 import { NOTIFICATION_SOUND_OPTIONS, playNotificationSound } from "../lib/notification-sounds.js";
 
@@ -72,6 +73,7 @@ function SettingsView({
   defaultWorkspaceId,
   onSetDefaultWorkspace,
   onCreateWorkspace,
+  onSwitchWorkspace,
   taskTemplates = [],
   projectTemplates = [],
   projects = [],
@@ -117,11 +119,6 @@ function SettingsView({
   const [permissionsError, setPermissionsError] = useState("");
   const isOwner = currentWorkspace?.role === "owner";
   const isArchived = currentWorkspace?.status === "archived";
-  // Matches the backend rule in tasks/auth_views.py: only someone who already
-  // owns a workspace may create another one.
-  const canCreateWorkspace = workspaces.some(
-    (workspace) => workspace.role === "owner",
-  );
   const toggleManagerPermission = async (member, key) => {
     const current = member.permissions || [];
     const next = current.includes(key)
@@ -239,6 +236,7 @@ function SettingsView({
     ["appearance", "Appearance", Sun],
     ["notifications", "Notifications", Bell],
     ["profile", "Profile", Users],
+    ["workspaces", "Workspaces", Layers],
     ...(canManageMembers
       ? [
           ["templates", "Templates", ClipboardList],
@@ -996,71 +994,107 @@ function SettingsView({
               />
             </Suspense>
           )}
-          {section === "profile" && workspaces.length >= 1 && (
+          {section === "workspaces" && (
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Workspace entry</p>
-                  <h2>Default workspace</h2>
+                  <p className="eyebrow">Where you belong</p>
+                  <h2>Workspaces</h2>
                   <p>
-                    Choose the workspace WorkSpace opens when you sign in, or
-                    leave one you no longer need.
+                    Open a workspace, choose which one WorkSpace starts on, or
+                    start one of your own.
                   </p>
                 </div>
-                {canCreateWorkspace && (
-                  <Button size="sm" onClick={() => onCreateWorkspace?.()}>
-                    <Plus size={14} /> New workspace
-                  </Button>
-                )}
+                <Button size="sm" onClick={() => onCreateWorkspace?.()}>
+                  <Plus size={14} /> New workspace
+                </Button>
               </div>
               {lifecycleError && (
                 <p className="auth-error" role="alert">
                   {lifecycleError}
                 </p>
               )}
-              <div className="grid gap-3 sm:grid-cols-2">
-                {workspaces.map((workspace) => (
-                  <div
-                    key={workspace.id}
-                    className={`rounded-xl border p-4 text-left transition-colors ${workspace.id === defaultWorkspaceId ? "border-primary bg-primary/5" : "border-border hover:bg-surface-secondary"}`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        workspace.status === "active" &&
-                        onSetDefaultWorkspace?.(workspace.id)
-                      }
-                      aria-pressed={workspace.id === defaultWorkspaceId}
-                      disabled={workspace.status !== "active"}
-                      className="block w-full text-left"
-                    >
-                      <strong className="block text-sm">
-                        {workspace.name}
-                        {workspace.status === "archived" ? " (archived)" : ""}
-                      </strong>
-                      <span className="mt-1 block text-xs text-text-muted">
-                        {workspace.id === defaultWorkspaceId
-                          ? "Default entry workspace"
-                          : workspace.status === "active"
-                            ? "Set as default"
-                            : "Archived - cannot be a default"}
-                      </span>
-                    </button>
-                    {workspace.role !== "owner" && (
-                      <button
-                        type="button"
-                        className="text-button mt-2"
-                        disabled={lifecycleBusy}
-                        onClick={() =>
-                          leaveWorkspace(workspace.id, workspace.name)
-                        }
+              {workspaces.length ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {workspaces.map((workspace) => {
+                    const isCurrent = workspace.id === workspaceId;
+                    const isDefault = workspace.id === defaultWorkspaceId;
+                    const isArchivedWorkspace =
+                      workspace.status === "archived";
+                    // Mirrors the canManageMembers gate on the section list:
+                    // only an owner or manager of that workspace has a roster
+                    // to open.
+                    const canManageTeam = ["owner", "manager"].includes(
+                      workspace.role,
+                    );
+                    return (
+                      <div
+                        key={workspace.id}
+                        className={`rounded-xl border p-4 text-left transition-colors ${isCurrent ? "border-primary bg-primary/5" : "border-border hover:bg-surface-secondary"}`}
                       >
-                        Leave workspace
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+                        <strong className="block text-sm">
+                          {workspace.name}
+                          {isArchivedWorkspace ? " (archived)" : ""}
+                        </strong>
+                        <span className="mt-1 block text-xs text-text-muted">
+                          {isCurrent
+                            ? `Open now - you are ${workspace.role}`
+                            : `You are ${workspace.role}${isDefault ? " - opens on sign in" : ""}`}
+                        </span>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <Button
+                            size="sm"
+                            disabled={isCurrent || isArchivedWorkspace}
+                            onClick={() => onSwitchWorkspace?.(workspace.id)}
+                          >
+                            {isCurrent ? "Open now" : "Switch"}
+                          </Button>
+                          {canManageTeam && !isArchivedWorkspace && (
+                            <button
+                              type="button"
+                              className="text-button"
+                              onClick={() => {
+                                onSwitchWorkspace?.(workspace.id);
+                                setSection("workspace");
+                              }}
+                            >
+                              Manage team
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          {!isArchivedWorkspace && (
+                            <button
+                              type="button"
+                              className="text-button"
+                              disabled={isDefault}
+                              onClick={() =>
+                                onSetDefaultWorkspace?.(workspace.id)
+                              }
+                            >
+                              {isDefault ? "Opens on sign in" : "Set as default"}
+                            </button>
+                          )}
+                          {workspace.role !== "owner" && (
+                            <button
+                              type="button"
+                              className="text-button"
+                              disabled={lifecycleBusy}
+                              onClick={() =>
+                                leaveWorkspace(workspace.id, workspace.name)
+                              }
+                            >
+                              Leave workspace
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState text="You are not in a workspace yet. Create one to get started." />
+              )}
             </Card>
           )}
           {section === "notifications" && (

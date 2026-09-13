@@ -77,30 +77,10 @@ it('saves the Notification sound choice from notification settings', async () =>
   expect(JSON.parse(request.body)).toEqual({ notification_sound: false })
 })
 
-it('offers Create workspace to an owner from the Profile section', () => {
+it('offers New workspace to any account, even one that owns nothing', () => {
+  // Every account may own a workspace, so a plain member of someone else's
+  // workspace still gets the entry point.
   const onCreateWorkspace = vi.fn()
-  render(
-    <SettingsView
-      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
-      currentUserName="Test"
-      currentUserEmail="test@example.test"
-      members={[]}
-      notifications={[]}
-      workspaceId={1}
-      workspaces={[{ id: 1, name: 'Northstar', role: 'owner' }]}
-      onCreateWorkspace={onCreateWorkspace}
-    />,
-  )
-
-  fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
-  fireEvent.click(screen.getByRole('button', { name: /New workspace/ }))
-
-  expect(onCreateWorkspace).toHaveBeenCalled()
-})
-
-it('hides Create workspace from someone who owns nothing', () => {
-  // The backend only lets an existing owner create another workspace, so the
-  // button stays away from everyone else rather than failing on submit.
   render(
     <SettingsView
       currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
@@ -110,13 +90,70 @@ it('hides Create workspace from someone who owns nothing', () => {
       notifications={[]}
       workspaceId={1}
       workspaces={[{ id: 1, name: 'Northstar', role: 'member' }]}
-      onCreateWorkspace={vi.fn()}
+      onCreateWorkspace={onCreateWorkspace}
     />,
   )
 
-  fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
+  fireEvent.click(screen.getByRole('button', { name: /New workspace/ }))
 
-  expect(screen.queryByRole('button', { name: /New workspace/ })).not.toBeInTheDocument()
+  expect(onCreateWorkspace).toHaveBeenCalled()
+})
+
+it('switches the open workspace without touching the sign-in default', () => {
+  const onSwitchWorkspace = vi.fn()
+  const onSetDefaultWorkspace = vi.fn()
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[
+        { id: 1, name: 'Northstar', role: 'owner', status: 'active' },
+        { id: 2, name: 'Side Project', role: 'owner', status: 'active' },
+      ]}
+      onCreateWorkspace={vi.fn()}
+      onSwitchWorkspace={onSwitchWorkspace}
+      onSetDefaultWorkspace={onSetDefaultWorkspace}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
+  expect(screen.getByRole('button', { name: 'Open now' })).toBeDisabled()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Switch' }))
+
+  expect(onSwitchWorkspace).toHaveBeenCalledWith(2)
+  expect(onSetDefaultWorkspace).not.toHaveBeenCalled()
+})
+
+it('opens the team roster of a workspace you manage', () => {
+  const onSwitchWorkspace = vi.fn()
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[
+        { id: 1, name: 'Northstar', role: 'member', status: 'active' },
+        { id: 2, name: 'Side Project', role: 'owner', status: 'active' },
+      ]}
+      onCreateWorkspace={vi.fn()}
+      onSwitchWorkspace={onSwitchWorkspace}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
+  // Only the workspace you own offers this; the one you merely belong to does not.
+  fireEvent.click(screen.getByRole('button', { name: 'Manage team' }))
+
+  expect(onSwitchWorkspace).toHaveBeenCalledWith(2)
 })
 
 it('saves the sound style and volume from notification settings', async () => {
