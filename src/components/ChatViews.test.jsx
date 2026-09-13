@@ -169,3 +169,21 @@ it('opens the full emoji picker from the reaction plus and posts the choice', as
   expect(reactionCall[0]).toContain('/direct-messages/1/reactions/')
   expect(reactionCall[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ emoji: '🥳' }) })
 })
+
+it('opens the compact composer emoji popup and inserts the choice', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  await openConversation()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add emoji' }))
+  expect(await screen.findByRole('dialog', { name: 'Choose an emoji' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('option', { name: 'Insert 🥳' }))
+
+  expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('🥳')
+  expect(screen.queryByRole('dialog', { name: 'Choose an emoji' })).not.toBeInTheDocument()
+})
