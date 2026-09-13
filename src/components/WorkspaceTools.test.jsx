@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AssistantFlyout, FilesWorkspaceView } from './WorkspaceTools.jsx'
+import { AssistantFlyout, FilesWorkspaceView, describeDocument } from './WorkspaceTools.jsx'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
 
 afterEach(() => {
@@ -134,4 +134,80 @@ it('shows a workspace action for confirmation before reporting success', async (
 
   expect(await screen.findByText('Done. Create task "Launch notes"')).toBeInTheDocument()
   expectRequest(fetchMock, '/api/workspaces/4/ai/actions/7/', 'POST')
+})
+
+it('describes what happened to an attached document, including what was withheld', () => {
+  expect(describeDocument(null)).toBe('')
+  expect(describeDocument({ name: 'report.pdf', ok: true })).toBe('Read report.pdf.')
+  expect(describeDocument({ name: 'report.pdf', ok: true, redacted: { EMAIL: 1 } })).toBe(
+    'Read report.pdf. 1 piece of personal data replaced with placeholders.',
+  )
+  expect(
+    describeDocument({ name: 'report.pdf', ok: true, redacted: { EMAIL: 2, PHONE: 1 }, truncated: true }),
+  ).toBe('Read report.pdf. 3 pieces of personal data replaced with placeholders, and only the first part was read because the file is very long.')
+  expect(describeDocument({ name: 'scan.pdf', ok: false, reason: 'That PDF has no text layer.' })).toBe(
+    'scan.pdf: That PDF has no text layer.',
+  )
+})
+
+it('sends an attached file with the question and reports what Zuri made of it', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/files/': { file: { id: 9, original_name: 'quarterly.pdf' } },
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'Revenue rose 4%.',
+      document: { name: 'quarterly.pdf', ok: true, redacted: { EMAIL: 2 }, truncated: false },
+    },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  const picker = await screen.findByLabelText('Attach a document for Zuri to read')
+  fireEvent.change(picker, { target: { files: [new File(['x'], 'quarterly.pdf', { type: 'application/pdf' })] } })
+
+  // The chip confirms the upload landed before the user commits to sending.
+  expect(await screen.findByText('quarterly.pdf')).toBeInTheDocument()
+
+  // A file on its own is a complete request, so the send button is live with an
+  // empty box and the question is filled in for the model.
+  const input = screen.getByLabelText('Message to Zuri')
+  expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled()
+  fireEvent.submit(input.closest('form'))
+
+  expect(
+    await screen.findByText('Read quarterly.pdf. 2 pieces of personal data replaced with placeholders.'),
+  ).toBeInTheDocument()
+  expect(await screen.findByText('Revenue rose 4%.')).toBeInTheDocument()
+  expect(await screen.findByText('Summarise quarterly.pdf')).toBeInTheDocument()
+
+  const [, init] = expectRequest(fetchMock, '/api/workspaces/4/ai/chat/', 'POST')
+  expect(JSON.parse(init.body)).toMatchObject({ message: 'Summarise quarterly.pdf', file_id: 9 })
+  // Cleared once the turn succeeds, so the next question is not about the file.
+  expect(screen.queryByText('quarterly.pdf')).not.toBeInTheDocument()
+})
+
+it('keeps the attachment when the turn fails so it can be retried', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/files/': { file: { id: 9, original_name: 'quarterly.pdf' } },
+    '/api/workspaces/4/ai/chat/': { status: 503, body: { error: 'Zuri is unavailable.' } },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  const picker = await screen.findByLabelText('Attach a document for Zuri to read')
+  fireEvent.change(picker, { target: { files: [new File(['x'], 'quarterly.pdf', { type: 'application/pdf' })] } })
+  expect(await screen.findByText('quarterly.pdf')).toBeInTheDocument()
+
+  const input = screen.getByLabelText('Message to Zuri')
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Zuri is unavailable.')
+  expect(screen.getByText('quarterly.pdf')).toBeInTheDocument()
 })

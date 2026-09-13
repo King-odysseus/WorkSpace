@@ -1,6 +1,7 @@
 import json
 import base64
 import importlib
+import io
 import tempfile
 from io import StringIO
 from datetime import timedelta
@@ -23,6 +24,8 @@ from django.test.utils import CaptureQueriesContext
 
 from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, ChatMessageReaction, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .automation import run_workspace_automation
+from .ai_actions import PrivacyBoundaryError, PrivacyRegistry
+from .document_text import DOCUMENT_MAX_CHARS, extract_document_text
 from .views import create_notification, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
@@ -3679,6 +3682,324 @@ class WorkspaceAiSettingsApiTests(TestCase):
         # The request is refused before the provider call, so nothing is spent
         # and no workspace data leaves the server.
         self.assertEqual(captured, {})
+
+
+def minimal_pdf_bytes(text='Quarterly report'):
+    """A one-page PDF carrying a real text layer.
+
+    Hand-assembled because the project has no PDF writer dependency, and the
+    fixture only has to be a file pypdf can find text in.
+    """
+    content = f'BT /F1 24 Tf 72 700 Td ({text}) Tj ET'.encode('ascii')
+    objects = [
+        b'<</Type/Catalog/Pages 2 0 R>>',
+        b'<</Type/Pages/Kids[3 0 R]/Count 1>>',
+        b'<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>',
+        b'<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>',
+        b'<</Length ' + str(len(content)).encode() + b'>>stream\n' + content + b'\nendstream',
+    ]
+    out = bytearray(b'%PDF-1.4\n')
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f'{number} 0 obj\n'.encode() + body + b'\nendobj\n'
+    xref_at = len(out)
+    count = len(objects) + 1
+    out += f'xref\n0 {count}\n'.encode() + b'0000000000 65535 f \n'
+    for offset in offsets:
+        out += f'{offset:010d} 00000 n \n'.encode()
+    out += f'trailer\n<</Size {count}/Root 1 0 R>>\nstartxref\n{xref_at}\n%%EOF\n'.encode()
+    return bytes(out)
+
+
+class DocumentExtractionTests(TestCase):
+    """Extraction is text handling only, so it runs without touching the API."""
+
+    def _extract(self, name, data):
+        return extract_document_text(SimpleUploadedFile(name, data), name)
+
+    def test_reads_plain_text_and_delimited_files(self):
+        self.assertEqual(self._extract('notes.md', b'# Title\n\nSome notes.')['text'], '# Title\n\nSome notes.')
+        self.assertEqual(self._extract('data.csv', b'a,b\n1,2')['text'], 'a,b\n1,2')
+
+    def test_reads_spreadsheets_with_their_sheet_names(self):
+        import openpyxl
+
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = 'Q3'
+        sheet.append(['Region', 'Revenue'])
+        sheet.append(['EMEA', 120])
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+
+        text = self._extract('book.xlsx', buffer.getvalue())['text']
+        self.assertIn('[Sheet: Q3]', text)
+        self.assertIn('EMEA | 120', text)
+
+    def test_reads_word_paragraphs_and_tables(self):
+        import docx
+
+        document = docx.Document()
+        document.add_paragraph('Executive summary')
+        table = document.add_table(rows=1, cols=2)
+        table.rows[0].cells[0].text = 'Owner'
+        table.rows[0].cells[1].text = 'Ada'
+        buffer = io.BytesIO()
+        document.save(buffer)
+
+        text = self._extract('brief.docx', buffer.getvalue())['text']
+        self.assertIn('Executive summary', text)
+        self.assertIn('Owner | Ada', text)
+
+    def test_reads_a_pdf_with_a_text_layer(self):
+        text = self._extract('report.pdf', minimal_pdf_bytes())['text']
+        self.assertIn('[Page 1]', text)
+        self.assertIn('Quarterly report', text)
+
+    def test_explains_a_pdf_with_no_text_layer_instead_of_returning_nothing(self):
+        from pypdf import PdfWriter
+
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        buffer = io.BytesIO()
+        writer.write(buffer)
+
+        result = self._extract('scan.pdf', buffer.getvalue())
+        self.assertEqual(result['text'], '')
+        self.assertIn('no text layer', result['reason'])
+
+    def test_explains_a_password_protected_pdf(self):
+        from pypdf import PdfWriter
+
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        writer.encrypt('secret')
+        buffer = io.BytesIO()
+        writer.write(buffer)
+
+        result = self._extract('locked.pdf', buffer.getvalue())
+        self.assertEqual(result['text'], '')
+        self.assertIn('password-protected', result['reason'])
+
+    def test_names_the_format_it_cannot_read(self):
+        result = self._extract('legacy.doc', b'\xd0\xcf\x11\xe0garbage')
+        self.assertIn('legacy binary Word format', result['reason'])
+        self.assertIn('archives', self._extract('bundle.zip', b'PK\x03\x04junk')['reason'])
+
+    def test_reports_an_empty_file_rather_than_an_empty_summary(self):
+        result = self._extract('empty.txt', b'   ')
+        self.assertEqual(result['text'], '')
+        self.assertIn('no readable text', result['reason'])
+
+    def test_truncates_a_document_longer_than_the_ceiling(self):
+        result = self._extract('big.txt', b'x' * (DOCUMENT_MAX_CHARS + 500))
+        self.assertEqual(len(result['text']), DOCUMENT_MAX_CHARS)
+        self.assertTrue(result['truncated'])
+
+    def test_reports_missing_ocr_instead_of_crashing(self):
+        import pytesseract
+        from PIL import Image, ImageDraw
+
+        image = Image.new('RGB', (220, 60), 'white')
+        ImageDraw.Draw(image).text((10, 20), 'Invoice 42', fill='black')
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+
+        result = self._extract('shot.png', buffer.getvalue())
+        try:
+            pytesseract.get_tesseract_version()
+        except Exception:
+            self.assertEqual(result['text'], '')
+            self.assertIn('recognition is not installed', result['reason'])
+        else:
+            self.assertIn('Invoice', result['text'])
+
+
+class DocumentRedactionTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='redact-owner@example.com', email='redact-owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='redact-member@example.com', email='redact-member@example.com', password='secure-pass-123', first_name='Ada', last_name='Lovelace')
+        self.workspace = Workspace.objects.create(name='Redaction Workspace', slug='redaction-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+
+    def test_replaces_a_workspace_identity_with_its_member_placeholder(self):
+        registry = PrivacyRegistry(self.workspace.id, self.owner)
+        text, counts = registry.redact('Prepared by Ada Lovelace for the team.')
+        self.assertIn('[MEMBER_2]', text)
+        self.assertNotIn('Ada', text)
+        self.assertEqual(counts, {})
+
+    def test_replaces_personal_data_with_numbered_placeholders(self):
+        registry = PrivacyRegistry(self.workspace.id, self.owner)
+        text, counts = registry.redact('Mail a@acme.co.uk and b@acme.co.uk, or call +44 20 7946 0958.')
+        self.assertIn('[EMAIL_1]', text)
+        self.assertIn('[EMAIL_2]', text)
+        self.assertIn('[PHONE_1]', text)
+        self.assertEqual(counts['EMAIL'], 2)
+        self.assertEqual(counts['PHONE'], 1)
+        self.assertNotIn('acme.co.uk', text)
+
+    def test_redacts_where_protect_would_refuse_the_whole_message(self):
+        # This is the whole point of the document path: the same text that makes
+        # the chat boundary refuse outright is read after redaction instead.
+        registry = PrivacyRegistry(self.workspace.id, self.owner)
+        document = 'Contact the account holder on 123-45-6789.'
+        with self.assertRaises(PrivacyBoundaryError):
+            registry.protect(document)
+        text, counts = registry.redact(document)
+        self.assertIn('[SSN_1]', text)
+        self.assertEqual(counts['SSN'], 1)
+
+    def test_leaves_ordinary_prose_untouched(self):
+        registry = PrivacyRegistry(self.workspace.id, self.owner)
+        prose = 'Revenue rose 12 per cent in Q3 across 4 regions.'
+        text, counts = registry.redact(prose)
+        self.assertEqual(text, prose)
+        self.assertEqual(counts, {})
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class ZuriDocumentChatTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='zuri-doc-owner@example.com', email='zuri-doc-owner@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Zuri Document Workspace', slug='zuri-document-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        self.other_workspace = Workspace.objects.create(name='Elsewhere', slug='elsewhere')
+        Membership.objects.create(workspace=self.other_workspace, user=self.owner, role='owner')
+        blank_keys = {name: '' for name in ('OPENAI_API_KEY', 'AI_API_KEY', 'ANTHROPIC_API_KEY', 'KIMI_API_KEY', 'DEEPSEEK_API_KEY')}
+        environment = mock.patch.dict('os.environ', blank_keys)
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.client.force_login(self.owner)
+
+    def _enable_ai(self):
+        from .workspace_tools import _setting
+
+        setting = _setting(self.workspace.id)
+        setting.ai_enabled = True
+        setting.ai_default_provider = 'openai'
+        setting.ai_enabled_providers = ['openai']
+        setting.save()
+        return setting
+
+    def _attach(self, name, data, workspace=None):
+        return WorkspaceFile.objects.create(
+            workspace=workspace or self.workspace,
+            file=SimpleUploadedFile(name, data),
+            original_name=name,
+            size=len(data),
+            uploaded_by=self.owner,
+        )
+
+    def _chat(self, payload, captured, answer='ok'):
+        class _Response:
+            def read(self):
+                return json.dumps({'choices': [{'message': {'content': answer}}]}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            captured['body'] = json.loads(request.data.decode())
+            return _Response()
+
+        with mock.patch('tasks.workspace_tools.urlrequest.urlopen', fake_urlopen):
+            with mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test-key'}):
+                return self.client.post(
+                    reverse('workspace-ai-chat', args=[self.workspace.id]),
+                    data=json.dumps(payload),
+                    content_type='application/json',
+                )
+
+    def test_document_text_reaches_the_prompt_as_its_own_section(self):
+        self._enable_ai()
+        item = self._attach('report.pdf', minimal_pdf_bytes())
+        captured = {}
+        response = self._chat({'message': 'What does this say?', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        system = captured['body']['messages'][0]['content']
+        self.assertIn('BEGIN DOCUMENT', system)
+        self.assertIn('Quarterly report', system)
+        self.assertEqual(response.json()['document']['name'], 'report.pdf')
+        self.assertTrue(response.json()['document']['ok'])
+
+    def test_personal_data_in_a_document_is_replaced_before_it_leaves(self):
+        self._enable_ai()
+        item = self._attach('contacts.txt', b'Escalate to ops@acme.co.uk if it recurs.')
+        captured = {}
+        response = self._chat({'message': 'Who do I escalate to?', 'file_id': item.id}, captured)
+
+        system = captured['body']['messages'][0]['content']
+        self.assertIn('[EMAIL_1]', system)
+        self.assertNotIn('ops@acme.co.uk', system)
+        self.assertEqual(response.json()['document']['redacted']['EMAIL'], 1)
+
+    def test_an_attachment_can_stand_in_for_an_empty_message(self):
+        self._enable_ai()
+        item = self._attach('report.pdf', minimal_pdf_bytes())
+        captured = {}
+        response = self._chat({'message': '', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured['body']['messages'][-1]['content'], 'Summarise the attached document.')
+
+    def test_an_empty_message_without_an_attachment_is_still_rejected(self):
+        self._enable_ai()
+        captured = {}
+        self.assertEqual(self._chat({'message': ''}, captured).status_code, 400)
+        self.assertEqual(captured, {})
+
+    def test_an_unreadable_attachment_is_reported_without_breaking_the_turn(self):
+        self._enable_ai()
+        item = self._attach('bundle.zip', b'PK\x03\x04junk')
+        captured = {}
+        response = self._chat({'message': 'Read this', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['document']['ok'])
+        self.assertIn('archives', response.json()['document']['reason'])
+        self.assertNotIn('BEGIN DOCUMENT', captured['body']['messages'][0]['content'])
+
+    def test_a_file_from_another_workspace_is_never_read(self):
+        self._enable_ai()
+        item = self._attach('secret.txt', b'The acquisition price is confidential.', workspace=self.other_workspace)
+        captured = {}
+        response = self._chat({'message': 'Read this', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['document']['ok'])
+        self.assertNotIn('acquisition price', captured['body']['messages'][0]['content'])
+
+    def test_an_unknown_attachment_id_is_reported_rather_than_ignored(self):
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Read this', 'file_id': 999999}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['document']['ok'])
+        self.assertIn('not in this workspace', response.json()['document']['reason'])
+
+    def test_the_upload_endpoint_feeds_the_next_turn(self):
+        # The paperclip flow end to end: upload through the files API, then ask
+        # about the id it returned.
+        self._enable_ai()
+        upload = self.client.post(
+            reverse('workspace-file-list', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('report.pdf', minimal_pdf_bytes())},
+        )
+        self.assertEqual(upload.status_code, 201)
+        file_id = upload.json()['file']['id']
+        captured = {}
+        response = self._chat({'message': 'Summarise this', 'file_id': file_id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Quarterly report', captured['body']['messages'][0]['content'])
 
 
 class WorkspaceDocumentCollaborationTests(TestCase):

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
-import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Alert } from './ui/alert.jsx'
 import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
@@ -938,19 +938,54 @@ function writeAiPendingAction(workspaceId, action) {
   }
 }
 
+// What happened to an attached file is a fact about the request, not something to
+// hope the model volunteers, so the server reports it and the composer says it.
+export function describeDocument(info) {
+  if (!info || !info.name) return ''
+  if (!info.ok) return `${info.name}: ${info.reason || 'that file could not be read.'}`
+  const parts = []
+  const counts = info.redacted || {}
+  const redacted = Object.values(counts).reduce((total, count) => total + count, 0)
+  if (redacted) parts.push(`${redacted} piece${redacted === 1 ? '' : 's'} of personal data replaced with placeholders`)
+  if (info.truncated) parts.push('only the first part was read because the file is very long')
+  return parts.length ? `Read ${info.name}. ${parts.join(', and ')}.` : `Read ${info.name}.`
+}
+
 export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
   const launcherRef = useRef(document.activeElement)
   const feedEndRef = useRef(null)
   const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+  const [attachment, setAttachment] = useState(null); const [attaching, setAttaching] = useState(false); const [documentNote, setDocumentNote] = useState('')
   const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
   const [pendingAction, setPendingAction] = useState(() => readAiPendingAction(workspaceId))
   useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
   useEffect(() => { setPendingAction(readAiPendingAction(workspaceId)) }, [workspaceId])
   useEffect(() => { feedEndRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy])
   useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
+  const attachFile = async event => {
+    const chosen = event.target.files?.[0]
+    event.target.value = ''
+    if (!chosen || attaching) return
+    setAttaching(true)
+    setError('')
+    setDocumentNote('')
+    try {
+      const body = new FormData(); body.append('file', chosen)
+      const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body })
+      const result = await readJsonResponse(response, 'That file could not be attached.')
+      if (!response.ok) throw new Error(result.error || 'That file could not be attached.')
+      setAttachment({ id: result.file.id, name: result.file.original_name || chosen.name })
+    } catch (uploadError) {
+      setError(uploadError.message)
+    } finally {
+      setAttaching(false)
+    }
+  }
   const ask = async event => {
     event.preventDefault()
-    const asked = message.trim()
+    // A file on its own is a complete request, and every provider rejects an empty
+    // user turn, so the attachment implies the question.
+    const asked = message.trim() || (attachment ? `Summarise ${attachment.name}` : '')
     if (busy || !asked) return
     // Show the question immediately and clear the box, so the transcript reads
     // like a conversation instead of the answer appearing with no prompt.
@@ -961,10 +996,16 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
     setMessage('')
     setBusy(true)
     setError('')
+    setDocumentNote('')
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/ai/chat/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify({ message: asked, provider, history }) })
+      const payload = { message: asked, provider, history }
+      if (attachment) payload.file_id = attachment.id
+      const response = await fetch(`/api/workspaces/${workspaceId}/ai/chat/`, { method: 'POST', credentials: 'include', headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }), body: JSON.stringify(payload) })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Zuri is unavailable.')
+      // Held until the turn succeeds, so a failed request can simply be retried.
+      setAttachment(null)
+      setDocumentNote(describeDocument(result.document))
       const answered = [...withQuestion, { role: 'assistant', content: result.answer }]
       setTurns(answered)
       writeAiHistory(workspaceId, answered)
@@ -1045,12 +1086,25 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
           </div>
         )}
         {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div>}
+        {documentNote && <div className="ai-chat-doc-note" role="status">{documentNote}</div>}
         {error && <div role="alert" className="ai-chat-error">{error}</div>}
         <div ref={feedEndRef} />
       </div>
-      <form onSubmit={ask} className="ai-chat-composer">
-        <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder="Ask anything..." />
-        <button className="ai-chat-send" disabled={busy || !message.trim()} aria-label="Send message"><Send size={20} /></button>
+      <form onSubmit={ask} className="ai-chat-composer is-stacked">
+        {attachment && <div className="ai-chat-attachment">
+          <FileText size={15} />
+          <span title={attachment.name}>{attachment.name}</span>
+          <button type="button" onClick={() => setAttachment(null)} aria-label={`Remove ${attachment.name}`}><X size={14} /></button>
+        </div>}
+        {attaching && <p className="ai-chat-attach-status" role="status">Attaching...</p>}
+        <div className="ai-chat-composer-row">
+          <label className="ai-chat-attach" title="Attach a document for Zuri to read">
+            <Paperclip size={19} />
+            <input type="file" onChange={attachFile} disabled={attaching || busy} accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.log,.yaml,.yml,.xlsx,.xlsm,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp" aria-label="Attach a document for Zuri to read" />
+          </label>
+          <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
+          <button className="ai-chat-send" disabled={busy || (!message.trim() && !attachment)} aria-label="Send message"><Send size={20} /></button>
+        </div>
       </form>
     </DialogContent>
   </Dialog>

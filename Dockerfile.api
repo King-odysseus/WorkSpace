@@ -7,7 +7,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 COPY . .
-RUN addgroup --system workspace && adduser --system --ingroup workspace workspace && mkdir -p /app/media && chown -R workspace:workspace /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system workspace && adduser --system --ingroup workspace workspace && mkdir -p /app/media && chown -R workspace:workspace /app
 
 USER workspace
 

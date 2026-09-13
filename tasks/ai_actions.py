@@ -55,6 +55,23 @@ class PrivacyBoundaryError(ValueError):
     pass
 
 
+# Applied to document text only, most specific pattern first so a card number is
+# not clipped into phone-shaped fragments before it is recognised. Person-facing
+# labels such as "date of birth" are deliberately absent: the words are not the
+# personal data, the value beside them is, and the patterns below catch it.
+REDACTION_PATTERNS = (
+    ('ADDRESS', ADDRESS_PATTERN),
+    ('EMAIL', EMAIL_PATTERN),
+    ('CARD', CARD_PATTERN),
+    ('SSN', SSN_PATTERN),
+    ('NI', NI_PATTERN),
+    ('PHONE', INTERNATIONAL_PHONE_PATTERN),
+    ('PHONE', NORTH_AMERICAN_PHONE_PATTERN),
+    ('PHONE', UK_PHONE_PATTERN),
+    ('ID', BARE_NUMBER_PATTERN),
+)
+
+
 class ActionValidationError(ValueError):
     pass
 
@@ -141,6 +158,36 @@ class PrivacyRegistry:
                 'Zuri blocked this request because it contains personal information that cannot leave the workspace.'
             )
         return text
+
+    def redact(self, value):
+        """Replace identities and personal data with numbered placeholders.
+
+        The chat path refuses a message that carries personal data, because the
+        user can be asked to rephrase. A document is different: the user has
+        already asked for a summary of a file they hold, so refusing it leaves
+        them with nothing. Everything matching is swapped for a placeholder
+        instead, and the caller tells the user what was taken out.
+
+        Returns ``(text, counts)`` where ``counts`` maps a kind such as 'EMAIL'
+        to the number of replacements made.
+        """
+        text = str(value or '')
+        for identity, placeholder in self.replacements:
+            text = re.sub(
+                rf'(?<!\w){re.escape(identity)}(?!\w)',
+                placeholder,
+                text,
+                flags=re.IGNORECASE,
+            )
+        counts = {}
+
+        def _substitute(match, kind):
+            counts[kind] = counts.get(kind, 0) + 1
+            return f'[{kind}_{counts[kind]}]'
+
+        for kind, pattern in REDACTION_PATTERNS:
+            text = pattern.sub(lambda match, kind=kind: _substitute(match, kind), text)
+        return text, counts
 
     def user_id_for_ref(self, value):
         ref = str(value or '').strip()
