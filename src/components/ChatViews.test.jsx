@@ -129,3 +129,22 @@ it('shows no messages yet rather than the previous conversation', async () => {
   expect(await screen.findByText('No messages yet')).toBeInTheDocument()
   expect(screen.queryByText('See you then.')).not.toBeInTheDocument()
 })
+
+it('offers more than thumbs up and posts the selected reaction', async () => {
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/direct-messages/1/reactions/': { message: { reactions: [{ emoji: '🎉', count: 1, reacted: true }] } },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  await openConversation()
+
+  fireEvent.click(await screen.findByRole('button', { name: 'React with Celebrate' }))
+
+  await screen.findByText('🎉 1')
+  const reactionCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/direct-messages/1/reactions/'))
+  expect(reactionCall[0]).toContain('/direct-messages/1/reactions/')
+  expect(reactionCall[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ emoji: '🎉' }) })
+})
