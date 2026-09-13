@@ -90,6 +90,10 @@ class PrivacyRegistry:
         self.actor = actor
         self.placeholder_to_user_id = {}
         self.user_id_to_placeholder = {}
+        # The assignable roster, exposed to the provider as placeholders only.
+        # Built here rather than re-queried so it can never drift from the
+        # placeholder mapping used to translate a name in and out.
+        self.members = []
         replacements = []
         memberships = (
             Membership.objects
@@ -102,6 +106,11 @@ class PrivacyRegistry:
             placeholder = f'[MEMBER_{index}]'
             self.placeholder_to_user_id[placeholder] = user.id
             self.user_id_to_placeholder[user.id] = placeholder
+            self.members.append({
+                'ref': placeholder,
+                'role': membership.role,
+                'is_current_user': user.id == actor.id,
+            })
             values = {
                 user.get_full_name(),
                 user.first_name,
@@ -195,6 +204,7 @@ def build_workspace_snapshot(workspace_id, actor, registry):
         'actor_ref': registry.actor_ref,
         'task_count': Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').count(),
         'project_count': Project.objects.filter(workspace_id=workspace_id).count(),
+        'members': registry.members,
         'tasks': task_rows,
         'projects': project_rows,
         'limits': {'tasks': MAX_SNAPSHOT_TASKS, 'projects': MAX_SNAPSHOT_PROJECTS},
@@ -208,7 +218,10 @@ def action_instructions(snapshot):
         'For normal conversation, return strict JSON with "answer" and "action": null. '
         'Allowed action kinds are task.create, task.update, project.create, and project.update. '
         'Never claim an action has happened: it only becomes a proposal that the user must confirm. '
-        'Never use external personal data. Use member placeholders exactly as shown, or "me"/"unassigned" for assignee_ref. '
+        'Never use external personal data. Real names never leave the workspace: people appear as placeholders such as [MEMBER_2], '
+        'listed in the snapshot "members" roster with their workspace role and whether they are the current user. '
+        'To assign work, set assignee_ref to a ref from that roster, or "me" for the current user, or "unassigned". '
+        'Never invent a ref that is not in the roster. '
         'The action fields are: task.create uses title, description, status, priority, due_date, start_date, project_id, assignee_ref, bucket, labels, progress_percent; '
         'task.update uses task_id plus any of those fields; project.create uses name, description, status, due_date, start_date, end_date; '
         'project.update uses project_id plus any project field. Do not propose deletes, comments, documents, invitations, budgets, expenses, or personal data. '

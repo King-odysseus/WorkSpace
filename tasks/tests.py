@@ -3314,6 +3314,89 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertNotIn(self.owner.email, outbound)
         self.assertIn('[MEMBER_', outbound)
 
+    @staticmethod
+    def _snapshot(captured):
+        """Pull the workspace snapshot back out of the outbound system prompt."""
+        system_prompt = captured['body']['messages'][0]['content']
+        return json.loads(system_prompt.split('Workspace snapshot: ', 1)[1])
+
+    def test_snapshot_lists_every_member_as_a_placeholder_even_without_tasks(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Who is on this team?'}, captured)
+        self.assertEqual(response.status_code, 200)
+        snapshot = self._snapshot(captured)
+
+        # The member holds no tasks, so nothing else in the snapshot mentions
+        # them: the roster is the only thing that makes them assignable.
+        self.assertEqual(snapshot['task_count'], 0)
+        roster = snapshot['members']
+        self.assertEqual(len(roster), 2)
+        self.assertEqual({entry['role'] for entry in roster}, {'owner', 'member'})
+        self.assertTrue(all(entry['ref'].startswith('[MEMBER_') for entry in roster))
+        self.assertEqual(
+            [entry['ref'] for entry in roster if entry['is_current_user']],
+            [snapshot['actor_ref']],
+        )
+
+        # The roster is placeholders only: the request still carries no identity.
+        outbound = json.dumps(captured['body'])
+        self.assertNotIn('ai-owner', outbound)
+        self.assertNotIn('example.com', outbound)
+
+    def test_answer_names_members_inside_the_app_while_the_request_stays_anonymous(self):
+        self.owner.first_name = 'Alex'
+        self.owner.last_name = 'Taylor'
+        self.owner.save(update_fields=['first_name', 'last_name'])
+        self.member.first_name = 'Priya'
+        self.member.last_name = 'Nair'
+        self.member.save(update_fields=['first_name', 'last_name'])
+        self.client.force_login(self.owner)
+        self._enable_ai()
+
+        captured = {}
+        self._chat({'message': 'Who is on this team?'}, captured)
+        refs = {entry['role']: entry['ref'] for entry in self._snapshot(captured)['members']}
+
+        captured = {}
+        response = self._chat({'message': 'Who is on this team?'}, captured, answer=json.dumps({
+            'answer': f"The team is {refs['owner']} and {refs['member']}.",
+            'action': None,
+        }))
+        self.assertEqual(response.status_code, 200)
+        # The user reads real names inside the app...
+        self.assertEqual(response.json()['answer'], 'The team is Alex Taylor and Priya Nair.')
+        # ...while the provider only ever saw the placeholders.
+        outbound = json.dumps(captured['body'])
+        for identity in ('Alex', 'Taylor', 'Priya', 'Nair'):
+            self.assertNotIn(identity, outbound)
+
+    def test_task_can_be_assigned_to_a_member_from_the_roster_ref(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        self._chat({'message': 'What is the roster?'}, captured)
+        other = next(entry for entry in self._snapshot(captured)['members'] if not entry['is_current_user'])
+
+        captured = {}
+        response = self._chat({'message': 'Create a task called Prepare launch notes.'}, captured, answer=json.dumps({
+            'answer': 'I prepared that task for your confirmation.',
+            'action': {
+                'kind': 'task.create',
+                'arguments': {'title': 'Prepare launch notes', 'assignee_ref': other['ref'], 'status': 'todo'},
+            },
+        }))
+        self.assertEqual(response.status_code, 200)
+        proposal = response.json()['pending_action']
+        self.assertIsNotNone(proposal, response.json().get('action_error'))
+
+        confirm_url = reverse('workspace-ai-action', args=[self.workspace.id, proposal['id']])
+        confirmed = self.client.post(confirm_url, data=json.dumps({'decision': 'confirm'}), content_type='application/json')
+        self.assertEqual(confirmed.status_code, 200)
+        task = Task.objects.get(workspace=self.workspace, title='Prepare launch notes')
+        self.assertEqual(task.assignee_id, self.member.id)
+
     def test_chat_blocks_unknown_personal_identifiers_before_provider_egress(self):
         self.client.force_login(self.owner)
         self._enable_ai()
