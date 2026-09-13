@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, ChatMessageReaction, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .automation import run_workspace_automation
 from .views import create_notification, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
@@ -2940,6 +2940,50 @@ class WorkspacePulseApiTests(TestCase):
         DirectConversationRead.objects.create(conversation=elsewhere, user=self.other, last_read_at=timezone.now())
         self.assertEqual(before, self.fingerprint(), 'a read in a thread I am not in must not move my fingerprint')
 
+    def test_editing_or_deleting_a_message_changes_the_fingerprint(self):
+        """An edit and a delete rewrite a row, so max(created_at) alone cannot see them.
+
+        Without the mutation stamps a viewer who is not the author would keep
+        rendering the old body until some unrelated change tripped the poll.
+        """
+        channel_message = ChatMessage.objects.create(workspace=self.workspace, author=self.user, channel='general', message='First draft')
+        conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.user.id}-{self.other.id}')
+        conversation.participants.add(self.user, self.other)
+        direct_message = DirectMessage.objects.create(conversation=conversation, author=self.user, message='First draft')
+
+        before = self.fingerprint()
+        channel_message.message = 'Rewritten'
+        channel_message.edited_at = timezone.now()
+        channel_message.save(update_fields=['message', 'edited_at'])
+        self.assertNotEqual(before, self.fingerprint(), 'a channel edit must reach the other viewer')
+
+        before = self.fingerprint()
+        direct_message.message = 'Rewritten'
+        direct_message.edited_at = timezone.now()
+        direct_message.save(update_fields=['message', 'edited_at'])
+        self.assertNotEqual(before, self.fingerprint(), 'a direct edit must reach the other viewer')
+
+        before = self.fingerprint()
+        channel_message.message = ''
+        channel_message.deleted_at = timezone.now()
+        channel_message.save(update_fields=['message', 'deleted_at'])
+        self.assertNotEqual(before, self.fingerprint(), 'a channel tombstone must reach the other viewer')
+
+        before = self.fingerprint()
+        direct_message.message = ''
+        direct_message.deleted_at = timezone.now()
+        direct_message.save(update_fields=['message', 'deleted_at'])
+        self.assertNotEqual(before, self.fingerprint(), 'a direct tombstone must reach the other viewer')
+
+    def test_messages_in_another_workspace_do_not_move_my_fingerprint(self):
+        other_workspace = Workspace.objects.create(name='Elsewhere', slug='elsewhere-messages')
+        elsewhere = ChatMessage.objects.create(workspace=other_workspace, author=self.other, channel='general', message='Not mine')
+        before = self.fingerprint()
+
+        elsewhere.deleted_at = timezone.now()
+        elsewhere.save(update_fields=['deleted_at'])
+        self.assertEqual(before, self.fingerprint())
+
     def test_pulse_runs_in_a_small_fixed_number_of_queries(self):
         """This runs on a timer in every open tab, so its cost must stay flat and small."""
         def pulse_queries():
@@ -4570,6 +4614,197 @@ class ChatMessageEditApiTests(TestCase):
         stored = ChatMessage.objects.get(id=message['id'])
         self.assertEqual(stored.author_id, self.author.id)
         self.assertEqual(stored.created_at, original_created_at)
+
+
+class ChatMessageDeleteApiTests(TestCase):
+    """Authors can delete their own message; the thread keeps a tombstone."""
+
+    def setUp(self):
+        self.author = User.objects.create_user(username='delete-author@example.com', email='delete-author@example.com', password='secure-pass-123')
+        self.other = User.objects.create_user(username='delete-other@example.com', email='delete-other@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Delete Workspace', slug='delete-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.author, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
+        self.conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.author.id}:{self.other.id}')
+        self.conversation.participants.add(self.author, self.other)
+        self.client.force_login(self.author)
+
+    def post_channel_message(self, text='Original channel text'):
+        response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': text}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()['message']
+
+    def post_direct_message(self, text='Original direct text'):
+        response = self.client.post(
+            reverse('direct-message-list', args=[self.conversation.id]),
+            data=json.dumps({'message': text}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()['message']
+
+    def delete_channel(self, message_id):
+        return self.client.delete(reverse('chat-message-detail', args=[message_id]))
+
+    def delete_direct(self, message_id):
+        return self.client.delete(reverse('direct-message-detail', args=[message_id]))
+
+    def test_the_author_can_delete_a_channel_message_and_it_becomes_a_tombstone(self):
+        message = self.post_channel_message()
+        self.assertIsNone(message['deleted_at'])
+
+        response = self.delete_channel(message['id'])
+        self.assertEqual(response.status_code, 200)
+        deleted = response.json()['message']
+        self.assertIsNotNone(deleted['deleted_at'])
+        self.assertEqual(deleted['message'], '')
+
+        stored = ChatMessage.objects.get(id=message['id'])
+        self.assertIsNotNone(stored.deleted_at)
+        self.assertEqual(stored.message, '', 'the text is cleared, not just hidden')
+
+    def test_the_author_can_delete_a_direct_message_and_it_becomes_a_tombstone(self):
+        message = self.post_direct_message()
+
+        response = self.delete_direct(message['id'])
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.json()['message']['deleted_at'])
+        stored = DirectMessage.objects.get(id=message['id'])
+        self.assertEqual(stored.message, '')
+        self.assertIsNotNone(stored.deleted_at)
+
+    def test_the_other_participant_sees_the_tombstone_and_never_the_text(self):
+        message = self.post_direct_message()
+        self.assertEqual(self.delete_direct(message['id']).status_code, 200)
+
+        self.client.force_login(self.other)
+        listed = self.client.get(reverse('direct-message-list', args=[self.conversation.id])).json()['messages']
+        entry = next(item for item in listed if item['id'] == message['id'])
+        self.assertEqual(entry['message'], '')
+        self.assertIsNotNone(entry['deleted_at'])
+        self.assertNotIn('Original direct text', json.dumps(listed), 'the body is gone from the payload')
+
+    def test_a_member_cannot_delete_someone_elses_channel_message(self):
+        message = self.post_channel_message()
+        self.client.force_login(self.other)
+
+        response = self.delete_channel(message['id'])
+        self.assertEqual(response.status_code, 403)
+        stored = ChatMessage.objects.get(id=message['id'])
+        self.assertIsNone(stored.deleted_at)
+        self.assertEqual(stored.message, 'Original channel text')
+
+    def test_a_participant_cannot_delete_someone_elses_direct_message(self):
+        message = self.post_direct_message()
+        self.client.force_login(self.other)
+
+        self.assertEqual(self.delete_direct(message['id']).status_code, 403)
+        self.assertEqual(DirectMessage.objects.get(id=message['id']).message, 'Original direct text')
+
+    def test_a_non_participant_cannot_reach_someone_elses_direct_message(self):
+        message = self.post_direct_message()
+        stranger = User.objects.create_user(username='delete-stranger@example.com', email='delete-stranger@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=stranger, role='member')
+        self.client.force_login(stranger)
+
+        self.assertEqual(self.delete_direct(message['id']).status_code, 404)
+        self.assertIsNone(DirectMessage.objects.get(id=message['id']).deleted_at)
+
+    def test_deleting_clears_the_attachments_as_well_as_the_text(self):
+        message = self.post_channel_message()
+        ChatMessage.objects.filter(id=message['id']).update(
+            shared_files=[{'id': 1, 'original_name': 'brief.pdf', 'url': '/media/brief.pdf'}],
+            shared_documents=[{'id': 2, 'title': 'Kickoff notes'}],
+        )
+
+        response = self.delete_channel(message['id'])
+        self.assertEqual(response.status_code, 200)
+        entry = response.json()['message']
+        self.assertEqual(entry['shared_files'], [])
+        self.assertEqual(entry['shared_documents'], [])
+        stored = ChatMessage.objects.get(id=message['id'])
+        self.assertEqual(stored.shared_files, [], 'an attachment left behind would survive the delete')
+        self.assertEqual(stored.shared_documents, [])
+
+    def test_deleting_clears_the_reactions_so_the_tombstone_holds_nothing(self):
+        message = self.post_channel_message()
+        ChatMessageReaction.objects.create(message_id=message['id'], user=self.author, emoji='\U0001F44D')
+        ChatMessageReaction.objects.create(message_id=message['id'], user=self.other, emoji='\U0001F389')
+
+        self.assertEqual(self.delete_channel(message['id']).status_code, 200)
+        self.assertEqual(ChatMessageReaction.objects.filter(message_id=message['id']).count(), 0)
+
+    def test_deleting_twice_is_not_an_error_and_the_first_tombstone_stands(self):
+        message = self.post_channel_message()
+        first = self.delete_channel(message['id']).json()['message']
+
+        second = self.delete_channel(message['id'])
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()['message']['deleted_at'], first['deleted_at'])
+
+    def test_a_deleted_message_can_no_longer_be_edited(self):
+        message = self.post_channel_message()
+        self.assertEqual(self.delete_channel(message['id']).status_code, 200)
+
+        response = self.client.patch(
+            reverse('chat-message-detail', args=[message['id']]),
+            data=json.dumps({'message': 'Restored by an edit'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 409)
+        stored = ChatMessage.objects.get(id=message['id'])
+        self.assertEqual(stored.message, '', 'an edit must not refill a tombstone')
+        self.assertIsNotNone(stored.deleted_at)
+
+    def test_a_reply_keeps_its_parent_and_the_thread_keeps_its_shape(self):
+        parent = self.post_channel_message('The original question')
+        reply = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': 'Answering that', 'parent_id': parent['id']}),
+            content_type='application/json',
+        ).json()['message']
+
+        self.assertEqual(self.delete_channel(parent['id']).status_code, 200)
+        listed = self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages']
+        entry = next(item for item in listed if item['id'] == reply['id'])
+        self.assertEqual(entry['parent_id'], parent['id'], 'the reply is not orphaned by the delete')
+        self.assertEqual(entry['message'], 'Answering that', 'the reply itself is untouched')
+
+    def test_a_tombstone_carries_no_receipt_tick(self):
+        message = self.post_channel_message()
+        # A read mark on the other member is what puts the tick on the message;
+        # it survives the delete, so a false receipt afterwards can only be the
+        # tombstone guard and not a missing reader.
+        ChannelReadState.objects.create(workspace=self.workspace, user=self.other, channel_name='general', last_read_at=timezone.now())
+        self.client.force_login(self.author)
+        before = self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages']
+        self.assertTrue(next(item for item in before if item['id'] == message['id'])['read'])
+
+        self.assertEqual(self.delete_channel(message['id']).status_code, 200)
+        after = self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages']
+        entry = next(item for item in after if item['id'] == message['id'])
+        self.assertFalse(entry['delivered'], 'there is no body left for a reader to reach')
+        self.assertFalse(entry['read'])
+
+    def test_the_conversation_list_flags_a_deleted_last_message(self):
+        message = self.post_direct_message('The last thing said')
+        self.client.force_login(self.other)
+        listed = self.client.get(reverse('direct-conversation-list', args=[self.workspace.id])).json()['conversations']
+        entry = next(item for item in listed if item['id'] == self.conversation.id)
+        self.assertEqual(entry['last_message'], 'The last thing said')
+        self.assertFalse(entry['last_message_deleted'])
+
+        self.client.force_login(self.author)
+        self.assertEqual(self.delete_direct(message['id']).status_code, 200)
+        self.client.force_login(self.other)
+        listed = self.client.get(reverse('direct-conversation-list', args=[self.workspace.id])).json()['conversations']
+        entry = next(item for item in listed if item['id'] == self.conversation.id)
+        self.assertEqual(entry['last_message'], '')
+        self.assertTrue(entry['last_message_deleted'], 'the preview must say deleted, not read as an empty chat')
 
 
 class ChatReceiptApiTests(TestCase):

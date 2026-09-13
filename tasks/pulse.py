@@ -64,6 +64,15 @@ WORKSPACE_COLLECTIONS = [
     ('members', Membership, 'joined_at'),
 ]
 
+# Collections whose rows can be rewritten in place without a new row appearing.
+# ``max(created_at)`` cannot see an edit or a delete, so a viewer who is not the
+# author would keep rendering the old body until something unrelated happened to
+# move the fingerprint. The newest of these stamps stands in for the row's
+# timestamp, and any edit or delete sets one of them to now.
+MUTATION_STAMPS = {
+    'messages': ('deleted_at', 'edited_at'),
+}
+
 
 def _workspace_parts(workspace_id, user):
     """One round trip returning ``(label, newest_timestamp, row_count)`` per collection.
@@ -78,8 +87,18 @@ def _workspace_parts(workspace_id, user):
         column = connection.ops.quote_name(model._meta.get_field(timestamp_field).column)
         primary_key = connection.ops.quote_name(model._meta.pk.column)
         workspace_column = connection.ops.quote_name(model._meta.get_field('workspace').column)
+        # COALESCE rather than GREATEST: SQLite has no GREATEST, and only one of
+        # these stamps is ever the live one, the most recent mutation first. The
+        # mutation stamps have to lead: created_at is never null, so putting it
+        # first would make COALESCE ignore every edit and delete.
+        mutation_stamps = [
+            connection.ops.quote_name(model._meta.get_field(field).column)
+            for field in MUTATION_STAMPS.get(label, ())
+        ]
+        stamps = mutation_stamps + [column]
+        newest = f'MAX(COALESCE({", ".join(stamps)}))' if len(stamps) > 1 else f'MAX({column})'
         selects.append(
-            f'SELECT %s AS label, MAX({table}.{column}) AS newest, COUNT({table}.{primary_key}) AS total '
+            f'SELECT %s AS label, {newest} AS newest, COUNT({table}.{primary_key}) AS total '
             f'FROM {table} WHERE {table}.{workspace_column} = %s'
         )
         params.extend([label, workspace_id])
@@ -159,8 +178,13 @@ def workspace_fingerprint(workspace_id, user):
 
     direct = DirectMessage.objects.filter(
         conversation__workspace_id=workspace_id, conversation__participants=user
-    ).aggregate(newest=Max('created_at'), total=Count('id'))
-    parts.append(f'direct:{direct["newest"] or ""}:{direct["total"]}')
+    ).aggregate(
+        newest=Max('created_at'),
+        total=Count('id'),
+        edited=Max('edited_at'),
+        deleted=Max('deleted_at'),
+    )
+    parts.append(f'direct:{direct["newest"] or ""}:{direct["total"]}:{direct["edited"] or ""}:{direct["deleted"] or ""}')
 
     # Presence and last-seen live on UserProfile (not Membership), so a member's
     # status change or a LastSeenMiddleware stamp would otherwise leave this

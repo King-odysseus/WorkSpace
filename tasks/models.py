@@ -582,6 +582,10 @@ class ChatMessage(models.Model):
     # Null until the author rewrites the text. Attachments are fixed at send
     # time, so an edit only ever changes `message`.
     edited_at = models.DateTimeField(null=True, blank=True)
+    # Set once the author deletes the message. The row stays so replies keep
+    # their parent and the thread keeps its shape; deleting clears `message`,
+    # the attachments and the reactions, so nothing of the original survives.
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['created_at']
@@ -595,11 +599,12 @@ class ChatMessage(models.Model):
             'parent_id': self.parent_id,
             'reply_count': self.replies.count(),
             'channel': self.channel,
-            'message': self.message,
-            'shared_documents': self.shared_documents or [],
-            'shared_files': self.shared_files or [],
+            'message': '' if self.deleted_at else self.message,
+            'shared_documents': [] if self.deleted_at else (self.shared_documents or []),
+            'shared_files': [] if self.deleted_at else (self.shared_files or []),
             'created_at': self.created_at.isoformat(),
             'edited_at': self.edited_at.isoformat() if self.edited_at else None,
+            'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,
         }
 
 
@@ -663,7 +668,8 @@ class DirectConversation(models.Model):
                 {'id': user.id, 'name': user.get_full_name() or user.email, 'email': user.email}
                 for user in participants
             ],
-            'last_message': last_message.message if last_message else '',
+            'last_message': last_message.message if last_message and not last_message.deleted_at else '',
+            'last_message_deleted': bool(last_message and last_message.deleted_at),
             'last_message_at': last_message.created_at.isoformat() if last_message else None,
             'created_at': self.created_at.isoformat(),
         }
@@ -680,6 +686,10 @@ class DirectMessage(models.Model):
     # Null until the author rewrites the text. Attachments are fixed at send
     # time, so an edit only ever changes `message`.
     edited_at = models.DateTimeField(null=True, blank=True)
+    # Set once the author deletes the message. The row stays so replies keep
+    # their parent and the thread keeps its shape; deleting clears `message`,
+    # the attachments and the reactions, so nothing of the original survives.
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['created_at']
@@ -692,11 +702,12 @@ class DirectMessage(models.Model):
             'author_name': self.author.get_full_name() or self.author.email,
             'parent_id': self.parent_id,
             'reply_count': self.replies.count(),
-            'message': self.message,
-            'shared_documents': self.shared_documents or [],
-            'shared_files': self.shared_files or [],
+            'message': '' if self.deleted_at else self.message,
+            'shared_documents': [] if self.deleted_at else (self.shared_documents or []),
+            'shared_files': [] if self.deleted_at else (self.shared_files or []),
             'created_at': self.created_at.isoformat(),
             'edited_at': self.edited_at.isoformat() if self.edited_at else None,
+            'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,
         }
 
 

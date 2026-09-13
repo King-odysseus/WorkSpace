@@ -106,6 +106,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [profileMember, setProfileMember] = useState(null)
   const [reactionUpdates, setReactionUpdates] = useState({})
   const [messageEdits, setMessageEdits] = useState({})
+  const [messageDeletes, setMessageDeletes] = useState({})
   const [editingMessageId, setEditingMessageId] = useState(null)
   const [editDraft, setEditDraft] = useState('')
   const [workspaceDocuments, setWorkspaceDocuments] = useState([])
@@ -412,6 +413,20 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       cancelEditing()
     } catch (editError) { setError(editError.message) }
   }
+  const deleteMessage = async message => {
+    const direct = mode === 'direct'
+    if (!(await onConfirm('Delete this message? This cannot be undone.', { title: 'Delete message', confirmLabel: 'Delete message' }))) return
+    const endpoint = direct ? `/api/direct-messages/${message.id}/` : `/api/chat-messages/${message.id}/`
+    setError('')
+    try {
+      const response = await fetch(endpoint, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Message could not be deleted.')
+      setMessageDeletes(current => ({ ...current, [message.id]: payload.message }))
+      if (editingMessageId === message.id) cancelEditing()
+      if (replyTo?.id === message.id) setReplyTo(null)
+    } catch (deleteError) { setError(deleteError.message) }
+  }
   useEffect(() => {
     if (mode === 'channels' && selectedChannel) markConversationRead('chat_channel', selectedChannel)
   }, [mode, selectedChannel, workspaceId])
@@ -423,6 +438,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const edit = messageEdits[message.id]
     const bodyText = edit ? edit.message : message.message
     const editedAt = edit ? edit.edited_at : message.edited_at
+    const deletedAt = messageDeletes[message.id]?.deleted_at || message.deleted_at
     const isEditing = editingMessageId === message.id
     const receiptScope = mode === 'direct' && !selectedConversation?.is_group ? '' : ' by everyone'
     const receiptLabel = message.read ? `Read${receiptScope}` : message.delivered ? 'Delivered' : 'Sent'
@@ -432,10 +448,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         <div className="chat-message-meta">
           {isMine ? <strong>{message.author_name}</strong> : <button type="button" className="chat-member-name" onClick={() => setProfileMember(author)} aria-label={`View ${message.author_name}'s profile`}>{message.author_name}</button>}
           <span>{formatRelativeActivityTime(message.created_at)}</span>
-          {isMine && <span className={`chat-receipt${message.read ? ' chat-receipt-read' : ''}`} aria-label={receiptLabel} title={receiptLabel}>{message.read || message.delivered ? <CheckCheck size={14} /> : <Check size={14} />}</span>}
-          {editedAt && <span className="chat-edited-marker" title={`Edited ${formatRelativeActivityTime(editedAt)}`}>edited</span>}
+          {isMine && !deletedAt && <span className={`chat-receipt${message.read ? ' chat-receipt-read' : ''}`} aria-label={receiptLabel} title={receiptLabel}>{message.read || message.delivered ? <CheckCheck size={14} /> : <Check size={14} />}</span>}
+          {editedAt && !deletedAt && <span className="chat-edited-marker" title={`Edited ${formatRelativeActivityTime(editedAt)}`}>edited</span>}
         </div>
-        {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.message || 'Original message is unavailable.'}</span></div>}
+        {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.deleted_at ? 'Original message was deleted.' : (parent?.message || 'Original message is unavailable.')}</span></div>}
         <div className={`chat-message-bubble chat-member-tone-${Number(author.id) % 5}`}>
           {isEditing ? <div className="chat-edit-form">
             <textarea value={editDraft} onChange={event => setEditDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); cancelEditing() } }} maxLength="4000" aria-label="Edit message" autoFocus />
@@ -443,13 +459,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
               <button type="button" className="chat-edit-save" onClick={() => saveEdit(message)}>Save changes</button>
               <button type="button" className="chat-edit-cancel" onClick={cancelEditing}>Cancel</button>
             </div>
-          </div> : <p>{renderMessageText(bodyText)}</p>}
-          {!isEditing && <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />}
-          {!isEditing && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
-          {!isEditing && isMine && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
+          </div> : deletedAt ? <p className="chat-deleted-text" title={`Deleted ${formatRelativeActivityTime(deletedAt)}`}>This message was deleted</p> : <p>{renderMessageText(bodyText)}</p>}
+          {!isEditing && !deletedAt && <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />}
+          {!isEditing && !deletedAt && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
+          {!isEditing && isMine && !deletedAt && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
+          {!isEditing && isMine && !deletedAt && <button type="button" className="chat-delete-button" onClick={() => deleteMessage(message)} aria-label="Delete message">Delete</button>}
         </div>
-        {(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}
-        {(message.shared_files || []).map(file => isImageFileName(file.original_name) && file.url ? <a className="chat-shared-image" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer" aria-label={`Open image ${file.original_name}`}><img src={file.url} alt={file.original_name} loading="lazy" /></a> : <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}
+        {!deletedAt && (message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}
+        {!deletedAt && (message.shared_files || []).map(file => isImageFileName(file.original_name) && file.url ? <a className="chat-shared-image" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer" aria-label={`Open image ${file.original_name}`}><img src={file.url} alt={file.original_name} loading="lazy" /></a> : <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}
       </div>
     </div>
   }

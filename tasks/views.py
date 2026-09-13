@@ -3418,9 +3418,10 @@ def receipt_flags(message, user, context):
     Two flags carry three states: read is the blue pair, delivered is the grey
     pair, and neither leaves the message on the single tick that means the server
     has it. Everyone else's messages report false for both, so these fields cannot
-    be read as a report on who else has seen somebody else's message.
+    be read as a report on who else has seen somebody else's message. A tombstone
+    reports false for both as well: there is no body left for a reader to reach.
     """
-    if message.author_id != user.id or context is None:
+    if message.author_id != user.id or context is None or message.deleted_at:
         return False, False
     read_through = context['read_through']
     read = read_through is not None and message.created_at <= read_through
@@ -3645,6 +3646,8 @@ def apply_message_edit(request, message, serializer):
     """Rewrite a sent message's text and stamp it as edited. Author only."""
     if message.author_id != request.user.id:
         return JsonResponse({'error': 'You can only edit your own messages.'}, status=403)
+    if message.deleted_at:
+        return JsonResponse({'error': 'This message was deleted and can no longer be edited.'}, status=409)
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -3658,23 +3661,48 @@ def apply_message_edit(request, message, serializer):
     return JsonResponse({'message': serializer([message], request.user)[0]})
 
 
-@require_http_methods(['PATCH'])
+def apply_message_delete(request, message, serializer, reaction_model):
+    """Empty a message and leave a tombstone in its place. Author only.
+
+    The row survives so the thread keeps its shape and any replies keep their
+    parent, but the text, the attachments and the reactions go, so the tombstone
+    is all that is left of the message. Deleting twice is not an error: the
+    second call answers with the same tombstone.
+    """
+    if message.author_id != request.user.id:
+        return JsonResponse({'error': 'You can only delete your own messages.'}, status=403)
+    if message.deleted_at is None:
+        message.message = ''
+        message.shared_documents = []
+        message.shared_files = []
+        message.edited_at = None
+        message.deleted_at = timezone.now()
+        message.save(update_fields=['message', 'shared_documents', 'shared_files', 'edited_at', 'deleted_at'])
+        reaction_model.objects.filter(message=message).delete()
+    return JsonResponse({'message': serializer([message], request.user)[0]})
+
+
+@require_http_methods(['PATCH', 'DELETE'])
 def chat_message_detail(request, message_id):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
     message = ChatMessage.objects.filter(id=message_id, workspace_id__in=user_workspace_ids(request.user)).select_related('author').first()
     if message is None or not accessible_chat_channels(message.workspace_id, request.user).filter(name=message.channel).exists():
         return JsonResponse({'error': 'Message was not found.'}, status=404)
+    if request.method == 'DELETE':
+        return apply_message_delete(request, message, serialize_chat_messages, ChatMessageReaction)
     return apply_message_edit(request, message, serialize_chat_messages)
 
 
-@require_http_methods(['PATCH'])
+@require_http_methods(['PATCH', 'DELETE'])
 def direct_message_detail(request, message_id):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
     message = DirectMessage.objects.filter(id=message_id, conversation__participants=request.user).select_related('author').first()
     if message is None:
         return JsonResponse({'error': 'Message was not found.'}, status=404)
+    if request.method == 'DELETE':
+        return apply_message_delete(request, message, serialize_direct_messages, DirectMessageReaction)
     return apply_message_edit(request, message, serialize_direct_messages)
 
 
