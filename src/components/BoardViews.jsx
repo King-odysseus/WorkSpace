@@ -43,6 +43,7 @@ import WorkScopeSelector, { taskMatchesScope } from "./WorkScopeSelector.jsx";
 import {
   DateField,
   EmptyState,
+  SelectField,
   WorkspaceViewHeading,
 } from "./workspace-ui.jsx";
 import {
@@ -428,7 +429,7 @@ function TeamBoardView({
             </div>
             {canManageMembers && member.role !== "owner" ? (
               <>
-                <select
+                <AppSelect
                   value={member.role}
                   onChange={(event) =>
                     onUpdateMemberRole(member, event.target.value)
@@ -437,7 +438,7 @@ function TeamBoardView({
                 >
                   <option value="member">Member</option>
                   <option value="manager">Manager</option>
-                </select>
+                </AppSelect>
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -667,7 +668,7 @@ function MyTasksView({
             placeholder="Search my tasks"
             aria-label="Search my tasks"
           />
-          <select
+          <AppSelect
             value={status}
             onChange={(event) => setStatus(event.target.value)}
             aria-label="Filter by status"
@@ -680,8 +681,8 @@ function MyTasksView({
             <option value="on_hold">On hold</option>
             <option value="cancelled">Cancelled</option>
             <option value="done">Done</option>
-          </select>
-          <select
+          </AppSelect>
+          <AppSelect
             value={priority}
             onChange={(event) => setPriority(event.target.value)}
             aria-label="Filter by priority"
@@ -692,8 +693,8 @@ function MyTasksView({
                 {value}
               </option>
             ))}
-          </select>
-          <select
+          </AppSelect>
+          <AppSelect
             value={project}
             onChange={(event) => setProject(event.target.value)}
             aria-label="Filter by project"
@@ -704,8 +705,8 @@ function MyTasksView({
                 {item.name}
               </option>
             ))}
-          </select>
-          <select
+          </AppSelect>
+          <AppSelect
             value={bucket}
             onChange={(event) => setBucket(event.target.value)}
             aria-label="Filter by bucket"
@@ -716,8 +717,8 @@ function MyTasksView({
                 {item.name}
               </option>
             ))}
-          </select>
-          <select
+          </AppSelect>
+          <AppSelect
             value={sort}
             onChange={(event) => setSort(event.target.value)}
             aria-label="Sort tasks"
@@ -725,7 +726,7 @@ function MyTasksView({
             <option value="priority">Sort: Priority</option>
             <option value="due">Sort: Due date</option>
             <option value="recent">Sort: Recently completed</option>
-          </select>
+          </AppSelect>
         </div>
       </div>
       <div className="my-task-results">
@@ -1156,7 +1157,7 @@ function ProjectRiskIssuePanel({
             surprises.
           </p>
         </div>
-        <select
+        <AppSelect
           value={projectId}
           onChange={(event) => setProjectId(event.target.value)}
           aria-label="Select project for risk and issue tracking"
@@ -1170,7 +1171,7 @@ function ProjectRiskIssuePanel({
           ) : (
             <option value="">No projects yet</option>
           )}
-        </select>
+        </AppSelect>
       </div>
       <Card className="project-register-card">
         <div className="project-register-toolbar">
@@ -1262,7 +1263,7 @@ function ProjectRiskIssuePanel({
                     </td>
                     <td>
                       {canManage ? (
-                        <select
+                        <AppSelect
                           value={item.status}
                           onChange={(event) =>
                             updateStatus(item.id, event.target.value)
@@ -1274,7 +1275,7 @@ function ProjectRiskIssuePanel({
                               {label}
                             </option>
                           ))}
-                        </select>
+                        </AppSelect>
                       ) : (
                         item.status
                       )}
@@ -1418,20 +1419,20 @@ function ProjectRiskIssuePanel({
               />
             </label>
             <div className="record-form-grid">
-              <label>
-                Severity
-                <select
-                  value={form.severity}
-                  onChange={(event) =>
-                    setForm({ ...form, severity: event.target.value })
-                  }
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </label>
+              <SelectField
+                label="Severity"
+                name="severity"
+                value={form.severity}
+                onChange={(event) =>
+                  setForm({ ...form, severity: event.target.value })
+                }
+                options={[
+                  ["low", "Low"],
+                  ["medium", "Medium"],
+                  ["high", "High"],
+                  ["critical", "Critical"],
+                ]}
+              />
               <label>
                 Likelihood (1-5)
                 <input
@@ -1496,7 +1497,7 @@ function ProjectRiskIssuePanel({
             </label>
             <label>
               Linked task
-              <select
+              <AppSelect
                 value={form.task_id}
                 onChange={(event) =>
                   setForm({ ...form, task_id: event.target.value })
@@ -1512,7 +1513,7 @@ function ProjectRiskIssuePanel({
                       {task.title}
                     </option>
                   ))}
-              </select>
+              </AppSelect>
             </label>
             <button type="submit" className="primary-button modal-submit">
               Add {kind}
@@ -1681,7 +1682,7 @@ function ClockInCard({
         <span>Status</span>
         <span className="presence-select">
           <span className={`presence-dot presence-${presence}`} />
-          <select
+          <AppSelect
             value={presence}
             onChange={(event) => onChangePresence(event.target.value)}
             aria-label="Set your status"
@@ -1691,7 +1692,7 @@ function ClockInCard({
                 {PRESENCE_LABEL[option]}
               </option>
             ))}
-          </select>
+          </AppSelect>
         </span>
       </label>
     </div>
@@ -1905,24 +1906,24 @@ function ProjectStakeholderResourcePanel({
                   required
                 />
               </label>
-              <label>
-                Type
-                <select
-                  value={resourceForm.resource_type}
-                  onChange={(event) =>
-                    setResourceForm((current) => ({
-                      ...current,
-                      resource_type: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="person">Person</option>
-                  <option value="equipment">Equipment</option>
-                  <option value="supplier">Supplier</option>
-                  <option value="file">File</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
+              <SelectField
+                label="Type"
+                name="resource_type"
+                value={resourceForm.resource_type}
+                onChange={(event) =>
+                  setResourceForm((current) => ({
+                    ...current,
+                    resource_type: event.target.value,
+                  }))
+                }
+                options={[
+                  ["person", "Person"],
+                  ["equipment", "Equipment"],
+                  ["supplier", "Supplier"],
+                  ["file", "File"],
+                  ["other", "Other"],
+                ]}
+              />
               <label>
                 Role
                 <input
@@ -1968,7 +1969,7 @@ function ProjectStakeholderResourcePanel({
               </label>
               <label>
                 Task link
-                <select
+                <AppSelect
                   value={resourceForm.task_id}
                   onChange={(event) =>
                     setResourceForm((current) => ({
@@ -1987,7 +1988,7 @@ function ProjectStakeholderResourcePanel({
                         {task.title}
                       </option>
                     ))}
-                </select>
+                </AppSelect>
               </label>
               <label>
                 File or supplier link
@@ -2091,38 +2092,38 @@ function ProjectStakeholderResourcePanel({
                 />
               </label>
               <div className="modal-grid">
-                <label>
-                  Influence
-                  <select
-                    value={stakeholderForm.influence}
-                    onChange={(event) =>
-                      setStakeholderForm((current) => ({
-                        ...current,
-                        influence: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </label>
-                <label>
-                  Interest
-                  <select
-                    value={stakeholderForm.interest}
-                    onChange={(event) =>
-                      setStakeholderForm((current) => ({
-                        ...current,
-                        interest: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </label>
+                <SelectField
+                  label="Influence"
+                  name="influence"
+                  value={stakeholderForm.influence}
+                  onChange={(event) =>
+                    setStakeholderForm((current) => ({
+                      ...current,
+                      influence: event.target.value,
+                    }))
+                  }
+                  options={[
+                    ["low", "Low"],
+                    ["medium", "Medium"],
+                    ["high", "High"],
+                  ]}
+                />
+                <SelectField
+                  label="Interest"
+                  name="interest"
+                  value={stakeholderForm.interest}
+                  onChange={(event) =>
+                    setStakeholderForm((current) => ({
+                      ...current,
+                      interest: event.target.value,
+                    }))
+                  }
+                  options={[
+                    ["low", "Low"],
+                    ["medium", "Medium"],
+                    ["high", "High"],
+                  ]}
+                />
               </div>
               <button className="secondary-button" type="submit">
                 <Plus size={15} /> Add stakeholder
@@ -2388,23 +2389,23 @@ function ProjectCostBudgetPanel({
                   placeholder="e.g. 50000"
                 />
               </label>
-              <label>
-                Currency
-                <select
-                  value={budgetForm.budget_currency}
-                  onChange={(event) =>
-                    setBudgetForm((current) => ({
-                      ...current,
-                      budget_currency: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="USD">US Dollar ($)</option>
-                  <option value="GBP">British Pound (£)</option>
-                  <option value="NGN">Nigerian Naira (₦)</option>
-                  <option value="KES">Kenyan Shilling (KSh)</option>
-                </select>
-              </label>
+              <SelectField
+                label="Currency"
+                name="budget_currency"
+                value={budgetForm.budget_currency}
+                onChange={(event) =>
+                  setBudgetForm((current) => ({
+                    ...current,
+                    budget_currency: event.target.value,
+                  }))
+                }
+                options={[
+                  ["USD", "US Dollar ($)"],
+                  ["GBP", "British Pound (£)"],
+                  ["NGN", "Nigerian Naira (₦)"],
+                  ["KES", "Kenyan Shilling (KSh)"],
+                ]}
+              />
               <button className="secondary-button" type="submit">
                 Save budget
               </button>
@@ -2436,24 +2437,24 @@ function ProjectCostBudgetPanel({
                   required
                 />
               </label>
-              <label>
-                Category
-                <select
-                  value={expenseForm.category}
-                  onChange={(event) =>
-                    setExpenseForm((current) => ({
-                      ...current,
-                      category: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="labor">Labor</option>
-                  <option value="materials">Materials</option>
-                  <option value="software">Software</option>
-                  <option value="travel">Travel</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
+              <SelectField
+                label="Category"
+                name="category"
+                value={expenseForm.category}
+                onChange={(event) =>
+                  setExpenseForm((current) => ({
+                    ...current,
+                    category: event.target.value,
+                  }))
+                }
+                options={[
+                  ["labor", "Labor"],
+                  ["materials", "Materials"],
+                  ["software", "Software"],
+                  ["travel", "Travel"],
+                  ["other", "Other"],
+                ]}
+              />
               <label>
                 Amount
                 <input
@@ -2471,19 +2472,17 @@ function ProjectCostBudgetPanel({
                   required
                 />
               </label>
-              <label>
-                Date
-                <input
-                  type="date"
-                  value={expenseForm.incurred_on}
-                  onChange={(event) =>
-                    setExpenseForm((current) => ({
-                      ...current,
-                      incurred_on: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+              <DateField
+                label="Date"
+                name="incurred_on"
+                value={expenseForm.incurred_on}
+                onChange={(event) =>
+                  setExpenseForm((current) => ({
+                    ...current,
+                    incurred_on: event.target.value,
+                  }))
+                }
+              />
               <label>
                 <input
                   type="checkbox"

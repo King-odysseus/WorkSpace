@@ -4994,6 +4994,7 @@ function WorkspaceView({
         projectTemplates={localData.projectTemplates || []}
         projects={localData.projects}
         onRefresh={onRefresh}
+        onConfirm={onConfirm}
       />
     );
   }

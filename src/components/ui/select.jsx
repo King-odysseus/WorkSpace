@@ -12,14 +12,29 @@ function SelectValue(props) {
 }
 
 // Preserve the existing controlled form handlers while rendering the app menu.
-function AppSelect({ children, value, onChange, name, disabled, required, className, ...props }) {
-  const options = React.Children.toArray(children).filter(React.isValidElement)
+// Children may be <option>, <optgroup label> of <option>, or fragments of either;
+// optgroups become real menu groups so grouped lists keep their heading.
+// onCloseAutoFocus is forwarded so callers embedded in a focus-sensitive surface
+// (the rich-text toolbar, where the caret must stay in the editor) can stop the
+// trigger claiming focus back when the menu closes.
+function AppSelect({ children, value, onChange, name, disabled, required, className, onCloseAutoFocus, ...props }) {
+  const flatten = nodes => React.Children.toArray(nodes).flatMap(child => {
+    if (!React.isValidElement(child)) return []
+    if (child.type === React.Fragment) return flatten(child.props.children)
+    if (child.type === 'optgroup') return [{ group: child.props.label, options: flatten(child.props.children).flatMap(entry => entry.options || []) }]
+    return [{ options: [child] }]
+  })
+  const entries = flatten(children)
+  const options = entries.flatMap(entry => entry.options)
   const emptyLabel = options.find(option => String(option.props.value ?? '') === '')?.props.children
+  const item = option => <SelectItem key={option.key ?? String(option.props.value)} value={String(option.props.value ?? '') || '__empty_option__'} disabled={option.props.disabled}>{option.props.children}</SelectItem>
   return <Select name={name} value={String(value ?? '')} disabled={disabled} required={required}
     onValueChange={next => { const target = { name, value: next === '__empty_option__' ? '' : next }; onChange?.({ target, currentTarget: target }) }}>
     <SelectTrigger {...props} className={cn('app-select-trigger', className)}><SelectValue placeholder={emptyLabel || 'Select an option'} /></SelectTrigger>
-    <SelectContent onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
-      {options.map(option => <SelectItem key={String(option.props.value)} value={String(option.props.value ?? '') || '__empty_option__'} disabled={option.props.disabled}>{option.props.children}</SelectItem>)}
+    <SelectContent onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onCloseAutoFocus={onCloseAutoFocus}>
+      {entries.map((entry, index) => entry.group
+        ? <SelectPrimitive.Group key={`group-${index}`}><SelectGroupLabel>{entry.group}</SelectGroupLabel>{entry.options.map(item)}</SelectPrimitive.Group>
+        : entry.options.map(item))}
     </SelectContent>
   </Select>
 }
@@ -83,4 +98,8 @@ function SelectItem({ className, children, ...props }) {
   )
 }
 
-export { Select, SelectValue, SelectTrigger, SelectContent, SelectItem, AppSelect }
+function SelectGroupLabel({ children }) {
+  return <SelectPrimitive.Label className="text-muted-foreground px-2.5 py-1.5 text-[10px] font-bold tracking-wide uppercase">{children}</SelectPrimitive.Label>
+}
+
+export { Select, SelectValue, SelectTrigger, SelectContent, SelectItem, SelectGroupLabel, AppSelect }

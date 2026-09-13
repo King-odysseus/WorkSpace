@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, MonitorUp, ShieldCheck, Trash2, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
+import { AppSelect } from './ui/select.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { getCsrfToken } from '../lib/workspace-format.js'
 
@@ -354,7 +355,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
     {canLead && <Card className="screen-sharing-request-card">
       <div className="drawer-section-heading"><h3>Request screen sharing</h3><span>Employee consent required</span></div>
       {policy && !policy.enabled && <p className="workspace-inline-status screen-share-policy-hint" role="status">Screen sharing is currently disabled. A workspace owner must enable it in Company policy above and publish the policy before a request can be sent.</p>}
-      <form onSubmit={requestShare}><label>Employee<select required value={employeeId} onChange={event => setEmployeeId(event.target.value)}><option value="">Select an employee</option>{members.filter(member => String(member.id) !== String(currentUserId)).map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</select></label><label>Reason (optional)<textarea maxLength="500" rows="3" value={message} onChange={event => setMessage(event.target.value)} placeholder="Explain why screen sharing is requested." /></label><button className="primary-button" disabled={saving || !policy?.enabled}>{policy?.enabled ? 'Send request' : 'Policy must be enabled first'}</button></form>
+      <form onSubmit={requestShare}><label>Employee<AppSelect className="w-full" name="employee" required value={employeeId} onChange={event => setEmployeeId(event.target.value)}><option value="">Select an employee</option>{members.filter(member => String(member.id) !== String(currentUserId)).map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</AppSelect></label><label>Reason (optional)<textarea maxLength="500" rows="3" value={message} onChange={event => setMessage(event.target.value)} placeholder="Explain why screen sharing is requested." /></label><button className="primary-button" disabled={saving || !policy?.enabled}>{policy?.enabled ? 'Send request' : 'Policy must be enabled first'}</button></form>
     </Card>}
     <Card className="screen-sharing-session-card">
       <div className="drawer-section-heading"><h3>Session history</h3><button type="button" className="secondary-button" onClick={refresh}>Refresh</button></div>

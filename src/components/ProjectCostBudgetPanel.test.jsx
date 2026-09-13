@@ -67,8 +67,14 @@ describe('ProjectCostBudgetPanel currency', () => {
   it('offers only the four supported currencies', async () => {
     renderPanel()
     await screen.findByRole('button', { name: /save budget/i })
-    const select = within(budgetForm()).getByLabelText(/currency/i)
-    expect([...select.options].map(option => option.value)).toEqual(['USD', 'GBP', 'NGN', 'KES'])
+    await userEvent.click(within(budgetForm()).getByRole('combobox'))
+    const options = await screen.findAllByRole('option')
+    expect(options.map(option => option.textContent)).toEqual([
+      'US Dollar ($)',
+      'British Pound (£)',
+      'Nigerian Naira (₦)',
+      'Kenyan Shilling (KSh)',
+    ])
   })
 
   it('formats the summary in the project currency', async () => {
@@ -94,7 +100,8 @@ describe('ProjectCostBudgetPanel saving', () => {
     const amount = within(budgetForm()).getByLabelText(/amount/i)
     await userEvent.clear(amount)
     await userEvent.type(amount, '2500')
-    await userEvent.selectOptions(within(budgetForm()).getByLabelText(/currency/i), 'GBP')
+    await userEvent.click(within(budgetForm()).getByRole('combobox'))
+    await userEvent.click(await screen.findByRole('option', { name: 'British Pound (£)' }))
     // happy-dom does not implicitly submit a form when its submit button is
     // clicked, so dispatch the submit the component actually listens for.
     fireEvent.submit(budgetForm())

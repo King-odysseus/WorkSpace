@@ -4,7 +4,7 @@
 
 import { Button } from './ui/button.jsx'
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover.jsx'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select.jsx'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, AppSelect } from './ui/select.jsx'
 import { Calendar as DatePicker } from './ui/calendar.jsx'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -26,13 +26,30 @@ function SelectField({ label, name, value, onChange, options }) {
 function DateTimeField({ label, name, value, onChange, required }) {
   const [datePart, timePart] = value ? value.split('T') : ['', '']
   const dateObj = datePart ? new Date(`${datePart}T00:00:00`) : undefined
+  const [hourPart = '', minutePart = ''] = timePart ? timePart.split(':') : []
+  const hour = hourPart ? hourPart.padStart(2, '0') : ''
+  const minute = minutePart ? minutePart.padStart(2, '0') : ''
   const commit = (nextDate, nextTime) => onChange({ target: { name, value: `${nextDate ?? datePart ?? toDateKey(new Date())}T${nextTime ?? timePart ?? '09:00'}` } })
+  // Hours and minutes are combo boxes rather than one native <input type="time">,
+  // whose popup is the browser's own clock widget. Minutes step by five, and the
+  // loaded value is folded in when it sits off that grid so it stays selectable.
+  const minutes = [...new Set([...Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0')), ...(minute ? [minute] : [])])].sort()
   return <label>{label}<div className="datetime-field">
     <Popover>
       <PopoverTrigger asChild><Button type="button" variant="outline" className="datetime-trigger w-full justify-start rounded-lg font-medium"><CalendarDays size={14} />{dateObj ? formatCalendarDate(dateObj, { dateStyle: 'medium' }) : 'Select date'}</Button></PopoverTrigger>
       <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked), null)} /></PopoverContent>
     </Popover>
-    <input className="datetime-time" type="time" value={timePart || ''} onChange={change => commit(null, change.target.value)} required={required} />
+    <div className="datetime-time-row">
+      <AppSelect className="datetime-time" aria-label="Hour" value={hour} onChange={event => event.target.value && commit(null, `${event.target.value}:${minute || '00'}`)}>
+        <option value="">Hour</option>
+        {Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0')).map(option => <option key={option} value={option}>{option}</option>)}
+      </AppSelect>
+      <AppSelect className="datetime-time" aria-label="Minute" value={minute} onChange={event => event.target.value && commit(null, `${hour || '09'}:${event.target.value}`)}>
+        <option value="">Minute</option>
+        {minutes.map(option => <option key={option} value={option}>{option}</option>)}
+      </AppSelect>
+    </div>
+    {required && <input type="text" className="date-field-required-shadow" value={timePart || ''} required onChange={() => {}} tabIndex={-1} aria-hidden="true" />}
   </div></label>
 }
 

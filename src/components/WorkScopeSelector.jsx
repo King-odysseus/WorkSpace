@@ -1,5 +1,6 @@
 import React from 'react'
 import { BriefcaseBusiness, Layers3 } from 'lucide-react'
+import { AppSelect } from './ui/select.jsx'
 
 export function taskMatchesScope(task, scope) {
   if (!scope || scope === 'all') return true
@@ -13,13 +14,13 @@ export default function WorkScopeSelector({ value = 'all', onChange, projects = 
     <span><Layers3 size={13} /> {label}</span>
     <span className="work-scope-control">
       <BriefcaseBusiness size={15} aria-hidden="true" />
-      <select value={value} onChange={event => onChange(event.target.value)} aria-label={label}>
+      <AppSelect className="work-scope-trigger" value={value} onChange={event => onChange(event.target.value)} aria-label={label}>
         <option value="all">All work</option>
         <option value="operations">Operations only</option>
         <optgroup label="Projects">
           {projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}
         </optgroup>
-      </select>
+      </AppSelect>
     </span>
     {!compact && <small>{value === 'operations' ? 'Ongoing work not linked to a project' : selectedProject ? `Project: ${selectedProject.name}` : 'Operations and every project'}</small>}
   </label>

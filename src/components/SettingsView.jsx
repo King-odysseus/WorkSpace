@@ -71,6 +71,7 @@ function SettingsView({
   projectTemplates = [],
   projects = [],
   onRefresh,
+  onConfirm,
 }) {
   const [section, setSection] = useState("appearance");
   const [notificationPrefs, setNotificationPrefs] = useState(null);
@@ -174,9 +175,9 @@ function SettingsView({
     targetWorkspaceId,
     method,
     path,
-    confirmMessage,
+    confirmOptions,
   ) => {
-    if (confirmMessage && !window.confirm(confirmMessage)) return;
+    if (confirmOptions && !(await onConfirm?.(confirmOptions.message, confirmOptions))) return;
     setLifecycleBusy(true);
     setLifecycleError("");
     try {
@@ -206,23 +207,19 @@ function SettingsView({
     }
   };
   const leaveWorkspace = (targetWorkspaceId, name) =>
-    runLifecycleAction(
-      targetWorkspaceId,
-      "POST",
-      "/leave/",
-      `Leave ${name || "this workspace"}? You will lose access until you are invited again.`,
-    );
+    runLifecycleAction(targetWorkspaceId, "POST", "/leave/", {
+      title: `Leave ${name || "this workspace"}?`,
+      message: `Leave ${name || "this workspace"}? You will lose access until you are invited again.`,
+      confirmLabel: "Leave",
+    });
   const archiveWorkspace = () =>
-    runLifecycleAction(
-      workspaceId,
-      "POST",
-      "/archive/",
-      `Archive ${currentWorkspace?.name || "this workspace"}? Members keep read access; only the owner can restore or permanently delete it.`,
-    );
-  const restoreWorkspace = () =>
-    runLifecycleAction(workspaceId, "POST", "/restore/", "");
-  const deleteWorkspace = () =>
-    runLifecycleAction(workspaceId, "DELETE", "/", "");
+    runLifecycleAction(workspaceId, "POST", "/archive/", {
+      title: `Archive ${currentWorkspace?.name || "this workspace"}?`,
+      message: `Archive ${currentWorkspace?.name || "this workspace"}? Members keep read access; only the owner can restore or permanently delete it.`,
+      confirmLabel: "Archive",
+    });
+  const restoreWorkspace = () => runLifecycleAction(workspaceId, "POST", "/restore/", "");
+  const deleteWorkspace = () => runLifecycleAction(workspaceId, "DELETE", "/", "");
   // Regular members only ever see personal settings (appearance, notifications,
   // profile/presence); workspace-wide administration is owner/manager-only.
   // This is a UI convenience, not the authorization boundary - every endpoint
@@ -1074,7 +1071,7 @@ function SettingsView({
                     <strong>Daily check-in reminder</strong>
                     <span>Send reminders at this workspace’s local time.</span>
                   </div>
-                  <select
+                  <AppSelect
                     value={checkInSettings.check_in_reminder_hour}
                     onChange={(event) => updateCheckInReminderHour(event.target.value)}
                     aria-label="Daily check-in reminder hour"
@@ -1082,7 +1079,7 @@ function SettingsView({
                     {Array.from({ length: 24 }, (_, hour) => (
                       <option key={hour} value={hour}>{`${String(hour).padStart(2, "0")}:00`}</option>
                     ))}
-                  </select>
+                  </AppSelect>
                 </div>
               )}
               {checkInSettingsError && <p className="auth-error" role="alert">{checkInSettingsError}</p>}
