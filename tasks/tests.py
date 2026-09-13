@@ -3469,6 +3469,44 @@ class WorkspaceAiSettingsApiTests(TestCase):
         task = Task.objects.get(workspace=self.workspace, title='Prepare launch notes')
         self.assertEqual(task.assignee_id, self.member.id)
 
+    def test_task_title_returned_beside_arguments_is_normalized(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        self._chat({'message': 'What is the roster?'}, captured)
+        other = next(entry for entry in self._snapshot(captured)['members'] if not entry['is_current_user'])
+
+        captured = {}
+        response = self._chat({'message': 'Go ahead and create it.'}, captured, answer=json.dumps({
+            'answer': "Here's the task proposal for ZuriLoft UI, assigned to Gregory Ikhine.",
+            'action': {
+                'kind': 'task.create',
+                'title': 'ZuriLoft UI',
+                'arguments': {
+                    'assignee_ref': other['ref'],
+                    'status': 'todo',
+                    'priority': 'normal',
+                    'bucket': 'Backlog',
+                },
+            },
+        }))
+        self.assertEqual(response.status_code, 200)
+        proposal = response.json()['pending_action']
+        self.assertIsNotNone(proposal, response.json().get('action_error'))
+        self.assertEqual(proposal['summary'], 'Create task "ZuriLoft UI"')
+
+        confirmed = self.client.post(
+            reverse('workspace-ai-action', args=[self.workspace.id, proposal['id']]),
+            data=json.dumps({'decision': 'confirm'}),
+            content_type='application/json',
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        task = Task.objects.get(workspace=self.workspace, title='ZuriLoft UI')
+        self.assertEqual(task.assignee_id, self.member.id)
+        self.assertEqual(task.status, 'todo')
+        self.assertEqual(task.priority, 'normal')
+        self.assertEqual(task.bucket, 'Backlog')
+
     def test_chat_blocks_unknown_personal_identifiers_before_provider_egress(self):
         self.client.force_login(self.owner)
         self._enable_ai()

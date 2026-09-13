@@ -216,6 +216,8 @@ def action_instructions(snapshot):
         'You can help with workspace tasks and projects. Reads are answered directly from the snapshot. '
         'For a create or update request, return strict JSON with an "answer" string and an "action" object. '
         'For normal conversation, return strict JSON with "answer" and "action": null. '
+        'Use this exact action shape: {"answer":"...","action":{"kind":"task.create","arguments":{"title":"..."}}}. '
+        'Put every action field inside "arguments", including title or name. '
         'Allowed action kinds are task.create, task.update, project.create, and project.update. '
         'Never claim an action has happened: it only becomes a proposal that the user must confirm. '
         'Never use external personal data. Real names never leave the workspace: people appear as placeholders such as [MEMBER_2], '
@@ -263,6 +265,31 @@ def _clean_string(value, registry, field, max_length):
     if len(text) > max_length:
         raise ActionValidationError(f'{field.replace("_", " ").title()} is too long.')
     return text
+
+
+def _normalize_action(action):
+    """Accept fields returned beside or inside an action's arguments.
+
+    Providers occasionally put ``title`` and other documented fields at the
+    action level instead of nesting every field under ``arguments``. The
+    validator already owns the security boundary, so normalize only known
+    fields here and leave unknown input for the existing rejection path.
+    """
+    if not isinstance(action, dict):
+        return action
+    kind = str(action.get('kind') or '').strip()
+    allowed_fields = ACTION_FIELDS.get(kind)
+    if not allowed_fields:
+        return action
+
+    raw_arguments = action.get('arguments')
+    if not isinstance(raw_arguments, dict):
+        raw_arguments = {}
+    arguments = dict(raw_arguments)
+    for field in allowed_fields:
+        if field in action and (field not in arguments or arguments[field] in (None, '')):
+            arguments[field] = action[field]
+    return {**action, 'arguments': arguments}
 
 
 def _validate_action(action, registry, workspace_id, actor):
@@ -412,6 +439,7 @@ def _action_summary(kind, payload, registry):
 
 
 def create_action_proposal(action, registry, workspace_id, actor):
+    action = _normalize_action(action)
     kind, arguments = _validate_action(action, registry, workspace_id, actor)
     payload = _action_payload(kind, arguments, registry)
     proposal = AiAction.objects.create(
