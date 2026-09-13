@@ -8,6 +8,7 @@ import {
   CalendarDays,
   CheckSquare,
   ChevronDown,
+  ChevronLeft,
   CircleHelp,
   FolderKanban,
   Hash,
@@ -304,7 +305,7 @@ function MinimizedAiToast({ onOpen }) {
   )
 }
 
-function AiPanel({ onMinimize }) {
+function AiPanel({ onMinimize, onHide }) {
   const [draft, setDraft] = useState('')
   const [turns, setTurns] = useState([
     { role: 'user', text: 'Update the project summary with the design review notes.' },
@@ -328,7 +329,7 @@ function AiPanel({ onMinimize }) {
         </span>
         <div className="ai-panel-actions">
           <IconButton label="Minimize Zuri" onClick={onMinimize}><Minus size={17} /></IconButton>
-          <IconButton label="Close Zuri" onClick={onMinimize}><X size={17} /></IconButton>
+          <IconButton label="Hide Zuri" onClick={onHide}><X size={17} /></IconButton>
         </div>
       </header>
 
@@ -357,7 +358,7 @@ function App() {
   const [theme, setTheme] = useState('light')
   const [activeConversation, setActiveConversation] = useState('design')
   const [detailsOpen, setDetailsOpen] = useState(true)
-  const [aiOpen, setAiOpen] = useState(false)
+  const [aiMode, setAiMode] = useState('minimized')
   const [messages, setMessages] = useState(initialMessages)
   const [draft, setDraft] = useState('')
   const messageScrollRef = useRef(null)
@@ -494,11 +495,24 @@ function App() {
         </div>
       </main>
 
-      {aiOpen ? <AiPanel onMinimize={() => setAiOpen(false)} /> : <MinimizedAiToast onOpen={() => setAiOpen(true)} />}
+      {aiMode === 'open' && (
+        <AiPanel
+          onMinimize={() => setAiMode('minimized')}
+          onHide={() => setAiMode('hidden')}
+        />
+      )}
 
-      {!aiOpen && (
-        <button type="button" className="ai-launcher" onClick={() => setAiOpen(true)} aria-label="Open Zuri assistant">
-          <Sparkles size={21} />
+      {aiMode === 'minimized' && <MinimizedAiToast onOpen={() => setAiMode('open')} />}
+
+      {aiMode === 'hidden' && (
+        <button
+          type="button"
+          className="ai-flyout-tab"
+          onClick={() => setAiMode('open')}
+          aria-label="Show Zuri assistant"
+        >
+          <ChevronLeft size={15} />
+          <Bot size={19} />
         </button>
       )}
     </div>
