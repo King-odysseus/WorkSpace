@@ -1749,7 +1749,7 @@ function SettingsView({
               </div>
               {canManageMembers && (
                 <p className="settings-note">
-                  Invite new members and remove existing ones from Team board.
+                  Invite new members and remove existing ones from Team.
                 </p>
               )}
               {isOwner &&

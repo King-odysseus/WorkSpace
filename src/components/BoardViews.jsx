@@ -5,10 +5,12 @@
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import {
+  AlertTriangle,
   AlarmClock,
   Archive,
   ArrowUpRight,
   Brush,
+  CalendarCheck2,
   CalendarClock,
   CalendarDays,
   Check,
@@ -21,12 +23,16 @@ import {
   CircleSlash,
   Filter,
   Hash,
+  LayoutDashboard,
+  ListChecks,
   MessageSquare,
   Pause,
   Play,
   Plus,
+  ShieldCheck,
   Square,
   Target,
+  Users,
   X,
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
@@ -61,7 +67,43 @@ import {
   toDateKey,
 } from "../lib/workspace-format.js";
 
-// The Today dashboard counts tasks the workspace over, and the Team board lists
+const isTerminalTask = (task) =>
+  task.status === "done" || task.status === "cancelled";
+const isOpenTask = (task) => !isTerminalTask(task);
+const addDaysToDateKey = (dateKey, days) => {
+  const date = new Date(`${dateKey}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return toDateKey(date);
+};
+const isDueSoon = (task, today) =>
+  isOpenTask(task) &&
+  Boolean(task.due_date) &&
+  task.due_date >= today &&
+  task.due_date <= addDaysToDateKey(today, 3);
+const completionRateForTasks = (tasks) => {
+  const tracked = tasks.filter((task) => task.status !== "cancelled");
+  if (!tracked.length) return null;
+  const completed = tracked.filter((task) => task.status === "done").length;
+  return Math.round((completed / tracked.length) * 100);
+};
+const taskRiskScore = (task, today) => {
+  let score = 0;
+  if (task.status === "blocked") score += 50;
+  if (task.due_date && task.due_date < today && isOpenTask(task)) score += 40;
+  if (isDueSoon(task, today)) score += 20;
+  if (!task.assignee_id) score += 15;
+  if (task.priority === "urgent") score += 10;
+  if (task.priority === "high") score += 5;
+  return score;
+};
+const compareTasksForAttention = (today) => (a, b) =>
+  taskRiskScore(b, today) - taskRiskScore(a, today) ||
+  String(a.due_date || "9999-12-31").localeCompare(
+    String(b.due_date || "9999-12-31"),
+  ) ||
+  String(a.title || "").localeCompare(String(b.title || ""));
+
+// The Today dashboard counts tasks the workspace over, and Team lists
 // them. The same words sat in both places with two hand-written filters each, so the
 // number and the list behind it were free to disagree - and did: an overdue task
 // nobody had picked up was counted by the dashboard, then not shown by the personal
@@ -70,11 +112,11 @@ import {
 // so a count and the list it opens are the same question asked twice.
 const BOARD_FOCUS = {
   "due-today": (task, today) =>
-    task.status !== "done" && task.due_date === today,
+    isOpenTask(task) && task.due_date === today,
   overdue: (task, today) =>
-    task.status !== "done" && Boolean(task.due_date && task.due_date < today),
+    isOpenTask(task) && Boolean(task.due_date && task.due_date < today),
   blocked: (task) => task.status === "blocked",
-  unassigned: (task) => task.status !== "done" && !task.assignee_id,
+  unassigned: (task) => isOpenTask(task) && !task.assignee_id,
   completed: (task, today) =>
     task.status === "done" &&
     Boolean(task.completed_at) &&
@@ -89,16 +131,171 @@ const BOARD_FOCUS_LABEL = {
   completed: "Completed today",
 };
 
-function MemberProfilePopup({ member, onClose, onMessage }) {
+function MemberProfilePopup({
+  member,
+  onClose,
+  onMessage,
+  tasks,
+  checkIn,
+  shift,
+  todayWorkedSeconds = 0,
+  today,
+  onOpenTask,
+}) {
   if (!member) return null;
   const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
-  return <div className="modal-backdrop" onMouseDown={onClose}><section className="modal member-profile-popup" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Workspace member</p><h2>{name}</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Close profile"><X size={18} /></button></div><div className="member-profile-summary"><Avatar name={name} avatarUrl={member.avatar_url} presence={effectivePresence(member)} /><div><strong>{name}</strong><span>{member.job_role || member.role || "Member"}{member.company ? ` · ${member.company}` : ""}</span><small>{member.email}</small></div></div><Button type="button" onClick={() => onMessage(member)}><MessageSquare size={15} /> Send message</Button></section></div>;
+  const hasWorkDetails = tasks !== undefined || today !== undefined;
+  const memberTasks = tasks || [];
+  const openTasks = memberTasks.filter(isOpenTask);
+  const overdue = openTasks.filter(
+    (task) => task.due_date && task.due_date < today,
+  );
+  const blocked = openTasks.filter((task) => task.status === "blocked");
+  const completionRate = completionRateForTasks(memberTasks);
+  const shiftLabel = shift?.is_open
+    ? shift.is_on_break
+      ? "On break"
+      : "Working now"
+    : todayWorkedSeconds > 0
+      ? "Clocked out"
+      : "Not clocked in";
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <section
+        className="modal member-profile-popup"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">Workspace member</p>
+            <h2>{name}</h2>
+          </div>
+          <button
+            type="button"
+            className="close-button"
+            onClick={onClose}
+            aria-label="Close profile"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="member-profile-summary">
+          <Avatar
+            name={name}
+            avatarUrl={member.avatar_url}
+            presence={effectivePresence(member)}
+          />
+          <div>
+            <strong>{name}</strong>
+            <span>
+              {member.job_role || member.role || "Member"}
+              {member.company ? ` at ${member.company}` : ""}
+            </span>
+            <small>
+              {member.email} | {formatLastSeen(member.last_seen_at)}
+            </small>
+          </div>
+        </div>
+        {hasWorkDetails && (
+        <div className="member-profile-stats">
+          <div>
+            <strong>{openTasks.length}</strong>
+            <span>Open</span>
+          </div>
+          <div className={overdue.length ? "is-warning" : ""}>
+            <strong>{overdue.length}</strong>
+            <span>Overdue</span>
+          </div>
+          <div className={blocked.length ? "is-danger" : ""}>
+            <strong>{blocked.length}</strong>
+            <span>Blocked</span>
+          </div>
+          <div>
+            <strong>{completionRate === null ? "n/a" : `${completionRate}%`}</strong>
+            <span>Completion</span>
+          </div>
+        </div>
+        )}
+        {hasWorkDetails && (
+        <div className="member-profile-detail-grid">
+          <section className="member-profile-detail">
+            <h3>Today&apos;s check-in</h3>
+            {checkIn ? (
+              <>
+                <p className="team-checkin-state is-complete">
+                  <CheckCircle2 size={14} /> Submitted
+                </p>
+                <p>{checkIn.completed || "No completed work summary."}</p>
+                {checkIn.next_steps && (
+                  <p><strong>Next:</strong> {checkIn.next_steps}</p>
+                )}
+                {checkIn.blockers && (
+                  <p className="team-blocker-note">
+                    <AlertTriangle size={13} /> {checkIn.blockers}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="today-muted">No check-in submitted yet.</p>
+            )}
+          </section>
+          <section className="member-profile-detail">
+            <h3>Work status</h3>
+            <p className={`team-checkin-state ${shift?.is_open ? "is-active" : ""}`}>
+              <Clock3 size={14} /> {shiftLabel}
+            </p>
+            <p>
+              {formatShiftDuration(
+                shift?.worked_seconds || todayWorkedSeconds || 0,
+              )} recorded today
+            </p>
+          </section>
+        </div>
+        )}
+        {hasWorkDetails && openTasks.length > 0 && (
+          <section className="member-profile-detail">
+            <h3>Priority work</h3>
+            <div className="member-profile-task-list">
+              {openTasks
+                .sort(compareTasksForAttention(today))
+                .slice(0, 4)
+                .map((task) => (
+                  <button
+                    type="button"
+                    key={task.id}
+                    onClick={() => onOpenTask?.(task)}
+                  >
+                    <span>{task.title}</span>
+                    <em>
+                      {task.status === "blocked"
+                        ? "Blocked"
+                        : overdue.some((item) => item.id === task.id)
+                          ? "Overdue"
+                          : isDueSoon(task, today)
+                            ? "Due soon"
+                            : task.priority}
+                    </em>
+                  </button>
+                ))}
+            </div>
+          </section>
+        )}
+        <Button type="button" onClick={() => onMessage(member)}>
+          <MessageSquare size={15} /> Send message
+        </Button>
+      </section>
+    </div>
+  );
 }
 
 function TeamBoardView({
   tasks,
   members,
   projects = [],
+  checkIns = [],
+  workShifts = [],
   scope = "all",
   onScopeChange,
   focus = "all",
@@ -116,7 +313,9 @@ function TeamBoardView({
   onNavigate,
 }) {
   const today = toDateKey(new Date());
-  const [mode, setMode] = useState("people");
+  const [tab, setTab] = useState("overview");
+  const [taskGrouping, setTaskGrouping] = useState("owner");
+  const [showTerminal, setShowTerminal] = useState(false);
   const [query, setQuery] = useState("");
   const [profileMember, setProfileMember] = useState(null);
   const sendMemberMessage = (member) => { onNavigate("Chats"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("chat:direct", { detail: { memberId: member.id } })), 0); };
@@ -133,22 +332,47 @@ function TeamBoardView({
   const scopedTasks = tasks.filter((task) => taskMatchesScope(task, scope));
   const matching = (key) =>
     scopedTasks.filter((task) => BOARD_FOCUS[key](task, today));
-  const openTasks = scopedTasks.filter((task) => task.status !== "done");
+  const openTasks = scopedTasks.filter(isOpenTask);
   const blocked = matching("blocked");
   const overdue = matching("overdue");
   const unassigned = matching("unassigned");
   const focused = focus === "all" ? [] : matching(focus);
+  const normalizedQuery = query.trim().toLowerCase();
   const matchesQuery = (task) =>
-    !query.trim() ||
-    [task.title, task.member, task.tag, task.bucket]
+    !normalizedQuery ||
+    [
+      task.title,
+      task.description,
+      task.member,
+      task.tag,
+      task.bucket,
+      task.workstream,
+      task.phase,
+      task.blocker_details,
+      ...(task.labels || []),
+    ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase()
-      .includes(query.trim().toLowerCase());
+      .includes(normalizedQuery);
   const filtered = scopedTasks.filter(matchesQuery);
   const memberName = (member) =>
     [member.first_name, member.last_name].filter(Boolean).join(" ") ||
     member.email;
+  const memberMatchesQuery = (member) =>
+    !normalizedQuery ||
+    [
+      memberName(member),
+      member.email,
+      member.role,
+      member.job_role,
+      member.company,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery);
+  const filteredMembers = members.filter(memberMatchesQuery);
   const copyInvitationLink = (invitation) => {
     if (!invitation.token) return;
     navigator.clipboard?.writeText(
@@ -156,82 +380,231 @@ function TeamBoardView({
     );
     toast.success(`Invite link for ${invitation.email} copied.`);
   };
-  const renderMessageText = (text) =>
-    String(text || "")
-      .split(/(@[A-Za-z0-9_.-]+)/g)
-      .map((part, index) =>
-        part.startsWith("@") ? (
-          <mark className="chat-mention" key={index}>
-            {part}
-          </mark>
-        ) : (
-          <React.Fragment key={index}>{part}</React.Fragment>
-        ),
-      );
-  const tasksForMember = (member) =>
-    filtered.filter(
+  const tasksForMember = (member, list = scopedTasks) =>
+    list.filter(
       (task) =>
         String(task.assignee_id || "") === String(member.id) ||
         (!task.assignee_id && task.member === memberName(member)),
     );
+  const todayCheckIns = checkIns.filter((item) => item.date === today);
+  const checkedInIds = new Set(
+    todayCheckIns.map((item) => String(item.user_id)),
+  );
+  const checkedInCount = members.filter((member) =>
+    checkedInIds.has(String(member.id)),
+  ).length;
+  const checkInPercent = members.length
+    ? Math.round((checkedInCount / members.length) * 100)
+    : 0;
+  const checkInForMember = (member) =>
+    todayCheckIns.find(
+      (item) => String(item.user_id) === String(member.id),
+    );
+  const openShiftForMember = (member) =>
+    workShifts.find(
+      (shift) =>
+        shift.is_open && String(shift.user_id) === String(member.id),
+    );
+  const workedTodayForMember = (member) =>
+    workShifts
+      .filter(
+        (shift) =>
+          shift.date === today && String(shift.user_id) === String(member.id),
+      )
+      .reduce((total, shift) => total + (shift.worked_seconds || 0), 0);
+  const memberStats = members
+    .map((member) => {
+      const memberTasks = tasksForMember(member);
+      const memberOpen = memberTasks.filter(isOpenTask);
+      const memberOverdue = memberOpen.filter(
+        (task) => task.due_date && task.due_date < today,
+      );
+      const memberBlocked = memberOpen.filter(
+        (task) => task.status === "blocked",
+      );
+      const memberDueSoon = memberOpen.filter((task) => isDueSoon(task, today));
+      const risk =
+        memberBlocked.length * 5 +
+        memberOverdue.length * 4 +
+        memberDueSoon.length * 2 +
+        memberOpen.filter((task) => task.priority === "urgent").length * 2 +
+        memberOpen.filter((task) => task.priority === "high").length;
+      return {
+        member,
+        tasks: memberTasks,
+        open: memberOpen,
+        overdue: memberOverdue,
+        blocked: memberBlocked,
+        dueSoon: memberDueSoon,
+        completionRate: completionRateForTasks(memberTasks),
+        risk,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.risk - a.risk ||
+        b.open.length - a.open.length ||
+        memberName(a.member).localeCompare(memberName(b.member)),
+    );
+  const visibleMemberStats = memberStats.filter((item) =>
+    memberMatchesQuery(item.member),
+  );
+  const riskTasks = openTasks
+    .filter(matchesQuery)
+    .sort(compareTasksForAttention(today))
+    .slice(0, 6);
+  const workloadWatch = memberStats.filter((item) => item.risk > 0).slice(0, 5);
+  const presenceCounts = PRESENCE_OPTIONS.reduce((counts, presence) => {
+    counts[presence] = members.filter(
+      (member) => effectivePresence(member) === presence,
+    ).length;
+    return counts;
+  }, {});
+  const workingNowCount = members.filter((member) =>
+    openShiftForMember(member),
+  ).length;
+  const taskSorter = compareTasksForAttention(today);
+  const visibleTaskRows = filtered
+    .filter((task) => showTerminal || isOpenTask(task))
+    .sort(taskSorter);
+  const groupedTasks = (items, keyFor, labelFor) => {
+    const groups = new Map();
+    items.forEach((task) => {
+      const key = keyFor(task);
+      if (!groups.has(key)) groups.set(key, { key, label: labelFor(task), tasks: [] });
+      groups.get(key).tasks.push(task);
+    });
+    return [...groups.values()].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  };
+  const ownerGroups = groupedTasks(
+    visibleTaskRows,
+    (task) => String(task.assignee_id || "unassigned"),
+    (task) => (task.assignee_id ? task.member || "Member" : "Unassigned"),
+  );
+  const statusGroups = statuses
+    .filter(
+      ([value]) => showTerminal || !["cancelled", "done"].includes(value),
+    )
+    .map(([value, label]) => ({
+      key: value,
+      label,
+      tasks: visibleTaskRows.filter((task) => task.status === value),
+    }));
+  const priorityGroups = priorities.map((value) => ({
+    key: value,
+    label: value,
+    tasks: visibleTaskRows.filter((task) => task.priority === value),
+  }));
+  const projectGroups = groupedTasks(
+    visibleTaskRows,
+    (task) => task.tag || "General",
+    (task) => task.tag || "General",
+  );
+  const taskGroups = {
+    owner: ownerGroups,
+    status: statusGroups,
+    priority: priorityGroups,
+    project: projectGroups,
+  }[taskGrouping] || ownerGroups;
+  const teamTabs = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "workload", label: "Workload", icon: Users },
+    { id: "tasks", label: "Tasks", icon: ListChecks },
+    { id: "availability", label: "Availability", icon: CalendarCheck2 },
+    ...(canManageMembers
+      ? [{ id: "people", label: "People & access", icon: ShieldCheck }]
+      : []),
+  ];
+  const activeTab =
+    tab === "people" && !canManageMembers ? "overview" : tab;
   const taskLabel = (task) =>
-    task.due_date && task.due_date < today && task.status !== "done"
+    task.status === "cancelled"
+      ? "Cancelled"
+      : task.due_date && task.due_date < today && isOpenTask(task)
       ? "Overdue"
-      : task.due_date === today
+      : task.due_date === today && isOpenTask(task)
         ? "Due today"
         : task.status === "in progress"
           ? "In progress"
           : task.status;
-  const taskList = (list) =>
+  const taskList = (list, emptyText = "No tasks in this view.") =>
     list.length ? (
-      list.map((task) => (
-        <article className={`team-task-row ${task.status}`} key={task.id}>
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={task.status === "done"}
-            className={`check ${task.status === "done" ? "checked" : ""}`}
-            onClick={() => onComplete(task.id)}
-            aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`}
-            title={task.status === "done" ? "Reopen task" : "Mark task complete"}
-          >
-            <Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" />
-          </button>
-          <div>
-            <button type="button" onClick={() => onOpenTask(task)}>
-              {task.title}
+      list.map((task) => {
+        const isDone = task.status === "done";
+        const isCancelled = task.status === "cancelled";
+        return (
+          <article className={`team-task-row ${task.status}`} key={task.id}>
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={isDone}
+              aria-disabled={isCancelled}
+              disabled={isCancelled}
+              className={`check ${isDone ? "checked" : ""}`}
+              onClick={() => !isCancelled && onComplete(task.id)}
+              aria-label={
+                isCancelled
+                  ? `Cancelled ${task.title}`
+                  : `${isDone ? "Reopen" : "Complete"} ${task.title}`
+              }
+              title={
+                isCancelled
+                  ? "Reopen this task from its status control first"
+                  : isDone
+                    ? "Reopen task"
+                    : "Mark task complete"
+              }
+            >
+              {isCancelled ? (
+                <CircleSlash size={13} aria-hidden="true" />
+              ) : (
+                <Check
+                  className="task-check-mark"
+                  size={13}
+                  strokeWidth={3}
+                  aria-hidden="true"
+                />
+              )}
             </button>
-            <span>
-              {task.member || "Unassigned"} · {taskLabel(task)}
+            <div>
+              <button type="button" onClick={() => onOpenTask(task)}>
+                {task.title}
+              </button>
+              <span title={task.blocker_details || undefined}>
+                {task.member || "Unassigned"} | {taskLabel(task)}
+                {task.progress_percent ? ` | ${task.progress_percent}%` : ""}
+              </span>
+            </div>
+            <span className={`my-task-priority ${task.priority}`}>
+              {task.priority}
             </span>
-          </div>
-          <span className={`my-task-priority ${task.priority}`}>
-            {task.priority}
-          </span>
-          <AppSelect
-            className={`task-status task-status-select ${task.status}`}
-            value={task.status}
-            onChange={(event) => onStatusChange(task.id, event.target.value)}
-            aria-label={`Change status for ${task.title}`}
-          >
-            <option value="todo">To do</option>
-            <option value="in progress">In progress</option>
-            <option value="review">Review</option>
-            <option value="blocked">Blocked</option>
-            <option value="on_hold">On hold</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="done">Done</option>
-          </AppSelect>
-        </article>
-      ))
+            <AppSelect
+              className={`task-status task-status-select ${task.status}`}
+              value={task.status}
+              onChange={(event) => onStatusChange(task.id, event.target.value)}
+              aria-label={`Change status for ${task.title}`}
+            >
+              <option value="todo">To do</option>
+              <option value="in progress">In progress</option>
+              <option value="review">Review</option>
+              <option value="blocked">Blocked</option>
+              <option value="on_hold">On hold</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="done">Done</option>
+            </AppSelect>
+          </article>
+        );
+      })
     ) : (
-      <p className="today-muted">No tasks in this view.</p>
+      <p className="today-muted">{emptyText}</p>
     );
   return (
     <section className="workspace-view team-board-view">
       <WorkspaceViewHeading
-        title="Team board"
-        subtitle="See ownership, workload, and exceptions across the workspace."
+        title="Team"
+        subtitle="See workload, availability, and the work that needs attention."
         action={canManageMembers ? "Invite team member" : undefined}
         onAction={onInvite}
       />
@@ -258,38 +631,74 @@ function TeamBoardView({
         })}
       </div>
       <div className="team-board-toolbar">
-        <WorkScopeSelector
-          compact
-          value={scope}
-          onChange={onScopeChange}
-          projects={projects}
-          label="Scope"
-        />
-        <div className="team-board-tabs">
-          {[
-            ["people", "People"],
-            ["status", "Status"],
-            ["priority", "Priority"],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              className={focus === "all" && mode === value ? "active" : ""}
-              onClick={() => {
-                setMode(value);
-                onFocusChange("all");
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="team-board-toolbar-main">
+          <WorkScopeSelector
+            compact
+            value={scope}
+            onChange={onScopeChange}
+            projects={projects}
+            label="Scope"
+          />
+          <div className="team-board-tabs" role="tablist" aria-label="Team views">
+            {teamTabs.map(({ id, label, icon: TabIcon }) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={focus === "all" && activeTab === id}
+                key={id}
+                className={focus === "all" && activeTab === id ? "active" : ""}
+                onClick={() => {
+                  setTab(id);
+                  if (focus !== "all") onFocusChange("all");
+                }}
+              >
+                <TabIcon size={14} aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search team tasks"
-          aria-label="Search team tasks"
+          placeholder={
+            activeTab === "tasks" || activeTab === "overview"
+              ? "Search tasks"
+              : "Search team"
+          }
+          aria-label={
+            activeTab === "tasks" || activeTab === "overview"
+              ? "Search team tasks"
+              : "Search team members"
+          }
         />
       </div>
+      {activeTab === "tasks" && focus === "all" && (
+        <div className="team-task-controls">
+          <label>
+            Group tasks
+            <AppSelect
+              value={taskGrouping}
+              onChange={(event) => setTaskGrouping(event.target.value)}
+              aria-label="Group tasks"
+            >
+              <option value="owner">By owner</option>
+              <option value="status">By status</option>
+              <option value="priority">By priority</option>
+              <option value="project">By project</option>
+            </AppSelect>
+          </label>
+          <button
+            type="button"
+            className={showTerminal ? "active" : ""}
+            aria-pressed={showTerminal}
+            onClick={() => setShowTerminal((current) => !current)}
+          >
+            <CheckCircle2 size={14} />
+            {showTerminal ? "Hide closed work" : "Show closed work"}
+          </button>
+        </div>
+      )}
       {focus !== "all" && (
         <div className="team-board-columns">
           <section className="team-board-column">
@@ -310,102 +719,265 @@ function TeamBoardView({
           </section>
         </div>
       )}
-      {focus === "all" && mode === "people" && (
-        <div className="team-member-grid">
-          {members.map((member) => {
-            const memberTasks = tasksForMember(member);
-            const memberOpen = memberTasks.filter(
-              (task) => task.status !== "done",
-            );
-            const memberDone = memberTasks.filter(
-              (task) => task.status === "done",
-            ).length;
-            return (
-              <section className="team-member-card" key={member.id}>
-                <button type="button" className="team-member-heading" onClick={() => setProfileMember(member)} aria-label={`Open ${memberName(member)} profile`} title={`${member.job_role || member.role || "Member"}${member.company ? ` at ${member.company}` : ""}`}>
-                  <Avatar
-                    name={memberName(member)}
-                    avatarUrl={member.avatar_url}
-                    presence={effectivePresence(member)}
-                    small
-                  />
-                  <div>
-                    <h2>{memberName(member)}</h2>
-                    <span>
-                      {member.role} · {memberOpen.length} open
-                    </span>
-                    <span className="team-member-last-seen">
-                      {formatLastSeen(member.last_seen_at)}
-                    </span>
-                  </div>
+      {focus === "all" && activeTab === "overview" && (
+        <div className="team-overview-grid">
+          <section className="team-overview-panel team-risk-panel">
+            <div className="today-panel-heading">
+              <div>
+                <h2>Highest-risk work</h2>
+                <p>Blocked, overdue, unowned, and due-soon work first.</p>
+              </div>
+              <span className="team-panel-count">Top {riskTasks.length}</span>
+            </div>
+            <div className="team-task-list">
+              {taskList(riskTasks, "No open work needs attention.")}
+            </div>
+          </section>
+          <div className="team-overview-stack">
+            <section className="team-overview-panel">
+              <div className="today-panel-heading">
+                <div>
+                  <h2>Check-in progress</h2>
+                  <p>Today&apos;s updates from the team.</p>
+                </div>
+                <strong className="team-panel-value">
+                  {checkedInCount}/{members.length}
+                </strong>
+              </div>
+              <div className="team-checkin-progress">
+                <i style={{ width: `${checkInPercent}%` }} />
+              </div>
+              <div className="team-checkin-roster">
+                {filteredMembers.slice(0, 6).map((member) => {
+                  const complete = checkedInIds.has(String(member.id));
+                  return (
+                    <button
+                      type="button"
+                      className={complete ? "is-complete" : ""}
+                      key={member.id}
+                      onClick={() => setProfileMember(member)}
+                    >
+                      <Avatar
+                        name={memberName(member)}
+                        avatarUrl={member.avatar_url}
+                        presence={effectivePresence(member)}
+                        small
+                      />
+                      <span>{memberName(member)}</span>
+                      {complete ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}
+                    </button>
+                  );
+                })}
+                {!members.length && <EmptyState text="No team members yet." />}
+              </div>
+            </section>
+            <section className="team-overview-panel">
+              <div className="today-panel-heading">
+                <div>
+                  <h2>Workload watch</h2>
+                  <p>People with the highest current risk.</p>
+                </div>
+                <span className="team-panel-count">Top {workloadWatch.length}</span>
+              </div>
+              {workloadWatch.length ? (
+                <div className="team-watch-list">
+                  {workloadWatch.map((item) => (
+                    <button
+                      type="button"
+                      key={item.member.id}
+                      onClick={() => setProfileMember(item.member)}
+                    >
+                      <span>{memberName(item.member)}</span>
+                      <em>
+                        {item.blocked.length} blocked | {item.overdue.length} overdue
+                      </em>
+                      <strong>{item.open.length} open</strong>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="today-muted">No workload pressure detected.</p>
+              )}
+              <div className="team-presence-strip">
+                {PRESENCE_OPTIONS.map((presence) => (
+                  <span key={presence}>
+                    <i className={`presence-${presence}`} />
+                    {PRESENCE_LABEL[presence]} {presenceCounts[presence] || 0}
+                  </span>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+      {focus === "all" && activeTab === "workload" && (
+        <div className="team-workload-list">
+          {visibleMemberStats.map((item) => (
+            <button
+              type="button"
+              className={`team-workload-card ${item.risk ? "is-at-risk" : ""}`}
+              key={item.member.id}
+              onClick={() => setProfileMember(item.member)}
+              aria-label={`Open workload for ${memberName(item.member)}`}
+            >
+              <div className="team-workload-heading">
+                <Avatar
+                  name={memberName(item.member)}
+                  avatarUrl={item.member.avatar_url}
+                  presence={effectivePresence(item.member)}
+                />
+                <div>
+                  <h2>{memberName(item.member)}</h2>
+                  <span>
+                    {item.member.job_role || item.member.role || "Member"} |{" "}
+                    {formatLastSeen(item.member.last_seen_at)}
+                  </span>
+                </div>
+                <em className={item.risk ? "is-warning" : ""}>
+                  {item.risk ? `${item.risk} risk` : "Clear"}
+                </em>
+              </div>
+              <div className="team-workload-stats">
+                <div>
+                  <strong>{item.open.length}</strong>
+                  <span>Open</span>
+                </div>
+                <div className={item.overdue.length ? "is-warning" : ""}>
+                  <strong>{item.overdue.length}</strong>
+                  <span>Overdue</span>
+                </div>
+                <div className={item.blocked.length ? "is-danger" : ""}>
+                  <strong>{item.blocked.length}</strong>
+                  <span>Blocked</span>
+                </div>
+                <div className={item.dueSoon.length ? "is-info" : ""}>
+                  <strong>{item.dueSoon.length}</strong>
+                  <span>Due soon</span>
+                </div>
+              </div>
+              <div className="team-completion">
+                <div>
+                  <span>Completion rate</span>
                   <strong>
-                    {memberTasks.length
-                      ? Math.round((memberDone / memberTasks.length) * 100)
-                      : 0}
-                    %
+                    {item.completionRate === null
+                      ? "No tracked work"
+                      : `${item.completionRate}%`}
                   </strong>
-                </button>
+                </div>
                 <div className="team-member-progress">
-                  <i
-                    style={{
-                      width: `${memberTasks.length ? Math.round((memberDone / memberTasks.length) * 100) : 0}%`,
-                    }}
-                  />
+                  <i style={{ width: `${item.completionRate || 0}%` }} />
                 </div>
-                <div className="team-task-list">
-                  {taskList(memberTasks.slice(0, 5))}
-                </div>
-                {memberTasks.length > 5 && (
+              </div>
+            </button>
+          ))}
+          {!visibleMemberStats.length && (
+            <EmptyState text="No team members match this search." />
+          )}
+        </div>
+      )}
+      {focus === "all" && activeTab === "tasks" && (
+        <>
+          {taskGroups.length ? (
+            <div className="team-board-columns">
+              {taskGroups.map((group) => (
+                <section className="team-board-column" key={group.key}>
+                  <div className="team-column-heading">
+                    <h2>{group.label}</h2>
+                    <span>{group.tasks.length}</span>
+                  </div>
+                  <div className="team-task-list">
+                    {taskList(group.tasks, "No work in this group.")}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <EmptyState text="No tasks match this view." />
+          )}
+        </>
+      )}
+      {focus === "all" && activeTab === "availability" && (
+        <>
+          <div className="team-availability-summary">
+            <div>
+              <span>Check-ins today</span>
+              <strong>{checkedInCount} of {members.length}</strong>
+            </div>
+            <div>
+              <span>Working now</span>
+              <strong>{workingNowCount}</strong>
+            </div>
+            <div className="team-checkin-progress">
+              <i style={{ width: `${checkInPercent}%` }} />
+            </div>
+          </div>
+          <div className="team-availability-grid">
+            {visibleMemberStats.map((item) => {
+              const checkIn = checkInForMember(item.member);
+              const shift = openShiftForMember(item.member);
+              const workedToday = workedTodayForMember(item.member);
+              return (
+                <article className="team-availability-card" key={item.member.id}>
                   <button
-                    className="text-button"
-                    onClick={() => {
-                      setMode("people");
-                      setQuery(memberName(member));
-                    }}
+                    type="button"
+                    className="team-member-heading"
+                    onClick={() => setProfileMember(item.member)}
+                    aria-label={`Open profile for ${memberName(item.member)}`}
                   >
-                    View all tasks <ArrowUpRight size={14} />
+                    <Avatar
+                      name={memberName(item.member)}
+                      avatarUrl={item.member.avatar_url}
+                      presence={effectivePresence(item.member)}
+                      small
+                    />
+                    <div>
+                      <h2>{memberName(item.member)}</h2>
+                      <span>
+                        {PRESENCE_LABEL[effectivePresence(item.member)]} |{" "}
+                        {formatLastSeen(item.member.last_seen_at)}
+                      </span>
+                    </div>
+                    <em className={shift?.is_open ? "is-working" : ""}>
+                      {shift
+                        ? shift.is_on_break
+                          ? "On break"
+                          : "Working"
+                        : "Not clocked in"}
+                    </em>
                   </button>
-                )}
-              </section>
-            );
-          })}
-          {!members.length && <EmptyState text="No team members yet." />}
-        </div>
+                  <div className="team-availability-chips">
+                    <span className={checkIn ? "is-complete" : "is-pending"}>
+                      {checkIn ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}
+                      {checkIn ? "Check-in submitted" : "Check-in pending"}
+                    </span>
+                    {workedToday > 0 && (
+                      <span>
+                        <Clock3 size={13} />
+                        {formatShiftDuration(workedToday)} today
+                      </span>
+                    )}
+                  </div>
+                  {checkIn?.blockers ? (
+                    <p className="team-blocker-note">
+                      <AlertTriangle size={13} /> {checkIn.blockers}
+                    </p>
+                  ) : checkIn?.next_steps ? (
+                    <p className="team-availability-note">
+                      <strong>Next:</strong> {checkIn.next_steps}
+                    </p>
+                  ) : (
+                    <p className="today-muted">No availability note submitted.</p>
+                  )}
+                </article>
+              );
+            })}
+            {!visibleMemberStats.length && (
+              <EmptyState text="No team members match this search." />
+            )}
+          </div>
+        </>
       )}
-      {focus === "all" && mode === "status" && (
-        <div className="team-board-columns">
-          {statuses.map(([value, label]) => (
-            <section className="team-board-column" key={value}>
-              <div className="team-column-heading">
-                <h2>{label}</h2>
-                <span>
-                  {filtered.filter((task) => task.status === value).length}
-                </span>
-              </div>
-              <div className="team-task-list">
-                {taskList(filtered.filter((task) => task.status === value))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
-      {focus === "all" && mode === "priority" && (
-        <div className="team-board-columns">
-          {priorities.map((value) => (
-            <section className="team-board-column" key={value}>
-              <div className="team-column-heading">
-                <h2>{value}</h2>
-                <span>
-                  {filtered.filter((task) => task.priority === value).length}
-                </span>
-              </div>
-              <div className="team-task-list">
-                {taskList(filtered.filter((task) => task.priority === value))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+      {focus === "all" && activeTab === "people" && canManageMembers && (
       <section className="team-access-panel">
         <div className="today-panel-heading">
           <div>
@@ -509,7 +1081,25 @@ function TeamBoardView({
             </div>
           ))}
       </section>
-      <MemberProfilePopup member={profileMember} onClose={() => setProfileMember(null)} onMessage={sendMemberMessage} />
+      )}
+      <MemberProfilePopup
+        member={profileMember}
+        onClose={() => setProfileMember(null)}
+        onMessage={sendMemberMessage}
+        tasks={
+          profileMember ? tasksForMember(profileMember) : []
+        }
+        checkIn={profileMember ? checkInForMember(profileMember) : null}
+        shift={profileMember ? openShiftForMember(profileMember) : null}
+        todayWorkedSeconds={
+          profileMember ? workedTodayForMember(profileMember) : 0
+        }
+        today={today}
+        onOpenTask={(task) => {
+          setProfileMember(null);
+          onOpenTask(task);
+        }}
+      />
     </section>
   );
 }
@@ -2585,7 +3175,7 @@ function TodayDashboard({
   const [profileMember, setProfileMember] = useState(null);
   const isOpen = (task) => task.status !== "done";
   // Counted through BOARD_FOCUS so each headline number is the same question the
-  // Team board answers when the card opens it.
+  // Team answers when the card opens it.
   const countMatching = (key) =>
     tasks.filter((task) => BOARD_FOCUS[key](task, today));
   const dueToday = countMatching("due-today");
@@ -2855,7 +3445,7 @@ function TodayDashboard({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => onNavigate("Team board")}
+                onClick={() => onNavigate("Team")}
                 aria-label="Open team board"
               >
                 <ArrowUpRight size={15} />
@@ -2977,7 +3567,7 @@ function TodayDashboard({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onNavigate("Team board")}
+              onClick={() => onNavigate("Team")}
             >
               Open board <ArrowUpRight size={14} />
             </Button>

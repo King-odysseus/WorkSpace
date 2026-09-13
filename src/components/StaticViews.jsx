@@ -56,9 +56,9 @@ function HelpView({ onNavigate }) {
     {
       title: 'Review team workload',
       icon: Users,
-      intro: 'Use Team board to spot overload, blocked work, and unassigned work.',
+      intro: 'Use Team to spot overload, blocked work, and unassigned work.',
       steps: [
-        'Open Team board.',
+        'Open Team.',
         'Choose a scope: all work, operations, or a specific project.',
         'Switch between People, Status, and Priority views.',
         'Look for Blocked, Overdue, and Unassigned metrics at the top.',
@@ -174,7 +174,7 @@ function HelpView({ onNavigate }) {
       icon: Plus,
       intro: 'Bring someone into the workspace with the correct access level.',
       steps: [
-        'Open Team board.',
+        'Open Team.',
         'Scroll to People & access.',
         'Select Invite team member.',
         'Enter their email address.',

@@ -39,18 +39,27 @@ const renderDashboard = (tasks, onOpenBoard = noop) =>
     />,
   )
 
-const renderBoard = ({ tasks, focus = 'all', onFocusChange = noop }) =>
+const renderBoard = ({
+  tasks,
+  focus = 'all',
+  onFocusChange = noop,
+  checkIns = [],
+  workShifts = [],
+  canManageMembers = false,
+}) =>
   render(
     <TeamBoardView
       tasks={tasks}
       members={[{ id: 9, first_name: 'Dana', last_name: 'Reed', role: 'member' }]}
       projects={[]}
+      checkIns={checkIns}
+      workShifts={workShifts}
       scope="all"
       onScopeChange={noop}
       focus={focus}
       onFocusChange={onFocusChange}
       invitations={[]}
-      canManageMembers={false}
+      canManageMembers={canManageMembers}
       onInvite={noop}
       onComplete={noop}
       onStatusChange={noop}
@@ -213,4 +222,47 @@ it('clears the focus when the tile that set it is pressed again', () => {
 
   fireEvent.click(container.querySelector('.team-board-metrics button.active'))
   expect(onFocusChange).toHaveBeenCalledWith('all')
+})
+
+it('treats cancelled work as terminal in Team totals', () => {
+  const { container } = renderBoard({
+    tasks: [
+      { id: 1, title: 'Open work', status: 'todo', assignee_id: 9, member: 'Dana Reed', priority: 'normal' },
+      { id: 2, title: 'Cancelled overdue work', status: 'cancelled', assignee_id: null, member: 'Unassigned', priority: 'urgent', due_date: dayOffset(-4) },
+    ],
+  })
+
+  const counts = [...container.querySelectorAll('.team-board-metrics strong')].map(
+    node => node.textContent,
+  )
+  expect(counts).toEqual(['1', '0', '0', '0'])
+  expect(screen.queryByText('Cancelled overdue work')).not.toBeInTheDocument()
+})
+
+it('excludes cancelled work from a member completion rate', () => {
+  renderBoard({
+    tasks: [
+      { id: 1, title: 'Finished work', status: 'done', assignee_id: 9, member: 'Dana Reed', priority: 'normal' },
+      { id: 2, title: 'Cancelled work', status: 'cancelled', assignee_id: 9, member: 'Dana Reed', priority: 'normal' },
+    ],
+  })
+
+  fireEvent.click(screen.getByRole('tab', { name: /Workload/ }))
+  const card = screen.getByRole('button', { name: 'Open workload for Dana Reed' })
+  expect(within(card).getByText('100%')).toBeInTheDocument()
+})
+
+it('keeps access administration inside the admin-only Team tab', () => {
+  const memberView = renderBoard({ tasks: [] })
+
+  expect(screen.getByRole('tab', { name: /Overview/ })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /Workload/ })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /Tasks/ })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /Availability/ })).toBeInTheDocument()
+  expect(screen.queryByRole('tab', { name: /People & access/ })).not.toBeInTheDocument()
+
+  memberView.unmount()
+  renderBoard({ tasks: [], canManageMembers: true })
+  fireEvent.click(screen.getByRole('tab', { name: /People & access/ }))
+  expect(screen.getByRole('heading', { name: 'People & access' })).toBeInTheDocument()
 })

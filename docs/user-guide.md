@@ -144,9 +144,17 @@ Planner is project delivery work.
 - Reorder tasks and buckets when you have permission.
 - Use the move controls on each task card as an accessible alternative to drag.
 
-## 6. Team board
+## 6. Team
 
-Team board shows ownership and workload across the workspace.
+Team shows workload, availability, and the work that needs attention across the workspace.
+
+### Views
+
+- **Overview**: the highest-risk work, today's check-in progress, and people under workload pressure.
+- **Workload**: open, overdue, blocked, and due-soon work for each teammate.
+- **Tasks**: work grouped by owner, status, priority, or project. Closed work is hidden by default.
+- **Availability**: presence, check-in state, blockers, and active shift status.
+- **People & access**: membership and invitation administration for workspace leaders.
 
 ### Metrics
 
@@ -157,12 +165,6 @@ The top cards show:
 - Overdue tasks
 - Unassigned tasks
 
-### Modes
-
-- **People**: task workload grouped by teammate.
-- **Status**: tasks grouped by current status.
-- **Priority**: tasks grouped by priority.
-
 ### Scope
 
 Use the scope selector to see:
@@ -171,9 +173,9 @@ Use the scope selector to see:
 - Operations only
 - A specific project
 
-### People and access
+### People & access
 
-At the bottom of Team board, workspace leaders can:
+In the admin-only People & access view, workspace leaders can:
 
 - Invite members.
 - Change a member's role.
@@ -391,7 +393,7 @@ Workspace leaders can review:
 - Your role.
 - Member list.
 
-Member invitations and role changes are available from Team board.
+Member invitations and role changes are available from Team.
 
 ## 15. Help and Legal
 
@@ -441,11 +443,12 @@ Member invitations and role changes are available from Team board.
 
 ### Invite a teammate
 
-1. Open **Team board**.
-2. Select **Invite member**.
-3. Enter their email and role.
-4. Send the invitation.
-5. The teammate accepts it from their invitation.
+1. Open **Team**.
+2. Open **People & access**.
+3. Select **Invite member**.
+4. Enter their email and role.
+5. Send the invitation.
+6. The teammate accepts it from their invitation.
 
 ### Complete a daily check-in
 

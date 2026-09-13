@@ -205,7 +205,8 @@ function App() {
   const [active, setActive] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get("view");
     const saved = localStorage.getItem("workspace-last-page");
-    const page = requested || saved || "Today";
+    const requestedPage = requested || saved || "Today";
+    const page = requestedPage === "Team board" ? "Team" : requestedPage;
     return ["Files", "Import data"].includes(page) ? "Today" : page;
   });
   useEffect(() => {
@@ -217,7 +218,7 @@ function App() {
   // sidebar cannot land you on a filtered board with no memory of why.
   const [teamBoardFocus, setTeamBoardFocus] = useState("all");
   useEffect(() => {
-    if (active !== "Team board") setTeamBoardFocus("all");
+    if (active !== "Team") setTeamBoardFocus("all");
   }, [active]);
   const [tasks, setTasks] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -282,7 +283,6 @@ function App() {
   const [newPriority, setNewPriority] = useState("normal");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("All work");
-  const [teamBoardMode, setTeamBoardMode] = useState("people");
   const [searchQuery, setSearchQuery] = useState("");
   const [globalSearchResults, setGlobalSearchResults] = useState([]);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
@@ -1810,7 +1810,7 @@ function App() {
           ).length,
         },
         { label: "Check-ins", icon: Hash },
-        { label: "Team board", icon: Users },
+        { label: "Team", icon: Users },
       ],
     },
     {
@@ -2589,7 +2589,7 @@ function App() {
                 onNavigate={setActive}
                 onOpenBoard={(focus) => {
                   setTeamBoardFocus(focus);
-                  setActive("Team board");
+                  setActive("Team");
                 }}
                 onComplete={completeTask}
                 onStatusChange={changeTaskStatus}
@@ -4170,7 +4170,7 @@ function WorkspaceView({
   const title = active === "My tasks" ? "My tasks" : active;
   const subtitle = {
     "My tasks": "Your personal work, deadlines, and follow-ups.",
-    "Team board": "See ownership and progress across the workspace.",
+    Team: "See workload, availability, and the work that needs attention.",
     Planner: "Plan work visually across buckets, owners, and priorities.",
     "Daily operations": "Track recurring and day-to-day work outside projects.",
     Calendar: "Meetings, focus time, and deadlines in one view.",
@@ -6385,13 +6385,15 @@ function WorkspaceView({
     );
   }
 
-  if (active === "Team board") {
+  if (active === "Team") {
     return (
       <>
         <TeamBoardView
           tasks={tasks}
           members={localData.members}
           projects={localData.projects}
+          checkIns={localData.checkIns}
+          workShifts={localData.workShifts}
           scope={teamBoardScope}
           onScopeChange={setTeamBoardScope}
           focus={teamBoardFocus}
@@ -6461,7 +6463,7 @@ function WorkspaceView({
         onAction={onAddTask}
       />
       <Card className="task-list-view px-5">
-        {active === "Team board" && (
+        {active === "Team" && (
           <div className="member-summary">
             <Users size={18} />
             <strong>{localData.members.length || 0} members</strong>
