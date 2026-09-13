@@ -9,6 +9,8 @@ import {
   Bell,
   Building2,
   Camera,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Copy,
   Layers,
@@ -81,6 +83,7 @@ function SettingsView({
   onConfirm,
 }) {
   const [section, setSection] = useState("appearance");
+  const [mobileSectionOpen, setMobileSectionOpen] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState(null);
   const [notificationVolume, setNotificationVolume] = useState(70);
   const [checkInSettings, setCheckInSettings] = useState(null);
@@ -233,19 +236,24 @@ function SettingsView({
   // This is a UI convenience, not the authorization boundary - every endpoint
   // behind these panels re-checks the actor's permission server-side.
   const sections = [
-    ["appearance", "Appearance", Sun],
-    ["notifications", "Notifications", Bell],
-    ["profile", "Profile", Users],
-    ["workspaces", "Workspaces", Layers],
+    { value: "appearance", label: "Appearance", Icon: Sun, description: "Theme and navigation layout.", group: "Personal" },
+    { value: "notifications", label: "Notifications", Icon: Bell, description: "Alerts, sounds, and device delivery.", group: "Personal" },
+    { value: "profile", label: "Profile", Icon: Users, description: "Your identity and presence.", group: "Personal" },
+    { value: "workspaces", label: "Workspaces", Icon: Layers, description: "Switch, open, or create a workspace.", group: "Personal" },
     ...(canManageMembers
       ? [
-          ["templates", "Templates", ClipboardList],
-          ["workspace", "Workspace access", Building2],
-          ["integrations", "Integrations", Webhook],
-          ["ai", "Zuri", Sparkles],
+          { value: "templates", label: "Templates", Icon: ClipboardList, description: "Reusable task and project setup.", group: "Workspace" },
+          { value: "workspace", label: "Workspace access", Icon: Building2, description: "Members, roles, and permissions.", group: "Workspace" },
+          { value: "integrations", label: "Integrations", Icon: Webhook, description: "Calendar feeds and team webhooks.", group: "Workspace" },
+          { value: "ai", label: "Zuri", Icon: Sparkles, description: "Assistant access and providers.", group: "Workspace" },
         ]
       : []),
   ];
+  const activeSectionLabel = sections.find((item) => item.value === section)?.label || "Settings";
+  const scrollMobileSettingsToTop = () => {
+    if (typeof window === "undefined" || !window.matchMedia?.("(max-width: 700px)").matches) return;
+    window.scrollTo?.({ top: 0, behavior: "smooth" });
+  };
   const preferenceRows = [
     ["mentions", "Mentions", "When someone mentions you in a channel."],
     [
@@ -911,21 +919,55 @@ function SettingsView({
         title="Settings"
         subtitle="Control your workspace, account, and notification preferences."
       />
-      <div className="settings-shell">
+      <div className={`settings-shell ${mobileSectionOpen ? "is-mobile-detail" : "is-mobile-index"}`}>
         <nav className="settings-nav" aria-label="Settings sections">
-          {sections.map(([value, label, Icon]) => (
-            <button
-              type="button"
-              key={value}
-              className={section === value ? "active" : ""}
-              onClick={() => setSection(value)}
-            >
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
+          {["Personal", "Workspace"].map((group) => {
+            const groupSections = sections.filter((item) => item.group === group);
+            if (!groupSections.length) return null;
+            return (
+              <div className="settings-nav-group" key={group}>
+                <span className="settings-nav-label">{group}</span>
+                {groupSections.map(({ value, label, Icon, description }) => (
+                  <button
+                    type="button"
+                    key={value}
+                    className={`settings-nav-link ${section === value ? "active" : ""}`}
+                    aria-label={label}
+                    aria-current={section === value ? "page" : undefined}
+                    onClick={() => {
+                      setSection(value);
+                      setMobileSectionOpen(true);
+                      scrollMobileSettingsToTop();
+                    }}
+                  >
+                    <span className="settings-nav-icon"><Icon size={17} /></span>
+                    <span className="settings-nav-copy">
+                      <strong>{label}</strong>
+                      <small>{description}</small>
+                    </span>
+                    <ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="settings-content">
+          <button
+            type="button"
+            className="settings-mobile-back"
+            aria-label="Back to settings sections"
+            onClick={() => {
+              setMobileSectionOpen(false);
+              scrollMobileSettingsToTop();
+            }}
+          >
+            <ChevronLeft size={18} aria-hidden="true" />
+            <span>
+              <small>Settings</small>
+              <strong>{activeSectionLabel}</strong>
+            </span>
+          </button>
           {section === "appearance" && (
             <Card className="settings-panel">
               <div className="settings-panel-heading">
@@ -935,7 +977,7 @@ function SettingsView({
                   <p>Choose how WorkSpace looks on this device.</p>
                 </div>
               </div>
-              <div className="settings-row settings-control-row">
+              <div className="settings-row settings-control-row settings-control-stack">
                 <div>
                   <strong>Theme</strong>
                   <span>Light, dark, or follow your operating system.</span>
@@ -979,8 +1021,8 @@ function SettingsView({
                   aria-pressed={!sidebarCollapsed}
                   onClick={onToggleSidebar}
                 >
-                  <span />
-                  {sidebarCollapsed ? "Collapsed" : "Expanded"}
+                  <span className="settings-switch-track" aria-hidden="true" />
+                  <span className="settings-switch-label">{sidebarCollapsed ? "Collapsed" : "Expanded"}</span>
                 </button>
               </div>
             </Card>
@@ -1056,6 +1098,8 @@ function SettingsView({
                               onClick={() => {
                                 onSwitchWorkspace?.(workspace.id);
                                 setSection("workspace");
+                                setMobileSectionOpen(true);
+                                scrollMobileSettingsToTop();
                               }}
                             >
                               Manage team
@@ -1126,8 +1170,8 @@ function SettingsView({
                           updatePreference(key, !notificationPrefs[key])
                         }
                       >
-                        <span />
-                        {notificationPrefs[key] ? "On" : "Off"}
+                        <span className="settings-switch-track" aria-hidden="true" />
+                        <span className="settings-switch-label">{notificationPrefs[key] ? "On" : "Off"}</span>
                       </button>
                     </div>
                   ))}
@@ -1880,7 +1924,7 @@ function SettingsView({
                       {lifecycleError}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="settings-danger-actions flex flex-wrap gap-2">
                     {!isArchived && (
                       <Button
                         type="button"
@@ -2022,8 +2066,8 @@ function SettingsView({
                         aria-pressed={hook.is_active}
                         onClick={() => toggleWebhook(hook)}
                       >
-                        <span />
-                        {hook.is_active ? "On" : "Off"}
+                        <span className="settings-switch-track" aria-hidden="true" />
+                        <span className="settings-switch-label">{hook.is_active ? "On" : "Off"}</span>
                       </button>
                       {canManageMembers && (
                         <Button

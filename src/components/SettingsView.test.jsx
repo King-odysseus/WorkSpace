@@ -9,6 +9,30 @@ afterEach(() => {
   else delete navigator.serviceWorker
 })
 
+it('uses a mobile settings index before opening one section', () => {
+  render(
+    <SettingsView
+      currentWorkspace={{ role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+    />,
+  )
+
+  const shell = document.querySelector('.settings-shell')
+  const navigation = screen.getByRole('navigation', { name: 'Settings sections' })
+  expect(shell).toHaveClass('is-mobile-index')
+  expect(within(navigation).getByText('Theme and navigation layout.')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+  expect(shell).toHaveClass('is-mobile-detail')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to settings sections' }))
+  expect(shell).toHaveClass('is-mobile-index')
+})
+
 async function setup(permission = 'default', saveStatus = 201) {
   const requestPermission = vi.fn(async () => { Notification.permission = 'granted'; return 'granted' })
   vi.stubGlobal('Notification', { permission, requestPermission })
