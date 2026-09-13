@@ -350,7 +350,14 @@ def workspace_ai_chat(request, workspace_id):
             'answer': parsed['answer'] or 'The assistant returned an empty response.',
             'pending_action': pending_action.as_dict() if pending_action else None,
         })
-    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+    except HTTPError as exc:
+        if exc.code == 401:
+            return JsonResponse({
+                'error': 'Zuri\'s saved API key was rejected. Ask a workspace administrator to replace it in Settings > Zuri.',
+                'code': 'ai_provider_unauthorized',
+            }, status=502)
+        return JsonResponse({'error': f'AI service unavailable: {exc}'}, status=502)
+    except (URLError, TimeoutError, ValueError) as exc:
         return JsonResponse({'error': f'AI service unavailable: {exc}'}, status=502)
 
 
