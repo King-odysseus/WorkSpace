@@ -1907,13 +1907,9 @@ html[data-theme='dark'] .channel-row-wrap .channel-row.active, html[data-theme='
 .chat-toolbar .chat-search input { min-height:44px; padding-top:11px; padding-bottom:11px; font-size:13px; }
 .chat-toolbar .chat-search { min-width:260px; }
 .chat-mode-channels .chat-conversation-list { background:#071a2e; color:#fff; }
-.chat-mode-channels .chat-list-heading h3 { color:#fff; }
-.chat-mode-channels .chat-list-heading button { background:rgb(255 255 255 / 12%); color:#fff; }
 .chat-mode-channels .channel-row { color:rgb(255 255 255 / 68%); }
 .chat-mode-channels .channel-row:hover { background:rgb(255 255 255 / 9%); color:#fff; }
 .chat-mode-channels .channel-row.active { background:#1d4ed8; color:#fff; }
-.chat-mode-channels .channel-delete { color:rgb(255 255 255 / 55%); background:transparent; }
-.chat-mode-channels .chat-sidebar-empty { color:rgb(255 255 255 / 60%); padding:12px; }
 .chat-mode-direct .chat-conversation-list { background:var(--workspace-surface); }
 .chat-mode-direct .chat-list-heading { padding:4px 6px 10px; }
 .chat-mode-direct .direct-row { border-radius:6px; padding:11px 8px; }

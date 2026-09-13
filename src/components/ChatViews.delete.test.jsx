@@ -21,10 +21,18 @@ const dataFor = () => ({
   notifications: [],
 })
 
-const renderChat = (data, onConfirm = vi.fn(async () => true)) => {
+const channelsFor = channels => ({
+  members: [{ id: currentUserId, first_name: 'Ada', last_name: 'Lane' }],
+  channels,
+  messages: [],
+  directConversations: [],
+  notifications: [],
+})
+
+const renderChat = (data, onConfirm = vi.fn(async () => true), viewType = 'direct') => {
   const result = render(
     <ChatWorkspaceView
-      viewType="direct"
+      viewType={viewType}
       data={data}
       workspaceId={workspaceId}
       currentUserId={currentUserId}
@@ -121,4 +129,43 @@ it('renders a tombstone on arrival with no tick and no reactions', async () => {
   expect(document.querySelector('.chat-reactions')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Delete message' })).not.toBeInTheDocument()
+})
+
+it('offers a delete on a channel the viewer created and deletes it', async () => {
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/chat-channels/21/': { status: 200, body: {} },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const { onConfirm } = renderChat(
+    channelsFor([
+      { id: 20, name: 'general', created_by: 9, is_private: false, member_ids: [] },
+      { id: 21, name: 'product-launch', description: 'Launch room', created_by: currentUserId, is_private: false, member_ids: [] },
+    ]),
+    vi.fn(async () => true),
+    'channels',
+  )
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete product-launch' }))
+
+  await waitFor(() => expect(onConfirm).toHaveBeenCalled())
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url, init = {}]) => String(url).includes('/chat-channels/21/') && init.method === 'DELETE')).toBe(true))
+})
+
+it('offers no delete on #general', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(
+    channelsFor([{ id: 20, name: 'general', created_by: currentUserId, is_private: false, member_ids: [] }]),
+    vi.fn(async () => true),
+    'channels',
+  )
+
+  // 'general' also names the feed heading, so wait on the sidebar row's button.
+  expect(await screen.findByRole('button', { name: 'general' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Delete general' })).not.toBeInTheDocument()
 })
