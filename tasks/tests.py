@@ -3520,6 +3520,30 @@ class WorkspaceAiSettingsApiTests(TestCase):
         for identity in ('Alex', 'Taylor', 'Priya', 'Nair'):
             self.assertNotIn(identity, outbound)
 
+    def test_prose_answer_names_members_inside_the_app(self):
+        # Providers answer an open question in prose, not JSON, and that prose
+        # carries placeholders just as a structured answer does. Every path out
+        # of the parser has to translate them before the user reads it.
+        self.owner.first_name = 'Alex'
+        self.owner.last_name = 'Taylor'
+        self.owner.save(update_fields=['first_name', 'last_name'])
+        self.client.force_login(self.owner)
+        self._enable_ai()
+
+        captured = {}
+        self._chat({'message': 'Who is overloaded?'}, captured)
+        ref = self._snapshot(captured)['actor_ref']
+
+        captured = {}
+        response = self._chat(
+            {'message': 'Who is overloaded?'},
+            captured,
+            answer=f'Based on the snapshot, {ref} is carrying three tasks.',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['answer'], 'Based on the snapshot, Alex Taylor is carrying three tasks.')
+        self.assertNotIn('Alex', json.dumps(captured['body']))
+
     def test_task_can_be_assigned_to_a_member_from_the_roster_ref(self):
         self.client.force_login(self.owner)
         self._enable_ai()

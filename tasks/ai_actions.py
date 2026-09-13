@@ -271,6 +271,8 @@ def action_instructions(snapshot):
         'listed in the snapshot "members" roster with their workspace role and whether they are the current user. '
         'To assign work, set assignee_ref to a ref from that roster, or "me" for the current user, or "unassigned". '
         'Never invent a ref that is not in the roster. '
+        'In "answer", always name things the way the user reads them: a task by its title, a project by its name, a person by their ref. '
+        'Never show a task or project id, code or number in "answer"; ids belong only inside action fields. '
         'The action fields are: task.create uses title, description, status, priority, due_date, start_date, project_id, assignee_ref, bucket, labels, progress_percent; '
         'task.update uses task_id plus any of those fields; project.create uses name, description, status, due_date, start_date, end_date; '
         'project.update uses project_id plus any project field. Do not propose deletes, comments, documents, invitations, budgets, expenses, or personal data. '
@@ -293,13 +295,13 @@ def parse_provider_response(content, registry):
         start = candidate.find('{')
         end = candidate.rfind('}')
         if start < 0 or end <= start:
-            return {'answer': text, 'action': None}
+            return {'answer': registry.expand(candidate), 'action': None}
         try:
             parsed = json.loads(candidate[start:end + 1])
         except json.JSONDecodeError:
-            return {'answer': text, 'action': None}
+            return {'answer': registry.expand(candidate), 'action': None}
     if not isinstance(parsed, dict):
-        return {'answer': text, 'action': None}
+        return {'answer': registry.expand(candidate), 'action': None}
     answer = str(parsed.get('answer') or '').strip() or 'I prepared a workspace action for your confirmation.'
     action = parsed.get('action')
     if action is None:
