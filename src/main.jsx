@@ -2168,23 +2168,25 @@ function App() {
       {/* ── Main ── */}
       <div className="flex flex-1 flex-col min-w-0">
         <header className="relative z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface/95 px-4 backdrop-blur lg:px-6">
-          <div className="flex min-w-0 items-center gap-2 lg:hidden">
+          {/* The title and the utility cluster are both flex-1, so they always hold
+              the same width and the search between them lands on the header's true
+              centre instead of the midpoint of whatever space was left over. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <img
               src="/tijha-logo.png"
               alt="TijhaBooks"
-              className="h-6 w-6 shrink-0 rounded-md object-contain"
+              className="h-6 w-6 shrink-0 rounded-md object-contain lg:hidden"
             />
-            <span className="hidden truncate text-sm font-bold tracking-tight text-navy sm:inline">
+            <span className="hidden truncate text-sm font-bold tracking-tight text-navy sm:inline lg:hidden">
               WorkSpace
             </span>
+            <h1 className="hidden truncate text-base font-bold tracking-tight text-navy lg:block">
+              {active}
+            </h1>
           </div>
 
-          <h1 className="hidden text-base font-bold tracking-tight text-navy lg:block">
-            {active}
-          </h1>
-
-          <div className="hidden flex-1 justify-center md:flex" ref={searchRef}>
-            <div className="relative w-full max-w-md">
+          <div className="hidden w-full max-w-md md:block" ref={searchRef}>
+            <div className="relative w-full">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <input
                 type="search"
@@ -2237,7 +2239,7 @@ function App() {
             </div>
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+          <div className="flex flex-1 items-center justify-end gap-0.5 sm:gap-1.5">
             <button
               type="button"
               onClick={() => window.location.reload()}
