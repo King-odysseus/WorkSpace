@@ -3,8 +3,9 @@ import json
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from .models import DirectConversation, Membership, Workspace, WorkspaceNotification
+from .models import DirectConversation, DirectConversationRead, Membership, Workspace, WorkspaceNotification
 from .pulse import workspace_fingerprint
 
 
@@ -183,7 +184,7 @@ class DirectConversationManagementTests(TestCase):
         self.client.post(reverse('direct-conversation-restore', args=[conversation['id']]))
         self.assertNotEqual(archived, workspace_fingerprint(self.workspace.id, self.owner))
 
-    def test_group_participants_can_be_updated_but_the_group_must_keep_three_people(self):
+    def test_group_participants_can_be_updated_but_the_group_must_keep_two_people(self):
         conversation = self.create_conversation([self.member.id, self.third.id])
 
         updated = self.client.patch(
@@ -197,7 +198,7 @@ class DirectConversationManagementTests(TestCase):
 
         too_small = self.client.patch(
             reverse('direct-conversation-detail', args=[conversation['id']]),
-            data=json.dumps({'participant_ids': [self.member.id]}),
+            data=json.dumps({'participant_ids': []}),
             content_type='application/json',
         )
         self.assertEqual(too_small.status_code, 400)
@@ -205,6 +206,55 @@ class DirectConversationManagementTests(TestCase):
             set(DirectConversation.objects.get(id=conversation['id']).participants.values_list('id', flat=True)),
             {self.owner.id, self.member.id, self.fourth.id},
         )
+
+    def test_a_group_can_be_reduced_to_a_direct_chat(self):
+        conversation = self.create_conversation([self.member.id, self.third.id])
+        self.client.post(
+            reverse('direct-message-list', args=[conversation['id']]),
+            data=json.dumps({'message': 'Kicking Priya off this thread'}),
+            content_type='application/json',
+        )
+
+        reduced = self.client.patch(
+            reverse('direct-conversation-detail', args=[conversation['id']]),
+            data=json.dumps({'participant_ids': [self.member.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(reduced.status_code, 200)
+        payload = reduced.json()['conversation']
+        self.assertFalse(payload['is_group'])
+        self.assertEqual({participant['id'] for participant in payload['participants']}, {self.owner.id, self.member.id})
+        # Shrinking a group is not a way to lose its history.
+        messages = self.client.get(reverse('direct-message-list', args=[conversation['id']])).json()['messages']
+        self.assertEqual([message['message'] for message in messages], ['Kicking Priya off this thread'])
+
+    def test_reducing_a_group_onto_an_existing_direct_chat_is_refused(self):
+        pair = self.create_conversation([self.member.id])
+        group = self.create_conversation([self.member.id, self.third.id])
+        original_key = DirectConversation.objects.get(id=group['id']).conversation_key
+        self.assertNotEqual(original_key, DirectConversation.objects.get(id=pair['id']).conversation_key)
+
+        response = self.client.patch(
+            reverse('direct-conversation-detail', args=[group['id']]),
+            data=json.dumps({'participant_ids': [self.member.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 409)
+        still_a_group = DirectConversation.objects.get(id=group['id'])
+        self.assertEqual(set(still_a_group.participants.values_list('id', flat=True)), {self.owner.id, self.member.id, self.third.id})
+        self.assertEqual(still_a_group.conversation_key, original_key)
+
+    def test_removing_a_participant_drops_their_read_state(self):
+        conversation = self.create_conversation([self.member.id, self.third.id])
+        DirectConversationRead.objects.create(conversation_id=conversation['id'], user=self.third, last_read_at=timezone.now())
+
+        removed = self.client.patch(
+            reverse('direct-conversation-detail', args=[conversation['id']]),
+            data=json.dumps({'participant_ids': [self.member.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(removed.status_code, 200)
+        self.assertFalse(DirectConversationRead.objects.filter(conversation_id=conversation['id'], user=self.third).exists())
 
     def test_direct_chats_cannot_be_converted_to_groups(self):
         conversation = self.create_conversation([self.member.id])

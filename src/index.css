@@ -2324,6 +2324,17 @@ html[data-theme='dark'] .workspace-view :is(
   font-size: 10px;
 }
 
+.chat-workspace-view .chat-header-members {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .chat-workspace-view .chat-details-files {
   display: grid;
   gap: 3px;
@@ -2412,6 +2423,12 @@ html[data-theme='dark'] .workspace-view :is(
   .chat-workspace-view .chat-feed-header {
     min-height: 66px;
     padding: 10px 12px;
+  }
+
+  /* The heading is the only thing that can give; drop the label to its icon
+     rather than let the two side by side push the title off the row. */
+  .chat-workspace-view .chat-header-members span {
+    display: none;
   }
 
   .chat-workspace-view .chat-pane-tabs {

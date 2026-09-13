@@ -3661,8 +3661,8 @@ def direct_conversation_detail(request, conversation_id):
         participant_ids.add(participant_id)
     participant_ids.discard(request.user.id)
     all_ids = sorted(participant_ids | {request.user.id})
-    if len(all_ids) < 3:
-        return JsonResponse({'error': 'A group chat must keep at least three participants.'}, status=400)
+    if len(all_ids) < 2:
+        return JsonResponse({'error': 'A chat must keep at least two participants.'}, status=400)
     if len(':'.join(str(value) for value in all_ids)) > 255:
         return JsonResponse({'error': 'This group has too many participants.'}, status=400)
     valid_ids = set(Membership.objects.filter(workspace_id=conversation.workspace_id, user_id__in=participant_ids).values_list('user_id', flat=True))
@@ -3670,7 +3670,7 @@ def direct_conversation_detail(request, conversation_id):
         return JsonResponse({'error': 'Choose group participants from this workspace.'}, status=400)
     conversation_key = ':'.join(str(value) for value in all_ids)
     if DirectConversation.objects.filter(workspace_id=conversation.workspace_id, conversation_key=conversation_key).exclude(id=conversation.id).exists():
-        return JsonResponse({'error': 'A conversation with those participants already exists.'}, status=409)
+        return JsonResponse({'error': 'Those people already have a chat. Open that one instead of changing this one.'}, status=409)
 
     previous_ids = set(conversation.participants.values_list('id', flat=True))
     with transaction.atomic():

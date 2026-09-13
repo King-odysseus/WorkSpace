@@ -32,6 +32,13 @@ const renderChat = (data, onRefresh = vi.fn(), onConfirm = vi.fn().mockResolvedV
   return { ...result, onRefresh }
 }
 
+const launchMembers = [
+  { id: currentUserId, first_name: 'Ada', last_name: 'Lane' },
+  { id: 9, first_name: 'Dana', last_name: 'Reed' },
+  { id: 8, first_name: 'Priya', last_name: 'Shah' },
+  { id: 10, first_name: 'Omar', last_name: 'Khan' },
+]
+
 const openConversation = async () => {
   fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
   await screen.findByText('See you then.')
@@ -345,6 +352,61 @@ it('edits the participants of a group chat', async () => {
   const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/13/') && init.method === 'PATCH')
   expect(patchCall).toBeTruthy()
   expect(JSON.parse(patchCall[1].body)).toEqual({ participant_ids: [9, 10] })
+})
+
+it('reduces a group to a direct chat by unticking a participant', async () => {
+  const group = {
+    id: 13,
+    title: 'Launch team',
+    is_group: true,
+    participants: [{ id: currentUserId }, { id: 9 }, { id: 8 }],
+    last_message: 'Ready to launch',
+  }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/13/': { conversation: group },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const onRefresh = vi.fn()
+  renderChat({ ...dataFor(), members: launchMembers, directConversations: [group] }, onRefresh)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit participants for Launch team' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Edit participants' })
+  fireEvent.click(screen.getByLabelText('Priya Shah'))
+
+  // One other member left is a direct chat, not a group.
+  expect(screen.getByText('Direct chat')).toBeInTheDocument()
+  expect(within(dialog).getByRole('button', { name: 'Save participants' })).toBeEnabled()
+
+  fireEvent.submit(dialog)
+
+  await waitFor(() => expect(onRefresh).toHaveBeenCalled())
+  const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/13/') && init.method === 'PATCH')
+  expect(patchCall).toBeTruthy()
+  expect(JSON.parse(patchCall[1].body)).toEqual({ participant_ids: [9] })
+})
+
+it('opens the member editor from the chat header', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const group = {
+    id: 13,
+    title: 'Launch team',
+    is_group: true,
+    participants: [{ id: currentUserId }, { id: 9 }, { id: 8 }],
+    last_message: 'Ready to launch',
+  }
+  renderChat({ ...dataFor(), members: launchMembers, directConversations: [group] })
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Launch team/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add or remove members' }))
+
+  expect(await screen.findByRole('dialog', { name: 'Edit participants' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Priya Shah')).toBeChecked()
 })
 
 it('groups conversations and filters the list to unread chats', async () => {
