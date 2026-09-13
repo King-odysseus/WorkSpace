@@ -26,7 +26,8 @@ it('prompts on screen but only requests native permission after the Allow click'
   await waitFor(() => expect(subscribe).toHaveBeenCalled())
   expectRequest(api, '/api/push/subscriptions/', 'POST')
   expect(requestPermission).toHaveBeenCalledTimes(1)
-  expect(await screen.findByText(/Notifications enabled on this device/)).toBeInTheDocument()
+  // A healthy device gets no bar at all - Settings already reports the state.
+  await waitFor(() => expect(screen.queryByLabelText('Notification status')).not.toBeInTheDocument())
 })
 
 it('shows blocked guidance without trying to re-prompt', async () => {

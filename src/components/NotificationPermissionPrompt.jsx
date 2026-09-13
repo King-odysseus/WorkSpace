@@ -82,14 +82,16 @@ export default function NotificationPermissionPrompt({ unreadCount }) {
     finally { setBusy(false) }
   }
   const messages = {
-    checking: 'Checking notification status...',
-    enabled: 'Notifications enabled on this device.',
     off: 'Allow WorkSpace to send notifications on this device, including when the app is closed.',
     blocked: 'Notifications blocked. Allow this site in your browser or device notification settings.',
     unconfigured: 'Notifications need administrator setup before this device can receive alerts.',
     unsupported: 'Push notifications are unavailable here. On iPhone or iPad, add WorkSpace to your Home Screen and open it there.',
     error: 'Notifications need attention.',
   }
+  // Only states the user can act on earn a bar above the page. While the check
+  // is running there is nothing to say, and once notifications are on the
+  // permanent "enabled" strip is noise - Settings reports the same state.
+  if (status === 'checking' || status === 'enabled') return null
   return <aside aria-label="Notification status" className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2 text-sm text-text-secondary">
     <div><p role="status">{messages[status]} <strong>{unreadCount === null ? 'Checking unread count...' : `${unreadCount} unread across your workspaces.`}</strong></p>
       {error && <p role="alert" className="text-danger">{error}</p>}</div>
