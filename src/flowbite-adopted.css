@@ -199,10 +199,6 @@
 
 .avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 
-.presence-dot {
-  box-shadow: 0 0 0 2px var(--workspace-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--workspace-border, #e2e2e6) 65%, transparent);
-}
-
 [data-slot="card"],
 .workspace-card {
   border: 1px solid color-mix(in srgb, var(--workspace-border, #e2e2e6) 78%, transparent);

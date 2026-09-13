@@ -94,21 +94,26 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
   .estimate { display: none; }
 }
 
-/* Avatar photos and Teams-style presence badge */
+/* Avatar photos and Teams-style presence badge.
+
+   One ring, drawn as a shadow so it never grows the dot's box. The dot used to
+   carry a 2px border AND a 2px + 1px box-shadow ring from flowbite-adopted.css,
+   which punched the same hole twice and left a 19px white donut on a 31px
+   avatar. The sizes below are the painted dot, not a content box the ring then
+   grew out of, so an avatar reads at roughly a third of its width. */
 .presence-dot {
   position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 9px;
-  height: 9px;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 2px solid var(--color-surface, #fff);
-  box-sizing: content-box;
+  box-shadow: 0 0 0 2px var(--workspace-surface, #fff);
 }
 .avatar.small .presence-dot {
-  width: 7px;
-  height: 7px;
-  border-width: 1.5px;
+  width: 6px;
+  height: 6px;
+  box-shadow: 0 0 0 1.5px var(--workspace-surface, #fff);
 }
 .presence-dot.presence-available { background: #22c55e; }
 .presence-dot.presence-busy { background: #ef4444; }
@@ -148,7 +153,9 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
   font: 600 12px 'Roboto';
 }
 .presence-select [data-slot='select-trigger'].app-select-trigger { min-height: 0; height: auto; padding: 0; gap: 4px; border: 0; box-shadow: none; background: transparent; color: inherit; font: inherit; outline: none; }
-.presence-select .presence-dot { position: static; border: 0; }
+/* Inline in the Status control the dot sits beside its own label, so it needs no
+   punch-out ring - that is only there to lift the dot off an avatar photo. */
+.presence-select .presence-dot { position: static; box-shadow: none; }
 
 .brand-mark { height: 24px; width: 24px; object-fit: contain; }
 
@@ -1817,7 +1824,6 @@ html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; ba
 .team-workload-list { display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:12px; }
 .team-workload-card { display:grid; gap:14px; width:100%; padding:17px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); color:inherit; text-align:left; cursor:pointer; }
 .team-workload-card:hover, .team-workload-card:focus-visible { border-color:var(--teal); }
-.team-workload-card.is-at-risk { border-left:4px solid #E36B43; }
 .team-workload-heading { display:flex; min-width:0; align-items:center; gap:10px; }
 .team-workload-heading > div { min-width:0; flex:1; display:grid; gap:3px; }
 .team-workload-heading h2 { margin:0; color:var(--workspace-text); font:700 13px 'Montserrat'; }
