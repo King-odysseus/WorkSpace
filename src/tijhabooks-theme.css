@@ -109,8 +109,10 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
   display: block;
   width: 9px;
   height: 9px;
+  border: 0;
   border-radius: 50%;
   background: #98a2b3;
+  opacity: 1;
   box-shadow: 0 0 0 2px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
 }
 .avatar.small .presence-dot {
@@ -1732,7 +1734,10 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .my-task-tabs { display: flex; gap: 5px; overflow-x: auto; }
 .my-task-tabs button { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; border: 0; border-radius: 999px; background: transparent; color: var(--workspace-text-soft); font: 700 10px 'Roboto'; white-space: nowrap; cursor: pointer; }
 .my-task-tabs button.active, .my-task-tabs button:hover { background: var(--workspace-surface-soft); color: var(--workspace-text); }
-.my-task-tabs span { min-width: 16px; padding: 2px 4px; border-radius: 999px; background: var(--workspace-border); font-size: 9px; text-align: center; }
+.my-task-tabs span { min-width: 16px; padding: 2px 4px; border-radius: 999px; background: var(--workspace-border); color: var(--workspace-text-soft); font-size: 9px; text-align: center; }
+/* The count pill keeps its own colour: inheriting the button's leaves it white
+   on the light pill whenever the tab is the selected one. */
+.my-task-tabs button.active span { background: #FFFFFF; color: var(--color-info); }
 .my-task-filters { display: flex; flex-wrap: wrap; gap: 7px; }
 .my-task-filters input, .my-task-filters [data-slot='select-trigger'] { min-height: 34px; padding: 0 8px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text); font: 500 10px 'Roboto'; }
 .my-task-filters input { flex: 1 1 180px; min-width: 150px; }

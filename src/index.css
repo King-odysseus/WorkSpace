@@ -2570,6 +2570,7 @@ html[data-theme='dark'] .workspace-view :is(
    darker still and the muted colour clears the ratio there. */
 html[data-theme='light'] :is(
   .chat-workspace-view .chat-filter-tabs button:not(.active) span,
+  .workspace-view .my-task-tabs button:not(.active) span,
   .workspace-view .checkin-range-filter button:not(.active) > span
 ) {
   color: #5f687c;
@@ -3086,11 +3087,27 @@ html[data-theme='dark'] .planner-bucket-menu {
    its own surface while leaving the planner board's horizontal scroll intact. */
 .workspace-view.projects-view .project-toolbar {
   min-width: 0;
+  margin: 0;
+}
+
+.workspace-view.projects-view,
+.workspace-view.planner-view {
+  gap: 14px;
+}
+
+.workspace-view.projects-view .project-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
 }
 
 .workspace-view.projects-view .project-card {
+  display: flex;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
+  gap: 0;
+  padding: 16px;
 }
 
 .workspace-view.projects-view .project-card > * {
@@ -3099,40 +3116,76 @@ html[data-theme='dark'] .planner-bucket-menu {
 }
 
 .workspace-view.projects-view .project-card-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
   min-width: 0;
-  flex-wrap: wrap;
-  row-gap: 6px;
+  gap: 6px;
 }
 
 .workspace-view.projects-view .project-card-top .project-icon {
   flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
 }
 
 .workspace-view.projects-view .project-card-top .project-health {
-  margin-left: auto;
+  justify-self: start;
+  margin-left: 0;
 }
 
 .workspace-view.projects-view .project-card-top .project-status {
-  min-width: 0;
-  flex: 0 1 auto;
-  max-width: 100%;
+  min-width: 76px;
+  max-width: 96px;
+  justify-self: end;
+}
+
+.workspace-view.projects-view .project-card-top [data-slot='button'] {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
 }
 
 .workspace-view.projects-view .project-card h3 {
+  display: -webkit-box;
+  margin: 13px 0 5px;
   overflow-wrap: anywhere;
+  overflow: hidden;
   white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.workspace-view.projects-view .project-card p,
+.workspace-view.projects-view .project-card p {
+  display: -webkit-box;
+  min-height: 2.9em;
+  overflow: hidden;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .workspace-view.projects-view .project-footer small {
   overflow-wrap: anywhere;
+}
+
+.workspace-view.projects-view .project-progress {
+  margin-top: 12px;
 }
 
 .workspace-view.projects-view .project-task-stats,
 .workspace-view.projects-view .project-footer {
   min-width: 0;
   flex-wrap: wrap;
-  row-gap: 8px;
+  row-gap: 6px;
+}
+
+.workspace-view.projects-view .project-task-stats {
+  gap: 5px;
+  margin-top: 9px;
 }
 
 .workspace-view.projects-view .project-task-stats span,
@@ -3144,6 +3197,13 @@ html[data-theme='dark'] .planner-bucket-menu {
 .workspace-view.projects-view .project-footer > div {
   min-width: 0;
   flex: 1 1 130px;
+}
+
+.workspace-view.projects-view .project-footer {
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--workspace-border);
 }
 
 @media (max-width: 1100px) {
@@ -3176,6 +3236,74 @@ html[data-theme='dark'] .planner-bucket-menu {
   max-width: 100%;
 }
 
+.workspace-view.planner-view .workspace-view-heading {
+  gap: 14px;
+  margin-bottom: 0;
+}
+
+.workspace-view.planner-view .planner-scope-switch {
+  gap: 8px;
+  margin-bottom: 0;
+  padding: 8px 10px;
+}
+
+.workspace-view.planner-view .planner-commandbar {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr) repeat(2, minmax(130px, 170px)) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  padding: 10px 12px;
+}
+
+.workspace-view.planner-view .planner-commandbar .planner-view-toggle {
+  width: max-content;
+}
+
+.workspace-view.planner-view .planner-commandbar .planner-view-toggle button {
+  gap: 4px;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.workspace-view.planner-view .planner-commandbar label:not(.planner-search) {
+  min-width: 0;
+  gap: 6px;
+}
+
+.workspace-view.planner-view .planner-commandbar label:not(.planner-search) [data-slot='select-trigger'] {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.workspace-view.planner-view .planner-commandbar .planner-search {
+  width: 100%;
+  min-width: 0;
+  flex: none;
+}
+
+.workspace-view.planner-view .planner-commandbar .planner-more-filters,
+.workspace-view.planner-view .planner-commandbar .planner-clear-filters {
+  padding-right: 10px;
+  padding-left: 10px;
+  white-space: nowrap;
+}
+
+.workspace-view.planner-view .planner-commandbar .planner-result-count {
+  justify-self: end;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.workspace-view.planner-view .planner-secondary-filters {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 2px 0 0;
+  padding-top: 10px;
+}
+
 .workspace-view.planner-view .planner-scope-switch label,
 .workspace-view.planner-view .planner-scope-switch [data-slot='select-trigger'] {
   min-width: 0;
@@ -3185,6 +3313,11 @@ html[data-theme='dark'] .planner-bucket-menu {
 .workspace-view.planner-view .operations-workstream-create > div {
   min-width: 0;
   flex: 1 1 240px;
+}
+
+.workspace-view.planner-view .operations-workstream-create {
+  margin-bottom: 0;
+  padding: 10px 12px;
 }
 
 .workspace-view.planner-view .operations-workstream-create input {
@@ -3199,6 +3332,8 @@ html[data-theme='dark'] .planner-bucket-menu {
 
 .workspace-view.planner-view .planner-manage-row {
   align-items: center;
+  gap: 6px;
+  margin: 0;
 }
 
 .workspace-view.planner-view .planner-manage-chip {
@@ -3214,9 +3349,11 @@ html[data-theme='dark'] .planner-bucket-menu {
 
 .workspace-view.planner-view .planner-add-bucket {
   display: grid;
-  grid-template-columns: minmax(0, 220px) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 220px) auto;
   justify-content: start;
   align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
 }
 
 .workspace-view.planner-view .planner-add-bucket input {
@@ -3229,6 +3366,7 @@ html[data-theme='dark'] .planner-bucket-menu {
 }
 
 .workspace-view.planner-view .planner-add-bucket > span {
+  grid-column: 1 / -1;
   min-width: 0;
   color: var(--dashboard-muted);
   font-size: 10px;
@@ -3276,22 +3414,81 @@ html[data-theme='dark'] .planner-bucket-menu {
   }
 
   .workspace-view.planner-view .operations-workstream-create {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
   }
 
-  .workspace-view.planner-view .operations-workstream-create > div,
-  .workspace-view.planner-view .operations-workstream-create input,
-  .workspace-view.planner-view .operations-workstream-create .secondary-button {
+  .workspace-view.planner-view .operations-workstream-create > div {
+    grid-column: 1 / -1;
     width: 100%;
-    flex-basis: 100%;
+    flex: none;
+  }
+
+  .workspace-view.planner-view .operations-workstream-create > div span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-view.planner-view .operations-workstream-create input {
+    grid-column: 1;
+    width: 100%;
+    min-width: 0;
+    flex: none;
+  }
+
+  .workspace-view.planner-view .operations-workstream-create .secondary-button {
+    grid-column: 2;
+    width: auto;
+    flex: none;
+  }
+
+  .workspace-view.planner-view .planner-manage-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: thin;
+  }
+
+  .workspace-view.planner-view .planner-manage-chip {
+    flex: 0 0 auto;
   }
 
   .workspace-view.planner-view .planner-add-bucket {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+}
 
-  .workspace-view.planner-view .planner-add-bucket > span {
+@media (max-width: 800px) {
+  .workspace-view.planner-view {
+    --workspace-control-height: 34px;
+  }
+
+  .workspace-view.planner-view .planner-commandbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-view.planner-view .planner-commandbar .planner-view-toggle,
+  .workspace-view.planner-view .planner-commandbar .planner-search {
     grid-column: 1 / -1;
+  }
+
+  .workspace-view.planner-view .planner-commandbar .planner-view-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .workspace-view.planner-view .planner-commandbar .planner-result-count {
+    justify-self: start;
+    text-align: left;
+  }
+}
+
+@media (min-width: 1001px) and (max-width: 1100px) {
+  .workspace-view.planner-view .planner-commandbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
