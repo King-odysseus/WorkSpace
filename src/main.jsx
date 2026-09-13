@@ -1849,16 +1849,6 @@ function App() {
   const mobilePillItems = mobilePillLabels
     .map((label) => navItemsByLabel.get(label))
     .filter(Boolean);
-  // Zuri joins the same row rather than the header, where a labelled button
-  // crowded the utility icons. It sits between the second and third
-  // destination, so the action lands in the middle of the row.
-  const mobilePillEntries = [
-    ...mobilePillItems.slice(0, 2),
-    ...(!aiLauncherHidden && !aiMinimized && activeWorkspaceId
-      ? [{ label: "Ask Zuri", zuri: true, icon: Sparkles }]
-      : []),
-    ...mobilePillItems.slice(2),
-  ];
 
   return (
     <div className="flex h-dvh overflow-hidden bg-surface-secondary">
@@ -2659,22 +2649,20 @@ function App() {
         pill doesn't sit dimmed under the overlay. ── */}
       <nav
         className={cn(
-          "fixed bottom-4 left-1/2 z-30 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-lg border border-white/10 bg-navy/95 p-1.5 shadow-lg backdrop-blur transition-opacity duration-200 [scrollbar-width:none] lg:hidden",
+          "fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-none border border-white/10 bg-navy/95 p-1.5 shadow-lg backdrop-blur transition-opacity duration-200 lg:hidden",
           mobileOpen && "pointer-events-none opacity-0",
         )}
         aria-label="Primary"
       >
-        {mobilePillEntries.map(({ label, icon: Icon, badge, badgeTone, zuri }) => (
+        {mobilePillItems.map(({ label, icon: Icon, badge, badgeTone }) => (
           <button
             type="button"
             key={label}
-            onClick={() => (zuri ? setAiFlyoutOpen(true) : setActive(label))}
-            aria-current={!zuri && active === label ? "page" : undefined}
-            aria-haspopup={zuri ? "dialog" : undefined}
+            onClick={() => setActive(label)}
+            aria-current={active === label ? "page" : undefined}
             className={cn(
-              "mobile-nav-item relative flex h-12 w-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-md transition-colors",
-              zuri && "mobile-nav-zuri",
-              !zuri && active === label
+              "mobile-nav-item relative flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-none transition-colors",
+              active === label
                 ? "is-active"
                 : "text-white/60 hover:bg-white/5 hover:text-white",
             )}
@@ -2704,11 +2692,24 @@ function App() {
           onClick={() => setMobileOpen(true)}
           aria-expanded={mobileOpen}
           aria-haspopup="menu"
-          className="flex h-12 w-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-md text-white/60 transition-colors hover:bg-white/5 hover:text-white"
+          className="flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-none text-white/60 transition-colors hover:bg-white/5 hover:text-white"
         >
           <MoreHorizontal size={19} className="shrink-0" />
           <span className="text-[10px] font-semibold leading-none">More</span>
         </button>
+
+        {!aiLauncherHidden && !aiMinimized && activeWorkspaceId && (
+          <button
+            type="button"
+            onClick={() => setAiFlyoutOpen(true)}
+            className="mobile-nav-zuri"
+            aria-label="Open Zuri"
+            aria-haspopup="dialog"
+            title="Ask Zuri"
+          >
+            <Sparkles size={22} />
+          </button>
+        )}
       </nav>
 
       {showModal && (

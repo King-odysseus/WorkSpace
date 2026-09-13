@@ -1407,7 +1407,27 @@ html[data-theme='light'] .mobile-pill-nav {
   color: #FFFFFF;
 }
 .mobile-nav-item.is-active svg { color: var(--brand-accent); }
-.mobile-nav-zuri svg { color: var(--brand-accent); }
+
+/* Zuri floats above the centre of the bar in its own circular bubble, keeping the
+   desktop launcher's white/gold treatment so the AI reads the same on both.
+   Square tiles, round AI. */
+.mobile-nav-zuri {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 8px;
+  transform: translateX(-50%);
+  border: 1px solid #C49A6C;
+  border-radius: 50%;
+  background: #FFFFFF;
+  color: #90673F;
+  box-shadow: 0 8px 20px rgb(2 5 31 / 28%);
+}
+.mobile-nav-zuri:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 
 /* Use one TijhaBooks popup treatment for dialogs, drawers, notifications, and menus. */
 .modal-backdrop,
