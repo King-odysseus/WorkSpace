@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 
 import { applyAppUpdate, subscribeToAppUpdates } from "../lib/app-updates.js";
+import { Button } from "./ui/button.jsx";
 
 // Shown when a newer build is waiting to take over. Reloading is the user's
 // call: an unprompted swap would drop whatever they were typing, and this app
@@ -19,29 +21,33 @@ export default function AppUpdateBanner() {
 
   return (
     <div className="app-update-banner" role="status" aria-live="polite">
-      <span className="app-update-banner-mark" aria-hidden="true" />
+      <span className="app-update-banner-mark" aria-hidden="true">
+        <Sparkles size={15} strokeWidth={2.4} />
+      </span>
       <div className="app-update-banner-copy">
         <strong>A new version of WorkSpace is available</strong>
         <span>Reload to pick up the latest changes.</span>
       </div>
-      <button
-        type="button"
-        className="primary-button"
-        disabled={reloading}
-        onClick={() => {
-          setReloading(true);
-          applyAppUpdate();
-        }}
-      >
-        {reloading ? "Reloading..." : "Reload now"}
-      </button>
-      <button
-        type="button"
-        className="app-update-banner-dismiss"
-        onClick={() => setUpdateReady(false)}
-      >
-        Later
-      </button>
+      <div className="app-update-banner-actions">
+        <Button
+          type="button"
+          size="sm"
+          loading={reloading}
+          onClick={() => {
+            setReloading(true);
+            applyAppUpdate();
+          }}
+        >
+          {reloading ? "Reloading..." : "Reload now"}
+        </Button>
+        <button
+          type="button"
+          className="app-update-banner-dismiss"
+          onClick={() => setUpdateReady(false)}
+        >
+          Later
+        </button>
+      </div>
     </div>
   );
 }

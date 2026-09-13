@@ -3719,11 +3719,11 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   box-shadow:0 10px 30px rgb(7 26 46 / 22%);
   animation:app-update-banner-reveal .2s ease-out;
 }
-.app-update-banner-mark { flex:0 0 auto; width:9px; height:9px; border-radius:50%; background:var(--brand-accent); }
-.app-update-banner-copy { display:grid; gap:2px; min-width:0; }
+.app-update-banner-mark { flex:0 0 auto; display:grid; place-items:center; width:32px; height:32px; border-radius:10px; color:var(--brand-accent); background:color-mix(in srgb, var(--brand-accent) 12%, transparent); }
+.app-update-banner-copy { flex:1 1 220px; display:grid; gap:2px; min-width:0; }
 .app-update-banner-copy strong { font-size:13px; }
 .app-update-banner-copy span { color:var(--workspace-text-soft); font-size:12px; }
-.app-update-banner .primary-button { padding:7px 14px; font-size:12px; }
+.app-update-banner-actions { display:flex; align-items:center; gap:8px; margin-left:auto; }
 .app-update-banner-dismiss { padding:7px 10px; border:0; border-radius:8px; background:transparent; color:var(--workspace-text-soft); cursor:pointer; font-size:12px; }
 .app-update-banner-dismiss:hover { color:var(--workspace-text); }
 @keyframes app-update-banner-reveal {
@@ -3731,6 +3731,10 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   to { opacity:1; transform:translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) { .app-update-banner { animation:none; } }
+@media (max-width:520px) {
+  .app-update-banner { align-items:flex-start; }
+  .app-update-banner-actions { width:100%; justify-content:flex-end; }
+}
 
 /* Dialogs open in the middle of the page, and every form in one is a single
    column. The detail panel used to slide in from the right edge, which covered
