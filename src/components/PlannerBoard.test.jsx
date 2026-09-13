@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import PlannerBoard from './PlannerBoard.jsx'
 
@@ -186,7 +187,8 @@ it('leaves a borrowed lane out of the reorder controls', () => {
   expect(container.querySelectorAll('.planner-bucket-move')).toHaveLength(0)
 })
 
-it('offers lifecycle actions for custom buckets and protects the default Backlog', () => {
+it('offers lifecycle actions for custom buckets through an overflow menu and protects the default Backlog', async () => {
+  const user = userEvent.setup()
   renderPlanner({
     buckets: [
       { id: 2, name: 'Backlog', project_id: null },
@@ -197,15 +199,16 @@ it('offers lifecycle actions for custom buckets and protects the default Backlog
     canManageBuckets: true,
   })
 
-  expect(screen.getByRole('button', { name: 'Rename Prototyping' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Archive Prototyping' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Delete Prototyping' })).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Rename Backlog' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Delete Backlog' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Open actions for Prototyping' }))
+  expect(screen.getByRole('menuitem', { name: 'Rename Prototyping' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Archive Prototyping' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Delete Prototyping' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Open actions for Backlog' })).not.toBeInTheDocument()
 })
 
 it('renames a custom bucket inline', async () => {
   const onRenameBucket = vi.fn().mockResolvedValue(true)
+  const user = userEvent.setup()
   renderPlanner({
     buckets: [{ id: 19, name: 'Prototyping', project_id: 2 }],
     scopeMode: 'projects',
@@ -214,7 +217,8 @@ it('renames a custom bucket inline', async () => {
     onRenameBucket,
   })
 
-  fireEvent.click(screen.getByRole('button', { name: 'Rename Prototyping' }))
+  await user.click(screen.getByRole('button', { name: 'Open actions for Prototyping' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Rename Prototyping' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Rename Prototyping' }), { target: { value: 'Discovery' } })
   fireEvent.click(screen.getByRole('button', { name: 'Save Prototyping name' }))
 

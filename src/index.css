@@ -2773,11 +2773,6 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   color: var(--workspace-primary);
 }
 
-.workspace-view .planner-manage-chip button.planner-bucket-delete:hover {
-  background: color-mix(in srgb, #C43D4B 11%, transparent);
-  color: #B83243;
-}
-
 .workspace-view .planner-bucket-edit {
   gap: 4px;
   padding: 4px 5px;
@@ -2793,6 +2788,51 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   background: var(--workspace-surface);
   color: var(--workspace-text);
   font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+}
+
+.workspace-view .planner-bucket-menu-trigger {
+  flex: 0 0 auto;
+}
+
+.planner-bucket-menu {
+  z-index: 60;
+  min-width: 150px;
+  padding: 5px;
+  border: 1px solid var(--border, #E6E8EE);
+  border-radius: 11px;
+  background: var(--surface, #FFFFFF);
+  color: var(--text-primary, #172033);
+  box-shadow: 0 14px 32px rgb(7 26 46 / 18%);
+}
+
+.planner-bucket-menu [data-slot='dropdown-menu-item'] {
+  min-height: 32px;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: inherit;
+  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+}
+
+.planner-bucket-menu [data-slot='dropdown-menu-item']:focus,
+.planner-bucket-menu [data-slot='dropdown-menu-item'][data-highlighted] {
+  background: color-mix(in srgb, var(--primary, #0B0B45) 9%, var(--surface, #FFFFFF));
+  color: var(--primary, #0B0B45);
+}
+
+.planner-bucket-menu [data-slot='dropdown-menu-item'][data-variant='destructive'] {
+  color: #B83243;
+}
+
+.planner-bucket-menu [data-slot='dropdown-menu-item'][data-variant='destructive']:focus,
+.planner-bucket-menu [data-slot='dropdown-menu-item'][data-variant='destructive'][data-highlighted] {
+  background: color-mix(in srgb, #C43D4B 10%, var(--surface, #FFFFFF));
+  color: #B83243;
+}
+
+.planner-bucket-menu [data-slot='dropdown-menu-separator'] {
+  margin: 4px 0;
+  background: var(--border, #E6E8EE);
 }
 
 .workspace-view .planner-bucket-archive {
@@ -2970,6 +3010,13 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
 
 html[data-theme='dark'] .workspace-view .planner-archive-card {
   box-shadow: 0 10px 25px rgb(2 5 31 / 34%);
+}
+
+html[data-theme='dark'] .planner-bucket-menu {
+  border-color: var(--border, #30315E);
+  background: var(--surface, #17183E);
+  color: var(--text-primary, #F1F2FA);
+  box-shadow: 0 16px 36px rgb(2 5 31 / 46%);
 }
 
 @media (max-width: 700px) {
