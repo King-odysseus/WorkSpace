@@ -694,11 +694,15 @@ html[data-theme='light'] .calendar-week, html[data-theme='light'] .workspace-sid
 .calendar-view-switcher button { border: 0; border-radius: 999px; padding: 7px 10px; background: transparent; color: #6B7280; cursor: pointer; font-size: 11px; font-weight: 700; }
 .calendar-view-switcher button.active { background: #071A2E; color: #FFFFFF; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
-.calendar-day { min-height: 110px; border-right: 1px solid #EEF0F3; border-bottom: 1px solid #EEF0F3; transition: background .15s ease; }
-.calendar-day > strong { display: flex; align-items: center; gap: 7px; padding: 12px; color: #4B5563; font-size: 11px; font-weight: 600; }
-.calendar-slot { display: grid; gap: 6px; padding: 0 8px 10px; }
+.calendar-day { min-height: 110px; border-right: 1px solid #EEF0F3; border-bottom: 1px solid #EEF0F3; cursor: pointer; transition: background .15s ease; }
+.calendar-day-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 12px; }
+.calendar-day-heading strong { display: flex; align-items: center; gap: 7px; color: #4B5563; font-size: 11px; font-weight: 600; }
+.calendar-day-add { display: inline-flex; width: 24px; height: 24px; flex: 0 0 auto; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); cursor: pointer; opacity: 0; transition: opacity .15s ease, background .15s ease; }
+.calendar-day:hover .calendar-day-add, .calendar-day:focus-within .calendar-day-add { opacity: 1; }
+.calendar-day-add:hover { background: color-mix(in srgb, var(--blue) 20%, transparent); }
+.calendar-slot { display: grid; cursor: pointer; gap: 6px; padding: 0 8px 10px; }
 .calendar-day.is-today { background: var(--color-info-soft); }
-.calendar-day.is-today > strong { color: #071A2E; }
+.calendar-day.is-today .calendar-day-heading strong { color: #071A2E; }
 .today-badge { display: inline-flex; align-items: center; justify-content: center; height: 17px; padding: 0 6px; border-radius: 999px; background: var(--blue); color: #FFFFFF; font-size: 9px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
 .calendar-view-month .calendar-day { min-height: 92px; }
 .calendar-view-year .calendar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -706,7 +710,8 @@ html[data-theme='light'] .calendar-week, html[data-theme='light'] .workspace-sid
 .calendar-view-year .calendar-slot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .calendar-view-day .calendar-grid { grid-template-columns: 1fr; }
 .calendar-view-day .calendar-day { min-height: 320px; border-right: 0; }
-.calendar-view-day .calendar-day > strong { padding: 16px 18px; font-size: 13px; }
+.calendar-view-day .calendar-day-heading { padding: 16px 18px; }
+.calendar-view-day .calendar-day-heading strong { font-size: 13px; }
 .calendar-view-day .calendar-slot { padding: 4px 18px 18px; gap: 8px; }
 .calendar-view-day .event-pill { padding: 12px 14px; font-size: 12px; }
 html[data-theme='dark'] .calendar-nav-button { border-color: #28516F; color: #FFFFFF; }
@@ -714,14 +719,16 @@ html[data-theme='dark'] .calendar-view-switcher { border-color: #28516F; backgro
 html[data-theme='dark'] .calendar-view-switcher button { color: #B9CCDD; }
 html[data-theme='dark'] .calendar-view-switcher button.active { background: var(--blue); color: #FFFFFF; }
 html[data-theme='dark'] .calendar-day { border-color: #28516F; }
-html[data-theme='dark'] .calendar-day > strong { color: #B9CCDD; }
+html[data-theme='dark'] .calendar-day-heading strong { color: #B9CCDD; }
 html[data-theme='dark'] .calendar-day.is-today { background: #16324B; }
-html[data-theme='dark'] .calendar-day.is-today > strong { color: #FFFFFF; }
+html[data-theme='dark'] .calendar-day.is-today .calendar-day-heading strong { color: #FFFFFF; }
 @media (max-width: 600px) { .calendar-toolbar { align-items: flex-start; flex-direction: column; gap: 12px; } .calendar-toolbar-actions { flex-wrap: wrap; } .calendar-view-switcher button { padding-inline: 7px; } .calendar-view-year .calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calendar-grid { padding: 0 4px; }
   .calendar-day { min-height: 74px; }
   .calendar-view-month .calendar-day { min-height: 64px; }
-  .calendar-day > strong { padding: 8px 6px; font-size: 10px; gap: 4px; }
+  .calendar-day-heading { padding: 8px 6px; }
+  .calendar-day-heading strong { font-size: 10px; gap: 4px; }
+  .calendar-day-add { width: 22px; height: 22px; opacity: 1; }
   .calendar-slot { padding: 0 4px 6px; gap: 4px; }
   .event-pill { gap: 4px; padding: 5px 6px; font-size: 9px; }
   .event-pill span { font-size: 8px; }
@@ -1041,7 +1048,7 @@ html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .calendar-time-day { text-align: center; }
 .calendar-time-day.is-today { color: var(--teal); }
 .calendar-time-label { min-height: 56px; padding: 5px 7px 0 0; border-right: 1px solid var(--workspace-border); color: var(--workspace-text-soft); font-size: 9px; text-align: right; }
-.calendar-time-slot { position: relative; min-height: 56px; padding: 3px; border-right: 1px solid var(--workspace-border); border-bottom: 1px solid var(--workspace-border); background: var(--workspace-surface); }
+.calendar-time-slot { position: relative; min-height: 56px; padding: 3px; border-right: 1px solid var(--workspace-border); border-bottom: 1px solid var(--workspace-border); background: var(--workspace-surface); cursor: pointer; }
 .calendar-time-slot:hover { background: var(--workspace-surface-soft); }
 .calendar-time-slot .event-pill { position: relative; z-index: 1; overflow: hidden; min-height: 31px; padding: 6px 7px; text-overflow: ellipsis; white-space: nowrap; }
 .error-boundary { min-height: 100vh; width: 100%; display: grid; place-items: center; padding: 24px; background: #071A2E; color: #FFFFFF; text-align: center; }
@@ -1122,7 +1129,7 @@ html[data-theme='dark'] .workspace-side-card .compact-row strong,
 html[data-theme='dark'] .directory-row strong,
 html[data-theme='dark'] .directory-row em,
 html[data-theme='dark'] .project-card p,
-html[data-theme='dark'] .calendar-day > strong,
+html[data-theme='dark'] .calendar-day-heading strong,
 html[data-theme='dark'] .chat-placeholder p {
   color: var(--workspace-text-soft);
 }
@@ -3872,6 +3879,20 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 .ai-chat-composer .ai-chat-input { flex:1; min-width:0; min-height:64px; max-height:160px; resize:vertical; border:1px solid var(--workspace-border); border-radius:12px; padding:10px; background:var(--workspace-surface-soft); color:var(--workspace-text); font-size:16px; }
 .ai-chat-send { display:grid; place-items:center; min-width:44px; height:44px; border:0; border-radius: 999px; background:var(--blue); color:#FFFFFF; cursor:pointer; }
 .ai-chat-send:disabled { opacity:.45; cursor:default; }
+/* The attachment chip sits above the input row, so the composer switches to a
+   column and the row keeps the original flex behaviour it had on its own. */
+.ai-chat-composer.is-stacked { flex-direction:column; align-items:stretch; }
+.ai-chat-composer-row { display:flex; align-items:flex-end; gap:8px; }
+.ai-chat-attachment { display:flex; align-items:center; gap:7px; min-width:0; padding:6px 8px 6px 10px; border:1px solid var(--workspace-border); border-radius:10px; background:var(--workspace-surface-soft); color:var(--workspace-text); font-size:12px; }
+.ai-chat-attachment span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-chat-attachment button { display:grid; place-items:center; width:24px; height:24px; border:0; border-radius:999px; background:transparent; color:var(--workspace-text-soft); cursor:pointer; }
+.ai-chat-attachment button:hover { background:var(--workspace-border); color:var(--workspace-text); }
+.ai-chat-attach-status { margin:0; color:var(--workspace-text-soft); font-size:11px; }
+.ai-chat-attach { position:relative; display:grid; place-items:center; min-width:44px; height:44px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); cursor:pointer; }
+.ai-chat-attach:hover { color:var(--workspace-text); }
+.ai-chat-attach input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.ai-chat-attach:focus-within { outline:2px solid var(--focus-ring) !important; outline-offset:2px; }
+.ai-chat-doc-note { padding:9px 13px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font-size:11px; line-height:1.45; }
 @media (min-width:1024px) {
   .ai-desktop-launcher { position:fixed; bottom:28px; right:28px; z-index:30; display:grid; place-items:center; width:56px; height:56px; border:0; border-radius:999px; background:var(--brand-accent); color:var(--workspace-on-accent); box-shadow:0 8px 24px rgb(0 0 0 / 20%); cursor:pointer; }
   .ai-desktop-launcher:hover { background:#FFFFFF; }

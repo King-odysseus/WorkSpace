@@ -5259,6 +5259,17 @@ function WorkspaceView({
         (event) => new Date(event.end_at || event.start_at) >= agendaStart,
       )
       .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+    const openCalendarComposerForDate = (day, hour = 9) => {
+      const start = new Date(day);
+      start.setHours(hour, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(start.getHours() + 1);
+      setCalendarDate(new Date(start));
+      openComposer("calendar", {
+        start_at: toDateTimeLocal(start),
+        end_at: toDateTimeLocal(end),
+      });
+    };
     const timeGridDays = calendarView === "day" ? [calendarDate] : calendarDays;
     const timeGrid = (
       <div
@@ -5285,16 +5296,9 @@ function WorkspaceView({
               <div
                 className="calendar-time-slot"
                 key={`${day.toISOString()}-${hour}`}
-                onDoubleClick={() => {
-                  const start = new Date(day);
-                  start.setHours(hour, 0, 0, 0);
-                  const end = new Date(start);
-                  end.setHours(hour + 1);
-                  setCalendarDate(new Date(day));
-                  openComposer("calendar", {
-                    start_at: toDateTimeLocal(start),
-                    end_at: toDateTimeLocal(end),
-                  });
+                onClick={(clickEvent) => {
+                  if (clickEvent.target.closest("button, a")) return;
+                  openCalendarComposerForDate(day, hour);
                 }}
               >
                 {visibleCalendarEvents
@@ -5641,20 +5645,42 @@ function WorkspaceView({
                   <div
                     className={`calendar-day${toDateKey(day) === today ? " is-today" : ""}`}
                     key={day.toISOString()}
+                    onClick={(clickEvent) => {
+                      if (clickEvent.target.closest("button, a")) return;
+                      openCalendarComposerForDate(day);
+                    }}
+                    title="Click to add an event"
                   >
-                    <strong>
-                      {calendarView === "year"
-                        ? formatCalendarDate(day, { month: "short" })
-                        : formatCalendarDate(day, {
-                            weekday: "short",
+                    <div className="calendar-day-heading">
+                      <strong>
+                        {calendarView === "year"
+                          ? formatCalendarDate(day, { month: "short" })
+                          : formatCalendarDate(day, {
+                              weekday: "short",
+                              day: "numeric",
+                            })}
+                        {toDateKey(day) === today && (
+                          <Badge variant="info" className="today-badge">
+                            Today
+                          </Badge>
+                        )}
+                      </strong>
+                      {calendarView !== "year" && (
+                        <button
+                          type="button"
+                          className="calendar-day-add"
+                          onClick={() => openCalendarComposerForDate(day)}
+                          aria-label={`Add event on ${formatCalendarDate(day, {
+                            weekday: "long",
+                            month: "long",
                             day: "numeric",
-                          })}
-                      {toDateKey(day) === today && (
-                        <Badge variant="info" className="today-badge">
-                          Today
-                        </Badge>
+                          })}`}
+                          title="Add event"
+                        >
+                          <Plus size={13} />
+                        </button>
                       )}
-                    </strong>
+                    </div>
                     <div className="calendar-slot">
                       {calendarEventsForDay(day)
                         .filter(
