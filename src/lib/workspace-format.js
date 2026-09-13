@@ -64,17 +64,47 @@ function filterCheckInsByRange(checkIns, range, todayKey = toDateKey(new Date())
 
 function taskDueLabel(dueDate, today) {
   if (!dueDate) return 'No due date'
-  return dueDate < today ? 'Overdue' : dueDate
+  return dueDate < today ? 'Overdue' : formatDay(dueDate)
 }
 
-// The day as the user reads it: DD/MM/YYYY.
+// Dates, written one way: DD/MM/YYYY, whatever the browser is set to. Nothing in
+// the UI should render a raw ISO string or lean on toLocaleDateString, because
+// both follow the machine's locale rather than the app's.
+const pad2 = value => String(value).padStart(2, '0')
+
+// A date-only value - a due date, a check-in day: '2026-09-13'.
 //
-// Read straight off the ISO string rather than through Date, because a
-// date-only value parsed as an instant lands on the previous day for anyone west
-// of UTC, and a due date must not move because of where someone is sitting.
+// Read straight off the string rather than through Date, because a date-only
+// value parsed as an instant lands on the previous day for anyone west of UTC,
+// and a due date must not move because of where someone is sitting. A timestamp
+// belongs to formatDate/formatDateTime below, which format it in local time.
 function formatDay(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
   return match ? `${match[3]}/${match[2]}/${match[1]}` : ''
+}
+
+function localDate(value) {
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+// A moment in time - created_at, last_seen_at, start_at. Shown as the local
+// calendar day it happened on, because that is the day the reader lived it.
+function formatDate(value) {
+  const date = localDate(value)
+  return date ? `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}` : ''
+}
+
+function formatDateTime(value) {
+  const date = localDate(value)
+  return date ? `${formatDate(date)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}` : ''
+}
+
+// Day and month without the year, for the narrow slots - a gantt column, an
+// event pill in the year view - where DD/MM/YYYY does not fit.
+function formatDayMonth(value) {
+  const date = localDate(value)
+  return date ? `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}` : ''
 }
 
 function taskSearchText(task) {
@@ -169,7 +199,7 @@ function formatLastSeen(value) {
   const days = Math.floor(hours / 24)
   if (days === 1) return 'Active yesterday'
   if (days < 7) return `Active ${days}d ago`
-  return `Last seen ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+  return `Last seen ${formatDate(date)}`
 }
 
 // A member's chosen presence is self-reported and sticky (see UserProfile.presence
@@ -311,6 +341,9 @@ export {
   filterCheckInsByRange,
   taskDueLabel,
   formatDay,
+  formatDate,
+  formatDateTime,
+  formatDayMonth,
   taskSearchText,
   mapTaskFromApi,
   taskAssigneeLabel,

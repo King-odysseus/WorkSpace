@@ -3,7 +3,7 @@ import { Download, MonitorUp, ShieldCheck, Trash2, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
-import { getCsrfToken } from '../lib/workspace-format.js'
+import { formatDateTime as formatTimestamp, getCsrfToken } from '../lib/workspace-format.js'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
@@ -18,7 +18,8 @@ async function apiRequest(url, options = {}) {
   return data
 }
 
-const formatDateTime = value => value ? new Date(value).toLocaleString() : '-'
+// The shared format, plus the dash this screen shows where a timestamp is missing.
+const formatDateTime = value => value ? formatTimestamp(value) : '-'
 
 export function ScreenShareControl({ workspaceId, currentUserId, targetSessionId = null }) {
   const [pending, setPending] = useState(null)

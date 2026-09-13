@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Moon, Sun, X } from 'lucide-react'
-import { readJsonResponse } from '../lib/workspace-format.js'
+import { formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 
 function Activity({ avatar, color, kind, text, strong, suffix, time }) { const detail = strong && text && strong.toLowerCase().startsWith(`${text.toLowerCase()} `) ? strong.slice(text.length + 1) : strong; return <div className="activity-item"><span className={`activity-kind activity-kind-${kind || 'default'}`} aria-hidden="true">{(kind || '•').slice(0, 1).toUpperCase()}</span><span className={`avatar small ${color}`}>{avatar}</span><p><strong>{text}</strong> {detail} {suffix}<span title={time}>{time}</span></p></div> }
 
@@ -148,7 +148,7 @@ function InvitationReview({ invitation, currentUserEmail, submitting, error, onA
       {invitation.invited_by_name && <p><strong>Invited by:</strong> {invitation.invited_by_name}</p>}
       <p><strong>Role:</strong> {invitation.role}</p>
       <p className="auth-subtitle">{ROLE_ACCESS_SUMMARY[invitation.role] || 'Access is limited to what this role permits.'}</p>
-      {invitation.expires_at && status === 'pending' && <p className="auth-subtitle">Expires {new Date(invitation.expires_at).toLocaleString()}</p>}
+      {invitation.expires_at && status === 'pending' && <p className="auth-subtitle">Expires {formatDateTime(invitation.expires_at)}</p>}
     </div>
     {wrongAccount && <p className="auth-error" role="alert">This invitation was sent to <strong>{invitation.email}</strong>, which does not match the account you are signed in with ({currentUserEmail}). Sign out and sign in with the invited address to continue.</p>}
     {!wrongAccount && status === 'expired' && <p className="auth-error" role="alert">This invitation has expired. Ask {invitation.invited_by_name || 'the inviter'} to send a new one.</p>}

@@ -187,6 +187,10 @@ import {
   WORK_SHIFT_TOAST,
   filterCheckInsByRange,
   formatCalendarDate,
+  formatDate,
+  formatDateTime,
+  formatDay,
+  formatDayMonth,
   formatHoursLabel,
   formatRelativeActivityTime,
   formatShiftClock,
@@ -612,7 +616,7 @@ function App() {
     setWorkspaceNotice(`Upcoming event: ${remindedEvent.title}`);
     if ("Notification" in window && Notification.permission === "granted")
       new Notification(`Upcoming event: ${remindedEvent.title}`, {
-        body: `Starts ${formatCalendarDate(new Date(remindedEvent.start_at), { dateStyle: "medium", timeStyle: "short" })}`,
+        body: `Starts ${formatDateTime(remindedEvent.start_at)}`,
       });
   }, [session.user, workspaceData.events]);
 
@@ -4886,7 +4890,7 @@ function WorkspaceView({
                   <div>
                     <strong>{shift.user_name}</strong>
                     <span>
-                      {shift.date} · {formatShiftClock(shift.started_at)}
+                      {formatDay(shift.date)} · {formatShiftClock(shift.started_at)}
                       {shift.ended_at
                         ? ` - ${formatShiftClock(shift.ended_at)}`
                         : " - now"}
@@ -4962,10 +4966,7 @@ function WorkspaceView({
                   </span>
                 </div>
                 <time dateTime={log.created_at}>
-                  {formatCalendarDate(new Date(log.created_at), {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
+                  {formatDateTime(log.created_at)}
                 </time>
               </div>
             ))
@@ -5011,7 +5012,6 @@ function WorkspaceView({
       return groups;
     }, {});
     const activityDateLabel = (key) => {
-      const date = new Date(`${key}T12:00:00`);
       const todayKey = toDateKey(new Date());
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
@@ -5020,12 +5020,7 @@ function WorkspaceView({
         ? "Today"
         : key === yesterdayKey
           ? "Yesterday"
-          : date.toLocaleDateString([], {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            });
+          : formatDay(key);
     };
     return (
       <section className="workspace-view">
@@ -5394,11 +5389,7 @@ function WorkspaceView({
     };
     const upcomingItemDateLabel = (item) => {
       if (item.kind === "task") {
-        return formatCalendarDate(item.date, {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        });
+        return formatDate(item.date);
       }
       const event = item.event;
       const start = new Date(event.start_at);
@@ -5412,11 +5403,7 @@ function WorkspaceView({
       })}`;
       const group = calendarUpcomingGroup(item.date);
       if (group.key === "today" || group.key === "tomorrow") return timeRange;
-      return `${formatCalendarDate(start, {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      })} · ${timeRange}`;
+      return `${formatDate(start)} · ${timeRange}`;
     };
     const renderUpcomingEvent = (item) => {
       const event = item.event;
@@ -5665,11 +5652,7 @@ function WorkspaceView({
                     >
                       <time>
                         <strong>
-                          {formatCalendarDate(new Date(event.start_at), {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {formatDate(event.start_at)}
                         </strong>
                         <span>
                           {formatCalendarDate(new Date(event.start_at), {
@@ -5726,11 +5709,7 @@ function WorkspaceView({
                           type="button"
                           className="calendar-day-add"
                           onClick={() => openCalendarComposerForDate(day)}
-                          aria-label={`Add event on ${formatCalendarDate(day, {
-                            weekday: "long",
-                            month: "long",
-                            day: "numeric",
-                          })}`}
+                          aria-label={`Add event on ${formatDate(day)}`}
                           title="Add event"
                         >
                           <Plus size={13} />
@@ -5753,12 +5732,12 @@ function WorkspaceView({
                             aria-label={`View ${event.title}`}
                           >
                             <span>
-                              {formatCalendarDate(
-                                new Date(event.start_at),
-                                calendarView === "year"
-                                  ? { month: "short", day: "numeric" }
-                                  : { hour: "numeric", minute: "2-digit" },
-                              )}
+                              {calendarView === "year"
+                                ? formatDayMonth(new Date(event.start_at))
+                                : formatCalendarDate(new Date(event.start_at), {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  })}
                             </span>
                             <span className="event-pill-title">
                               {event.title}
@@ -5840,7 +5819,7 @@ function WorkspaceView({
                             <span>
                               <strong>{item.task.title}</strong>
                               <small>
-                                {item.task.due_date}
+                                {formatDay(item.task.due_date)}
                                 {item.task.tag &&
                                 item.task.tag !== "General"
                                   ? ` · ${item.task.tag}`
@@ -5913,11 +5892,7 @@ function WorkspaceView({
     const checkInDateLabel = (value) =>
       value === today
         ? "Today"
-        : formatCalendarDate(new Date(`${value}T12:00:00`), {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-          });
+        : formatDay(value);
 
     return (
       <section className="workspace-view">
@@ -6422,7 +6397,7 @@ function WorkspaceView({
                   <div>
                     <span>
                       {project.due_date
-                        ? `Due ${project.due_date}`
+                        ? `Due ${formatDay(project.due_date)}`
                         : "No due date"}
                     </span>
                     {project.updated_at && (
@@ -6573,7 +6548,7 @@ function WorkspaceView({
                     <strong>{followUp.note}</strong>
                     <span>
                       {followUp.due_date
-                        ? `Due ${followUp.due_date}`
+                        ? `Due ${formatDay(followUp.due_date)}`
                         : "No due date"}
                       {linkedTask ? ` | ${linkedTask.title}` : ""}
                       {followUp.assigned_to_name

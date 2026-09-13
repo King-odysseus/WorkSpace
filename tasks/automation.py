@@ -20,7 +20,7 @@ from .reporting import (
     PROGRESSABLE_STATUSES,
     get_workspace_setting,
 )
-from .views import create_notification
+from .views import create_notification, display_date
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ def run_workspace_automation(workspace_id):
     for task in due_soon:
         if _deliver_task_reminder(
             workspace_id, task, 'due_soon_reminder',
-            'Due soon', f'Due {task.due_date.isoformat()}.',
+            'Due soon', f'Due {display_date(task.due_date)}.',
             task.due_date.isoformat() if task.due_date else 'none',
         ):
             counts['due_soon'] += 1
@@ -145,7 +145,7 @@ def run_workspace_automation(workspace_id):
     for task in overdue:
         if _deliver_task_reminder(
             workspace_id, task, 'overdue_reminder',
-            'Overdue', f'Was due {task.due_date.isoformat()}.',
+            'Overdue', f'Was due {display_date(task.due_date)}.',
             task.due_date.isoformat() if task.due_date else 'none',
         ):
             counts['overdue'] += 1

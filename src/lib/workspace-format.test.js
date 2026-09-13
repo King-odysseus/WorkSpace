@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, formatDay, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, formatDate, formatDateTime, formatDay, formatDayMonth, formatLastSeen, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -12,7 +12,7 @@ const jsonResponse = (body, { ok = true, status = 200, contentType = 'applicatio
 describe('taskDueLabel', () => {
   it('reports overdue only for dates strictly before today', () => {
     expect(taskDueLabel('2026-09-04', '2026-09-05')).toBe('Overdue')
-    expect(taskDueLabel('2026-09-05', '2026-09-05')).toBe('2026-09-05')
+    expect(taskDueLabel('2026-09-05', '2026-09-05')).toBe('05/09/2026')
     expect(taskDueLabel('', '2026-09-05')).toBe('No due date')
   })
 })
@@ -31,6 +31,46 @@ describe('formatDay', () => {
   it('renders nothing rather than a broken date', () => {
     expect(formatDay('')).toBe('')
     expect(formatDay('next tuesday')).toBe('')
+  })
+})
+
+describe('formatDate', () => {
+  // Built from local parts rather than an ISO string, so the expectation holds
+  // wherever the suite runs.
+  it('writes a timestamp in the reader own time zone as DD/MM/YYYY', () => {
+    expect(formatDate(new Date(2026, 8, 5, 23, 30))).toBe('05/09/2026')
+  })
+
+  it('renders nothing rather than a broken date', () => {
+    expect(formatDate('')).toBe('')
+    expect(formatDate('not a date')).toBe('')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('puts a 24 hour clock beside the day', () => {
+    expect(formatDateTime(new Date(2026, 8, 5, 9, 5))).toBe('05/09/2026 09:05')
+    expect(formatDateTime(new Date(2026, 8, 5, 18, 45))).toBe('05/09/2026 18:45')
+  })
+
+  it('renders nothing rather than a broken date', () => {
+    expect(formatDateTime('')).toBe('')
+  })
+})
+
+describe('formatDayMonth', () => {
+  it('drops the year for the narrow slots', () => {
+    expect(formatDayMonth(new Date(2026, 8, 5, 12))).toBe('05/09')
+  })
+
+  it('renders nothing rather than a broken date', () => {
+    expect(formatDayMonth('')).toBe('')
+  })
+})
+
+describe('formatLastSeen', () => {
+  it('gives the day in the app wide format once relative wording runs out', () => {
+    expect(formatLastSeen(new Date(2020, 0, 5, 12).toISOString())).toBe('Last seen 05/01/2020')
   })
 })
 

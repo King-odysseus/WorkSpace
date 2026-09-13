@@ -58,6 +58,8 @@ import {
   PRESENCE_LABEL,
   PRESENCE_OPTIONS,
   effectivePresence,
+  formatDate,
+  formatDay,
   formatLastSeen,
   formatShiftClock,
   formatShiftDuration,
@@ -1034,8 +1036,8 @@ function TeamBoardView({
                 <strong>{invitation.email}</strong>
                 <span>
                   Invited as {invitation.role} on{" "}
-                  {new Date(invitation.created_at).toLocaleDateString()} ·
-                  Expires {new Date(invitation.expires_at).toLocaleDateString()}
+                  {formatDate(invitation.created_at)} ·
+                  Expires {formatDate(invitation.expires_at)}
                 </span>
               </div>
               <em
@@ -1346,7 +1348,7 @@ function MyTasksView({
                     <span>
                       {task.tag || "General"} · {task.bucket || "Backlog"}
                       {task.due_date
-                        ? ` · Due ${task.due_date}`
+                        ? ` · Due ${formatDay(task.due_date)}`
                         : " · No due date"}
                     </span>
                   </div>

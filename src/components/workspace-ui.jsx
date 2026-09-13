@@ -10,7 +10,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog.jsx'
 import { Brush, CalendarDays, Plus } from 'lucide-react'
-import { formatCalendarDate, toDateKey } from '../lib/workspace-format.js'
+import { formatDay, toDateKey } from '../lib/workspace-format.js'
 
 function WorkspaceViewHeading({ title, subtitle, action, onAction }) {
   return <div className="workspace-view-heading"><div><h1>{title}</h1><p className="subtitle">{subtitle}</p></div>{action && <Button onClick={onAction}><Plus size={17} /> {action}</Button>}</div>
@@ -36,7 +36,7 @@ function DateTimeField({ label, name, value, onChange, required }) {
   const minutes = [...new Set([...Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0')), ...(minute ? [minute] : [])])].sort()
   return <label>{label}<div className="datetime-field">
     <Popover>
-      <PopoverTrigger asChild><Button type="button" variant="outline" className="datetime-trigger w-full justify-start font-medium"><CalendarDays size={14} />{dateObj ? formatCalendarDate(dateObj, { dateStyle: 'medium' }) : 'Select date'}</Button></PopoverTrigger>
+      <PopoverTrigger asChild><Button type="button" variant="outline" className="datetime-trigger w-full justify-start font-medium"><CalendarDays size={14} />{datePart ? formatDay(datePart) : 'Select date'}</Button></PopoverTrigger>
       <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked), null)} /></PopoverContent>
     </Popover>
     <div className="datetime-time-row">
@@ -60,7 +60,7 @@ function DateField({ label, name, value, onChange, required, disabled, placehold
   const dateObj = value ? new Date(`${value}T00:00:00`) : undefined
   const commit = picked => onChange({ target: { name, value: picked } })
   return <label>{label}<Popover>
-    <PopoverTrigger asChild><Button type="button" variant="outline" disabled={disabled} className="date-field-trigger w-full justify-start font-medium"><CalendarDays size={14} />{dateObj ? formatCalendarDate(dateObj, { dateStyle: 'medium' }) : placeholder}</Button></PopoverTrigger>
+    <PopoverTrigger asChild><Button type="button" variant="outline" disabled={disabled} className="date-field-trigger w-full justify-start font-medium"><CalendarDays size={14} />{value ? formatDay(value) : placeholder}</Button></PopoverTrigger>
     <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked))} /></PopoverContent>
   </Popover>
   {required && <input type="text" className="date-field-required-shadow" value={value || ''} required onChange={() => {}} tabIndex={-1} aria-hidden="true" />}

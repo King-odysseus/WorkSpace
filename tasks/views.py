@@ -285,6 +285,22 @@ def json_value(value):
     return value
 
 
+def display_date(value, with_time=False):
+    """A date the way the app writes it for people: DD/MM/YYYY, and the time
+    after it when asked.
+
+    For the text that reaches a person - activity lines, notification bodies,
+    search result titles. Anything a client reads back or compares (as_dict
+    payloads, dedup keys, filter values) stays ISO.
+    """
+    if not value:
+        return ''
+    if isinstance(value, datetime) and timezone.is_aware(value):
+        value = timezone.localtime(value)
+    formatted = value.strftime('%d/%m/%Y')
+    return f'{formatted} {value.strftime("%H:%M")}' if with_time else formatted
+
+
 def task_snapshot(task, fields):
     return {field: json_value(getattr(task, field)) for field in fields}
 
@@ -420,7 +436,7 @@ def deliver_due_calendar_reminders(workspace_id):
                 locked_event.created_by,
                 'calendar_reminder',
                 f'Upcoming event: {locked_event.title}',
-                f'Starts at {locked_event.start_at.isoformat()}.',
+                f'Starts at {display_date(locked_event.start_at, with_time=True)}.',
                 target_type='calendar_event',
                 target_id=locked_event.id,
             )
@@ -562,7 +578,7 @@ def workspace_search(request, workspace_id):
     ).select_related('user').order_by('-date')[:limit_per_kind]
     for check_in in check_ins:
         snippet = check_in.completed or check_in.next_steps or check_in.blockers
-        results.append({'kind': 'check_in', 'id': check_in.id, 'title': f'{check_in.user.get_full_name() or check_in.user.email} - {check_in.date.isoformat()}', 'snippet': (snippet or '')[:160], 'target_type': 'check_in', 'target_id': check_in.id, 'meta': check_in.date.isoformat()})
+        results.append({'kind': 'check_in', 'id': check_in.id, 'title': f'{check_in.user.get_full_name() or check_in.user.email} - {display_date(check_in.date)}', 'snippet': (snippet or '')[:160], 'target_type': 'check_in', 'target_id': check_in.id, 'meta': check_in.date.isoformat()})
 
     follow_ups = FollowUp.objects.filter(workspace_id=workspace_id).filter(note__icontains=query).order_by('-updated_at')[:limit_per_kind]
     for follow_up in follow_ups:
@@ -1903,7 +1919,7 @@ def task_detail(request, task_id):
     if previous_priority != task.priority:
         record_activity(task.workspace_id, request.user, 'task_priority', f'{actor_name} changed the priority of {task.title} to {task.get_priority_display()}.')
     if previous_due_date != task.due_date:
-        due_label = task.due_date.isoformat() if task.due_date else 'no due date'
+        due_label = display_date(task.due_date) if task.due_date else 'no due date'
         record_activity(task.workspace_id, request.user, 'task_due_date', f'{actor_name} changed the due date of {task.title} to {due_label}.')
     if previous_recurrence != task.recurrence:
         record_activity(task.workspace_id, request.user, 'task_recurrence', f'{actor_name} changed recurrence for {task.title} to {task.get_recurrence_display()}.')
@@ -3363,10 +3379,10 @@ def check_in_list(request, workspace_id):
     )
     actor_name = request.user.get_full_name() or request.user.email
     action = 'submitted' if created else 'updated'
-    record_activity(workspace_id, request.user, 'check_in_submitted', f'{actor_name} {action} a daily check-in for {check_in.date.isoformat()}.')
+    record_activity(workspace_id, request.user, 'check_in_submitted', f'{actor_name} {action} a daily check-in for {display_date(check_in.date)}.')
     if created:
         notify_managers(
-            workspace_id, request.user, 'submitted a check-in', check_in.date.isoformat(),
+            workspace_id, request.user, 'submitted a check-in', display_date(check_in.date),
             target_type='check_in', target_id=check_in.id,
             immediate=True, dedup_key=f'check_in:{check_in.id}:{check_in.date.isoformat()}',
         )
@@ -3377,7 +3393,7 @@ def check_in_list(request, workspace_id):
         # just submitted it.
         create_notification(
             workspace_id, request.user, 'check_in_submitted',
-            f'Check-in submitted for {check_in.date.isoformat()}',
+            f'Check-in submitted for {display_date(check_in.date)}',
             'Your update is saved and visible to the team.',
             target_type='check_in', target_id=check_in.id,
             immediate=False,
@@ -4165,7 +4181,7 @@ def follow_up_detail(request, follow_up_id):
             create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note, target_type='follow_up', target_id=follow_up.id)
     if previous_due_date != follow_up.due_date:
         if follow_up.due_date:
-            record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} set the follow-up due date to {follow_up.due_date.isoformat()}.')
+            record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} set the follow-up due date to {display_date(follow_up.due_date)}.')
         else:
             record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} cleared the follow-up due date.')
     if previous_task != follow_up.task:

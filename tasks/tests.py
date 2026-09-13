@@ -4,7 +4,7 @@ import importlib
 import io
 import tempfile
 from io import StringIO
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -26,7 +26,7 @@ from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelRea
 from .automation import run_workspace_automation
 from .ai_actions import PrivacyBoundaryError, PrivacyRegistry
 from .document_text import DOCUMENT_MAX_CHARS, extract_document_text
-from .views import create_notification, notification_deep_link
+from .views import create_notification, display_date, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
 
@@ -5729,3 +5729,24 @@ class PersonalPlannerApiTests(TestCase):
         accepted = self._add_task('Errand', due_date='2026-09-05')
         self.assertEqual(accepted.status_code, 201)
         self.assertEqual(accepted.json()['task']['due_date'], '2026-09-05')
+
+
+class DisplayDateTests(TestCase):
+    """The server writes dates for people the same way the UI does: DD/MM/YYYY.
+
+    Wording that reaches a person - an activity line, a notification body, a
+    search result title - is formatted here, while anything a client reads back
+    or compares stays ISO. These tests pin the human half of that split.
+    """
+
+    def test_a_date_only_value_reads_as_day_month_year(self):
+        self.assertEqual(display_date(date(2026, 9, 5)), '05/09/2026')
+
+    def test_a_moment_in_time_keeps_the_clock_beside_it_when_asked(self):
+        moment = timezone.make_aware(datetime(2026, 9, 5, 14, 5))
+        self.assertEqual(display_date(moment), '05/09/2026')
+        self.assertEqual(display_date(moment, with_time=True), '05/09/2026 14:05')
+
+    def test_nothing_rather_than_a_broken_date(self):
+        self.assertEqual(display_date(None), '')
+        self.assertEqual(display_date(''), '')
