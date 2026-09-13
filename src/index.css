@@ -3088,3 +3088,33 @@ html[data-theme='dark'] .planner-bucket-menu {
 button {
   border-radius: 999px;
 }
+
+/* Enabled controls should advertise that they are clickable. The zero-specificity
+   :where() wrapper keeps intentional component cursors (drag handles, disabled
+   states, text fields) free to override this fallback. */
+:where(
+  a[href]:not([aria-disabled='true']):not([data-disabled]),
+  area[href]:not([aria-disabled='true']):not([data-disabled]),
+  button:not(:disabled):not([aria-disabled='true']):not([data-disabled]),
+  input:is([type='button'], [type='submit'], [type='reset'], [type='checkbox'], [type='radio'], [type='file'], [type='color'], [type='range']):not(:disabled):not([aria-disabled='true']):not([data-disabled]),
+  select:not(:disabled):not([aria-disabled='true']):not([data-disabled]),
+  summary,
+  label:not([aria-disabled='true']):not([data-disabled]):has(:is(input[type='checkbox'], input[type='radio'], input[type='file']):not(:disabled):not([aria-disabled='true']):not([data-disabled])),
+  [data-slot='button']:not(:disabled):not([aria-disabled='true']):not([data-disabled]),
+  [data-slot='select-trigger']:not(:disabled):not([aria-disabled='true']):not([data-disabled]),
+  [data-slot='dropdown-menu-trigger']:not(:disabled):not([aria-disabled='true']):not([data-disabled]),
+  [role='button']:not([aria-disabled='true']):not([data-disabled]),
+  [role='link']:not([aria-disabled='true']):not([data-disabled]),
+  [role='checkbox']:not([aria-disabled='true']):not([data-disabled]),
+  [role='combobox']:not([aria-disabled='true']):not([data-disabled]),
+  [role='radio']:not([aria-disabled='true']):not([data-disabled]),
+  [role='switch']:not([aria-disabled='true']):not([data-disabled]),
+  [role='menuitem']:not([aria-disabled='true']):not([data-disabled]),
+  [role='menuitemcheckbox']:not([aria-disabled='true']):not([data-disabled]),
+  [role='menuitemradio']:not([aria-disabled='true']):not([data-disabled]),
+  [role='option']:not([aria-disabled='true']):not([data-disabled]),
+  [role='tab']:not([aria-disabled='true']):not([data-disabled]),
+  [role='treeitem']:not([aria-disabled='true']):not([data-disabled])
+) {
+  cursor: pointer;
+}
