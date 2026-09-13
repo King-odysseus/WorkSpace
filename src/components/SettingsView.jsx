@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Copy,
   Link2,
+  Plus,
   Sparkles,
   Sun,
   Users,
@@ -70,6 +71,7 @@ function SettingsView({
   workspaces = [],
   defaultWorkspaceId,
   onSetDefaultWorkspace,
+  onCreateWorkspace,
   taskTemplates = [],
   projectTemplates = [],
   projects = [],
@@ -115,6 +117,11 @@ function SettingsView({
   const [permissionsError, setPermissionsError] = useState("");
   const isOwner = currentWorkspace?.role === "owner";
   const isArchived = currentWorkspace?.status === "archived";
+  // Matches the backend rule in tasks/auth_views.py: only someone who already
+  // owns a workspace may create another one.
+  const canCreateWorkspace = workspaces.some(
+    (workspace) => workspace.role === "owner",
+  );
   const toggleManagerPermission = async (member, key) => {
     const current = member.permissions || [];
     const next = current.includes(key)
@@ -1000,6 +1007,11 @@ function SettingsView({
                     leave one you no longer need.
                   </p>
                 </div>
+                {canCreateWorkspace && (
+                  <Button size="sm" onClick={() => onCreateWorkspace?.()}>
+                    <Plus size={14} /> New workspace
+                  </Button>
+                )}
               </div>
               {lifecycleError && (
                 <p className="auth-error" role="alert">

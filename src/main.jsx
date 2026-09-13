@@ -2630,6 +2630,7 @@ function App() {
                 currentUserWorkspaces={session.user.workspaces}
                 defaultWorkspaceId={session.user.default_workspace_id}
                 onSetDefaultWorkspace={setDefaultWorkspace}
+                onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                 onProfileUpdated={updateSessionUser}
                 canManageMembers={["owner", "manager"].includes(
                   currentWorkspace?.role,
@@ -3052,6 +3053,7 @@ function WorkspaceView({
   currentUserWorkspaces,
   defaultWorkspaceId,
   onSetDefaultWorkspace,
+  onCreateWorkspace,
   onProfileUpdated,
   canManageMembers,
   canManageTasks,
@@ -5163,6 +5165,7 @@ function WorkspaceView({
         workspaces={currentUserWorkspaces}
         defaultWorkspaceId={defaultWorkspaceId}
         onSetDefaultWorkspace={onSetDefaultWorkspace}
+        onCreateWorkspace={onCreateWorkspace}
         taskTemplates={localData.taskTemplates || []}
         projectTemplates={localData.projectTemplates || []}
         projects={localData.projects}

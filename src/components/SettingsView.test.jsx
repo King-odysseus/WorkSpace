@@ -77,6 +77,48 @@ it('saves the Notification sound choice from notification settings', async () =>
   expect(JSON.parse(request.body)).toEqual({ notification_sound: false })
 })
 
+it('offers Create workspace to an owner from the Profile section', () => {
+  const onCreateWorkspace = vi.fn()
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[{ id: 1, name: 'Northstar', role: 'owner' }]}
+      onCreateWorkspace={onCreateWorkspace}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+  fireEvent.click(screen.getByRole('button', { name: /New workspace/ }))
+
+  expect(onCreateWorkspace).toHaveBeenCalled()
+})
+
+it('hides Create workspace from someone who owns nothing', () => {
+  // The backend only lets an existing owner create another workspace, so the
+  // button stays away from everyone else rather than failing on submit.
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[{ id: 1, name: 'Northstar', role: 'member' }]}
+      onCreateWorkspace={vi.fn()}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+
+  expect(screen.queryByRole('button', { name: /New workspace/ })).not.toBeInTheDocument()
+})
+
 it('saves the sound style and volume from notification settings', async () => {
   const { api } = await setup()
   fireEvent.click(screen.getByRole('combobox', { name: 'Notification sound style' }))
