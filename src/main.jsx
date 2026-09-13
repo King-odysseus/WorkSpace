@@ -49,6 +49,8 @@ import {
   EyeOff,
   MonitorUp,
   Pause,
+  PanelRightClose,
+  PanelRightOpen,
   Play,
   Plus,
   RefreshCw,
@@ -5407,7 +5409,6 @@ function WorkspaceView({
         </div>
       );
     };
-    const nextUpcomingItem = upcomingItems[0];
     return (
       <section className="workspace-view">
         <WorkspaceViewHeading
@@ -5416,7 +5417,9 @@ function WorkspaceView({
           action="Add event"
           onAction={() => openComposer("calendar")}
         />
-        <div className="calendar-layout">
+        <div
+          className={`calendar-layout${calendarUpcomingOpen ? "" : " is-upcoming-collapsed"}`}
+        >
           <Card
             className={`calendar-week calendar-view-${calendarView} gap-0 py-0 overflow-hidden`}
           >
@@ -5478,6 +5481,34 @@ function WorkspaceView({
                     ))}
                   </TabsList>
                 </Tabs>
+                <Button
+                  type="button"
+                  variant={calendarUpcomingOpen ? "secondary" : "outline"}
+                  size="sm"
+                  className="calendar-upcoming-side-toggle"
+                  onClick={toggleCalendarUpcoming}
+                  aria-expanded={calendarUpcomingOpen}
+                  aria-controls="calendar-upcoming-panel"
+                  aria-label={
+                    calendarUpcomingOpen
+                      ? "Collapse upcoming panel"
+                      : "Show upcoming panel"
+                  }
+                  title={
+                    calendarUpcomingOpen
+                      ? "Collapse upcoming panel"
+                      : "Show upcoming panel"
+                  }
+                >
+                  {calendarUpcomingOpen ? (
+                    <PanelRightClose size={16} />
+                  ) : (
+                    <PanelRightOpen size={16} />
+                  )}
+                  <span className="calendar-upcoming-side-toggle-label">
+                    {calendarUpcomingOpen ? "Hide upcoming" : "Show upcoming"}
+                  </span>
+                </Button>
               </div>
               <div className="calendar-filter-row">
                 <label>
@@ -5658,7 +5689,11 @@ function WorkspaceView({
               )}
             </CardContent>
           </Card>
-          <Card className="workspace-side-card py-5 gap-4">
+          {calendarUpcomingOpen && (
+            <Card
+              id="calendar-upcoming-panel"
+              className="workspace-side-card py-5 gap-4"
+            >
             <div className="calendar-side-heading">
               <h3 className="calendar-upcoming-title">
                 <button
@@ -5666,13 +5701,10 @@ function WorkspaceView({
                   className="calendar-upcoming-toggle"
                   onClick={toggleCalendarUpcoming}
                   aria-expanded={calendarUpcomingOpen}
-                  aria-controls="calendar-upcoming-content"
+                  aria-controls="calendar-upcoming-panel"
+                  title="Collapse upcoming panel"
                 >
-                  <ChevronDown
-                    size={16}
-                    className="calendar-upcoming-chevron"
-                    aria-hidden="true"
-                  />
+                  <PanelRightClose size={16} aria-hidden="true" />
                   <span>Upcoming</span>
                   <span className="calendar-upcoming-count">
                     {upcomingItems.length}
@@ -5697,75 +5729,54 @@ function WorkspaceView({
                 </button>
               </span>
             </div>
-            {!calendarUpcomingOpen && (
-              <div className="calendar-upcoming-collapsed-summary">
-                {nextUpcomingItem ? (
-                  <>
-                    <span>Next up</span>
-                    <strong>
-                      {nextUpcomingItem.kind === "event"
-                        ? nextUpcomingItem.event.title
-                        : nextUpcomingItem.task.title}
-                    </strong>
-                    <small>{upcomingItemDateLabel(nextUpcomingItem)}</small>
-                  </>
-                ) : (
-                  <span>Nothing scheduled in this calendar view.</span>
-                )}
-              </div>
-            )}
-            {calendarUpcomingOpen && (
-              <div
-                className="calendar-upcoming-content"
-                id="calendar-upcoming-content"
-              >
-                {upcomingGroups.length ? (
-                  <div className="calendar-upcoming-groups">
-                    {upcomingGroups.map((group) => (
-                      <section
-                        className="calendar-upcoming-group"
-                        key={group.key}
-                        aria-labelledby={`calendar-upcoming-${group.key}`}
-                      >
-                        <div className="calendar-upcoming-group-heading">
-                          <h4 id={`calendar-upcoming-${group.key}`}>
-                            {group.label}
-                          </h4>
-                          <span>{group.items.length}</span>
-                        </div>
-                        {group.items.map((item) =>
-                          item.kind === "event" ? (
-                            renderUpcomingEvent(item)
-                          ) : (
-                            <button
-                              type="button"
-                              className="calendar-task-deadline calendar-upcoming-task"
-                              key={item.key}
-                              onClick={() => onOpenTask(item.task)}
-                            >
-                              <CalendarDays size={15} />
-                              <span>
-                                <strong>{item.task.title}</strong>
-                                <small>
-                                  {item.task.due_date}
-                                  {item.task.tag &&
-                                  item.task.tag !== "General"
-                                    ? ` · ${item.task.tag}`
-                                    : ""}
-                                </small>
-                              </span>
-                            </button>
-                          ),
-                        )}
-                      </section>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState text="No upcoming events or task deadlines match this filter." />
-                )}
-              </div>
-            )}
-          </Card>
+            <div className="calendar-upcoming-content">
+              {upcomingGroups.length ? (
+                <div className="calendar-upcoming-groups">
+                  {upcomingGroups.map((group) => (
+                    <section
+                      className="calendar-upcoming-group"
+                      key={group.key}
+                      aria-labelledby={`calendar-upcoming-${group.key}`}
+                    >
+                      <div className="calendar-upcoming-group-heading">
+                        <h4 id={`calendar-upcoming-${group.key}`}>
+                          {group.label}
+                        </h4>
+                        <span>{group.items.length}</span>
+                      </div>
+                      {group.items.map((item) =>
+                        item.kind === "event" ? (
+                          renderUpcomingEvent(item)
+                        ) : (
+                          <button
+                            type="button"
+                            className="calendar-task-deadline calendar-upcoming-task"
+                            key={item.key}
+                            onClick={() => onOpenTask(item.task)}
+                          >
+                            <CalendarDays size={15} />
+                            <span>
+                              <strong>{item.task.title}</strong>
+                              <small>
+                                {item.task.due_date}
+                                {item.task.tag &&
+                                item.task.tag !== "General"
+                                  ? ` · ${item.task.tag}`
+                                  : ""}
+                              </small>
+                            </span>
+                          </button>
+                        ),
+                      )}
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState text="No upcoming events or task deadlines match this filter." />
+              )}
+            </div>
+            </Card>
+          )}
         </div>
         {composerOpen && (
           <WorkspaceComposer

@@ -518,6 +518,7 @@ html[data-theme='light'] .theme-toggle {
 .workspace-view-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; }
 .workspace-view-heading h1 { margin: 0; color: #FFFFFF; font: 400 22px 'Montserrat', sans-serif; letter-spacing: -.4px; }
 .calendar-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(270px, .7fr); gap: 20px; }
+.calendar-layout.is-upcoming-collapsed { grid-template-columns: minmax(0, 1fr); }
 .calendar-week, .workspace-side-card, .workspace-card { background: #FFFFFF; border-radius: 12px; }
 .calendar-week { overflow: hidden; }
 .calendar-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid #E2E2E6; color: #071A2E; }
@@ -878,14 +879,10 @@ html[data-theme='dark'] .chat-day h3 { border-color: var(--workspace-border); co
 .calendar-upcoming-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }
 .calendar-upcoming-toggle:hover { color: var(--blue); }
 .calendar-upcoming-toggle:focus-visible { border-radius: 4px; outline: 2px solid var(--focus-ring); outline-offset: 4px; }
-.calendar-upcoming-chevron { flex: 0 0 auto; transition: transform .15s ease; }
-.calendar-upcoming-toggle[aria-expanded='true'] .calendar-upcoming-chevron { transform: rotate(180deg); }
 .calendar-upcoming-count { display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 10px; font-weight: 800; }
 .calendar-upcoming-content { display: grid; min-width: 0; }
-.calendar-upcoming-collapsed-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--workspace-border); border-radius: 8px; background: var(--workspace-surface-soft); }
-.calendar-upcoming-collapsed-summary > span:first-child { color: var(--workspace-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.calendar-upcoming-collapsed-summary strong { min-width: 0; overflow: hidden; color: var(--workspace-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.calendar-upcoming-collapsed-summary small { grid-column: 2; color: var(--workspace-text-soft); font-size: 10px; }
+.calendar-upcoming-side-toggle { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 1100px) { .calendar-upcoming-side-toggle-label { display: none; } }
 .calendar-upcoming-groups { display: grid; gap: 16px; }
 .calendar-upcoming-group { display: grid; gap: 2px; }
 .calendar-upcoming-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid var(--workspace-border); }
@@ -3838,9 +3835,6 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
   .calendar-filter-row { align-items:stretch; flex-direction:column; gap:9px; }
   .calendar-filter-row label { justify-content:space-between; }
   .calendar-filter-row [data-slot='select-trigger'] { flex:1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .calendar-upcoming-chevron { transition: none; }
 }
 
 /* Zuri is a floating button on desktop and a pill in the bottom nav below
