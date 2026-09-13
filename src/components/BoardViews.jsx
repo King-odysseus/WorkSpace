@@ -37,12 +37,6 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
 import { AppSelect } from "./ui/select.jsx";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu.jsx";
 import { Card } from "./ui/card.jsx";
 import Avatar from "./Avatar.jsx";
 import WorkScopeSelector, { taskMatchesScope } from "./WorkScopeSelector.jsx";
@@ -3147,6 +3141,47 @@ function ProjectCostBudgetPanel({
     </section>
   );
 }
+function TodayPanel({
+  panelKey,
+  title,
+  description,
+  open,
+  onToggle,
+  action,
+  className = "",
+  children,
+}) {
+  return (
+    <section className={`today-panel ${className}`.trim()}>
+      <div className="today-panel-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <div className="today-panel-controls">
+          {action}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-controls={`today-panel-${panelKey}`}
+            aria-label={`${open ? "Collapse" : "Expand"} ${title}`}
+            title={`${open ? "Collapse" : "Expand"} ${title}`}
+          >
+            <ChevronDown
+              size={15}
+              className={open ? "today-panel-chevron is-open" : "today-panel-chevron"}
+            />
+          </Button>
+        </div>
+      </div>
+      {open && <div id={`today-panel-${panelKey}`} className="today-panel-body">{children}</div>}
+    </section>
+  );
+}
+
 function TodayDashboard({
   today,
   todayLabel,
@@ -3158,12 +3193,17 @@ function TodayDashboard({
   events,
   followUps,
   checkIns,
+  activity = [],
   workShifts,
   members,
   canManageMembers,
   onAddTask,
+  onAddEvent,
+  onCheckIn,
   onInvite,
   onOpenTask,
+  onOpenEvent,
+  onOpenFollowUp,
   onNavigate,
   onOpenBoard,
   onComplete,
@@ -3172,6 +3212,21 @@ function TodayDashboard({
   onChangePresence,
 }) {
   const [profileMember, setProfileMember] = useState(null);
+  const [collapsedPanels, setCollapsedPanels] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("workspace-today-panels") || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const panelOpen = (key) => collapsedPanels[key] !== false;
+  const togglePanel = (key) => {
+    setCollapsedPanels((current) => {
+      const next = { ...current, [key]: current[key] === false };
+      localStorage.setItem("workspace-today-panels", JSON.stringify(next));
+      return next;
+    });
+  };
   const isOpen = (task) => task.status !== "done";
   // Counted through BOARD_FOCUS so each headline number is the same question the
   // Team answers when the card opens it.
@@ -3218,7 +3273,7 @@ function TodayDashboard({
         toDateKey(event.end_at || event.start_at) >= today,
     )
     .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
-    .slice(0, 4);
+    .slice(0, 6);
   const dueFollowUps = followUps
     .filter(
       (item) =>
@@ -3230,7 +3285,7 @@ function TodayDashboard({
     .sort((a, b) =>
       (a.due_date || "9999-12-31").localeCompare(b.due_date || "9999-12-31"),
     )
-    .slice(0, 4);
+    .slice(0, 6);
   const openExceptions = [
     ...blocked,
     ...tasks
@@ -3242,16 +3297,91 @@ function TodayDashboard({
       (task, index, list) =>
         list.findIndex((item) => item.id === task.id) === index,
     )
-    .slice(0, 6);
+    .slice(0, 8);
   const checkInsToday = checkIns.filter(
     (item) =>
       item.date === today ||
       (item.created_at && toDateKey(item.created_at) === today),
-  ).length;
+  );
+  const checkedInMemberIds = new Set(checkInsToday.map((item) => String(item.user_id)));
   const memberName = (member) =>
     [member.first_name, member.last_name].filter(Boolean).join(" ") ||
     member.email;
-  const onlineMembers = sortMembersByRecentActivity(members, currentUserId);
+  const membersByActivity = sortMembersByRecentActivity(members, currentUserId);
+  const onlineMembers = membersByActivity
+    .filter((member) => effectivePresence(member) !== "offline")
+    .slice(0, 6);
+  const recentMembers = membersByActivity
+    .filter((member) => effectivePresence(member) === "offline")
+    .slice(0, 4);
+  const missingCheckInMembers = members.filter(
+    (member) => !checkedInMemberIds.has(String(member.id)),
+  );
+  const myAgendaTasks = myTasks
+    .filter(
+      (task) =>
+        isOpen(task) &&
+        (task.due === "Overdue" || task.due_date === today),
+    )
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))
+    .slice(0, 6);
+  const agendaItems = [
+    ...myAgendaTasks.map((task) => ({
+      key: `task-${task.id}`,
+      kind: "task",
+      sort: task.due === "Overdue" ? -1 : 1,
+      label: task.due === "Overdue" ? "Overdue" : "Due today",
+      title: task.title,
+      meta: `${taskAssigneeLabel(task)} - ${task.status}`,
+      onOpen: () => onOpenTask(task),
+    })),
+    ...todaysEvents.map((event) => ({
+      key: `event-${event.id}`,
+      kind: "event",
+      sort: new Date(event.start_at).getTime(),
+      label:
+        toDateKey(event.start_at) === today
+          ? new Date(event.start_at).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : formatDay(event.start_at),
+      title: event.title,
+      meta: event.event_type || "Event",
+      onOpen: () => onOpenEvent?.(event),
+    })),
+    ...dueFollowUps.map((item) => ({
+      key: `followup-${item.id}`,
+      kind: "followup",
+      sort: item.due_date ? new Date(`${item.due_date}T12:00:00`).getTime() : Number.MAX_SAFE_INTEGER,
+      label: item.due_date ? formatDay(item.due_date) : "No due date",
+      title: item.note,
+      meta: item.task_id ? "Linked follow-up" : "Open follow-up",
+      onOpen: () => onOpenFollowUp?.(item),
+    })),
+  ].sort((a, b) => a.sort - b.sort).slice(0, 8);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todaysChanges = activity
+    .filter((event) => new Date(event.created_at).getTime() >= todayStart.getTime())
+    .slice(0, 4);
+  const dueAge = (task) => {
+    if (!task.due_date || task.due === "Due today") return "Due today";
+    const days = Math.max(
+      0,
+      Math.round(
+        (new Date(`${today}T12:00:00`) - new Date(`${task.due_date}T12:00:00`)) /
+          86400000,
+      ),
+    );
+    return days === 1 ? "1 day overdue" : `${days} days overdue`;
+  };
+  const exceptionReason = (task) =>
+    task.status === "blocked"
+      ? task.blocker_details || "Blocked work"
+      : !task.assignee_id
+        ? "No owner"
+        : dueAge(task);
   const messageOnlineMember = (member) => {
     requestDirectMessage(member.id);
     onNavigate("Chats");
@@ -3284,32 +3414,31 @@ function TodayDashboard({
           </p>
         </div>
         <div className="today-actions">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button>
-                Quick action <ChevronDown size={16} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={onAddTask}>
-                <Plus size={17} /> Add task
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onNavigate("Calendar")}>
-                <CalendarDays size={16} /> Add event
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onNavigate("Check-ins")}>
-                <MessageSquare size={16} /> Check in
-              </DropdownMenuItem>
-              {canManageMembers && (
-                <DropdownMenuItem onSelect={onInvite}>
-                  <Plus size={16} /> Invite team member
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button type="button" onClick={onAddTask}>
+            <Plus size={16} /> Add task
+          </Button>
+          <Button type="button" variant="secondary" onClick={onAddEvent}>
+            <CalendarDays size={16} /> Add event
+          </Button>
+          <Button type="button" variant="outline" onClick={onCheckIn}>
+            <MessageSquare size={16} /> Check in
+          </Button>
+          {canManageMembers && (
+            <Button type="button" variant="ghost" onClick={onInvite}>
+              <Plus size={16} /> Invite
+            </Button>
+          )}
         </div>
       </section>
-      <section className="today-metrics">
+      <section className="today-overview">
+        <div className="today-overview-heading">
+          <div>
+            <h2>Workspace overview</h2>
+            <p>Across all work in {workspaceName}</p>
+          </div>
+          <span>My day is separated below</span>
+        </div>
+        <div className="today-metrics">
         <button
           className="today-metric today-metric-due"
           onClick={() => onOpenBoard("due-today")}
@@ -3358,22 +3487,50 @@ function TodayDashboard({
             <span>Completed today</span>
           </span>
         </button>
+        </div>
       </section>
+      {todaysChanges.length > 0 && (
+        <section className="today-change-strip">
+          <div>
+            <strong>Changed today</strong>
+            <span>Latest workspace updates</span>
+          </div>
+          <div className="today-change-list">
+            {todaysChanges.map((event) => (
+              <span key={event.id}>
+                <b>{event.actor_name}</b> {event.message}
+              </span>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onNavigate("Activity")}
+          >
+            Activity <ArrowUpRight size={14} />
+          </Button>
+        </section>
+      )}
       <div className="today-grid">
-        <div className="today-panel my-day-panel">
-          <div className="today-panel-heading">
-            <div>
-              <h2>My day</h2>
-              <p>Prioritized work for you</p>
-            </div>
+        <TodayPanel
+          panelKey="my-day"
+          title="My day"
+          description="Prioritized work assigned to you"
+          open={panelOpen("my-day")}
+          onToggle={() => togglePanel("my-day")}
+          className="my-day-panel"
+          action={
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => onNavigate("My tasks")}
             >
               View all <ArrowUpRight size={14} />
             </Button>
-          </div>
+          }
+        >
           {myQueue.length ? (
             <div className="today-task-list">
               {myQueue.map((task) => (
@@ -3429,7 +3586,7 @@ function TodayDashboard({
               </Button>
             </div>
           )}
-        </div>
+        </TodayPanel>
         <aside className="today-side-stack">
           <ClockInCard
             shifts={workShifts}
@@ -3438,184 +3595,239 @@ function TodayDashboard({
             onSubmitShift={onSubmitShift}
             onChangePresence={onChangePresence}
           />
-          <div className="today-panel team-online-panel">
-            <div className="today-panel-heading">
-              <div>
-                <h2>Team online</h2>
-                <p>Teammates active or recently seen</p>
-              </div>
+          <TodayPanel
+            panelKey="agenda"
+            title="Today agenda"
+            description="Tasks, events and follow-ups in chronological order"
+            open={panelOpen("agenda")}
+            onToggle={() => togglePanel("agenda")}
+            className="today-agenda-panel"
+            action={
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onNavigate("Team")}
-                aria-label="Open team board"
-              >
-                <ArrowUpRight size={15} />
-              </Button>
-            </div>
-            {onlineMembers.length ? (
-              onlineMembers.map((member) => (
-                <button
-                  type="button"
-                  className="team-access-row"
-                  key={member.id}
-                  onClick={() => setProfileMember(member)}
-                  aria-label={`Open ${memberName(member)} profile`}
-                  title={`${member.job_role || member.role || "Member"}${member.company ? ` at ${member.company}` : ""}`}
-                >
-                  <Avatar
-                    name={memberName(member)}
-                    avatarUrl={member.avatar_url}
-                    presence={effectivePresence(member)}
-                    small
-                  />
-                  <div>
-                    <strong>{memberName(member)}</strong>
-                    <span>
-                      {formatLastSeen(member.last_seen_at)}
-                      {canManageMembers &&
-                        (member.on_break
-                          ? " · On break"
-                          : member.clocked_in
-                            ? ` · Clocked in ${formatShiftClock(member.clock_in_at)}`
-                            : "")}
-                    </span>
-                  </div>
-                  <ArrowUpRight size={15} />
-                </button>
-              ))
-            ) : (
-              <p className="today-muted">No teammates yet.</p>
-            )}
-          </div>
-          <div className="today-panel">
-            <div className="today-panel-heading">
-              <div>
-                <h2>Schedule</h2>
-                <p>Events and deadlines today</p>
-              </div>
-              <Button
+                type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => onNavigate("Calendar")}
                 aria-label="Open calendar"
+                title="Open calendar"
               >
                 <ArrowUpRight size={15} />
               </Button>
-            </div>
-            {todaysEvents.length ? (
-              todaysEvents.map((event) => (
-                <div className="today-event-row" key={event.id}>
-                  <time>
-                    {toDateKey(event.start_at) === today
-                      ? new Date(event.start_at).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })
-                      : formatDate(event.start_at)}
-                  </time>
-                  <div>
-                    <strong>{event.title}</strong>
-                    <span>{event.event_type || "Event"}</span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="today-muted">No events scheduled today.</p>
-            )}
-          </div>
-          <div className="today-panel">
-            <div className="today-panel-heading">
-              <div>
-                <h2>Follow-ups</h2>
-                <p>Items needing a response</p>
+            }
+          >
+            {agendaItems.length ? (
+              <div className="today-agenda-list">
+                {agendaItems.map((item) => (
+                  <button
+                    type="button"
+                    className={`today-agenda-row is-${item.kind}`}
+                    key={item.key}
+                    onClick={item.onOpen}
+                  >
+                    <span className="today-agenda-time">{item.label}</span>
+                    <span className="today-agenda-dot" aria-hidden="true" />
+                    <span className="today-agenda-copy">
+                      <strong>{item.title}</strong>
+                      <small>{item.meta}</small>
+                    </span>
+                    <ArrowUpRight size={14} aria-hidden="true" />
+                  </button>
+                ))}
               </div>
+            ) : (
+              <div className="today-empty">
+                <CalendarCheck2 size={20} />
+                <p>No events or deadlines left today.</p>
+                <Button type="button" variant="ghost" size="sm" onClick={onAddEvent}>
+                  Add an event <ArrowUpRight size={14} />
+                </Button>
+              </div>
+            )}
+          </TodayPanel>
+          <TodayPanel
+            panelKey="team-presence"
+            title="Team presence"
+            description="Online now, then recently active teammates"
+            open={panelOpen("team-presence")}
+            onToggle={() => togglePanel("team-presence")}
+            className="team-online-panel"
+            action={
               <Button
+                type="button"
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => onNavigate("Follow-up")}
-                aria-label="Open follow-ups"
+                onClick={() => onNavigate("Team")}
+                aria-label="Open team board"
+                title="Open team board"
               >
                 <ArrowUpRight size={15} />
               </Button>
+            }
+          >
+            <div className="today-presence-group">
+              <h3>Online now <span>{onlineMembers.length}</span></h3>
+              {onlineMembers.length ? (
+                onlineMembers.map((member) => (
+                  <button
+                    type="button"
+                    className="team-access-row"
+                    key={member.id}
+                    onClick={() => setProfileMember(member)}
+                    aria-label={`Open ${memberName(member)} profile`}
+                    title={`${member.job_role || member.role || "Member"}${member.company ? ` at ${member.company}` : ""}`}
+                  >
+                    <Avatar
+                      name={memberName(member)}
+                      avatarUrl={member.avatar_url}
+                      presence={effectivePresence(member)}
+                      small
+                    />
+                    <div>
+                      <strong>{memberName(member)}</strong>
+                      <span>
+                        {formatLastSeen(member.last_seen_at)}
+                        {canManageMembers &&
+                          (member.on_break
+                            ? " - On break"
+                            : member.clocked_in
+                              ? ` - Clocked in ${formatShiftClock(member.clock_in_at)}`
+                              : "")}
+                      </span>
+                    </div>
+                    <ArrowUpRight size={15} />
+                  </button>
+                ))
+              ) : (
+                <p className="today-muted">No teammates are online right now.</p>
+              )}
             </div>
-            {dueFollowUps.length ? (
-              dueFollowUps.map((item) => (
-                <button
-                  className="today-followup-row"
-                  key={item.id}
-                  onClick={() => onNavigate("Follow-up")}
-                >
-                  <span className="priority-dot" />
-                  <span>{item.note}</span>
-                  <small>{formatDay(item.due_date) || "No due date"}</small>
-                </button>
-              ))
-            ) : (
-              <p className="today-muted">No follow-ups due.</p>
-            )}
-          </div>
+            <div className="today-presence-group">
+              <h3>Recently active <span>{recentMembers.length}</span></h3>
+              {recentMembers.length ? (
+                recentMembers.map((member) => (
+                  <button
+                    type="button"
+                    className="team-access-row"
+                    key={member.id}
+                    onClick={() => setProfileMember(member)}
+                    aria-label={`Open ${memberName(member)} profile`}
+                  >
+                    <Avatar
+                      name={memberName(member)}
+                      avatarUrl={member.avatar_url}
+                      presence={effectivePresence(member)}
+                      small
+                    />
+                    <div>
+                      <strong>{memberName(member)}</strong>
+                      <span>{formatLastSeen(member.last_seen_at)}</span>
+                    </div>
+                    <ArrowUpRight size={15} />
+                  </button>
+                ))
+              ) : (
+                <p className="today-muted">No recent activity to show.</p>
+              )}
+            </div>
+          </TodayPanel>
         </aside>
       </div>
       <div className="today-lower-grid">
-        <div className="today-panel">
-          <div className="today-panel-heading">
-            <div>
-              <h2>Team attention</h2>
-              <p>
-                {canManageMembers
-                  ? "Exceptions worth acting on"
-                  : "Work that may need help"}
-              </p>
-            </div>
+        <TodayPanel
+          panelKey="team-attention"
+          title="Team attention"
+          description={
+            canManageMembers
+              ? "Exceptions worth acting on"
+              : "Work that may need help"
+          }
+          open={panelOpen("team-attention")}
+          onToggle={() => togglePanel("team-attention")}
+          className="today-attention-panel"
+          action={
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => onNavigate("Team")}
             >
               Open board <ArrowUpRight size={14} />
             </Button>
-          </div>
+          }
+        >
           {openExceptions.length ? (
             <div className="today-exception-list">
               {openExceptions.map((task) => (
-                <button key={task.id} onClick={() => onOpenTask(task)}>
-                  <span className={`status-dot ${task.status}`} />
-                  <span>{task.title}</span>
-                  <small>
-                    {task.status === "blocked"
-                      ? "Blocked"
-                      : !task.assignee_id
-                        ? "Unassigned"
-                        : "Overdue"}
-                  </small>
-                </button>
+                <article className="today-exception-row" key={task.id}>
+                  <button
+                    type="button"
+                    className="today-exception-main"
+                    onClick={() => onOpenTask(task)}
+                  >
+                    <span className={`status-dot ${task.status}`} />
+                    <span className="today-exception-copy">
+                      <strong>{task.title}</strong>
+                      <small>
+                        {task.assignee_id ? taskAssigneeLabel(task) : "Unassigned"}
+                        {" - "}
+                        {exceptionReason(task)}
+                      </small>
+                    </span>
+                  </button>
+                  <span className={`today-exception-priority ${task.priority || "normal"}`}>
+                    {task.priority || "normal"}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onComplete(task.id)}
+                    aria-label={`Complete ${task.title}`}
+                    title={`Complete ${task.title}`}
+                  >
+                    <Check size={14} />
+                  </Button>
+                </article>
               ))}
             </div>
           ) : (
             <p className="today-muted">No team exceptions right now.</p>
           )}
-        </div>
-        <div className="today-panel today-checkin-panel">
-          <div className="today-panel-heading">
-            <div>
-              <h2>Check-ins</h2>
-              <p>Keep the team aligned</p>
-            </div>
-            <Hash size={17} />
-          </div>
+        </TodayPanel>
+        <TodayPanel
+          panelKey="check-ins"
+          title="Check-ins"
+          description="Keep the team aligned"
+          open={panelOpen("check-ins")}
+          onToggle={() => togglePanel("check-ins")}
+          className="today-checkin-panel"
+        >
           <strong className="today-checkin-count">
-            {members.length ? `${checkInsToday} of ${members.length}` : checkInsToday}
+            {checkedInMemberIds.size} of {members.length}
           </strong>
           <span className="today-muted">check-ins received today</span>
+          {missingCheckInMembers.length ? (
+            <div className="today-checkin-members">
+              <span>Waiting on</span>
+              {missingCheckInMembers.slice(0, 4).map((member) => (
+                <b key={member.id}>{memberName(member)}</b>
+              ))}
+              {missingCheckInMembers.length > 4 && (
+                <b>+{missingCheckInMembers.length - 4} more</b>
+              )}
+            </div>
+          ) : (
+            <p className="today-muted">Everyone has checked in today.</p>
+          )}
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => onNavigate("Check-ins")}
           >
-            {checkInsToday ? "View check-ins" : "Start check-in"}
+            {checkedInMemberIds.size ? "View check-ins" : "Start check-in"}
           </Button>
-        </div>
+        </TodayPanel>
       </div>
       <MemberProfilePopup member={profileMember} onClose={() => setProfileMember(null)} onMessage={messageOnlineMember} />
     </section>

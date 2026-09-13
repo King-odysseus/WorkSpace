@@ -2300,6 +2300,47 @@ def activity_list(request, workspace_id):
         return error
     from .models import ActivityEvent
     events = ActivityEvent.objects.filter(workspace_id=workspace_id).select_related('actor')
+
+    search = request.GET.get('search', '').strip()
+    if search:
+        events = events.filter(
+            Q(message__icontains=search)
+            | Q(kind__icontains=search)
+            | Q(actor__first_name__icontains=search)
+            | Q(actor__last_name__icontains=search)
+            | Q(actor__email__icontains=search)
+        )
+
+    kind = request.GET.get('kind', '').strip()
+    if kind:
+        events = events.filter(kind=kind)
+
+    actor_id = request.GET.get('actor_id', '').strip()
+    if actor_id:
+        if actor_id == 'system':
+            events = events.filter(actor__isnull=True)
+        else:
+            try:
+                events = events.filter(actor_id=int(actor_id))
+            except ValueError:
+                return JsonResponse({'error': 'actor_id must be an integer or system.'}, status=400)
+
+    date_from = request.GET.get('date_from', '').strip()
+    if date_from:
+        try:
+            events = events.filter(created_at__date__gte=date.fromisoformat(date_from))
+        except ValueError:
+            return JsonResponse({'error': 'date_from must use YYYY-MM-DD format.'}, status=400)
+
+    date_to = request.GET.get('date_to', '').strip()
+    if date_to:
+        try:
+            events = events.filter(created_at__date__lte=date.fromisoformat(date_to))
+        except ValueError:
+            return JsonResponse({'error': 'date_to must use YYYY-MM-DD format.'}, status=400)
+    if date_from and date_to and date.fromisoformat(date_from) > date.fromisoformat(date_to):
+        return JsonResponse({'error': 'date_from cannot be after date_to.'}, status=400)
+
     try:
         page_size = min(max(int(request.GET.get('page_size', 50)), 1), 500)
         page_number = max(int(request.GET.get('page', 1)), 1)
@@ -2309,7 +2350,29 @@ def activity_list(request, workspace_id):
     try:
         page = paginator.page(page_number)
     except EmptyPage:
-        page = paginator.page(paginator.num_pages)
+        page = paginator.page(1 if paginator.num_pages == 0 else paginator.num_pages)
+
+    today = timezone.localdate()
+    actor_rows = (
+        ActivityEvent.objects.filter(workspace_id=workspace_id)
+        .values('actor_id', 'actor__first_name', 'actor__last_name', 'actor__email')
+        .annotate(event_count=Count('id'))
+        .order_by('-event_count', 'actor__first_name', 'actor__email')
+    )
+    actors = []
+    for row in actor_rows:
+        name = ' '.join(filter(None, [row['actor__first_name'], row['actor__last_name']])).strip() or row['actor__email']
+        actors.append({
+            'id': str(row['actor_id']) if row['actor_id'] is not None else 'system',
+            'name': name or 'System',
+            'event_count': row['event_count'],
+        })
+    kinds = list(
+        ActivityEvent.objects.filter(workspace_id=workspace_id)
+        .values_list('kind', flat=True)
+        .distinct()
+        .order_by('kind')
+    )
     return JsonResponse({
         'activity': [event.as_dict() for event in page.object_list],
         'pagination': {
@@ -2319,6 +2382,13 @@ def activity_list(request, workspace_id):
             'total_pages': paginator.num_pages,
             'has_next': page.has_next(),
             'has_previous': page.has_previous(),
+        },
+        'filters': {'actors': actors, 'kinds': kinds},
+        'summary': {
+            'total_events': paginator.count,
+            'today_events': events.filter(created_at__date=today).count(),
+            'week_events': events.filter(created_at__date__gte=today - timedelta(days=6)).count(),
+            'active_actors': events.filter(actor__isnull=False).values('actor_id').distinct().count(),
         },
     })
 

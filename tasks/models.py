@@ -1196,6 +1196,7 @@ class ActivityEvent(models.Model):
         return {
             'id': self.id,
             'workspace_id': self.workspace_id,
+            'actor_id': self.actor_id,
             'actor_name': self.actor.get_full_name() if self.actor else 'System',
             'kind': self.kind,
             'message': self.message,

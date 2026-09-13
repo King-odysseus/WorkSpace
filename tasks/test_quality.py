@@ -465,6 +465,16 @@ class QualityHttpApiTests(TestCase):
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(reverse('workspace-report', args=[self.workspace.id])).status_code, 403)
 
+    def test_report_endpoint_accepts_quarter_and_year_periods(self):
+        self.client.force_login(self.member)
+        for period in ('quarter', 'year'):
+            response = self.client.get(
+                reverse('workspace-report', args=[self.workspace.id]),
+                {'period': period},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['report']['period']['type'], period)
+
     def test_project_health_validates_workspace_project(self):
         self.client.force_login(self.member)
         response = self.client.get(reverse('project-health-report', args=[self.workspace.id]), {'project_id': self.project.id})

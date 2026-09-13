@@ -19,7 +19,7 @@ from .views import require_permission, require_workspace_leader, require_workspa
 
 
 REPORT_SCOPES = {'all', 'operations', 'project'}
-REPORT_PERIODS = {'all', 'week', 'month', 'custom'}
+REPORT_PERIODS = {'all', 'week', 'month', 'quarter', 'year', 'custom'}
 REPORT_FILTER_FIELDS = {'status', 'priority', 'assignee_id', 'bucket', 'project_id', 'workstream', 'phase', 'state', 'stale', 'due', 'search'}
 IMPORT_MAX_BYTES = 20 * 1024 * 1024
 
@@ -45,7 +45,7 @@ def workspace_report(request, workspace_id):
     if scope not in REPORT_SCOPES:
         return JsonResponse({'error': 'scope must be all, operations, or project.'}, status=400)
     if period not in REPORT_PERIODS:
-        return JsonResponse({'error': 'period must be all, week, month, or custom.'}, status=400)
+        return JsonResponse({'error': 'period must be all, week, month, quarter, year, or custom.'}, status=400)
     project_id = request.GET.get('project_id')
     if scope == 'project':
         try:

@@ -129,6 +129,8 @@ accepts any subset of:
 * `all` - no constraint.
 * `week` - last 7 days (today-6 … today).
 * `month` - current calendar month (day 1 … today).
+* `quarter` - current calendar quarter (quarter start ... today).
+* `year` - current calendar year (January 1 ... today).
 * `custom` - explicit `start`/`end`.
 
 A task belongs to a period by **delivery/completion date, never creation date**:
@@ -260,7 +262,8 @@ each. Keys take the form:
 All endpoints require an authenticated workspace member. Integrity, automation,
 preview, and commit additionally require an owner or manager.
 
-* `GET /api/workspaces/{id}/reports/?scope=&period=&project_id=&start=&end=&filter=` → `{"report": ...}`. Scope is `all`, `operations`, or `project`; period is `all`, `week`, `month`, or `custom`. Custom periods require ISO `start` and `end`. `filter` is a JSON-encoded drill-down filter using the vocabulary in §1.
+* `GET /api/workspaces/{id}/reports/?scope=&period=&project_id=&start=&end=&filter=` returns `{"report": ...}`. Scope is `all`, `operations`, or `project`; period is `all`, `week`, `month`, `quarter`, `year`, or `custom`. Custom periods require ISO `start` and `end`. `filter` is a JSON-encoded drill-down filter using the vocabulary in section 1.
+* `GET /api/workspaces/{id}/activity/?page=&page_size=&search=&actor_id=&kind=&date_from=&date_to=` returns `{"activity": [...], "pagination": {...}, "filters": {...}, "summary": {...}}`. The endpoint filters and counts the full workspace history before paginating, accepts `system` as an actor id for events with no user actor, and requires ISO `YYYY-MM-DD` date bounds.
 * `GET /api/workspaces/{id}/reports/project-health/?project_id=` → `{"health": ...}`.
 * `GET /api/workspaces/{id}/integrity/` → `{"checks": [...]}`; leader only.
 * `POST /api/workspaces/{id}/automation/run/` → `{"deliveries": ...}`; leader only and audited.

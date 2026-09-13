@@ -3103,6 +3103,41 @@ class ActivityPaginationApiTests(TestCase):
         response = self.client.get(f"{reverse('activity-list', args=[self.workspace.id])}?page=abc")
         self.assertEqual(response.status_code, 400)
 
+    def test_filters_cover_the_full_history_not_only_the_current_page(self):
+        other = User.objects.create_user(username='activity-other@example.com', email='activity-other@example.com', password='secure-pass-123')
+        ActivityEvent.objects.create(workspace=self.workspace, actor=other, kind='member_invited', message='Invited Alex')
+        ActivityEvent.objects.create(workspace=self.workspace, actor=None, kind='automation', message='System cleanup')
+
+        searched = self.fetch('?page_size=5&search=Invited')
+        self.assertEqual(searched['pagination']['total_items'], 1)
+        self.assertEqual(searched['activity'][0]['actor_id'], other.id)
+
+        system_only = self.fetch('?actor_id=system')
+        self.assertEqual(system_only['pagination']['total_items'], 1)
+        self.assertEqual(system_only['activity'][0]['kind'], 'automation')
+        self.assertEqual(system_only['summary']['active_actors'], 0)
+
+        typed = self.fetch('?kind=member_invited&page_size=1')
+        self.assertEqual(typed['pagination']['total_items'], 1)
+        self.assertEqual(typed['activity'][0]['message'], 'Invited Alex')
+
+        tomorrow = (timezone.localdate() + timedelta(days=1)).isoformat()
+        ranged = self.fetch(f'?date_from={tomorrow}')
+        self.assertEqual(ranged['pagination']['total_items'], 0)
+
+    def test_invalid_activity_filters_are_rejected(self):
+        response = self.client.get(f"{reverse('activity-list', args=[self.workspace.id])}?actor_id=abc")
+        self.assertEqual(response.status_code, 400)
+        response = self.client.get(f"{reverse('activity-list', args=[self.workspace.id])}?date_from=13-09-2026")
+        self.assertEqual(response.status_code, 400)
+
+    def test_empty_filtered_history_returns_an_empty_first_page(self):
+        tomorrow = (timezone.localdate() + timedelta(days=1)).isoformat()
+        payload = self.fetch(f'?date_from={tomorrow}&page=9')
+        self.assertEqual(payload['activity'], [])
+        self.assertEqual(payload['pagination']['page'], 1)
+        self.assertEqual(payload['pagination']['total_items'], 0)
+
     def test_non_members_cannot_read_activity(self):
         User.objects.create_user(username='activityoutsider@example.com', email='activityoutsider@example.com', password='secure-pass-123')
         self.client.logout()

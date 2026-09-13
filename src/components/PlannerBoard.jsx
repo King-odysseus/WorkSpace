@@ -7,6 +7,7 @@ import { formatDay, formatDayMonth, taskAssigneeLabel, taskIsAssignedTo, toDateK
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
 const statusLabel = { todo: 'To do', 'in progress': 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
+const STALE_DAYS = 14
 
 function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, onDropBefore, draggedTaskId, setDraggedTaskId, dropTaskId, setDropTaskId }) {
   const bucketIndex = buckets.findIndex(bucket => bucket.name === task.bucket)
@@ -67,6 +68,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [phase, setPhase] = useState('all')
   const [bucketFilter, setBucketFilter] = useState('all')
   const [dueFilter, setDueFilter] = useState('all')
+  const [staleOnly, setStaleOnly] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [draggedTaskId, setDraggedTaskId] = useState(null)
@@ -86,15 +88,16 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   // assignee ("mine" / "member:<id>" / "unassigned"), or "overdue"/"all".
   useEffect(() => {
     if (!externalFilter || externalFilter === 'all') {
-      setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee('all')
+      setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee('all'); setStaleOnly(false)
       return
     }
-    if (externalFilter === 'overdue') { setStatus('all'); setDueFilter('overdue'); setBucketFilter('all'); setAssignee('all'); return }
-    if (externalFilter === 'unassigned') { setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee(''); return }
-    if (externalFilter === 'mine') { setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee(String(currentUserId)); return }
-    if (externalFilter.startsWith('member:')) { setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee(externalFilter.slice(7)); return }
-    if (statusLabel[externalFilter]) { setStatus(externalFilter); setDueFilter('all'); setBucketFilter('all'); setAssignee('all'); return }
-    if (buckets.some(bucket => bucket.name === externalFilter)) { setStatus('all'); setDueFilter('all'); setBucketFilter(externalFilter); setAssignee('all') }
+    if (externalFilter === 'overdue') { setStatus('all'); setDueFilter('overdue'); setBucketFilter('all'); setAssignee('all'); setStaleOnly(false); return }
+    if (externalFilter === 'stale') { setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee('all'); setStaleOnly(true); return }
+    if (externalFilter === 'unassigned') { setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee(''); setStaleOnly(false); return }
+    if (externalFilter === 'mine') { setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee(String(currentUserId)); setStaleOnly(false); return }
+    if (externalFilter.startsWith('member:')) { setStatus('all'); setDueFilter('all'); setBucketFilter('all'); setAssignee(externalFilter.slice(7)); setStaleOnly(false); return }
+    if (statusLabel[externalFilter]) { setStatus(externalFilter); setDueFilter('all'); setBucketFilter('all'); setAssignee('all'); setStaleOnly(false); return }
+    if (buckets.some(bucket => bucket.name === externalFilter)) { setStatus('all'); setDueFilter('all'); setBucketFilter(externalFilter); setAssignee('all'); setStaleOnly(false) }
     // buckets/currentUserId are read but deliberately excluded below: buckets is a
     // fresh array literal on every parent render (WorkspaceView rebuilds it inline),
     // and currentUserId is effectively static - including either would re-apply
@@ -173,12 +176,13 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       && (!dateFrom || (task.due_date && task.due_date >= dateFrom))
       && (!dateTo || (task.due_date && task.due_date <= dateTo))
       && (dueFilter === 'all' || (dueFilter === 'overdue' && task.due_date && task.due_date < today && task.status !== 'done') || (dueFilter === 'today' && task.due_date === today) || (dueFilter === 'none' && !task.due_date))
-  }), [tasks, searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, today, projectByBucketName])
+      && (!staleOnly || (task.status !== 'done' && task.status !== 'cancelled' && task.updated_at && Date.now() - new Date(task.updated_at).getTime() > STALE_DAYS * 86400000))
+  }), [tasks, searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, today, projectByBucketName, staleOnly])
 
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(visibleTasks.length / pageSize))
   const tableTasks = visibleTasks.slice((page - 1) * pageSize, page * pageSize)
-  useEffect(() => { setPage(1); setSelectedIds([]) }, [searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, view])
+  useEffect(() => { setPage(1); setSelectedIds([]) }, [searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, view, staleOnly])
   useEffect(() => { if (page > totalPages) setPage(totalPages) }, [page, totalPages])
   const toggleSelected = id => setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
   const pageIsSelected = tableTasks.length > 0 && tableTasks.every(task => selectedIds.includes(task.id))
@@ -324,7 +328,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       <DateField label="From" value={dateFrom} onChange={event => setDateFrom(event.target.value)} />
       <DateField label="To" value={dateTo} onChange={event => setDateTo(event.target.value)} />
       </div>}
-      {(status !== 'all' || priority !== 'all' || assignee !== 'all' || supporter !== 'all' || workstream !== 'all' || phase !== 'all' || bucketFilter !== 'all' || dueFilter !== 'all' || dateFrom || dateTo || searchQuery) && <button type="button" className="planner-clear-filters" onClick={() => { setStatus('all'); setPriority('all'); setAssignee('all'); setSupporter('all'); setWorkstream('all'); setPhase('all'); setBucketFilter('all'); setDueFilter('all'); setDateFrom(''); setDateTo(''); onSearchChange('') }}>Clear filters</button>}
+      {(status !== 'all' || priority !== 'all' || assignee !== 'all' || supporter !== 'all' || workstream !== 'all' || phase !== 'all' || bucketFilter !== 'all' || dueFilter !== 'all' || dateFrom || dateTo || searchQuery || staleOnly) && <button type="button" className="planner-clear-filters" onClick={() => { setStatus('all'); setPriority('all'); setAssignee('all'); setSupporter('all'); setWorkstream('all'); setPhase('all'); setBucketFilter('all'); setDueFilter('all'); setDateFrom(''); setDateTo(''); setStaleOnly(false); onSearchChange('') }}>Clear filters</button>}
       <span className="planner-result-count" aria-live="polite">{visibleTasks.length} of {tasks.length} tasks</span>
     </div>
     {isOperations && canManageBuckets && <form className="operations-workstream-create" onSubmit={onCreateWorkstream}><div><strong>Operations workstreams</strong><span>Create reusable lanes such as Finance, Customer Support, or People.</span></div><input value={newWorkstreamName} onChange={event => setNewWorkstreamName(event.target.value)} placeholder="New operations workstream" maxLength="120" required /><button type="submit" className="secondary-button" disabled={workstreamSubmitting}>{workstreamSubmitting ? 'Creating…' : 'Create workstream'}</button></form>}

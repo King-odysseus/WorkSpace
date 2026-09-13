@@ -87,7 +87,8 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   // Chat is a drawer destination, not a bar tile, so the two halves stay even.
   expect(nav.textContent).not.toContain('Chats')
 
-  const opener = await screen.findByText('Desingn UI', {}, { timeout: 20000 })
+  const myDay = screen.getByRole('heading', { name: 'My day' }).closest('.today-panel')
+  const opener = await within(myDay).findByText('Desingn UI', {}, { timeout: 20000 })
   fireEvent.click(opener)
 
   await waitFor(

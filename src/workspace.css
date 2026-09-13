@@ -132,10 +132,15 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
   height: 8px;
   box-shadow: 0 0 0 1.5px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
 }
-.presence-dot.presence-available { background-color: #16a34a; }
-.presence-dot.presence-busy { background-color: #dc2626; }
-.presence-dot.presence-away { background-color: #d97706; }
-.presence-dot.presence-offline { background-color: #98a2b3; }
+.presence-dot.presence-available { background-color: #16a34a !important; }
+.presence-dot.presence-busy { background-color: #dc2626 !important; }
+.presence-dot.presence-away { background-color: #d97706 !important; }
+.presence-dot.presence-offline { background-color: #98a2b3 !important; }
+.avatar .presence-dot,
+.today-dashboard .presence-dot {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
 
 .avatar-upload {
   position: relative;
@@ -4946,6 +4951,39 @@ html[data-theme='dark'] .today-metric.attention .today-metric-copy strong {
   gap: 16px;
 }
 
+.today-overview {
+  display: grid;
+  gap: 12px;
+}
+
+.today-overview-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 2px;
+}
+
+.today-overview-heading h2 {
+  margin: 0;
+  color: var(--dashboard-text);
+  font: 700 15px/1.25 'Montserrat', sans-serif;
+}
+
+.today-overview-heading p,
+.today-overview-heading > span {
+  color: var(--dashboard-muted);
+  font-size: 12px;
+}
+
+.today-overview-heading p {
+  margin: 4px 0 0;
+}
+
+.today-overview-heading > span {
+  font-weight: 600;
+}
+
 .today-side-stack {
   gap: 16px;
 }
@@ -4963,6 +5001,25 @@ html[data-theme='dark'] .today-metric.attention .today-metric-copy strong {
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 15px;
+}
+
+.today-panel-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.today-panel-chevron {
+  transition: transform .18s ease;
+}
+
+.today-panel-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.today-panel-body {
+  min-width: 0;
 }
 
 .today-panel-heading h2 {
@@ -5022,8 +5079,136 @@ html[data-theme='dark'] .today-panel-heading > svg {
 .today-task-copy span,
 .today-muted {
   color: var(--dashboard-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.4;
+}
+
+.today-change-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 18px;
+  background: var(--dashboard-surface);
+  box-shadow: var(--dashboard-shadow);
+}
+
+.today-change-strip > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 110px;
+}
+
+.today-change-strip strong {
+  color: var(--dashboard-text);
+  font-size: 12px;
+}
+
+.today-change-strip > div:first-child span {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+}
+
+.today-change-list {
+  display: flex;
+  min-width: 0;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.today-change-list > span {
+  max-width: 260px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--dashboard-surface-soft);
+  color: var(--dashboard-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-change-list b {
+  color: var(--dashboard-text);
+}
+
+.today-agenda-list {
+  display: grid;
+  gap: 7px;
+}
+
+.today-agenda-row {
+  display: grid;
+  grid-template-columns: 76px 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: var(--dashboard-surface-soft);
+  color: var(--dashboard-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease;
+}
+
+.today-agenda-row:hover {
+  border-color: var(--dashboard-border);
+  background: var(--dashboard-surface);
+}
+
+.today-agenda-time {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.today-agenda-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-info, #2563EB);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info, #2563EB) 13%, transparent);
+}
+
+.today-agenda-row.is-task .today-agenda-dot {
+  background: #C78A1B;
+  box-shadow: 0 0 0 3px rgb(199 138 27 / 14%);
+}
+
+.today-agenda-row.is-followup .today-agenda-dot {
+  background: #3D8B6E;
+  box-shadow: 0 0 0 3px rgb(61 139 110 / 14%);
+}
+
+.today-agenda-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.today-agenda-copy strong {
+  overflow: hidden;
+  color: var(--dashboard-text);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-agenda-copy small {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+}
+
+.today-agenda-row > svg {
+  color: var(--dashboard-muted);
 }
 
 .today-empty {
@@ -5065,28 +5250,116 @@ html[data-theme='dark'] .today-panel-heading > svg {
 }
 
 .today-exception-list {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 9px;
 }
 
-.today-exception-list button {
+.today-exception-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 32px;
+  align-items: center;
   gap: 10px;
-  padding: 11px 12px;
-  border-color: transparent;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid transparent;
   border-radius: 14px;
   background: var(--dashboard-surface-soft);
+  transition: border-color .18s ease, background-color .18s ease;
 }
 
-.today-exception-list button:hover {
+.today-exception-row:hover {
   border-color: var(--dashboard-border);
   background: var(--dashboard-surface);
 }
 
-.today-exception-list button span:nth-child(2) {
-  font-size: 11px;
+.today-exception-main {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.today-exception-list small {
-  font-size: 9.5px;
+.today-exception-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.today-exception-copy strong {
+  overflow: hidden;
+  color: var(--dashboard-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-exception-copy small {
+  overflow: hidden;
+  color: var(--dashboard-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-exception-priority {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #EEF2F7;
+  color: #526071;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.today-exception-priority.high {
+  background: #FFF1EA;
+  color: #C2410C;
+}
+
+.today-exception-priority.urgent {
+  background: #FFF0F2;
+  color: #B42336;
+}
+
+.today-presence-group {
+  display: grid;
+  gap: 4px;
+}
+
+.today-presence-group + .today-presence-group {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dashboard-border);
+}
+
+.today-presence-group h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 2px;
+  color: var(--dashboard-muted);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.today-presence-group h3 span {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--dashboard-surface-soft);
+  color: var(--dashboard-text);
+  font-size: 10px;
 }
 
 .team-online-panel .team-access-row {
@@ -5150,6 +5423,11 @@ html[data-theme='dark'] .today-panel-heading > svg {
   background: var(--dashboard-surface-tint) !important;
 }
 
+.today-checkin-panel .today-panel-body {
+  display: grid;
+  gap: 7px;
+}
+
 .today-checkin-count {
   margin-top: 3px;
   color: var(--dashboard-text);
@@ -5162,8 +5440,176 @@ html[data-theme='dark'] .today-panel-heading > svg {
   margin-top: 8px;
 }
 
+.today-checkin-members {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.today-checkin-members > span {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+}
+
+.today-checkin-members b {
+  padding: 4px 7px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 999px;
+  background: var(--dashboard-surface);
+  color: var(--dashboard-text);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.report-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-context > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 999px;
+  background: var(--dashboard-surface);
+  color: var(--dashboard-muted);
+  font-size: 11px;
+}
+
+.report-context strong {
+  color: var(--dashboard-text);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.report-breakdown-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-progress-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(120px, 1.2fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--dashboard-border);
+}
+
+.report-progress-row:last-child {
+  border-bottom: 0;
+}
+
+.report-progress-row > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.report-progress-row strong {
+  overflow: hidden;
+  color: var(--dashboard-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-progress-row span,
+.report-progress-row em {
+  color: var(--dashboard-muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.report-progress-track {
+  overflow: hidden;
+  height: 7px;
+  border-radius: 999px;
+  background: #E9ECF2;
+}
+
+.report-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563EB, #3D8B6E);
+}
+
+.activity-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.activity-summary > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 16px;
+  background: var(--dashboard-surface);
+  box-shadow: var(--dashboard-shadow);
+}
+
+.activity-summary span {
+  color: var(--dashboard-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.activity-summary strong {
+  color: var(--dashboard-text);
+  font: 800 22px/1 'Montserrat', sans-serif;
+}
+
+.activity-clear {
+  align-self: end;
+  margin: 0;
+  cursor: pointer;
+}
+
+:is(.workspace-view, .today-dashboard) :is(
+  button:not(:disabled),
+  a[href],
+  [role='button'],
+  .calendar-day,
+  .calendar-time-slot,
+  .assignee-picker-row
+) {
+  cursor: pointer;
+}
+
+html[data-theme='dark'] .report-progress-track {
+  background: #292A58;
+}
+
+html[data-theme='dark'] .today-exception-priority {
+  background: #282955;
+  color: #C6CAE5;
+}
+
+html[data-theme='dark'] .today-exception-priority.high {
+  background: rgb(227 107 67 / 18%);
+  color: #FFAB88;
+}
+
+html[data-theme='dark'] .today-exception-priority.urgent {
+  background: rgb(196 61 75 / 19%);
+  color: #FF9BA7;
+}
+
 @media (max-width: 1060px) {
   .today-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activity-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -5175,6 +5621,25 @@ html[data-theme='dark'] .today-panel-heading > svg {
 
   .today-grid,
   .today-lower-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .today-overview-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .today-change-strip {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .today-change-strip [data-slot='button'] {
+    justify-self: start;
+  }
+
+  .report-breakdown-grid {
     grid-template-columns: 1fr;
   }
 
@@ -5220,6 +5685,35 @@ html[data-theme='dark'] .today-panel-heading > svg {
   .today-clock-panel {
     padding: 17px;
     border-radius: 18px !important;
+  }
+
+  .today-agenda-row {
+    grid-template-columns: 62px 8px minmax(0, 1fr);
+  }
+
+  .today-agenda-row > svg {
+    display: none;
+  }
+
+  .today-exception-row {
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+
+  .today-exception-priority {
+    display: none;
+  }
+
+  .report-progress-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .report-progress-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .activity-summary {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { MyTasksView, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
 import { takePendingDirectMessage } from '../lib/chat-navigation.js'
@@ -77,6 +77,10 @@ const renderBoard = ({
 const myDayPanel = () =>
   screen.getByRole('heading', { name: 'My day' }).closest('.today-panel')
 
+afterEach(() => {
+  localStorage.removeItem('workspace-today-panels')
+})
+
 it('shows only tasks assigned to the current user in My day', () => {
   renderDashboard([
     { id: 1, title: 'Mine to do', status: 'todo', assignee_id: 7, member: 'Nate Foster', priority: 'high', tag: 'Ops' },
@@ -150,6 +154,46 @@ it('lists an event that started earlier but runs into today', () => {
   // A carried-over event shows the day it began, not a bare time that reads as
   // if it started today.
   expect(screen.getByText('11-09-2026')).toBeInTheDocument()
+})
+
+it('opens an agenda event through the supplied action', () => {
+  const onOpenEvent = vi.fn()
+  renderDashboard([], noop, [], {
+    events: [
+      { id: 1, title: 'Launch review', event_type: 'meeting', start_at: '2026-09-12T12:00:00Z', end_at: '2026-09-12T13:00:00Z' },
+    ],
+    onOpenEvent,
+  })
+
+  fireEvent.click(screen.getByText('Launch review').closest('button'))
+
+  expect(onOpenEvent).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
+})
+
+it('separates online teammates from recent activity and names missing check-ins', () => {
+  renderDashboard([], noop, [], {
+    checkIns: [{ id: 1, user_id: 1, date: '2026-09-12' }],
+    members: [
+      { id: 1, first_name: 'Ada', last_name: 'Online', email: 'ada@example.com', presence: 'available', last_seen_at: new Date().toISOString() },
+      { id: 2, first_name: 'Dana', last_name: 'Offline', email: 'dana@example.com', presence: 'available', last_seen_at: '2020-01-01T00:00:00Z' },
+    ],
+  })
+
+  const presencePanel = screen.getByRole('heading', { name: 'Team presence' }).closest('.today-panel')
+  const presence = within(presencePanel)
+  const online = within(presence.getByRole('heading', { name: /Online now/ }).closest('.today-presence-group'))
+  const recent = within(presence.getByRole('heading', { name: /Recently active/ }).closest('.today-presence-group'))
+  expect(online.getByText('Ada Online')).toBeInTheDocument()
+  expect(online.queryByText('Dana Offline')).not.toBeInTheDocument()
+  expect(recent.getByText('Dana Offline')).toBeInTheDocument()
+
+  const checkInPanel = screen.getByRole('heading', { name: 'Check-ins' }).closest('.today-panel')
+  expect(within(checkInPanel).getByText('1 of 2')).toBeInTheDocument()
+  expect(within(checkInPanel).getByText('Dana Offline')).toBeInTheDocument()
+
+  fireEvent.click(within(checkInPanel).getByRole('button', { name: 'Collapse Check-ins' }))
+  expect(within(checkInPanel).queryByText('1 of 2')).not.toBeInTheDocument()
+  expect(within(checkInPanel).getByRole('button', { name: 'Expand Check-ins' })).toBeInTheDocument()
 })
 
 it('hands a messaging target to Chats instead of racing a window event', () => {

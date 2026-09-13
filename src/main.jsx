@@ -241,6 +241,9 @@ function App() {
     new Promise((resolve) => setConfirmState({ message, resolve, ...options }));
   const [taskError, setTaskError] = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedFollowUp, setSelectedFollowUp] = useState(null);
+  const [pendingComposer, setPendingComposer] = useState(null);
   const taskModalRef = useRef(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
@@ -2624,6 +2627,12 @@ function App() {
                 onDeletePermanently={deleteTaskPermanently}
                 onAddTask={() => openTaskModal()}
                 onOpenTask={setSelectedTask}
+                selectedEvent={selectedEvent}
+                setSelectedEvent={setSelectedEvent}
+                selectedFollowUp={selectedFollowUp}
+                setSelectedFollowUp={setSelectedFollowUp}
+                pendingComposer={pendingComposer}
+                onPendingComposerHandled={() => setPendingComposer(null)}
                 onOpenNotification={openNotification}
                 onMarkNotificationsRead={markNotificationsRead}
                 onActionError={(message) => toast.error(message)}
@@ -2642,6 +2651,7 @@ function App() {
                 events={workspaceData.events}
                 followUps={workspaceData.followUps}
                 checkIns={workspaceData.checkIns}
+                activity={workspaceData.activity}
                 workShifts={workspaceData.workShifts}
                 currentUserId={session.user.id}
                 currentUserPresence={currentUserPresence}
@@ -2650,8 +2660,24 @@ function App() {
                 members={workspaceData.members}
                 canManageMembers={canManageMembers}
                 onAddTask={() => openTaskModal()}
+                onAddEvent={() => {
+                  setPendingComposer({ type: "calendar", prefill: { date: today } });
+                  setActive("Calendar");
+                }}
+                onCheckIn={() => {
+                  setPendingComposer({ type: "checkin" });
+                  setActive("Check-ins");
+                }}
                 onInvite={() => openComposer("invite")}
                 onOpenTask={setSelectedTask}
+                onOpenEvent={(event) => {
+                  setSelectedEvent(event);
+                  setActive("Calendar");
+                }}
+                onOpenFollowUp={(followUp) => {
+                  setSelectedFollowUp(followUp);
+                  setActive("Follow-up");
+                }}
                 onNavigate={setActive}
                 onOpenBoard={(focus) => {
                   setTeamBoardFocus(focus);
@@ -3040,6 +3066,12 @@ function WorkspaceView({
   onDeletePermanently,
   onAddTask,
   onOpenTask,
+  selectedEvent,
+  setSelectedEvent,
+  selectedFollowUp,
+  setSelectedFollowUp,
+  pendingComposer,
+  onPendingComposerHandled,
   onOpenNotification,
   onMarkNotificationsRead,
   onActionError,
@@ -3081,11 +3113,25 @@ function WorkspaceView({
   const [plannerProjectFilter, setPlannerProjectFilter] = useState(() => localStorage.getItem("workspace-project-filter") || "all");
   useEffect(() => { localStorage.setItem("workspace-project-filter", plannerProjectFilter); }, [plannerProjectFilter]);
   const [reportsScope, setReportsScope] = useState("all");
+  const [reportDetail, setReportDetail] = useState(null);
+  const [reportDetailLoading, setReportDetailLoading] = useState(false);
+  const [reportDetailError, setReportDetailError] = useState("");
   const [teamBoardScope, setTeamBoardScope] = useState("all");
   const [activitySearch, setActivitySearch] = useState("");
   const [activityActor, setActivityActor] = useState("all");
   const [activityKind, setActivityKind] = useState("all");
+  const [activityDateFrom, setActivityDateFrom] = useState("");
+  const [activityDateTo, setActivityDateTo] = useState("");
   const [activityPage, setActivityPage] = useState(1);
+  const [activityReload, setActivityReload] = useState(0);
+  const [activityServer, setActivityServer] = useState({
+    activity: [],
+    pagination: null,
+    filters: { actors: [], kinds: [] },
+    summary: null,
+  });
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState("");
   const [notificationPage, setNotificationPage] = useState(1);
   const [notificationHistory, setNotificationHistory] = useState([]);
   const [notificationPagination, setNotificationPagination] = useState(null);
@@ -3104,12 +3150,10 @@ function WorkspaceView({
   const [pendingProjectNotification, setPendingProjectNotification] = useState(null);
   const [pendingWorkstreamNotification, setPendingWorkstreamNotification] = useState(null);
   const [projectOperation, setProjectOperation] = useState("");
-  const [selectedFollowUp, setSelectedFollowUp] = useState(null);
   const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
-  const [selectedEvent, setSelectedEvent] = useState(null);
   const [pendingEventId, setPendingEventId] = useState(null);
   const [savedViews, setSavedViews] = useState(data.savedViews || []);
   const canCommentCheckIns = Boolean(currentWorkspace?.permissions?.includes("comment_check_ins"));
@@ -3138,7 +3182,107 @@ function WorkspaceView({
   // so go back to the first page whenever the filters change.
   useEffect(() => {
     setActivityPage(1);
-  }, [activitySearch, activityActor, activityKind]);
+  }, [activitySearch, activityActor, activityKind, activityDateFrom, activityDateTo]);
+
+  useEffect(() => {
+    if (active !== "Reports" || !workspaceId) return undefined;
+    let isCurrent = true;
+    setReportDetailLoading(true);
+    setReportDetailError("");
+    const params = new URLSearchParams({ period: reportRange || "all" });
+    if (reportsScope === "operations") {
+      params.set("scope", "operations");
+    } else if (reportsScope !== "all") {
+      params.set("scope", "project");
+      params.set("project_id", String(reportsScope));
+    } else {
+      params.set("scope", "all");
+    }
+    fetch(`/api/workspaces/${workspaceId}/reports/?${params.toString()}`, {
+      credentials: "include",
+      headers: { "X-Workspace-Id": String(workspaceId) },
+    })
+      .then((response) =>
+        readJsonResponse(response, "Report data could not be loaded.").then(
+          (payload) => ({ ok: response.ok, payload }),
+        ),
+      )
+      .then(({ ok, payload }) => {
+        if (!isCurrent) return;
+        if (!ok) throw new Error(payload.error || "Report data could not be loaded.");
+        setReportDetail(payload.report || null);
+      })
+      .catch((error) => {
+        if (isCurrent) setReportDetailError(error.message || "Report data could not be loaded.");
+      })
+      .finally(() => {
+        if (isCurrent) setReportDetailLoading(false);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [active, workspaceId, reportsScope, reportRange, reportLastUpdated]);
+
+  useEffect(() => {
+    if (active !== "Activity" || !workspaceId) return undefined;
+    let isCurrent = true;
+    const timer = window.setTimeout(() => {
+      setActivityLoading(true);
+      setActivityError("");
+      const params = new URLSearchParams({
+        page: String(activityPage),
+        page_size: "40",
+      });
+      if (activitySearch.trim()) params.set("search", activitySearch.trim());
+      if (activityActor !== "all") params.set("actor_id", activityActor);
+      if (activityKind !== "all") params.set("kind", activityKind);
+      if (activityDateFrom) params.set("date_from", activityDateFrom);
+      if (activityDateTo) params.set("date_to", activityDateTo);
+      fetch(`/api/workspaces/${workspaceId}/activity/?${params.toString()}`, {
+        credentials: "include",
+        headers: { "X-Workspace-Id": String(workspaceId) },
+      })
+        .then((response) =>
+          readJsonResponse(response, "Activity could not be loaded.").then(
+            (payload) => ({ ok: response.ok, payload }),
+          ),
+        )
+        .then(({ ok, payload }) => {
+          if (!isCurrent) return;
+          if (!ok) throw new Error(payload.error || "Activity could not be loaded.");
+          const serverPage = payload.pagination?.page;
+          if (serverPage && serverPage !== activityPage) {
+            setActivityPage(serverPage);
+          }
+          setActivityServer({
+            activity: payload.activity || [],
+            pagination: payload.pagination || null,
+            filters: payload.filters || { actors: [], kinds: [] },
+            summary: payload.summary || null,
+          });
+        })
+        .catch((error) => {
+          if (isCurrent) setActivityError(error.message || "Activity could not be loaded.");
+        })
+        .finally(() => {
+          if (isCurrent) setActivityLoading(false);
+        });
+    }, 250);
+    return () => {
+      isCurrent = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    active,
+    workspaceId,
+    activityPage,
+    activitySearch,
+    activityActor,
+    activityKind,
+    activityDateFrom,
+    activityDateTo,
+    activityReload,
+  ]);
   useEffect(() => {
     if (active === "Notifications") setNotificationPage(1);
   }, [active]);
@@ -3433,6 +3577,14 @@ function WorkspaceView({
     if (type !== "chat") setReplyTo(null);
     setComposerOpen(true);
   };
+
+  useEffect(() => {
+    if (!pendingComposer) return;
+    const targetView = pendingComposer.type === "calendar" ? "Calendar" : "Check-ins";
+    if (active !== targetView) return;
+    openComposer(pendingComposer.type, pendingComposer.prefill || {});
+    onPendingComposerHandled?.();
+  }, [active, pendingComposer, onPendingComposerHandled, openComposer]);
 
   const submitComposer = async (event) => {
     event.preventDefault();
@@ -4518,7 +4670,7 @@ function WorkspaceView({
   }
 
   if (active === "Reports") {
-    const serverReport = data.reports || {
+    const summaryReport = data.reports || {
       total_tasks: 0,
       overdue_tasks: 0,
       due_this_week: 0,
@@ -4530,7 +4682,41 @@ function WorkspaceView({
       status_counts: {},
       workload: [],
       time_clock: null,
+      average_progress: 0,
+      stale_tasks: 0,
+      on_hold_tasks: 0,
+      cancelled_tasks: 0,
+      progress_by_project: [],
+      progress_by_priority: [],
+      kpis: {},
     };
+    const detailedReport = reportDetail;
+    const serverReport = detailedReport
+      ? {
+          ...summaryReport,
+          total_tasks: detailedReport.totals?.total_tasks || 0,
+          status_counts: Object.fromEntries(
+            Object.entries(detailedReport.status_counts || {}).map(
+              ([status, item]) => [status, item?.count || 0],
+            ),
+          ),
+          completion_rate: detailedReport.totals?.completion_rate || 0,
+          average_progress: detailedReport.totals?.average_progress || 0,
+          overdue_tasks: detailedReport.overdue?.count || 0,
+          due_this_week: detailedReport.due_soon?.count || 0,
+          blocked_tasks: detailedReport.blocked?.count || 0,
+          unassigned_tasks: detailedReport.unassigned?.count || 0,
+          stale_tasks: detailedReport.stale?.count || 0,
+          on_hold_tasks: detailedReport.on_hold?.count || 0,
+          cancelled_tasks: detailedReport.cancelled?.count || 0,
+          workload: detailedReport.workload || [],
+          progress_by_project: detailedReport.progress_by_project || [],
+          progress_by_priority: detailedReport.progress_by_priority || [],
+          kpis: detailedReport.kpis || {},
+          scope_label: detailedReport.scope?.label || "",
+          period_label: detailedReport.period?.type || reportRange,
+        }
+      : summaryReport;
     const statusLabels = {
       todo: "To do",
       in_progress: "In progress",
@@ -4540,41 +4726,23 @@ function WorkspaceView({
       cancelled: "Cancelled",
       done: "Done",
     };
-    // Task counts/status breakdown are recomputed client-side when a scope is picked, since the
-    // server's report summary is workspace-wide. Team workload, check-ins, and the audit trail stay
-    // server-provided in every scope - they're people/workspace history, not project-scoped concepts.
-    const scopedTasks =
+    const report = serverReport;
+    const reportScopeLabel =
       reportsScope === "all"
-        ? null
-        : tasks.filter((task) => taskMatchesScope(task, reportsScope));
-    const report = scopedTasks
-      ? (() => {
-          const openTasks = scopedTasks.filter(
-            (task) => task.status !== "done",
-          );
-          const statusCounts = scopedTasks.reduce((counts, task) => {
-            const key =
-              task.status === "in progress" ? "in_progress" : task.status;
-            counts[key] = (counts[key] || 0) + 1;
-            return counts;
-          }, {});
-          const doneCount = statusCounts.done || 0;
-          return {
-            ...serverReport,
-            total_tasks: scopedTasks.length,
-            status_counts: statusCounts,
-            completion_rate: scopedTasks.length
-              ? Math.round((doneCount / scopedTasks.length) * 100)
-              : 0,
-            overdue_tasks: openTasks.filter(
-              (task) => task.due_date && task.due_date < today,
-            ).length,
-            blocked_tasks: statusCounts.blocked || 0,
-            unassigned_tasks: openTasks.filter((task) => !task.assignee_id)
-              .length,
-          };
-        })()
-      : serverReport;
+        ? "Entire workspace"
+        : reportsScope === "operations"
+          ? "Operations"
+          : localData.projects.find(
+              (project) => String(project.id) === String(reportsScope),
+            )?.name || "Project";
+    const reportPeriodLabel =
+      {
+        all: "All time",
+        week: "Last 7 days",
+        month: "This month",
+        quarter: "This quarter",
+        year: "This year",
+      }[reportRange] || reportRange;
     const openPlannerWithFilter = (filter) => {
       onSearchChange("");
       if (reportsScope !== "all" && reportsScope !== "operations")
@@ -4606,7 +4774,7 @@ function WorkspaceView({
       [member.first_name, member.last_name].filter(Boolean).join(" ") ||
       member.email;
     return (
-      <section className="workspace-view">
+      <section className="workspace-view" aria-busy={reportDetailLoading}>
         <WorkspaceViewHeading title="Reports" subtitle={subtitle} />
         <div className="report-toolbar">
           <WorkScopeSelector
@@ -4637,14 +4805,26 @@ function WorkspaceView({
             className="secondary-button"
             onClick={onRefresh}
           >
-            Refresh reports
+            {reportDetailLoading ? "Refreshing..." : "Refresh reports"}
           </button>
           <span className="report-updated">
-            {reportLastUpdated
+            {reportDetailLoading
+              ? "Loading report data..."
+              : reportLastUpdated
               ? `Updated ${formatCalendarDate(reportLastUpdated, { timeStyle: "short" })}`
-              : "Loading report data…"}
+              : "Waiting for report data"}
           </span>
         </div>
+        <div className="report-context" aria-live="polite">
+          <span><strong>Scope</strong>{reportScopeLabel}</span>
+          <span><strong>Period</strong>{reportPeriodLabel}</span>
+          <span><strong>Source</strong>{detailedReport ? "Server report" : "Summary fallback"}</span>
+        </div>
+        {reportDetailError && (
+          <Alert tone="warning" compact>
+            The detailed report could not be refreshed. Showing the latest summary data instead. {reportDetailError}
+          </Alert>
+        )}
         <div className="report-metrics">
           <button
             type="button"
@@ -4653,7 +4833,7 @@ function WorkspaceView({
           >
             <span>Total tasks</span>
             <strong>{report.total_tasks}</strong>
-            <em>{report.completion_rate}% complete</em>
+            <em>{report.completion_rate}% complete - {report.average_progress || 0}% average progress</em>
           </button>
           <button
             type="button"
@@ -4731,6 +4911,52 @@ function WorkspaceView({
             )}
           </Card>
         </div>
+        <div className="report-grid report-breakdown-grid">
+          <Card className="report-panel">
+            <div className="drawer-section-heading">
+              <h3>Project progress</h3>
+              <span>{report.progress_by_project.length} groups</span>
+            </div>
+            {report.progress_by_project.length ? (
+              report.progress_by_project.slice(0, 6).map((group) => (
+                <div className="report-progress-row" key={group.name}>
+                  <div>
+                    <strong>{group.name}</strong>
+                    <span>{group.completed} of {group.total} complete</span>
+                  </div>
+                  <div className="report-progress-track" aria-label={`${group.name} ${group.completion_rate}% complete`}>
+                    <i style={{ width: `${group.completion_rate}%` }} />
+                  </div>
+                  <em>{group.completion_rate}%</em>
+                </div>
+              ))
+            ) : (
+              <EmptyState text="No project progress is available for this report." />
+            )}
+          </Card>
+          <Card className="report-panel">
+            <div className="drawer-section-heading">
+              <h3>Priority delivery</h3>
+              <span>Workload mix</span>
+            </div>
+            {report.progress_by_priority.length ? (
+              report.progress_by_priority.map((group) => (
+                <div className="report-progress-row" key={group.name}>
+                  <div>
+                    <strong>{group.name}</strong>
+                    <span>{group.overdue} overdue - {group.blocked} blocked</span>
+                  </div>
+                  <div className="report-progress-track" aria-label={`${group.name} ${group.average_progress}% average progress`}>
+                    <i style={{ width: `${group.average_progress}%` }} />
+                  </div>
+                  <em>{group.average_progress}%</em>
+                </div>
+              ))
+            ) : (
+              <EmptyState text="No priority progress is available for this report." />
+            )}
+          </Card>
+        </div>
         <div className="report-grid report-risk-grid">
           <Card className="report-panel">
             <div className="drawer-section-heading">
@@ -4755,6 +4981,27 @@ function WorkspaceView({
               >
                 <strong>{report.unassigned_tasks}</strong>
                 <span>Unassigned tasks</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openPlannerWithFilter("blocked")}
+              >
+                <strong>{report.blocked_tasks}</strong>
+                <span>Blocked tasks</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openPlannerWithFilter("on_hold")}
+              >
+                <strong>{report.on_hold_tasks || 0}</strong>
+                <span>On hold</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openPlannerWithFilter("stale")}
+              >
+                <strong>{report.stale_tasks || 0}</strong>
+                <span>Stale updates</span>
               </button>
             </div>
           </Card>
@@ -4944,35 +5191,12 @@ function WorkspaceView({
     );
   }
   if (active === "Activity") {
-    const activityKinds = [
-      ...new Set(data.activity.map((event) => event.kind).filter(Boolean)),
-    ].sort();
-    const activityActors = [
-      ...new Set(
-        data.activity.map((event) => event.actor_name).filter(Boolean),
-      ),
-    ].sort();
-    const visibleActivity = data.activity.filter(
-      (event) =>
-        (activityActor === "all" || event.actor_name === activityActor) &&
-        (activityKind === "all" || event.kind === activityKind) &&
-        (!activitySearch.trim() ||
-          `${event.actor_name} ${event.message} ${event.kind}`
-            .toLowerCase()
-            .includes(activitySearch.trim().toLowerCase())),
-    );
-    const activityPageSize = 40;
-    const activityTotalPages = Math.max(
-      1,
-      Math.ceil(visibleActivity.length / activityPageSize),
-    );
-    const activityPageSafe = Math.min(activityPage, activityTotalPages);
-    const activityStart = (activityPageSafe - 1) * activityPageSize;
-    const pagedActivity = visibleActivity.slice(
-      activityStart,
-      activityStart + activityPageSize,
-    );
-    const groupedActivity = pagedActivity.reduce((groups, event) => {
+    const activityPagination = activityServer.pagination;
+    const activityPageSafe = activityPagination?.page || activityPage;
+    const activityStart = activityPagination
+      ? (activityPageSafe - 1) * activityPagination.page_size
+      : 0;
+    const groupedActivity = activityServer.activity.reduce((groups, event) => {
       const key = toDateKey(event.created_at);
       (groups[key] ||= []).push(event);
       return groups;
@@ -4989,10 +5213,10 @@ function WorkspaceView({
           : formatDay(key);
     };
     return (
-      <section className="workspace-view">
+      <section className="workspace-view" aria-busy={activityLoading}>
         <WorkspaceViewHeading
           title="Activity"
-          subtitle="A complete recent history of workspace changes."
+          subtitle="Search and audit the full workspace history."
         />
         <div className="activity-toolbar">
           <label className="activity-search">
@@ -5011,9 +5235,9 @@ function WorkspaceView({
               onChange={(event) => setActivityActor(event.target.value)}
             >
               <option value="all">Everyone</option>
-              {activityActors.map((actor) => (
-                <option key={actor} value={actor}>
-                  {actor}
+              {(activityServer.filters.actors || []).map((actor) => (
+                <option key={actor.id} value={actor.id}>
+                  {actor.name}
                 </option>
               ))}
             </AppSelect>
@@ -5025,29 +5249,69 @@ function WorkspaceView({
               onChange={(event) => setActivityKind(event.target.value)}
             >
               <option value="all">All activity</option>
-              {activityKinds.map((kind) => (
+              {(activityServer.filters.kinds || []).map((kind) => (
                 <option key={kind} value={kind}>
                   {kind.replaceAll("_", " ")}
                 </option>
               ))}
             </AppSelect>
           </label>
+          <DateField
+            label="From"
+            name="activityDateFrom"
+            value={activityDateFrom}
+            onChange={(event) => setActivityDateFrom(event.target.value)}
+            placeholder="Any date"
+          />
+          <DateField
+            label="To"
+            name="activityDateTo"
+            value={activityDateTo}
+            onChange={(event) => setActivityDateTo(event.target.value)}
+            placeholder="Any date"
+          />
+          {(activitySearch || activityActor !== "all" || activityKind !== "all" || activityDateFrom || activityDateTo) && (
+            <button
+              type="button"
+              className="text-button activity-clear"
+              onClick={() => {
+                setActivitySearch("");
+                setActivityActor("all");
+                setActivityKind("all");
+                setActivityDateFrom("");
+                setActivityDateTo("");
+              }}
+            >
+              Clear filters
+            </button>
+          )}
           <button
             type="button"
             className="secondary-button"
-            onClick={onRefresh}
+            onClick={() => setActivityReload((current) => current + 1)}
           >
-            Refresh
+            {activityLoading ? "Refreshing..." : "Refresh"}
           </button>
           <span className="activity-count">
-            {visibleActivity.length
-              ? `${activityStart + 1}-${activityStart + pagedActivity.length} of ${visibleActivity.length}`
+            {activityPagination?.total_items
+              ? `${activityStart + 1}-${activityStart + activityServer.activity.length} of ${activityPagination.total_items}`
               : "0"}{" "}
             events
           </span>
         </div>
+        <div className="activity-summary">
+          <div><span>Matching events</span><strong>{activityServer.summary?.total_events || 0}</strong></div>
+          <div><span>Today</span><strong>{activityServer.summary?.today_events || 0}</strong></div>
+          <div><span>Last 7 days</span><strong>{activityServer.summary?.week_events || 0}</strong></div>
+          <div><span>Active people</span><strong>{activityServer.summary?.active_actors || 0}</strong></div>
+        </div>
+        {activityError && (
+          <Alert tone="danger" compact>
+            {activityError}
+          </Alert>
+        )}
         <Card className="activity-history">
-          {visibleActivity.length ? (
+          {activityServer.activity.length ? (
             Object.entries(groupedActivity).map(([date, events]) => (
               <div className="activity-day" key={date}>
                 <h3>{activityDateLabel(date)}</h3>
@@ -5070,34 +5334,34 @@ function WorkspaceView({
           ) : (
             <EmptyState
               text={
-                data.activity.length
-                  ? "No activity matches these filters."
-                  : "No workspace activity yet."
+                activityLoading
+                  ? "Loading activity..."
+                  : activityPagination?.total_items === 0
+                    ? "No activity matches these filters."
+                    : "No workspace activity yet."
               }
             />
           )}
         </Card>
-        {visibleActivity.length > activityPageSize && (
+        {activityPagination && activityPagination.total_pages > 1 && (
           <div className="activity-pagination">
-            <span>{`${activityStart + 1}-${activityStart + pagedActivity.length} of ${visibleActivity.length}`}</span>
+            <span>{`${activityStart + 1}-${activityStart + activityServer.activity.length} of ${activityPagination.total_items}`}</span>
             <div>
               <button
                 type="button"
-                disabled={activityPageSafe === 1}
-                onClick={() =>
-                  setActivityPage((current) => Math.max(1, current - 1))
-                }
+                disabled={!activityPagination.has_previous}
+                onClick={() => setActivityPage(Math.max(1, activityPageSafe - 1))}
                 aria-label="Previous page"
               >
                 <ChevronLeft size={15} />
               </button>
               <span>
-                Page {activityPageSafe} of {activityTotalPages}
+                Page {activityPageSafe} of {activityPagination.total_pages}
               </span>
               <button
                 type="button"
-                disabled={activityPageSafe === activityTotalPages}
-                onClick={() => setActivityPage((current) => current + 1)}
+                disabled={!activityPagination.has_next}
+                onClick={() => setActivityPage(activityPageSafe + 1)}
                 aria-label="Next page"
               >
                 <ChevronRight size={15} />
