@@ -1125,11 +1125,13 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
         </div>}
         {attaching && <p className="ai-chat-attach-status" role="status">Attaching...</p>}
         <div className="ai-chat-composer-row">
-          <label className="ai-chat-attach" title="Attach a document for Zuri to read">
-            <Paperclip size={19} />
-            <input type="file" onChange={attachFile} disabled={attaching || busy} accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.log,.yaml,.yml,.xlsx,.xlsm,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp" aria-label="Attach a document for Zuri to read" />
-          </label>
-          <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
+          <div className="ai-chat-input-shell">
+            <label className="ai-chat-attach" title="Attach a document for Zuri to read">
+              <Paperclip size={19} />
+              <input type="file" onChange={attachFile} disabled={attaching || busy} accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.log,.yaml,.yml,.xlsx,.xlsm,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp" aria-label="Attach a document for Zuri to read" />
+            </label>
+            <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
+          </div>
           <button className="ai-chat-send" disabled={busy || (!message.trim() && !attachment)} aria-label="Send message"><Send size={20} /></button>
         </div>
       </form>

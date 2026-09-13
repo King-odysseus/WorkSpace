@@ -187,6 +187,9 @@ it('sends an attached file with the question and reports what Zuri made of it', 
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
 
   const picker = await screen.findByLabelText('Attach a document for Zuri to read')
+  const input = screen.getByLabelText('Message to Zuri')
+  expect(picker.closest('.ai-chat-input-shell')).toBe(input.closest('.ai-chat-input-shell'))
+  expect(input.closest('.ai-chat-input-shell')).not.toBeNull()
   fireEvent.change(picker, { target: { files: [new File(['x'], 'quarterly.pdf', { type: 'application/pdf' })] } })
 
   // The chip confirms the upload landed before the user commits to sending.
@@ -194,7 +197,6 @@ it('sends an attached file with the question and reports what Zuri made of it', 
 
   // A file on its own is a complete request, so the send button is live with an
   // empty box and the question is filled in for the model.
-  const input = screen.getByLabelText('Message to Zuri')
   expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled()
   fireEvent.submit(input.closest('form'))
 

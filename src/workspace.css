@@ -8418,6 +8418,10 @@ button {
 /* Zuri: dock the assistant to the bottom on every viewport, with a compact
    desktop panel and a mobile bottom sheet instead of a floating window. */
 .ai-chat-window[data-slot='dialog-content'] {
+  top: auto !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  translate: 0 0 !important;
   border: 1px solid var(--workspace-border) !important;
   box-shadow: 0 30px 80px rgb(2 5 31 / 30%) !important;
 }
@@ -8668,11 +8672,15 @@ button {
   padding: 13px 14px;
 }
 
-.ai-chat-composer-row {
+.ai-chat-input-shell {
   position: relative;
+  flex: 1;
+  min-width: 0;
 }
 
 .ai-chat-composer .ai-chat-input {
+  display: block;
+  width: 100%;
   min-height: 52px;
   max-height: 160px;
   padding-left: 52px;
