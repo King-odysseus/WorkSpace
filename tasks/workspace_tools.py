@@ -175,11 +175,14 @@ def workspace_ai_settings(request, workspace_id):
     # so a rejected request never leaves the row partially mutated in memory
     # only to silently discard those changes instead of persisting them.
     member_ids = {member.user_id for member in setting.workspace.memberships.all()}
-    selected = [int(value) for value in payload.get('ai_user_ids', []) if str(value).isdigit()]
+    requested_member_ids = [int(value) for value in payload.get('ai_user_ids', []) if str(value).isdigit()]
+    # A removed member can remain in the saved access list after their
+    # membership is deleted. The UI cannot display that stale id, so failing
+    # the whole save makes every setting on the panel permanently unsaveable.
+    # Keep only current members; stale and unknown ids can never grant access.
+    selected = [user_id for user_id in requested_member_ids if user_id in member_ids]
     if 'ai_user_ids' in payload and not can_manage_access:
         return JsonResponse({'error': 'You do not have permission to manage Zuri member access.'}, status=403)
-    if not set(selected).issubset(member_ids):
-        return JsonResponse({'error': 'AI access can only be granted to workspace members.'}, status=400)
     if 'ai_enabled' in payload and not can_manage_access:
         return JsonResponse({'error': 'You do not have permission to manage Zuri member access.'}, status=403)
     new_ai_enabled = bool(payload.get('ai_enabled', setting.ai_enabled))
