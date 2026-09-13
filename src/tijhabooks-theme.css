@@ -51,14 +51,14 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
 .task-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .task-copy strong { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; font-size: 11px; color: #263248; }
 .task-copy div { display: flex; gap: 7px; align-items: center; }
-.task-status, .task-tag { --status-color: #718096; --status-bg: #f0f3f7; font-size: 9px; padding: 3px 6px; border-radius: 4px; background: var(--status-bg); color: var(--status-color); }
+.task-status, .task-tag { --status-color: #626f82; --status-bg: #f0f3f7; font-size: 9px; padding: 3px 6px; border-radius: 4px; background: var(--status-bg); color: var(--status-color); }
 .task-status.in.progress { --status-color: #2563eb; --status-bg: #edf4ff; }
-.task-status.review { --status-color: #0b899d; --status-bg: #e8f8fa; }
-.task-status.blocked { --status-color: #dd6c3c; --status-bg: #fff0e9; }
+.task-status.review { --status-color: #0a7a8c; --status-bg: #e8f8fa; }
+.task-status.blocked { --status-color: #ac542f; --status-bg: #fff0e9; }
 .task-status.on_hold { --status-color: #b45309; --status-bg: #fef3e2; }
-.task-status.cancelled { --status-color: #6b7280; --status-bg: #f3f4f6; text-decoration: line-through; }
-.task-status.done { --status-color: #0a9e87; --status-bg: #e7f8f3; }
-.task-tag { padding: 0; background: none; color: #9da7b4; }
+.task-status.cancelled { --status-color: #686f7c; --status-bg: #f3f4f6; text-decoration: line-through; }
+.task-status.done { --status-color: #087d6b; --status-bg: #e7f8f3; }
+.task-tag { padding: 0; background: none; color: #6b727a; }
 .due, .estimate { font-size: 10px; color: #7f8a99; white-space: nowrap; }
 .due.overdue { color: #e4603e; font-weight: 700; }
 .estimate { color: #a2acb9; }
@@ -546,14 +546,14 @@ html[data-theme='light'] .theme-toggle {
 .project-search { display: flex; align-items: center; position: relative; min-width: 240px; }
 .project-search svg { position: absolute; left: 10px; color: #8A93A3; }
 .project-search input { width: 100%; padding-left: 32px; }
-.project-health { padding: 4px 7px; border-radius: 999px; background: #E8F8F5; color: #078C7D; font-size: 8px; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
+.project-health { padding: 4px 7px; border-radius: 999px; background: #E8F8F5; color: #067d6f; font-size: 8px; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
 .project-health.at-risk { background: #FFF3E8; color: #C2410C; }
 .project-health.off-track { background: #FDECEC; color: #B42318; }
 .project-health.completed { background: #EAF0FF; color: #1D4ED8; }
 .project-card.project-health-off-track { border-color: #F0B7B3; }
 .project-card.project-health-at-risk { border-color: #F2CDA9; }
 .project-task-stats { display: flex; gap: 7px; margin-top: 11px; }
-.project-task-stats span { padding: 4px 7px; border-radius: 6px; background: #F1F3F5; color: #6B7280; font-size: 9px; font-weight: 700; }
+.project-task-stats span { padding: 4px 7px; border-radius: 6px; background: #F1F3F5; color: #676d7b; font-size: 9px; font-weight: 700; }
 .project-task-stats span.risk { background: #FFF3E8; color: #C2410C; }
 .project-task-stats span.danger { background: #FDECEC; color: #B42318; }
 .project-footer > div { display: grid; gap: 3px; }
@@ -561,8 +561,8 @@ html[data-theme='light'] .theme-toggle {
 .project-card-top, .project-footer, .member-summary { display: flex; align-items: center; gap: 9px; }
 .project-card-top { justify-content: space-between; }
 .project-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; color: #1D4ED8; background: #EAF0FF; }
-.project-status.app-select-trigger { min-height: 26px; padding: 0 10px; border-radius: 999px; background: #F1F3F5; color: var(--workspace-text-soft); font-size: 9px; font-weight: 700; text-transform: capitalize; }
-.project-status.active { background: #E8F8F5; color: #078C7D; }
+.project-status.app-select-trigger { min-height: 26px; padding: 0 10px; border-radius: 999px; background: #F1F3F5; color: #646e82; font-size: 9px; font-weight: 700; text-transform: capitalize; }
+.project-status.active { background: #E8F8F5; color: #067d6f; }
 .project-card h3 { overflow: hidden; margin: 18px 0 7px; color: #071A2E; font: 700 14px 'Montserrat'; text-overflow: ellipsis; white-space: nowrap; }
 .project-card p { margin: 0; color: #6B7280; font-size: 11px; }
 .project-progress { display: grid; gap: 7px; margin-top: 16px; }
@@ -663,7 +663,7 @@ html[data-theme='light'] .theme-toggle {
 .activity-count { margin-left: auto; padding-bottom: 8px; color: #8A93A3; font-size: 11px; }
 .activity-day + .activity-day { margin-top: 24px; }
 .activity-day h3 { margin: 0 0 8px; color: #071A2E; font-size: 12px; }
-.activity-kind { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: #E8F6F3; color: #0A9E87; font-size: 10px; font-weight: 800; }
+.activity-kind { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: #E8F6F3; color: #087b69; font-size: 10px; font-weight: 800; }
 .activity-item { display: flex; align-items: center; gap: 9px; }
 .empty-workspace p { margin: 0; }
 .empty-workspace-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: var(--color-info-soft); color: var(--blue); }
@@ -748,7 +748,7 @@ html[data-theme='dark'] .planner-gantt-track i.is-today { background: #173150; }
 .planner-board { display: grid; grid-template-columns: repeat(5, minmax(230px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; }
 .planner-column { min-height: 420px; padding: 12px; border-radius: 12px; background: #F7F9FC; }
 .planner-column-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: #071A2E; font-size: 13px; }
-.planner-column-heading span { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; border-radius: 7px; background: #E9EAF1; color: #6B7280; font-size: 11px; }
+.planner-column-heading span { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; border-radius: 7px; background: #E9EAF1; color: #626976; font-size: 11px; }
 .planner-column-tasks { display: grid; gap: 10px; }
 .planner-column .task-card { grid-template-columns: 20px minmax(0, 1fr) auto; padding: 12px; border-radius: 10px; box-shadow: 0 4px 12px #071A2E10; }
 html[data-theme='dark'] .planner-column { border-color: #28516F; background: #0B223A; }
@@ -1732,7 +1732,7 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .team-task-row > div button { overflow: hidden; border: 0; background: transparent; color: var(--workspace-text); font: 600 10px 'Roboto'; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .team-task-row > div span { overflow: hidden; color: var(--workspace-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .team-task-row .my-task-priority { grid-area: priority; display: inline-flex; align-items: center; justify-content: center; justify-self: start; min-width: 44px; padding: 3px 7px; border-radius: 999px; background: var(--workspace-surface); color: var(--workspace-text-soft); font-size: 8px; font-weight: 800; text-transform: capitalize; }
-.team-task-row .my-task-priority.urgent { background: #fee2e2; color: #b42318; }.team-task-row .my-task-priority.high { background: #fff0e9; color: #c2410c; }.team-task-row .my-task-priority.normal { background: #eaf0ff; color: #2563eb; }.team-task-row .my-task-priority.low { background: #eef2f7; color: #64748b; }
+.team-task-row .my-task-priority.urgent { background: #fee2e2; color: #b42318; }.team-task-row .my-task-priority.high { background: #fff0e9; color: #c2410c; }.team-task-row .my-task-priority.normal { background: #eaf0ff; color: #2563eb; }.team-task-row .my-task-priority.low { background: #eef2f7; color: #5f6e84; }
 .team-board-column { overflow: hidden; border: 1px solid var(--workspace-border); }
 .team-board-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; overflow: visible; padding-bottom: 8px; }
 .team-board-column { min-height: 190px; padding: 18px; }
@@ -1755,8 +1755,8 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .team-access-row [data-slot='select-trigger'] { padding: 5px; border: 1px solid var(--workspace-border); background: var(--workspace-surface-soft); color: var(--workspace-text); font-size: 9px; }
 .team-access-row em { flex-shrink: 0; color: var(--workspace-text-soft); font-size: 9px; font-style: normal; text-transform: capitalize; }
 .invitation-status-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 999px; font-weight: 700; letter-spacing: .2px; }
-.invitation-status-badge.is-pending { color: #9A6A1E; background: #FBF0DC; }
-.invitation-status-badge.is-expired { color: #8B97A7; background: var(--workspace-surface-soft); }
+.invitation-status-badge.is-pending { color: #91641c; background: #FBF0DC; }
+.invitation-status-badge.is-expired { color: #68717d; background: var(--workspace-surface-soft); }
 html[data-theme='dark'] .invitation-status-badge.is-pending { color: #DAB68D; background: #3A2A14; }
 html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; background: #123A5B; }
 .team-access-row > .team-access-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; justify-items: normal; }
@@ -2122,7 +2122,7 @@ html[data-theme='dark'] .project-detail-links button { box-shadow:7px 9px 22px r
 .project-record-row p { margin:3px 0; overflow:hidden; color:var(--workspace-text-soft); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
 .project-record-row small { color:var(--workspace-text-soft); font-size:9px; }
 .record-severity { padding:4px 7px; border-radius:999px; font-size:9px; font-weight:800; text-transform:capitalize; }
-.record-severity.low { background:#e8f8f3; color:#087f73; }.record-severity.medium { background:#eaf0ff; color:#2563eb; }.record-severity.high { background:#fff0e9; color:#c2410c; }.record-severity.critical { background:#fee2e2; color:#b42318; }
+.record-severity.low { background:#e8f8f3; color:#087c71; }.record-severity.medium { background:#eaf0ff; color:#2563eb; }.record-severity.high { background:#fff0e9; color:#c2410c; }.record-severity.critical { background:#fee2e2; color:#b42318; }
 .project-record-form form { display:grid; gap:9px; }.project-record-form input, .project-record-form [data-slot='select-trigger'] { min-height:36px; width:100%; border:1px solid var(--workspace-border); background:var(--workspace-surface-soft); color:var(--workspace-text); padding:8px 10px; font-size:11px; }.project-record-form input { border-radius:8px; }.project-record-form form > .primary-button { width:auto; justify-self:start; min-width:0; padding:8px 14px; }.record-form-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px; }.record-form-toggle { display:flex; gap:5px; }.record-form-toggle button { border:1px solid var(--workspace-border); border-radius:999px; padding:6px 12px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); cursor:pointer; font-size:10px; font-weight:700; }.record-form-toggle button.active { background:var(--navy); color:#fff; border-color:var(--navy); }
 @media (max-width:700px) { .project-risk-issues-heading { align-items:stretch; flex-direction:column; }.project-risk-issues-grid,.project-detail-links { grid-template-columns:1fr; }.record-form-grid { grid-template-columns:1fr; }.project-record-row { grid-template-columns:auto minmax(0,1fr) auto; }.project-record-row > [data-slot='select-trigger'] { grid-column:2; }.project-record-row > .inline-delete { grid-column:3; grid-row:1; } }
 
@@ -2842,6 +2842,11 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
   color: var(--workspace-text-soft);
   font-size: 9px;
 }
+/* The count pill sits on --workspace-border, which is darker than the surface
+   the muted token was chosen against, so the shared token misses 4.5:1 by a
+   hair here. Dark theme keeps the token: its border is darker still and the
+   muted colour clears the ratio there. */
+html[data-theme='light'] .planner-scope-switch button:not(.active) span { color: #5f687c; }
 .planner-scope-switch button.active span {
   background: rgb(255 255 255 / 14%);
   color: #FFFFFF;

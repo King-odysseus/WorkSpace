@@ -425,6 +425,13 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
   background: var(--workspace-surface-soft, #F8F9FA);
 }
 
+/* The theme gives this button an #f6fcfb background, but the rule above
+   replaces it with the surface-soft token, so the theme's own teal only
+   clears 3.9:1 on the background that actually paints. */
+html[data-theme='light'] .secondary-button {
+  color: #067f72;
+}
+
 html[data-theme='dark'] :where(.project-summary > div, .today-metrics button, .my-task-summary button, .team-board-metrics button, .time-clock-totals div) {
   box-shadow: 0 8px 22px rgb(0 0 0 / 14%);
 }
@@ -2555,6 +2562,17 @@ html[data-theme='dark'] .workspace-view :is(
 .workspace-view .checkin-range-filter button.active > span {
   background: color-mix(in srgb, var(--workspace-primary) 12%, transparent);
   color: var(--workspace-primary);
+}
+
+/* These count pills fill with --workspace-border, a shade darker than the
+   surface the muted token was picked against, so the shared token lands just
+   under 4.5:1 in the light theme. Dark theme keeps the token: its border is
+   darker still and the muted colour clears the ratio there. */
+html[data-theme='light'] :is(
+  .chat-workspace-view .chat-filter-tabs button:not(.active) span,
+  .workspace-view .checkin-range-filter button:not(.active) > span
+) {
+  color: #5f687c;
 }
 
 .workspace-view .checkin-toolbar > span {
