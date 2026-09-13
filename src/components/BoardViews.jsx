@@ -208,6 +208,7 @@ function TeamBoardView({
             {task.priority}
           </span>
           <AppSelect
+            className={`task-status task-status-select ${task.status}`}
             value={task.status}
             onChange={(event) => onStatusChange(task.id, event.target.value)}
             aria-label={`Change status for ${task.title}`}
@@ -766,6 +767,7 @@ function MyTasksView({
                     {task.priority}
                   </span>
                   <AppSelect
+                    className={`task-status task-status-select ${task.status}`}
                     value={task.status}
                     onChange={(event) =>
                       onStatusChange(task.id, event.target.value)
@@ -2809,6 +2811,7 @@ function TodayDashboard({
                     </span>
                   </div>
                   <AppSelect
+                    className={`task-status task-status-select ${task.status}`}
                     value={task.status}
                     onChange={(event) =>
                       onStatusChange(task.id, event.target.value)

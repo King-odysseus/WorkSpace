@@ -2012,13 +2012,8 @@ html[data-theme='dark'] .team-board-metrics > button { box-shadow: 9px 10px 24px
 @media (max-width: 620px) { .follow-up-row { align-items:flex-start; flex-wrap:wrap; }.follow-up-row > .follow-up-actions { width:100%; padding-left:21px; justify-content:flex-start; } }
 @media (max-width: 820px) { .my-task-row { grid-template-columns:20px minmax(0,1fr) auto auto; }.my-task-row > .my-task-priority { display:none; }.my-task-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.my-task-filters input { grid-column:1 / -1; min-width:0; }.my-task-filters select { width:100%; min-width:0; } }
 @media (max-width: 520px) { .my-task-row { grid-template-columns:20px minmax(0,1fr) auto; grid-template-areas:"check copy delete" ". status status"; }.my-task-row > .check { grid-area:check; }.my-task-row-copy { grid-area:copy; }.my-task-row > button:last-child { grid-area:delete; }.my-task-filters { grid-template-columns:1fr; }.my-task-filters input { grid-column:auto; } }
-.status-select, .priority-select, .task-status-select { border: 1px solid var(--workspace-border); border-radius: 8px; background: var(--workspace-surface-soft); color: var(--workspace-text); box-shadow: inset 2px 2px 5px rgb(7 26 46 / 8%), 2px 2px 6px rgb(255 255 255 / 65%); font-weight: 700; }
-.status-select:focus, .priority-select:focus, .task-status-select:focus { outline: 2px solid rgb(10 158 135 / 28%); outline-offset: 1px; }
-.status-todo { color: #64748b; }
-.status-in-progress { color: #2563eb; }
-.status-review { color: #0f899d; }
-.status-blocked { color: #c2410c; }
-.status-done { color: #087f73; }
+.priority-select, .task-status-select { border: 1px solid var(--workspace-border); border-radius: 8px; background: var(--workspace-surface-soft); color: var(--workspace-text); box-shadow: inset 2px 2px 5px rgb(7 26 46 / 8%), 2px 2px 6px rgb(255 255 255 / 65%); font-weight: 700; }
+.priority-select:focus, .task-status-select:focus { outline: 2px solid rgb(10 158 135 / 28%); outline-offset: 1px; }
 .priority-urgent { color: #b42318; }
 .priority-high { color: #c2410c; }
 .priority-normal { color: #2563eb; }
