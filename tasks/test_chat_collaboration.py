@@ -4,7 +4,8 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import DirectConversation, DirectConversationDismissal, Membership, Workspace, WorkspaceNotification
+from .models import DirectConversation, Membership, Workspace, WorkspaceNotification
+from .pulse import workspace_fingerprint
 
 
 class ChatCollaborationTests(TestCase):
@@ -103,30 +104,84 @@ class DirectConversationManagementTests(TestCase):
         self.assertEqual(response.status_code, 201)
         return response.json()['conversation']
 
-    def listed_conversation_ids(self, user):
+    def listed_conversation_ids(self, user, archived=False):
         self.client.force_login(user)
-        response = self.client.get(reverse('direct-conversation-list', args=[self.workspace.id]))
+        url = reverse('direct-conversation-list', args=[self.workspace.id])
+        if archived:
+            url = f'{url}?archived=true'
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         return {conversation['id'] for conversation in response.json()['conversations']}
 
-    def test_delete_hides_a_chat_per_user_and_a_new_message_restores_it(self):
+    def test_deleting_a_chat_archives_it_for_every_participant(self):
         conversation = self.create_conversation([self.member.id])
 
         deleted = self.client.delete(reverse('direct-conversation-detail', args=[conversation['id']]))
         self.assertEqual(deleted.status_code, 200)
-        self.assertTrue(DirectConversationDismissal.objects.filter(conversation_id=conversation['id'], user=self.owner).exists())
+        self.assertEqual(deleted.json(), {'archived': conversation['id']})
+        stored = DirectConversation.objects.get(id=conversation['id'])
+        self.assertIsNotNone(stored.archived_at)
+        self.assertEqual(stored.archived_by_id, self.owner.id)
+        # Archive is shared state, so the other participant loses the chat too.
         self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.owner))
-        self.assertIn(conversation['id'], self.listed_conversation_ids(self.member))
+        self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.member))
+        self.assertIn(conversation['id'], self.listed_conversation_ids(self.owner, archived=True))
+        self.assertIn(conversation['id'], self.listed_conversation_ids(self.member, archived=True))
+
+    def test_an_archived_chat_stays_archived_when_a_message_arrives(self):
+        conversation = self.create_conversation([self.member.id])
+        self.client.delete(reverse('direct-conversation-detail', args=[conversation['id']]))
 
         self.client.force_login(self.member)
         sent = self.client.post(
             reverse('direct-message-list', args=[conversation['id']]),
-            data=json.dumps({'message': 'Bringing this chat back'}),
+            data=json.dumps({'message': 'Any news on this?'}),
             content_type='application/json',
         )
         self.assertEqual(sent.status_code, 201)
-        self.assertFalse(DirectConversationDismissal.objects.filter(conversation_id=conversation['id']).exists())
+
+        self.assertIsNotNone(DirectConversation.objects.get(id=conversation['id']).archived_at)
+        self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.member))
+        self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.owner))
+
+    def test_any_participant_can_restore_an_archived_chat(self):
+        conversation = self.create_conversation([self.member.id])
+        self.client.delete(reverse('direct-conversation-detail', args=[conversation['id']]))
+
+        self.client.force_login(self.member)
+        restored = self.client.post(reverse('direct-conversation-restore', args=[conversation['id']]))
+        self.assertEqual(restored.status_code, 200)
+        self.assertFalse(restored.json()['conversation']['is_archived'])
+        stored = DirectConversation.objects.get(id=conversation['id'])
+        self.assertIsNone(stored.archived_at)
+        self.assertIsNone(stored.archived_by)
         self.assertIn(conversation['id'], self.listed_conversation_ids(self.owner))
+        self.assertIn(conversation['id'], self.listed_conversation_ids(self.member))
+        self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.member, archived=True))
+
+    def test_archiving_clears_only_that_chats_unread_notifications(self):
+        archived_chat = self.create_conversation([self.member.id])
+        other_chat = self.create_conversation([self.third.id])
+        self.client.force_login(self.member)
+        self.client.post(reverse('direct-message-list', args=[archived_chat['id']]), data=json.dumps({'message': 'Ping'}), content_type='application/json')
+        self.client.force_login(self.third)
+        self.client.post(reverse('direct-message-list', args=[other_chat['id']]), data=json.dumps({'message': 'Also ping'}), content_type='application/json')
+
+        self.client.force_login(self.owner)
+        self.client.delete(reverse('direct-conversation-detail', args=[archived_chat['id']]))
+        self.assertFalse(WorkspaceNotification.objects.filter(recipient=self.owner, target_type='direct_conversation', target_id=str(archived_chat['id']), read_at__isnull=True).exists())
+        self.assertTrue(WorkspaceNotification.objects.filter(recipient=self.owner, target_type='direct_conversation', target_id=str(other_chat['id']), read_at__isnull=True).exists())
+
+    def test_archiving_moves_the_workspace_pulse(self):
+        conversation = self.create_conversation([self.member.id])
+        before = workspace_fingerprint(self.workspace.id, self.owner)
+
+        self.client.delete(reverse('direct-conversation-detail', args=[conversation['id']]))
+        archived = workspace_fingerprint(self.workspace.id, self.owner)
+        self.assertNotEqual(before, archived)
+
+        self.client.post(reverse('direct-conversation-restore', args=[conversation['id']]))
+        self.assertNotEqual(archived, workspace_fingerprint(self.workspace.id, self.owner))
 
     def test_group_participants_can_be_updated_but_the_group_must_keep_three_people(self):
         conversation = self.create_conversation([self.member.id, self.third.id])
@@ -197,5 +252,9 @@ class DirectConversationManagementTests(TestCase):
                 data=json.dumps({'participant_ids': [self.member.id, self.third.id]}),
                 content_type='application/json',
             ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(reverse('direct-conversation-restore', args=[conversation['id']])).status_code,
             404,
         )
