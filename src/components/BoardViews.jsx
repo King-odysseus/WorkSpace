@@ -64,6 +64,8 @@ import {
   getCsrfToken,
   readJsonResponse,
   sortMembersByRecentActivity,
+  taskAssigneeLabel,
+  taskIsAssignedTo,
   toDateKey,
 } from "../lib/workspace-format.js";
 
@@ -381,11 +383,7 @@ function TeamBoardView({
     toast.success(`Invite link for ${invitation.email} copied.`);
   };
   const tasksForMember = (member, list = scopedTasks) =>
-    list.filter(
-      (task) =>
-        String(task.assignee_id || "") === String(member.id) ||
-        (!task.assignee_id && task.member === memberName(member)),
-    );
+    list.filter((task) => taskIsAssignedTo(task, member.id, memberName(member)));
   const todayCheckIns = checkIns.filter((item) => item.date === today);
   const checkedInIds = new Set(
     todayCheckIns.map((item) => String(item.user_id)),
@@ -481,7 +479,7 @@ function TeamBoardView({
   const ownerGroups = groupedTasks(
     visibleTaskRows,
     (task) => String(task.assignee_id || "unassigned"),
-    (task) => (task.assignee_id ? task.member || "Member" : "Unassigned"),
+    (task) => (task.assignee_id ? taskAssigneeLabel(task) : "Unassigned"),
   );
   const statusGroups = statuses
     .filter(
@@ -573,7 +571,7 @@ function TeamBoardView({
                 {task.title}
               </button>
               <span title={task.blocker_details || undefined}>
-                {task.member || "Unassigned"} | {taskLabel(task)}
+                {taskAssigneeLabel(task) || "Unassigned"} | {taskLabel(task)}
                 {task.progress_percent ? ` | ${task.progress_percent}%` : ""}
               </span>
             </div>
@@ -1125,10 +1123,8 @@ function MyTasksView({
   const [bucket, setBucket] = useState("all");
   const [sort, setSort] = useState("priority");
   const [query, setQuery] = useState("");
-  const mine = tasks.filter(
-    (task) =>
-      String(task.assignee_id || "") === String(currentUserId) ||
-      (!task.assignee_id && task.member === currentUserName),
+  const mine = tasks.filter((task) =>
+    taskIsAssignedTo(task, currentUserId, currentUserName),
   );
   const isOpen = (task) => task.status !== "done";
   const overdue = (task) =>
@@ -3188,10 +3184,8 @@ function TodayDashboard({
   // every unassigned task satisfied "" === "" and showed up as yours. The name
   // fallback is kept behind the same !assignee_id guard as MyTasksView so an
   // unassigned task cannot be claimed by a name comparison.
-  const myTasks = tasks.filter(
-    (task) =>
-      String(task.assignee_id || "") === String(currentUserId) ||
-      (!task.assignee_id && task.member === currentUserName),
+  const myTasks = tasks.filter((task) =>
+    taskIsAssignedTo(task, currentUserId, currentUserName),
   );
   const myQueue = myTasks
     .filter(isOpen)

@@ -88,9 +88,12 @@ function mapTaskFromApi(apiTask, { today, workspaceRole, currentUserId } = {}) {
     completed_at: apiTask.completed_at || '',
     created_at: apiTask.created_at || '',
     estimate: 'n/a',
-    can_edit: ['owner', 'manager'].includes(workspaceRole) || apiTask.assignee_id === currentUserId,
+    can_edit: ['owner', 'manager'].includes(workspaceRole) || (apiTask.assignee_ids || []).includes(currentUserId) || apiTask.assignee_id === currentUserId,
     recurrence: apiTask.recurrence || 'none',
     assignee_id: apiTask.assignee_id || '',
+    // Every assignee, primary first. `assignee_id` above stays the primary, so
+    // readers that only ever wanted one owner keep working.
+    assignee_ids: apiTask.assignee_ids || [],
     project_id: apiTask.project_id || '',
     bucket: apiTask.bucket || 'Backlog',
     position: apiTask.position || 0,
@@ -111,6 +114,23 @@ function mapTaskFromApi(apiTask, { today, workspaceRole, currentUserId } = {}) {
     blocking_ids: apiTask.blocking_ids || [],
     is_blocked_by_dependency: apiTask.is_blocked_by_dependency || false,
   }
+}
+
+// `member` still names the primary, so any task with co-owners needs this to
+// say so rather than quietly showing one person.
+function taskAssigneeLabel(task) {
+  const others = (task.assignee_ids?.length || 0) - 1
+  return others > 0 ? `${task.member} + ${others}` : task.member
+}
+
+// "Is this task mine?" was an equality check on the single assignee; with
+// co-owners it is a membership test. The trailing name comparison keeps the
+// legacy case where the API reports an assignee name but no id.
+function taskIsAssignedTo(task, userId, userName) {
+  if (userId && (task.assignee_ids || []).some((id) => String(id) === String(userId))) return true
+  if ((task.assignee_ids || []).length) return false
+  if (userId && String(task.assignee_id || '') === String(userId)) return true
+  return !task.assignee_id && Boolean(userName) && task.member === userName
 }
 
 function formatRelativeActivityTime(value) {
@@ -240,6 +260,8 @@ export {
   taskDueLabel,
   taskSearchText,
   mapTaskFromApi,
+  taskAssigneeLabel,
+  taskIsAssignedTo,
   formatRelativeActivityTime,
   formatLastSeen,
   effectivePresence,

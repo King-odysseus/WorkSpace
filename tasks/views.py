@@ -20,7 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .file_responses import stored_file_response
 from .mailer import send_invitation_email, send_reminder_email
@@ -189,6 +189,7 @@ def notify_managers(workspace_id, actor, verb, object_label, target_type='', tar
 def task_activity_recipients(task, actor):
     recipient_ids = set(TaskComment.objects.filter(task=task).exclude(author_id=actor.id).values_list('author_id', flat=True))
     recipient_ids.update(task.supporters.exclude(id=actor.id).values_list('id', flat=True))
+    recipient_ids.update(task.assignees.exclude(id=actor.id).values_list('id', flat=True))
     if task.assignee_id and task.assignee_id != actor.id:
         recipient_ids.add(task.assignee_id)
     return User.objects.filter(id__in=recipient_ids)
@@ -334,6 +335,47 @@ def set_task_supporters(task, supporter_ids, actor):
     return None
 
 
+def set_task_assignees(task, assignee_ids, actor):
+    """Replace the task's assignees and keep the primary in step.
+
+    Order is meaningful: the first id becomes the primary and is mirrored onto
+    ``Task.assignee`` for the readers that only ever wanted one owner.
+    """
+    if assignee_ids is None:
+        return None
+    if not isinstance(assignee_ids, list):
+        return JsonResponse({'error': 'assignee_ids must be a list.'}, status=400)
+    try:
+        ids = list(dict.fromkeys(int(value) for value in assignee_ids))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'assignee_ids must contain valid user IDs.'}, status=400)
+    valid_ids = set(Membership.objects.filter(workspace_id=task.workspace_id, user_id__in=ids).values_list('user_id', flat=True))
+    if set(ids) != valid_ids:
+        return JsonResponse({'error': 'Every assignee must belong to the task workspace.'}, status=404)
+    TaskAssignee.objects.filter(task=task).exclude(user_id__in=ids).delete()
+    existing = set(TaskAssignee.objects.filter(task=task).values_list('user_id', flat=True))
+    TaskAssignee.objects.bulk_create([
+        TaskAssignee(task=task, user_id=user_id, added_by=actor, position=position)
+        for position, user_id in enumerate(ids) if user_id not in existing
+    ])
+    # Anyone left over kept their old position, so renumber the whole set; a
+    # changed primary has to land at 0 or the denormalised field would drift.
+    links = {link.user_id: link for link in TaskAssignee.objects.filter(task=task)}
+    moved = []
+    for position, user_id in enumerate(ids):
+        link = links[user_id]
+        if link.position != position:
+            link.position = position
+            moved.append(link)
+    if moved:
+        TaskAssignee.objects.bulk_update(moved, ['position'])
+    primary_id = ids[0] if ids else None
+    if task.assignee_id != primary_id:
+        task.assignee_id = primary_id
+        task.save(update_fields=['assignee'])
+    return None
+
+
 def set_task_blocked_by(task, blocked_by_ids):
     if blocked_by_ids is None:
         return None
@@ -442,11 +484,19 @@ def require_permission(request, workspace_id, permission_key):
     return membership, None
 
 
+def task_has_assignee(task, user_id):
+    """True when the user is on the task. Checks the denormalised primary first
+    so the ordinary single-assignee case never touches the join table."""
+    if task.assignee_id == user_id:
+        return True
+    return task.assignee_links.filter(user_id=user_id).exists()
+
+
 def require_task_editor(request, task):
     membership, error = require_workspace_member(request, task.workspace_id)
     if error:
         return error
-    if not membership.has_permission('edit_team_tasks') and task.assignee_id != request.user.id:
+    if not membership.has_permission('edit_team_tasks') and not task_has_assignee(task, request.user.id):
         return JsonResponse({'error': 'You can only edit subtasks on tasks assigned to you.'}, status=403)
     return None
 
@@ -646,7 +696,7 @@ def task_list(request, workspace_id=None):
         return error
 
     if request.method == 'GET':
-        tasks = Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref').prefetch_related('supporters', 'blocked_by', 'blocks')
+        tasks = Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref').prefetch_related('supporters', 'assignee_links', 'blocked_by', 'blocks')
         scope = request.GET.get('scope', 'all')
         project_filter = request.GET.get('project') or request.GET.get('project_id')
         if scope == 'operations':
@@ -658,7 +708,9 @@ def task_list(request, workspace_id=None):
                 tasks = tasks.filter(project_ref_id=int(project_filter))
             except ValueError:
                 return JsonResponse({'error': 'Project filter must be an integer.'}, status=400)
-        filter_map = {'owner': 'assignee_id', 'supporter': 'supporters__id', 'workstream': 'workstream_ref_id', 'phase': 'phase_ref_id', 'status': 'status', 'priority': 'priority'}
+        # `owner` matches any assignee, not just the primary. Filtering the join
+        # on one id cannot duplicate a task: the through table is unique per user.
+        filter_map = {'owner': 'assignees__id', 'supporter': 'supporters__id', 'workstream': 'workstream_ref_id', 'phase': 'phase_ref_id', 'status': 'status', 'priority': 'priority'}
         for parameter, lookup in filter_map.items():
             value = request.GET.get(parameter)
             if value:
@@ -730,7 +782,7 @@ def task_list(request, workspace_id=None):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    create_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
+    create_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'assignee_ids', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
     unknown_fields = set(payload) - create_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -753,6 +805,21 @@ def task_list(request, workspace_id=None):
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     if membership.role == 'member' and assignee is None:
         assignee = request.user
+    # `assignee_ids` is the full set; `assignee_id` above stays supported and is
+    # treated as a one-element list, so the AI action path and the importer are
+    # unaffected. The first id is the primary.
+    assignee_ids = None
+    if 'assignee_ids' in payload:
+        if not isinstance(payload['assignee_ids'], list):
+            return JsonResponse({'error': 'assignee_ids must be a list.'}, status=400)
+        try:
+            assignee_ids = list(dict.fromkeys(int(value) for value in payload['assignee_ids']))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'assignee_ids must contain valid user IDs.'}, status=400)
+        chosen = {user.id: user for user in User.objects.filter(id__in=assignee_ids, workspace_memberships__workspace_id=workspace_id)}
+        if len(chosen) != len(assignee_ids):
+            return JsonResponse({'error': 'Every assignee must belong to this workspace.'}, status=404)
+        assignee = chosen[assignee_ids[0]] if assignee_ids else None
     project_ref = None
     if payload.get('project_id'):
         project_id, id_error = parse_int(payload['project_id'], 'Project')
@@ -809,10 +876,10 @@ def task_list(request, workspace_id=None):
         return JsonResponse({'error': labels_error}, status=400)
 
     max_position = Task.objects.filter(workspace_id=workspace_id, bucket=bucket).aggregate(max_position=Max('position'))['max_position']
-    restricted = {'assignee_id', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
+    restricted = {'assignee_id', 'assignee_ids', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
     if not membership.has_permission('edit_team_tasks') and restricted & set(payload):
         return JsonResponse({'error': 'You do not have permission to set ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
-    if 'assignee_id' in payload and not membership.has_permission('assign_tasks'):
+    if ('assignee_id' in payload or 'assignee_ids' in payload) and not membership.has_permission('assign_tasks'):
         return JsonResponse({'error': 'You do not have permission to assign tasks.'}, status=403)
     start_date, date_error = parse_iso_date(payload.get('start_date'), 'Start date')
     if date_error:
@@ -864,10 +931,14 @@ def task_list(request, workspace_id=None):
         if supporter_error:
             transaction.set_rollback(True)
             return supporter_error
+        assignee_error = set_task_assignees(task, assignee_ids if assignee_ids is not None else ([assignee.id] if assignee else []), request.user)
+        if assignee_error:
+            transaction.set_rollback(True)
+            return assignee_error
         TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=workspace_id, actor=request.user, field='created', previous_value=None, new_value={'title': task.title, 'status': task.status})
     record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')
-    if assignee and assignee != request.user:
-        create_notification(workspace_id, assignee, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
+    for recipient in task.assignees.exclude(id=request.user.id):
+        create_notification(workspace_id, recipient, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
     notify_managers(workspace_id, request.user, 'created task', task.title, target_type='task', target_id=task.id, dedup_key=f'created_task:{task.id}')
     return JsonResponse({'task': task.as_dict()}, status=201)
 
@@ -884,7 +955,7 @@ def task_reorder(request, workspace_id):
     columns = payload.get('columns')
     if not isinstance(columns, list) or not columns:
         return JsonResponse({'error': 'columns must be a non-empty list.'}, status=400)
-    tasks = {task.id: task for task in Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').prefetch_related('supporters', 'blocked_by', 'blocks')}
+    tasks = {task.id: task for task in Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').prefetch_related('supporters', 'assignee_links', 'blocked_by', 'blocks')}
     supplied_ids = []
     updates = []
     reorder_history = []
@@ -1639,7 +1710,7 @@ def task_detail(request, task_id):
         return JsonResponse({'deleted': task_id, 'archived': True, 'task': task.as_dict()})
 
     if not membership.has_permission('edit_team_tasks'):
-        if task.assignee_id != request.user.id:
+        if not task_has_assignee(task, request.user.id):
             return JsonResponse({'error': 'You can only update tasks assigned to you.'}, status=403)
         if not membership.has_permission('edit_own_tasks'):
             return JsonResponse({'error': 'You do not have permission to edit tasks.'}, status=403)
@@ -1649,23 +1720,23 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state', 'blocked_by_ids'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'assignee_ids', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state', 'blocked_by_ids'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
-    leader_fields = {'assignee_id', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
+    leader_fields = {'assignee_id', 'assignee_ids', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
     if not membership.has_permission('edit_team_tasks') and leader_fields & set(payload):
         return JsonResponse({'error': 'You do not have permission to change ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
-    if 'assignee_id' in payload and not membership.has_permission('assign_tasks'):
+    if ('assignee_id' in payload or 'assignee_ids' in payload) and not membership.has_permission('assign_tasks'):
         return JsonResponse({'error': 'You do not have permission to assign tasks.'}, status=403)
 
     material_fields = ['title', 'description', 'assignee_id', 'project_ref_id', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'workstream_ref_id', 'phase_ref_id', 'state']
     previous_values = task_snapshot(task, material_fields)
     previous_supporters = list(task.supporters.values_list('id', flat=True))
+    previous_assignee_ids = [user.id for user in task.assignee_users()]
 
     previous_title = task.title
     previous_status = task.status
-    previous_assignee = task.assignee
     previous_priority = task.priority
     previous_due_date = task.due_date
     previous_recurrence = task.recurrence
@@ -1796,11 +1867,27 @@ def task_detail(request, task_id):
         if blocked_by_error:
             transaction.set_rollback(True)
             return blocked_by_error
+        # An `assignee_id`-only patch is a one-element set, so the link rows stay
+        # in step with the FK that was written just above.
+        if 'assignee_ids' in payload:
+            requested_assignee_ids = payload['assignee_ids']
+        elif 'assignee_id' in payload:
+            requested_assignee_ids = [task.assignee_id] if task.assignee_id else []
+        else:
+            requested_assignee_ids = None
+        assignee_error = set_task_assignees(task, requested_assignee_ids, request.user)
+        if assignee_error:
+            transaction.set_rollback(True)
+            return assignee_error
         changed_fields = record_task_changes(task, request.user, previous_values, material_fields)
         if 'supporter_ids' in payload:
             new_supporters = list(task.supporters.values_list('id', flat=True))
             if sorted(previous_supporters) != sorted(new_supporters):
                 TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=task.workspace_id, actor=request.user, field='supporter_ids', previous_value=previous_supporters, new_value=new_supporters)
+        if 'assignee_ids' in payload:
+            new_assignee_ids = list(task.assignee_links.order_by('position').values_list('user_id', flat=True))
+            if previous_assignee_ids != new_assignee_ids:
+                TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=task.workspace_id, actor=request.user, field='assignee_ids', previous_value=previous_assignee_ids, new_value=new_assignee_ids)
     completed = previous_status != 'done' and task.status == 'done'
     manager_changes = [field for field in changed_fields if field not in {'progress_percent', 'actual_completion_date'}]
     if completed:
@@ -1829,9 +1916,12 @@ def task_detail(request, task_id):
             record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} assigned {task.title} to project {task.project_ref.name}.')
         else:
             record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} removed {task.title} from its project.')
-    if previous_assignee != task.assignee and task.assignee and task.assignee != request.user:
-        record_activity(task.workspace_id, request.user, 'task_assigned', f'{request.user.get_full_name() or request.user.email} assigned {task.title} to {task.assignee.get_full_name() or task.assignee.email}.')
-        create_notification(task.workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
+    added_assignees = [user for user in task.assignee_users() if user.id not in previous_assignee_ids and user.id != request.user.id]
+    if added_assignees:
+        names = ', '.join(user.get_full_name() or user.email for user in added_assignees)
+        record_activity(task.workspace_id, request.user, 'task_assigned', f'{actor_name} assigned {task.title} to {names}.')
+        for recipient in added_assignees:
+            create_notification(task.workspace_id, recipient, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
     next_task = None
     if previous_status != 'done' and task.status == 'done' and task.recurrence != 'none':
         with transaction.atomic():
@@ -1848,6 +1938,8 @@ def task_detail(request, task_id):
             TaskCodeRegistry.objects.create(workspace=task.workspace, code=next_code, task_id=next_task.id)
             for link in task.supporter_links.all():
                 TaskSupporter.objects.create(task=next_task, user_id=link.user_id, added_by=request.user)
+            for link in task.assignee_links.all():
+                TaskAssignee.objects.create(task=next_task, user_id=link.user_id, added_by=request.user, position=link.position)
             TaskChangeHistory.objects.create(task=next_task, task_code=next_code, workspace=task.workspace, actor=request.user, field='created_by_recurrence', previous_value=None, new_value={'source_task_id': task.id})
         record_activity(task.workspace_id, request.user, 'task_recurred', f'Created the next {task.recurrence} occurrence of {task.title}.')
     return JsonResponse({'task': task.as_dict(), 'next_task': next_task.as_dict() if next_task else None})

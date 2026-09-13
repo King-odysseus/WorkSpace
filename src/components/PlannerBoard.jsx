@@ -3,7 +3,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, ChevronL
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { SelectField, DateField } from './workspace-ui.jsx'
-import { toDateKey } from '../lib/workspace-format.js'
+import { taskAssigneeLabel, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
 const statusLabel = { todo: 'To do', 'in progress': 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
@@ -45,7 +45,7 @@ function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOp
       {onStatusChange && <AppSelect className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></AppSelect>}
     </div>
     <div className="planner-card-footer">
-      <span>{task.member || 'Unassigned'}</span>
+      <span>{taskAssigneeLabel(task) || 'Unassigned'}</span>
       <span className={task.due === 'Overdue' ? 'overdue' : ''}>{task.due}</span>
     </div>
     {canReorder && <div className="planner-card-move" aria-label={`Move ${task.title}`}>
@@ -164,7 +164,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     return (!search || [task.task_code, task.title, task.description, task.tag, task.member, task.workstream, task.phase, task.quarter, ...(task.labels || [])].filter(Boolean).join(' ').toLowerCase().includes(search))
       && (status === 'all' || task.status === status)
       && (priority === 'all' || task.priority === priority)
-      && (assignee === 'all' || String(task.assignee_id || '') === assignee)
+      && (assignee === 'all' || taskIsAssignedTo(task, assignee))
       && (supporter === 'all' || supporterIds.includes(supporter))
       && matchesWorkstream(task)
       && (phase === 'all' || (task.phase || task.quarter) === phase)
@@ -198,7 +198,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     if (!movedTask || !next[targetBucket]) return
     next[targetBucket].splice(Math.max(0, Math.min(targetIndex, next[targetBucket].length)), 0, movedTask)
     const columns = buckets.map(bucket => ({ bucket: bucket.name, task_ids: next[bucket.name].map(task => task.id) }))
-    onTaskMove(canManageTasks ? columns : columns.map(column => ({ ...column, task_ids: column.task_ids.filter(id => { const item = tasks.find(task => task.id === id); return item && String(item.assignee_id || '') === String(currentUserId) }) })).filter(column => column.task_ids.length))
+    onTaskMove(canManageTasks ? columns : columns.map(column => ({ ...column, task_ids: column.task_ids.filter(id => { const item = tasks.find(task => task.id === id); return item && taskIsAssignedTo(item, currentUserId) }) })).filter(column => column.task_ids.length))
   }
   const moveTask = (task, targetBucket, placement) => {
     const target = allOrderedFor(targetBucket).filter(item => item.id !== task.id)
@@ -357,7 +357,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
           onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null) }}>
           <GripVertical size={15} aria-hidden="true" /><strong>{bucket.name}</strong><span>{orderedFor(bucket.name).length}</span>{bucketDraggable && <div className="planner-bucket-move"><button type="button" disabled={persistedIndex <= 1} onClick={() => nudgeBucket(bucket.id, -1)} aria-label={`Move ${bucket.name} left`}><ArrowLeft size={12} /></button><button type="button" disabled={persistedIndex < 0 || persistedIndex >= persistedBuckets.length - 1} onClick={() => nudgeBucket(bucket.id, 1)} aria-label={`Move ${bucket.name} right`}><ArrowRight size={12} /></button></div>}
         </header>
-        <div className="planner-column-tasks">{orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || String(task.assignee_id || '') === String(currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}{!orderedFor(bucket.name).length && <div className="planner-empty">Drop tasks here</div>}</div>
+        <div className="planner-column-tasks">{orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}{!orderedFor(bucket.name).length && <div className="planner-empty">Drop tasks here</div>}</div>
         <button type="button" className="planner-column-add" onClick={() => addToBucket(bucket.name)}><Plus size={14} /> Add task</button>
       </section>})}
       {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}

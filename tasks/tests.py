@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, ChatMessageReaction, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, ChatMessageReaction, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .automation import run_workspace_automation
 from .views import create_notification, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
@@ -4211,6 +4211,148 @@ class AuditRemediationApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.membership.refresh_from_db()
         self.assertEqual(self.membership.role, 'manager')
+
+
+class MultiAssigneeTests(TestCase):
+    """A task can have several assignees. Position 0 is the primary, and
+    ``Task.assignee`` mirrors it so the single-owner readers keep working."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
+        self.first = User.objects.create_user(username='first@example.com', email='first@example.com', password='secure-pass-123')
+        self.second = User.objects.create_user(username='second@example.com', email='second@example.com', password='secure-pass-123')
+        self.outsider = User.objects.create_user(username='outsider@example.com', email='outsider@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.first, role='member')
+        Membership.objects.create(workspace=self.workspace, user=self.second, role='member')
+        self.client.login(username='owner@example.com', password='secure-pass-123')
+
+    def _create(self, payload):
+        return self.client.post(
+            reverse('task-list'),
+            data=json.dumps(payload),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+
+    def _shared_task(self, **kwargs):
+        task = Task.objects.create(workspace=self.workspace, title='Prepare brief', assignee=self.first, **kwargs)
+        TaskAssignee.objects.create(task=task, user=self.first, position=0)
+        TaskAssignee.objects.create(task=task, user=self.second, position=1)
+        return task
+
+    def test_create_accepts_several_assignees_and_keeps_the_first_as_primary(self):
+        response = self._create({'title': 'Prepare brief', 'assignee_ids': [self.second.id, self.first.id]})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['task']['assignee_ids'], [self.second.id, self.first.id])
+        self.assertEqual(
+            list(Task.objects.get().assignee_links.values_list('user_id', 'position')),
+            [(self.second.id, 0), (self.first.id, 1)],
+        )
+        self.assertEqual(Task.objects.get().assignee, self.second)
+
+    def test_assignee_id_alone_still_produces_a_one_element_set(self):
+        response = self._create({'title': 'Prepare brief', 'assignee_id': self.first.id})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['task']['assignee_ids'], [self.first.id])
+        self.assertEqual(Task.objects.get().assignee, self.first)
+
+    def test_a_non_member_assignee_is_rejected_without_creating_the_task(self):
+        response = self._create({'title': 'Prepare brief', 'assignee_ids': [self.first.id, self.outsider.id]})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(Task.objects.exists())
+
+    def test_every_assignee_can_edit_the_task(self):
+        task = self._shared_task()
+        self.client.logout()
+        self.client.login(username='second@example.com', password='secure-pass-123')
+
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'progress_percent': 40}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.progress_percent, 40)
+
+    def test_the_owner_filter_matches_any_assignee_not_just_the_primary(self):
+        task = self._shared_task()
+
+        response = self.client.get(f"{reverse('task-list')}?owner={self.second.id}", HTTP_X_WORKSPACE_ID=str(self.workspace.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item['id'] for item in response.json()['tasks']], [task.id])
+
+    def test_patch_replaces_the_set_and_notifies_only_the_newcomer(self):
+        task = Task.objects.create(workspace=self.workspace, title='Prepare brief', assignee=self.first)
+        TaskAssignee.objects.create(task=task, user=self.first, position=0)
+
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'assignee_ids': [self.first.id, self.second.id]}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['task']['assignee_ids'], [self.first.id, self.second.id])
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.second, kind='task_assigned').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.first, kind='task_assigned').count(), 0)
+
+    def test_patch_moves_the_primary_when_the_order_changes(self):
+        task = self._shared_task()
+
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'assignee_ids': [self.second.id, self.first.id]}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['task']['assignee_ids'], [self.second.id, self.first.id])
+        task.refresh_from_db()
+        self.assertEqual(task.assignee, self.second)
+
+    def test_clearing_the_assignees_also_clears_the_primary(self):
+        task = self._shared_task()
+
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'assignee_ids': []}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['task']['assignee_ids'], [])
+        task.refresh_from_db()
+        self.assertIsNone(task.assignee)
+
+    def test_recurrence_carries_every_assignee_forward(self):
+        task = self._shared_task(recurrence='weekly')
+
+        response = self.client.patch(
+            reverse('task-detail', args=[task.id]),
+            data=json.dumps({'status': 'done'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        next_task = Task.objects.exclude(id=task.id).get()
+        self.assertEqual([user.id for user in next_task.assignee_users()], [self.first.id, self.second.id])
+
+    def test_automation_reminds_every_assignee(self):
+        overdue = timezone.localdate() - timedelta(days=1)
+        self._shared_task(due_date=overdue, status='in_progress')
+
+        run_workspace_automation(self.workspace.id)
+
+        recipients = set(WorkspaceNotification.objects.filter(kind='overdue_reminder').values_list('recipient_id', flat=True))
+        self.assertEqual(recipients, {self.first.id, self.second.id})
 
 
 class PlanBucketListScopeTests(TestCase):

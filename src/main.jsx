@@ -140,7 +140,11 @@ import {
   FollowUpEditDialog,
   ProjectEditDrawer,
 } from "./components/RecordDialogs.jsx";
-import { TaskCard, TaskDetailDrawer } from "./components/TaskViews.jsx";
+import {
+  AssigneePicker,
+  TaskCard,
+  TaskDetailDrawer,
+} from "./components/TaskViews.jsx";
 import SettingsView from "./components/SettingsView.jsx";
 const ScreenSharingView = lazy(() => import("./components/ScreenSharing.jsx"));
 const ScreenShareControl = lazy(() =>
@@ -185,7 +189,8 @@ import {
   initialsFor,
   mapTaskFromApi,
   readJsonResponse,
-  taskDueLabel,
+  taskAssigneeLabel,
+  taskIsAssignedTo,
   taskSearchText,
   toDateKey,
   toDateTimeLocal,
@@ -274,7 +279,7 @@ function App() {
   const [newTask, setNewTask] = useState("");
   const [newTaskTemplate, setNewTaskTemplate] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newAssigneeId, setNewAssigneeId] = useState("");
+  const [newAssigneeIds, setNewAssigneeIds] = useState([]);
   const [newProjectId, setNewProjectId] = useState("");
   const [newWorkstreamId, setNewWorkstreamId] = useState("");
   const [newBucket, setNewBucket] = useState("Backlog");
@@ -939,7 +944,7 @@ function App() {
     const mine = session.user
       ? tasks.filter(
           (task) =>
-            String(task.assignee_id || "") === String(session.user.id) &&
+            taskIsAssignedTo(task, session.user.id) &&
             (!task.due_date || task.due_date <= today),
         )
       : [];
@@ -1355,7 +1360,9 @@ function App() {
       setNewRecurrence(template.recurrence || "none");
       setNewProjectId(template.project_id || "");
       setNewWorkstreamId(template.workstream_id || "");
-      setNewAssigneeId(template.assignee_id || "");
+      setNewAssigneeIds(
+        template.assignee_id ? [String(template.assignee_id)] : [],
+      );
     }
   };
   const openTaskModal = (assigneeId, options = {}) => {
@@ -1364,7 +1371,7 @@ function App() {
     setNewTask("");
     setNewTaskTemplate("");
     setNewDescription("");
-    setNewAssigneeId(assigneeId ? String(assigneeId) : "");
+    setNewAssigneeIds(assigneeId ? [String(assigneeId)] : []);
     setNewProjectId(options.projectId ? String(options.projectId) : "");
     setNewWorkstreamId("");
     setNewDueDate("");
@@ -1618,7 +1625,12 @@ function App() {
         body: JSON.stringify({
           title: newTask.trim(),
           description: newDescription.trim(),
-          assignee_id: newAssigneeId || null,
+          // Omitted when nobody is picked rather than sent empty: the server
+          // treats a present key as an explicit choice and would skip the
+          // member-defaults-to-self rule.
+          ...(newAssigneeIds.length
+            ? { assignee_ids: newAssigneeIds.map(Number) }
+            : {}),
           project_id: newProjectId || null,
           workstream_id: newWorkstreamId || null,
           bucket: newBucket,
@@ -1637,31 +1649,16 @@ function App() {
         );
       setTasks((current) => [
         ...current,
-        {
-          id: data.task.id,
-          title: data.task.title,
-          description: data.task.description || "",
-          member: data.task.assignee_name || "Unassigned",
-          tag: data.task.project || "General",
-          status: data.task.status || "todo",
-          priority: data.task.priority || "normal",
-          due: taskDueLabel(data.task.due_date, today),
-          due_date: data.task.due_date || "",
-          estimate: "n/a",
-          assignee_id: data.task.assignee_id || "",
-          project_id: data.task.project_id || "",
-          can_edit:
-            ["owner", "manager"].includes(currentWorkspace?.role) ||
-            data.task.assignee_id === session.user.id,
-          recurrence: data.task.recurrence || "none",
-          bucket: data.task.bucket || "Backlog",
-          labels: data.task.labels || [],
-        },
+        mapTaskFromApi(data.task, {
+          today,
+          workspaceRole: currentWorkspace?.role,
+          currentUserId: session.user.id,
+        }),
       ]);
       setNewTask("");
       setNewTaskTemplate("");
       setNewDescription("");
-      setNewAssigneeId("");
+      setNewAssigneeIds([]);
       setNewProjectId("");
       setNewWorkstreamId("");
       setNewBucket("Backlog");
@@ -1798,7 +1795,7 @@ function App() {
     : 0;
   const myTasks = tasks.filter(
     (task) =>
-      String(task.assignee_id || "") === String(session.user.id) &&
+      taskIsAssignedTo(task, session.user.id) &&
       (!task.due_date || task.due_date <= today),
   );
   const myTodayTasks = myTasks;
@@ -2826,19 +2823,11 @@ function App() {
             <div className="modal-grid">
               <label>
                 Assign to
-                <AppSelect
-                  value={newAssigneeId}
-                  onChange={(event) => setNewAssigneeId(event.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {workspaceData.members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {[member.first_name, member.last_name]
-                        .filter(Boolean)
-                        .join(" ") || member.email}
-                    </option>
-                  ))}
-                </AppSelect>
+                <AssigneePicker
+                  members={workspaceData.members}
+                  value={newAssigneeIds}
+                  onChange={setNewAssigneeIds}
+                />
               </label>
               <DateField
                 label="Due date"
@@ -6546,9 +6535,7 @@ function WorkspaceView({
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredTasks = tasks
     .filter(
-      (task) =>
-        active !== "My tasks" ||
-        String(task.assignee_id || "") === String(currentUserId),
+      (task) => active !== "My tasks" || taskIsAssignedTo(task, currentUserId),
     )
     .filter(
       (task) =>

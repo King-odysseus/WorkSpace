@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effectivePresence, filterCheckInsByRange, mapTaskFromApi, sortMembersByRecentActivity, taskDueLabel, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { effectivePresence, filterCheckInsByRange, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -51,6 +51,54 @@ describe('taskSearchText', () => {
   it('folds the searchable fields into one lowercase haystack', () => {
     const text = taskSearchText({ title: 'Ship Release', member: 'Ada', tag: 'Apollo', labels: ['Urgent'] })
     expect(text).toBe('ship release ada apollo urgent')
+  })
+})
+
+describe('taskAssigneeLabel', () => {
+  it('names the sole assignee without a count', () => {
+    expect(taskAssigneeLabel({ member: 'Ada Lovelace', assignee_ids: [1] })).toBe('Ada Lovelace')
+  })
+
+  it('counts the co-owners beyond the primary', () => {
+    expect(taskAssigneeLabel({ member: 'Ada Lovelace', assignee_ids: [1, 2, 3] })).toBe('Ada Lovelace + 2')
+  })
+
+  it('falls back to the legacy name when the API sends no assignee ids', () => {
+    expect(taskAssigneeLabel({ member: 'Ada Lovelace' })).toBe('Ada Lovelace')
+  })
+})
+
+describe('taskIsAssignedTo', () => {
+  const coOwned = { member: 'Ada Lovelace', assignee_id: 1, assignee_ids: [1, 2] }
+
+  it('matches any co-owner, not just the primary', () => {
+    expect(taskIsAssignedTo(coOwned, 1)).toBe(true)
+    expect(taskIsAssignedTo(coOwned, 2)).toBe(true)
+    expect(taskIsAssignedTo(coOwned, 3)).toBe(false)
+  })
+
+  it('compares ids across string and number forms', () => {
+    expect(taskIsAssignedTo(coOwned, '2')).toBe(true)
+  })
+
+  it('treats assignee_ids as authoritative once the API sends them', () => {
+    // assignee_id still names the primary, but it must not grant membership on
+    // its own - otherwise clearing a co-owner would not take effect.
+    expect(taskIsAssignedTo({ member: 'Ada', assignee_id: 1, assignee_ids: [2] }, 1)).toBe(false)
+  })
+
+  it('falls back to the single assignee id when the API sends no list', () => {
+    expect(taskIsAssignedTo({ member: 'Ada', assignee_id: 7 }, 7)).toBe(true)
+    expect(taskIsAssignedTo({ member: 'Ada', assignee_id: 7 }, 8)).toBe(false)
+  })
+
+  it('falls back to the reported name for the oldest payloads', () => {
+    expect(taskIsAssignedTo({ member: 'Ada Lovelace' }, 9, 'Ada Lovelace')).toBe(true)
+    expect(taskIsAssignedTo({ member: 'Ada Lovelace' }, 9, 'Grace Hopper')).toBe(false)
+  })
+
+  it('does not claim a task sitting on the Unassigned placeholder', () => {
+    expect(taskIsAssignedTo({ member: 'Unassigned', assignee_id: '' }, 9, 'Ada Lovelace')).toBe(false)
   })
 })
 

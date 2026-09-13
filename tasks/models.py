@@ -841,6 +841,10 @@ class Task(models.Model):
     STATE_CHOICES = [('draft', 'Draft'), ('active', 'Active'), ('archived', 'Archived')]
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
+    # The denormalised primary assignee. `assignees` below holds the full set;
+    # this field is always rewritten to whichever assignee sits at position 0, so
+    # the single-owner readers (workload reports, the dashboard filters, the
+    # workspace index) keep working without knowing about the join table.
     assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
     supporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supported_tasks')
     project_ref = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
@@ -867,6 +871,7 @@ class Task(models.Model):
     workstream_ref = models.ForeignKey(LookupValue, on_delete=models.SET_NULL, null=True, blank=True, related_name='workstream_tasks')
     phase_ref = models.ForeignKey(LookupValue, on_delete=models.SET_NULL, null=True, blank=True, related_name='phase_tasks')
     supporters = models.ManyToManyField(User, through='TaskSupporter', through_fields=('task', 'user'), related_name='task_support_roles')
+    assignees = models.ManyToManyField(User, through='TaskAssignee', through_fields=('task', 'user'), related_name='assigned_task_roles', blank=True)
     recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default='none')
     blocked_by = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='blocks')
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -914,6 +919,19 @@ class Task(models.Model):
         """Canonical public name; ``code`` remains the stored legacy field."""
         return self.code
 
+    def assignee_users(self):
+        """Every assignee, in primary-first order.
+
+        Falls back to the denormalised ``assignee`` when there are no link rows.
+        Rows created outside the API (the importer, template instantiation, an
+        admin edit) only set the FK, and a reader that trusted the join table
+        alone would silently see those tasks as unassigned.
+        """
+        users = list(self.assignees.all())
+        if not users and self.assignee_id:
+            users = [self.assignee]
+        return users
+
     def _visible_dependencies(self, related_manager):
         """Dependency rows that still count, filtered in Python so a
         ``prefetch_related`` cache is reused instead of issuing a query per task."""
@@ -955,6 +973,7 @@ class Task(models.Model):
             'state': self.state,
             'archived_at': self.archived_at.isoformat() if self.archived_at else None,
             'supporter_ids': [supporter.id for supporter in self.supporters.all()],
+            'assignee_ids': [link.user_id for link in self.assignee_links.all()],
             'recurrence': self.recurrence,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -976,6 +995,24 @@ class TaskSupporter(models.Model):
     def clean(self):
         if self.task.workspace_id and not Membership.objects.filter(workspace_id=self.task.workspace_id, user_id=self.user_id).exists():
             raise ValidationError({'user': 'Supporter must belong to the task workspace.'})
+
+
+class TaskAssignee(models.Model):
+    """Who a task is assigned to. Position 0 is the primary, mirrored onto
+    ``Task.assignee`` for the readers that only ever wanted one owner."""
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='assignee_links')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task_assignee_links')
+    added_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='added_task_assignees')
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        constraints = [models.UniqueConstraint(fields=['task', 'user'], name='unique_task_assignee')]
+
+    def clean(self):
+        if self.task.workspace_id and not Membership.objects.filter(workspace_id=self.task.workspace_id, user_id=self.user_id).exists():
+            raise ValidationError({'user': 'Assignee must belong to the task workspace.'})
 
 
 class TaskCodeRegistry(models.Model):

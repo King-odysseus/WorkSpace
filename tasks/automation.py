@@ -54,12 +54,19 @@ def deliver_once(workspace_id, recipient, kind, title, body, target_type='', tar
 
 
 def _deliver_task_reminder(workspace_id, task, kind, title_prefix, body_suffix, dedup_suffix):
-    if task.assignee_id is None:
+    """Remind every assignee, once each. The dedup key stays per-recipient so
+    co-owners are not silently collapsed into a single reminder."""
+    assignees = task.assignee_users()
+    if not assignees:
         return False
     title = f'{title_prefix}: {task.title}'
     body = task.description[:200] if task.description else body_suffix
-    key = f'{kind}:{task.id}:{dedup_suffix}:{task.assignee_id}'
-    return deliver_once(workspace_id, task.assignee, kind, title, body, target_type='task', target_id=task.id, dedup_key=key)
+    delivered = False
+    for assignee in assignees:
+        key = f'{kind}:{task.id}:{dedup_suffix}:{assignee.id}'
+        if deliver_once(workspace_id, assignee, kind, title, body, target_type='task', target_id=task.id, dedup_key=key):
+            delivered = True
+    return delivered
 
 
 def _digest_body(scope_label, open_count, overdue_count, blocked_count, due_soon_count, stale_count):
@@ -87,7 +94,7 @@ def run_workspace_automation(workspace_id):
     now = timezone.now()
     stale_cutoff = now - timedelta(days=stale_days)
 
-    tasks = list(Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref'))
+    tasks = list(Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref').prefetch_related('assignees'))
     active = [t for t in tasks if t.status not in {COMPLETED_STATUS, CANCELLED_STATUS} and getattr(t, 'state', 'active') == 'active']
     progressable = [t for t in active if t.status in PROGRESSABLE_STATUSES]
 
@@ -146,7 +153,7 @@ def run_workspace_automation(workspace_id):
     # Blocked alerts notify the owner and every workspace leader.
     leaders = _leaders(workspace_id)
     for task in blocked:
-        recipients = [task.assignee] if task.assignee_id else []
+        recipients = task.assignee_users()
         recipients += [m.user for m in leaders]
         seen = set()
         for recipient in recipients:
