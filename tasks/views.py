@@ -20,7 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .file_responses import stored_file_response
 from .mailer import send_invitation_email, send_reminder_email
@@ -2008,6 +2008,25 @@ def task_attachment_download(request, attachment_id):
     return stored_file_response(request, attachment_file, attachment.original_name)
 
 
+def record_chat_read_watermark(workspace_id, user, target_type, target_id, read_at):
+    """Advance the reader's high-water mark for the thread a notification named.
+
+    Only the two chat targets carry one; a task or a check-in has no read state
+    to keep. The conversation is re-checked for membership so a crafted target id
+    cannot write a row for a thread the caller is not part of.
+    """
+    if target_type == 'chat_channel':
+        ChannelReadState.objects.update_or_create(workspace_id=workspace_id, channel_name=target_id, user=user, defaults={'last_read_at': read_at})
+        return
+    if target_type == 'direct_conversation':
+        conversation_id, _ = parse_int(target_id, 'Conversation')
+        if conversation_id is None:
+            return
+        conversation = DirectConversation.objects.filter(id=conversation_id, workspace_id=workspace_id, participants=user).first()
+        if conversation is not None:
+            DirectConversationRead.objects.update_or_create(conversation=conversation, user=user, defaults={'last_read_at': read_at})
+
+
 @require_http_methods(['GET', 'PATCH'])
 def notification_list(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
@@ -2049,7 +2068,9 @@ def notification_list(request, workspace_id):
     target_type = str(payload.get('target_type', '')).strip()
     target_id = str(payload.get('target_id', '')).strip()
     if target_type and target_id:
-        WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, target_type=target_type, target_id=target_id, read_at__isnull=True).update(read_at=timezone.now())
+        read_at = timezone.now()
+        WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, target_type=target_type, target_id=target_id, read_at__isnull=True).update(read_at=read_at)
+        record_chat_read_watermark(workspace_id, request.user, target_type, target_id, read_at)
         return JsonResponse({'updated': 'target'})
     # A deep link is user supplied, so a non numeric id must be a 404 rather
     # than a ValueError raised out of the id lookup.
@@ -3323,16 +3344,108 @@ def clean_message_text(value):
     return text, None
 
 
+# Mirrors PRESENCE_STALE_AFTER_MS in src/lib/workspace-format.js so both sides
+# agree on who counts as around.
+PRESENCE_STALE_AFTER = timedelta(minutes=10)
+
+
+def online_user_ids(user_ids):
+    """Ids of members who are currently around and have not set themselves offline.
+
+    A missing or stale last_seen_at reads as offline whatever presence the member
+    picked for themselves, matching effectivePresence on the client.
+    """
+    user_ids = list(user_ids)
+    if not user_ids:
+        return set()
+    cutoff = timezone.now() - PRESENCE_STALE_AFTER
+    fresh = dict(UserProfile.objects.filter(user_id__in=user_ids, last_seen_at__gte=cutoff).values_list('user_id', 'presence'))
+    return {user_id for user_id, presence in fresh.items() if presence != 'offline'}
+
+
+def read_through_at(watermarks, reader_ids):
+    """The moment every reader had finished, or None while any of them has not.
+
+    None is what holds a group or a channel on a single tick until the last
+    reader catches up. A thread with nobody else in it is read by definition.
+    """
+    if not reader_ids:
+        return timezone.now()
+    if any(reader_id not in watermarks for reader_id in reader_ids):
+        return None
+    return min(watermarks.values())
+
+
+def watermark_context(watermarks, reader_ids, online_ids):
+    return {
+        'others_online': bool(online_ids & reader_ids),
+        'read_through': read_through_at(watermarks, reader_ids),
+    }
+
+
+def direct_receipt_context(messages, user):
+    """Who else has read, and who else is online, for one direct conversation."""
+    conversation_id = messages[0].conversation_id
+    reader_ids = set(DirectConversation.objects.filter(id=conversation_id).values_list('participants__id', flat=True)) - {user.id}
+    watermarks = dict(DirectConversationRead.objects.filter(conversation_id=conversation_id, user_id__in=reader_ids).values_list('user_id', 'last_read_at'))
+    return watermark_context(watermarks, reader_ids, online_user_ids(reader_ids))
+
+
+def channel_receipt_context(messages, user):
+    """The same, keyed by channel name, because one message list spans channels."""
+    workspace_id = messages[0].workspace_id
+    names = {message.channel for message in messages}
+    channels = {channel.name: channel for channel in ChatChannel.objects.filter(workspace_id=workspace_id, name__in=names)}
+    workspace_member_ids = set(Membership.objects.filter(workspace_id=workspace_id).values_list('user_id', flat=True))
+    online_ids = online_user_ids(workspace_member_ids)
+    contexts = {}
+    for name in names:
+        channel = channels.get(name)
+        if channel is None:
+            continue
+        if channel.is_private:
+            reader_ids = set(channel.members.values_list('id', flat=True)) | {channel.created_by_id}
+        else:
+            reader_ids = set(workspace_member_ids)
+        reader_ids -= {user.id, None}
+        watermarks = dict(ChannelReadState.objects.filter(workspace_id=workspace_id, channel_name=name, user_id__in=reader_ids).values_list('user_id', 'last_read_at'))
+        contexts[name] = watermark_context(watermarks, reader_ids, online_ids)
+    return contexts
+
+
+def receipt_flags(message, user, context):
+    """(delivered, read) for one message, and only ever for the author's own.
+
+    Everyone else's messages report false for both, so these fields cannot be
+    read as a report on who else has seen somebody else's message.
+    """
+    if message.author_id != user.id or context is None:
+        return False, False
+    read_through = context['read_through']
+    read = read_through is not None and message.created_at <= read_through
+    return bool(read or context['others_online']), bool(read)
+
+
 def serialize_chat_messages(messages, user):
     messages = list(messages)
     reactions = reaction_summary(ChatMessageReaction, [message.id for message in messages], user)
-    return [{**message.as_dict(), 'reactions': reactions.get(message.id, [])} for message in messages]
+    receipts = channel_receipt_context(messages, user) if messages else {}
+    payload = []
+    for message in messages:
+        delivered, read = receipt_flags(message, user, receipts.get(message.channel))
+        payload.append({**message.as_dict(), 'reactions': reactions.get(message.id, []), 'delivered': delivered, 'read': read})
+    return payload
 
 
 def serialize_direct_messages(messages, user):
     messages = list(messages)
     reactions = reaction_summary(DirectMessageReaction, [message.id for message in messages], user)
-    return [{**message.as_dict(), 'reactions': reactions.get(message.id, [])} for message in messages]
+    context = direct_receipt_context(messages, user) if messages else None
+    payload = []
+    for message in messages:
+        delivered, read = receipt_flags(message, user, context)
+        payload.append({**message.as_dict(), 'reactions': reactions.get(message.id, []), 'delivered': delivered, 'read': read})
+    return payload
 
 
 @require_http_methods(['GET', 'POST'])
@@ -3498,7 +3611,9 @@ def direct_message_list(request, conversation_id):
         return JsonResponse({'error': 'Conversation was not found.'}, status=404)
     if request.method == 'GET':
         messages = conversation.messages.select_related('author')
-        WorkspaceNotification.objects.filter(workspace_id=conversation.workspace_id, recipient=request.user, target_type='direct_conversation', target_id=str(conversation.id), read_at__isnull=True).update(read_at=timezone.now())
+        read_at = timezone.now()
+        WorkspaceNotification.objects.filter(workspace_id=conversation.workspace_id, recipient=request.user, target_type='direct_conversation', target_id=str(conversation.id), read_at__isnull=True).update(read_at=read_at)
+        DirectConversationRead.objects.update_or_create(conversation=conversation, user=request.user, defaults={'last_read_at': read_at})
         return JsonResponse({'messages': serialize_direct_messages(messages, request.user)})
     try:
         data = json.loads(request.body or '{}')

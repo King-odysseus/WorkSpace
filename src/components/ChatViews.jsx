@@ -4,7 +4,7 @@ import { AppSelect } from './ui/select.jsx'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { ArrowUpRight, Download, FileText, Hash, MessageSquare, Paperclip, Plus, Search, Smile, Users, X } from 'lucide-react'
+import { ArrowUpRight, Check, CheckCheck, Download, FileText, Hash, MessageSquare, Paperclip, Plus, Search, Smile, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -424,12 +424,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const bodyText = edit ? edit.message : message.message
     const editedAt = edit ? edit.edited_at : message.edited_at
     const isEditing = editingMessageId === message.id
+    const receiptScope = mode === 'direct' && !selectedConversation?.is_group ? '' : ' by everyone'
     return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''}`} key={message.id}>
       <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={effectivePresence(author)} small />
       <div className="chat-message-body">
         <div className="chat-message-meta">
           {isMine ? <strong>{message.author_name}</strong> : <button type="button" className="chat-member-name" onClick={() => setProfileMember(author)} aria-label={`View ${message.author_name}'s profile`}>{message.author_name}</button>}
           <span>{formatRelativeActivityTime(message.created_at)}</span>
+          {isMine && message.delivered && <span className={`chat-receipt${message.read ? ' chat-receipt-read' : ''}`} aria-label={message.read ? `Read${receiptScope}` : 'Delivered'} title={message.read ? `Read${receiptScope}` : 'Delivered'}>{message.read ? <CheckCheck size={14} /> : <Check size={14} />}</span>}
           {editedAt && <span className="chat-edited-marker" title={`Edited ${formatRelativeActivityTime(editedAt)}`}>edited</span>}
         </div>
         {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.message || 'Original message is unavailable.'}</span></div>}

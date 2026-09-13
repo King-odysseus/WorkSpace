@@ -3523,6 +3523,8 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .chat-workspace-view .chat-message-mine .chat-reactions { right:10px; left:auto; }
 .chat-workspace-view .chat-message-mine .chat-reply-button { left: auto; right: calc(100% + 8px); transform: translate(-6px, -50%); }
 .chat-workspace-view .chat-edited-marker { color:var(--workspace-text-soft); font-size:10px; font-style:italic; }
+.chat-workspace-view .chat-receipt { display:inline-flex; align-items:center; color:var(--workspace-text-soft); }
+.chat-workspace-view .chat-receipt-read { color:#1D4ED8; }
 .chat-workspace-view .chat-edit-button { position:absolute; left:calc(100% + 8px); top:calc(50% - 26px); border:0; padding:0; background:transparent; color:#1D4ED8; cursor:pointer; font-size:11px; font-weight:700; white-space:nowrap; opacity:0; pointer-events:none; transform:translate(6px, -50%); transition:opacity .15s ease, transform .15s ease; }
 .chat-workspace-view .chat-message:hover .chat-edit-button, .chat-workspace-view .chat-message:focus-within .chat-edit-button { opacity:1; pointer-events:auto; transform:translate(0, -50%); }
 .chat-workspace-view .chat-message-mine .chat-edit-button { left:auto; right:calc(100% + 8px); transform:translate(-6px, -50%); }

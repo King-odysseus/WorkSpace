@@ -10,6 +10,7 @@ from unittest import mock
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.core import mail
+from django.core.cache import cache
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -20,7 +21,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .automation import run_workspace_automation
 from .views import create_notification, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
@@ -2912,6 +2913,33 @@ class WorkspacePulseApiTests(TestCase):
         DirectMessage.objects.create(conversation=mine, author=self.other, message='For you')
         self.assertNotEqual(before_mine, self.fingerprint())
 
+    def test_reading_a_thread_changes_the_fingerprint(self):
+        """Reading adds no message, so the read marks need their own signal or the ticks stall."""
+        conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.user.id}-{self.other.id}')
+        conversation.participants.add(self.user, self.other)
+        ChatChannel.objects.create(workspace=self.workspace, name='general', created_by=self.user)
+        before = self.fingerprint()
+
+        DirectConversationRead.objects.create(conversation=conversation, user=self.other, last_read_at=timezone.now())
+        self.assertNotEqual(before, self.fingerprint(), 'a two-tick read must reach the author')
+
+        before = self.fingerprint()
+        ChannelReadState.objects.create(workspace=self.workspace, user=self.other, channel_name='general', last_read_at=timezone.now())
+        self.assertNotEqual(before, self.fingerprint())
+
+    def test_read_marks_are_scoped(self):
+        other_workspace = Workspace.objects.create(name='Elsewhere', slug='elsewhere-reads')
+        ChatChannel.objects.create(workspace=other_workspace, name='general', created_by=self.other)
+        outsider = User.objects.create_user(username='pulsereader@example.com', email='pulsereader@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=outsider, role='member')
+        elsewhere = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.other.id}-{outsider.id}')
+        elsewhere.participants.add(self.other, outsider)
+        before = self.fingerprint()
+
+        ChannelReadState.objects.create(workspace=other_workspace, user=self.other, channel_name='general', last_read_at=timezone.now())
+        DirectConversationRead.objects.create(conversation=elsewhere, user=self.other, last_read_at=timezone.now())
+        self.assertEqual(before, self.fingerprint(), 'a read in a thread I am not in must not move my fingerprint')
+
     def test_pulse_runs_in_a_small_fixed_number_of_queries(self):
         """This runs on a timer in every open tab, so its cost must stay flat and small."""
         def pulse_queries():
@@ -4542,3 +4570,182 @@ class ChatMessageEditApiTests(TestCase):
         stored = ChatMessage.objects.get(id=message['id'])
         self.assertEqual(stored.author_id, self.author.id)
         self.assertEqual(stored.created_at, original_created_at)
+
+
+class ChatReceiptApiTests(TestCase):
+    """One tick while the other side is around, two once they have read.
+
+    "Around" is the middleware's last_seen_at inside the same ten minute window
+    the frontend uses, so a member who is away shows no tick at all.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.author = User.objects.create_user(username='receipt-author@example.com', email='receipt-author@example.com', password='secure-pass-123')
+        self.reader = User.objects.create_user(username='receipt-reader@example.com', email='receipt-reader@example.com', password='secure-pass-123')
+        self.third = User.objects.create_user(username='receipt-third@example.com', email='receipt-third@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Receipt Workspace', slug='receipt-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.author, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.reader, role='member')
+        Membership.objects.create(workspace=self.workspace, user=self.third, role='member')
+        self.conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.author.id}:{self.reader.id}')
+        self.conversation.participants.add(self.author, self.reader)
+        self.group = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.author.id}:{self.reader.id}:{self.third.id}')
+        self.group.participants.add(self.author, self.reader, self.third)
+        self.client.force_login(self.author)
+
+    def set_last_seen(self, user, minutes_ago):
+        UserProfile.objects.update_or_create(user=user, defaults={'last_seen_at': timezone.now() - timedelta(minutes=minutes_ago)})
+
+    def post_direct(self, conversation, text='Receipt text'):
+        response = self.client.post(
+            reverse('direct-message-list', args=[conversation.id]),
+            data=json.dumps({'message': text}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()['message']['id']
+
+    def post_channel(self, text='Receipt text'):
+        response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': text}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()['message']['id']
+
+    def direct_entry(self, conversation, message_id):
+        self.client.force_login(self.author)
+        listed = self.client.get(reverse('direct-message-list', args=[conversation.id])).json()['messages']
+        return next(item for item in listed if item['id'] == message_id)
+
+    def channel_entry(self, message_id):
+        self.client.force_login(self.author)
+        listed = self.client.get(reverse('chat-message-list', args=[self.workspace.id])).json()['messages']
+        return next(item for item in listed if item['id'] == message_id)
+
+    def read_target(self, user, target_type, target_id):
+        self.client.force_login(user)
+        response = self.client.patch(
+            reverse('notification-list', args=[self.workspace.id]),
+            data=json.dumps({'target_type': target_type, 'target_id': str(target_id)}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_an_away_reader_leaves_a_direct_message_unticked(self):
+        message_id = self.post_direct(self.conversation)
+        self.set_last_seen(self.reader, 30)
+
+        entry = self.direct_entry(self.conversation, message_id)
+        self.assertFalse(entry['delivered'])
+        self.assertFalse(entry['read'])
+
+    def test_one_tick_once_the_reader_is_around(self):
+        message_id = self.post_direct(self.conversation)
+        self.set_last_seen(self.reader, 0)
+
+        entry = self.direct_entry(self.conversation, message_id)
+        self.assertTrue(entry['delivered'])
+        self.assertFalse(entry['read'])
+
+    def test_two_ticks_once_the_reader_has_opened_the_thread(self):
+        message_id = self.post_direct(self.conversation)
+        self.set_last_seen(self.reader, 0)
+        self.read_target(self.reader, 'direct_conversation', self.conversation.id)
+
+        entry = self.direct_entry(self.conversation, message_id)
+        self.assertTrue(entry['delivered'])
+        self.assertTrue(entry['read'])
+
+    def test_only_messages_at_or_before_the_mark_are_read(self):
+        first_id = self.post_direct(self.conversation, 'Before the reader read the thread')
+        self.set_last_seen(self.reader, 0)
+        self.read_target(self.reader, 'direct_conversation', self.conversation.id)
+        self.client.force_login(self.author)
+        second_id = self.post_direct(self.conversation, 'Posted after the reader read the thread')
+
+        self.assertTrue(self.direct_entry(self.conversation, first_id)['read'])
+        self.assertFalse(self.direct_entry(self.conversation, second_id)['read'])
+
+    def test_a_group_thread_needs_every_participant_before_the_second_tick(self):
+        message_id = self.post_direct(self.group)
+        self.set_last_seen(self.reader, 0)
+        self.set_last_seen(self.third, 0)
+        self.read_target(self.reader, 'direct_conversation', self.group.id)
+
+        entry = self.direct_entry(self.group, message_id)
+        self.assertTrue(entry['delivered'])
+        self.assertFalse(entry['read'])
+
+        self.read_target(self.third, 'direct_conversation', self.group.id)
+        self.assertTrue(self.direct_entry(self.group, message_id)['read'])
+
+    def test_reading_the_conversation_list_directly_also_advances_the_mark(self):
+        message_id = self.post_direct(self.conversation)
+        self.set_last_seen(self.reader, 0)
+
+        self.client.force_login(self.reader)
+        self.client.get(reverse('direct-message-list', args=[self.conversation.id]))
+
+        self.assertTrue(self.direct_entry(self.conversation, message_id)['read'])
+
+    def test_another_participants_message_reports_no_receipt(self):
+        self.set_last_seen(self.author, 0)
+        self.client.force_login(self.reader)
+        message_id = self.post_direct(self.conversation, 'Sent by the reader')
+
+        entry = self.direct_entry(self.conversation, message_id)
+        self.assertFalse(entry['delivered'])
+        self.assertFalse(entry['read'])
+
+    def test_a_channel_message_needs_every_member_before_the_second_tick(self):
+        message_id = self.post_channel()
+        self.set_last_seen(self.reader, 0)
+        self.set_last_seen(self.third, 0)
+
+        entry = self.channel_entry(message_id)
+        self.assertTrue(entry['delivered'])
+        self.assertFalse(entry['read'])
+
+        self.read_target(self.reader, 'chat_channel', 'general')
+        self.assertFalse(self.channel_entry(message_id)['read'])
+
+        self.read_target(self.third, 'chat_channel', 'general')
+        self.assertTrue(self.channel_entry(message_id)['read'])
+
+    def test_a_channel_message_is_unticked_while_every_reader_is_away(self):
+        message_id = self.post_channel()
+        self.set_last_seen(self.reader, 30)
+        self.set_last_seen(self.third, 30)
+
+        entry = self.channel_entry(message_id)
+        self.assertFalse(entry['delivered'])
+        self.assertFalse(entry['read'])
+
+    def test_a_read_ahead_of_the_message_only_ticks_that_message(self):
+        """A mark left before the post does not read the post."""
+        self.set_last_seen(self.reader, 0)
+        self.read_target(self.reader, 'direct_conversation', self.conversation.id)
+        self.client.force_login(self.author)
+        message_id = self.post_direct(self.conversation, 'Posted after the reader last opened the thread')
+
+        entry = self.direct_entry(self.conversation, message_id)
+        self.assertTrue(entry['delivered'])
+        self.assertFalse(entry['read'])
+
+    def test_a_crafted_conversation_target_writes_no_read_state(self):
+        stranger = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.reader.id}:{self.third.id}')
+        stranger.participants.add(self.reader, self.third)
+
+        self.read_target(self.author, 'direct_conversation', stranger.id)
+
+        self.assertFalse(DirectConversationRead.objects.filter(conversation=stranger).exists())
+        self.assertFalse(DirectConversationRead.objects.filter(conversation=self.conversation, user=self.author).exists())
+
+    def test_a_non_chat_target_writes_no_read_state(self):
+        self.read_target(self.author, 'task', 1)
+
+        self.assertFalse(DirectConversationRead.objects.exists())
+        self.assertFalse(ChannelReadState.objects.exists())

@@ -710,6 +710,38 @@ class DirectMessageReaction(models.Model):
         constraints = [models.UniqueConstraint(fields=['message', 'user', 'emoji'], name='unique_direct_message_reaction')]
 
 
+class DirectConversationRead(models.Model):
+    """How far one participant has read a direct conversation.
+
+    A high-water mark rather than a row per message: a message counts as read
+    once this stamp has passed its created_at, so a conversation costs one row
+    per participant no matter how long it gets.
+    """
+
+    conversation = models.ForeignKey(DirectConversation, on_delete=models.CASCADE, related_name='read_states')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_read_states')
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['conversation', 'user'], name='unique_direct_conversation_read')]
+
+
+class ChannelReadState(models.Model):
+    """How far one member has read a named channel in a workspace.
+
+    Channels are addressed by name within a workspace, so that is what the
+    watermark keys on rather than the ChatChannel row, which can be recreated.
+    """
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='channel_read_states')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='channel_read_states')
+    channel_name = models.CharField(max_length=80)
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'channel_name', 'user'], name='unique_channel_read_state')]
+
+
 class FollowUp(models.Model):
     STATUS_CHOICES = [('open', 'Open'), ('completed', 'Completed')]
 

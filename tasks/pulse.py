@@ -25,9 +25,12 @@ from django.views.decorators.http import require_http_methods
 from .models import (
     ActivityEvent,
     CalendarEvent,
+    ChannelReadState,
     ChatChannel,
     ChatMessage,
     CheckIn,
+    DirectConversation,
+    DirectConversationRead,
     DirectMessage,
     FollowUp,
     LookupValue,
@@ -62,7 +65,7 @@ WORKSPACE_COLLECTIONS = [
 ]
 
 
-def _workspace_parts(workspace_id):
+def _workspace_parts(workspace_id, user):
     """One round trip returning ``(label, newest_timestamp, row_count)`` per collection.
 
     Table and column names come from the model metadata so a rename in the ORM
@@ -81,9 +84,58 @@ def _workspace_parts(workspace_id):
         )
         params.extend([label, workspace_id])
 
+    read_selects, read_params = _read_state_selects(workspace_id, user)
+
     with connection.cursor() as cursor:
-        cursor.execute(' UNION ALL '.join(selects), params)
+        cursor.execute(' UNION ALL '.join(selects + read_selects), params + read_params)
         return [f'{label}:{newest or ""}:{total}' for label, newest, total in cursor.fetchall()]
+
+
+def _read_state_selects(workspace_id, user):
+    """The two chat read-watermark tables, in the ``WORKSPACE_COLLECTIONS`` shape.
+
+    Who has read what decides whether the viewer's own messages still show one
+    tick, but reading a thread adds no row to any listed collection - so without
+    these parts a tick would only flip to two when some unrelated change happened
+    to trip the refresh. They sit here rather than in that list because both need
+    a join: a channel mark reaches its workspace through the channel it names, and
+    a conversation mark only counts when the viewer is in that conversation.
+    """
+    quote = connection.ops.quote_name
+
+    channel = ChannelReadState._meta
+    channel_table = quote(channel.db_table)
+    chat_channel = ChatChannel._meta
+    chat_channel_table = quote(chat_channel.db_table)
+    selects = [
+        f'SELECT %s AS label, MAX({channel_table}.{quote(channel.get_field("last_read_at").column)}) AS newest, '
+        f'COUNT({channel_table}.{quote(channel.pk.column)}) AS total '
+        f'FROM {channel_table} JOIN {chat_channel_table} '
+        f'ON {chat_channel_table}.{quote(chat_channel.get_field("workspace").column)} = {channel_table}.{quote(channel.get_field("workspace").column)} '
+        f'AND {chat_channel_table}.{quote(chat_channel.get_field("name").column)} = {channel_table}.{quote(channel.get_field("channel_name").column)} '
+        f'WHERE {channel_table}.{quote(channel.get_field("workspace").column)} = %s'
+    ]
+    params = ['channel_reads', workspace_id]
+
+    read = DirectConversationRead._meta
+    conversation = DirectConversation._meta
+    read_table = quote(read.db_table)
+    conversation_table = quote(conversation.db_table)
+    participants = conversation.get_field('participants')
+    through_table = quote(DirectConversation.participants.through._meta.db_table)
+    selects.append(
+        f'SELECT %s AS label, MAX({read_table}.{quote(read.get_field("last_read_at").column)}) AS newest, '
+        f'COUNT({read_table}.{quote(read.pk.column)}) AS total '
+        f'FROM {read_table} JOIN {conversation_table} '
+        f'ON {conversation_table}.{quote(conversation.pk.column)} = {read_table}.{quote(read.get_field("conversation").column)} '
+        f'JOIN {through_table} '
+        f'ON {through_table}.{quote(participants.m2m_column_name())} = {conversation_table}.{quote(conversation.pk.column)} '
+        f'WHERE {conversation_table}.{quote(conversation.get_field("workspace").column)} = %s '
+        f'AND {through_table}.{quote(participants.m2m_reverse_name())} = %s'
+    )
+    params.extend(['conversation_reads', workspace_id, user.id])
+
+    return selects, params
 
 
 def workspace_fingerprint(workspace_id, user):
@@ -92,7 +144,7 @@ def workspace_fingerprint(workspace_id, user):
     Row counts sit alongside the newest timestamp so deletions register too - a
     removed row moves the count without moving ``max(updated_at)``.
     """
-    parts = _workspace_parts(workspace_id)
+    parts = _workspace_parts(workspace_id, user)
 
     # Per-viewer collections: two people in the same workspace legitimately see
     # different notification and direct-message state.
