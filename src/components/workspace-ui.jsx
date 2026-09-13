@@ -36,7 +36,7 @@ function DateTimeField({ label, name, value, onChange, required }) {
   const minutes = [...new Set([...Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0')), ...(minute ? [minute] : [])])].sort()
   return <label>{label}<div className="datetime-field">
     <Popover>
-      <PopoverTrigger asChild><Button type="button" variant="outline" className="datetime-trigger w-full justify-start rounded-lg font-medium"><CalendarDays size={14} />{dateObj ? formatCalendarDate(dateObj, { dateStyle: 'medium' }) : 'Select date'}</Button></PopoverTrigger>
+      <PopoverTrigger asChild><Button type="button" variant="outline" className="datetime-trigger w-full justify-start font-medium"><CalendarDays size={14} />{dateObj ? formatCalendarDate(dateObj, { dateStyle: 'medium' }) : 'Select date'}</Button></PopoverTrigger>
       <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked), null)} /></PopoverContent>
     </Popover>
     <div className="datetime-time-row">
@@ -60,7 +60,7 @@ function DateField({ label, name, value, onChange, required, disabled, placehold
   const dateObj = value ? new Date(`${value}T00:00:00`) : undefined
   const commit = picked => onChange({ target: { name, value: picked } })
   return <label>{label}<Popover>
-    <PopoverTrigger asChild><Button type="button" variant="outline" disabled={disabled} className="date-field-trigger w-full justify-start rounded-lg font-medium"><CalendarDays size={14} />{dateObj ? formatCalendarDate(dateObj, { dateStyle: 'medium' }) : placeholder}</Button></PopoverTrigger>
+    <PopoverTrigger asChild><Button type="button" variant="outline" disabled={disabled} className="date-field-trigger w-full justify-start font-medium"><CalendarDays size={14} />{dateObj ? formatCalendarDate(dateObj, { dateStyle: 'medium' }) : placeholder}</Button></PopoverTrigger>
     <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked))} /></PopoverContent>
   </Popover>
   {required && <input type="text" className="date-field-required-shadow" value={value || ''} required onChange={() => {}} tabIndex={-1} aria-hidden="true" />}

@@ -298,7 +298,6 @@ input[type='checkbox'], input[type='radio'] {
   height: 26px;
   padding: 0 7px;
   gap: 4px;
-  border-radius: 7px;
   font-size: 10px;
   line-height: 1;
 }
@@ -316,7 +315,6 @@ input[type='checkbox'], input[type='radio'] {
   height: 30px;
   padding: 0 9px;
   gap: 5px;
-  border-radius: 8px;
   font-size: 10px;
   line-height: 1;
 }
@@ -1350,6 +1348,17 @@ html[data-theme='dark'] .today-panel-heading > svg {
 }
 
 .workspace-view :is(input, textarea)::placeholder {
+
+/* The four search fields below carry their own outline - their wrapper is a bare
+   flex row with the icon parked over the field - so the pill is drawn on the input
+   itself. Same specificity as the field treatment above, later, so they read as
+   pills instead of rounded rectangles. */
+.project-search input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.chat-search input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.activity-search input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.conversation-search input:not([type='checkbox']):not([type='radio']):not([type='file']) {
+  border-radius: 999px !important;
+}
   color: #98A2B3;
 }
 
@@ -1505,7 +1514,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 .workspace-view .report-risk-list button,
 .workspace-view .project-detail-links button {
   border: 1px solid var(--dashboard-border) !important;
-  border-radius: 14px !important;
+  border-radius: 999px !important;
   background: var(--dashboard-surface-soft) !important;
   box-shadow: none !important;
 }
@@ -1784,7 +1793,7 @@ html[data-theme='dark'] .workspace-view :is(
   place-items: center;
   padding: 0;
   border: 1px solid var(--workspace-border);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--workspace-surface-soft);
   color: var(--workspace-text);
   cursor: pointer;
@@ -1803,7 +1812,7 @@ html[data-theme='dark'] .workspace-view :is(
   margin-bottom: 10px;
   padding: 3px;
   border: 1px solid var(--workspace-border);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--workspace-surface-soft);
 }
 
@@ -1818,7 +1827,7 @@ html[data-theme='dark'] .workspace-view :is(
   min-height: 30px;
   padding: 5px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 999px;
   background: transparent;
   color: var(--workspace-text-soft);
   cursor: pointer;
@@ -1938,7 +1947,7 @@ html[data-theme='dark'] .workspace-view :is(
   place-items: center;
   padding: 0;
   border: 1px solid var(--workspace-border);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--workspace-surface-soft);
   color: var(--workspace-text-soft);
   cursor: pointer;
@@ -2309,7 +2318,7 @@ html[data-theme='dark'] .workspace-view :is(
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--workspace-text-soft);
   cursor: pointer;
@@ -2495,7 +2504,7 @@ html[data-theme='dark'] .workspace-view :is(
   padding: 3px;
   overflow-x: auto;
   border: 1px solid var(--workspace-border);
-  border-radius: 11px;
+  border-radius: 999px;
   background: var(--workspace-surface-soft);
   scrollbar-width: none;
 }
@@ -2515,7 +2524,6 @@ html[data-theme='dark'] .workspace-view :is(
   gap: 6px;
   padding: 6px 10px;
   border: 0;
-  border-radius: 8px;
   background: transparent;
   color: var(--workspace-text-soft);
   cursor: pointer;
@@ -2760,7 +2768,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   place-items: center;
   padding: 0;
   border: 1px solid var(--workspace-border);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--workspace-surface);
   color: var(--workspace-text-soft);
   cursor: pointer;
@@ -2893,7 +2901,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   place-items: center;
   padding: 0;
   border: 1px solid var(--workspace-border);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--workspace-surface);
   color: var(--workspace-text-soft);
   cursor: pointer;
@@ -2985,7 +2993,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   justify-content: center;
   gap: 5px;
   padding: 6px 9px;
-  border-radius: 9px;
+  border-radius: 999px;
   font-size: 10px;
   white-space: nowrap;
 }
