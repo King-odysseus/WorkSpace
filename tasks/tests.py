@@ -1929,6 +1929,24 @@ class TaskApiTests(TestCase):
         self.assertTrue(TaskCodeRegistry.objects.filter(workspace=self.workspace, code=task.code, task_id=task.id).exists())
         self.assertTrue(TaskChangeHistory.objects.filter(task=task, field='created').exists())
 
+    def test_malformed_body_ids_are_rejected_with_400(self):
+        # A non numeric id went straight into the ORM, so the ValueError came out
+        # of the view and Django answered 500 for what is a bad request.
+        cases = (
+            ('workspace-task-list', {'title': 'Bad assignee', 'assignee_id': 'abc'}),
+            ('workspace-task-list', {'title': 'Bad project', 'project_id': 'abc'}),
+            ('risk-issue-list', {'kind': 'risk', 'title': 'Bad project', 'project_id': 'abc'}),
+            ('follow-up-list', {'note': 'Bad task', 'task_id': 'abc'}),
+        )
+        for url_name, body in cases:
+            with self.subTest(url_name=url_name, body=body):
+                response = self.client.post(
+                    reverse(url_name, args=[self.workspace.id]),
+                    data=json.dumps(body),
+                    content_type='application/json',
+                )
+                self.assertEqual(response.status_code, 400)
+
     def test_project_template_create_list_apply_and_delete(self):
         create = self.client.post(
             reverse('project-template-list', args=[self.workspace.id]),

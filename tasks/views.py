@@ -238,6 +238,20 @@ def parse_iso_date(value, field_name, allow_null=True):
         return None, f'{field_name} must use YYYY-MM-DD format.'
 
 
+def parse_int(value, field_name, allow_null=True):
+    """Body values arrive as whatever JSON the caller sent, and a bare int()
+    around one turns a string like 'abc' into an unhandled 500. Ids from request
+    bodies come through here first so a malformed one is a 400."""
+    if value in (None, ''):
+        return None, None if allow_null else f'{field_name} must be an integer.'
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        return None, f'{field_name} must be an integer.'
+    try:
+        return int(value), None
+    except (TypeError, ValueError):
+        return None, f'{field_name} must be an integer.'
+
+
 def parse_money_amount(value, field_name, allow_null=True):
     if value in (None, '') and allow_null:
         return None, None
@@ -728,14 +742,20 @@ def task_list(request, workspace_id=None):
 
     assignee = None
     if payload.get('assignee_id'):
-        assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=workspace_id).first()
+        assignee_id, id_error = parse_int(payload['assignee_id'], 'Assignee')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        assignee = User.objects.filter(id=assignee_id, workspace_memberships__workspace_id=workspace_id).first()
         if assignee is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     if membership.role == 'member' and assignee is None:
         assignee = request.user
     project_ref = None
     if payload.get('project_id'):
-        project_ref = Project.objects.filter(id=payload['project_id'], workspace_id=workspace_id).first()
+        project_id, id_error = parse_int(payload['project_id'], 'Project')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        project_ref = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
         if project_ref is None:
             return JsonResponse({'error': 'Project was not found in this workspace.'}, status=404)
     due_date = None
@@ -761,7 +781,10 @@ def task_list(request, workspace_id=None):
         plan_bucket = ensure_bucket_named(workspace_id, bucket)
     workstream_ref = None
     if payload.get('workstream_id'):
-        workstream_ref = LookupValue.objects.filter(id=payload['workstream_id'], workspace_id=workspace_id, kind='workstream').first()
+        workstream_id, id_error = parse_int(payload['workstream_id'], 'Workstream')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        workstream_ref = LookupValue.objects.filter(id=workstream_id, workspace_id=workspace_id, kind='workstream').first()
         if workstream_ref is None:
             return JsonResponse({'error': 'Workstream was not found in this workspace.'}, status=404)
     if plan_bucket and plan_bucket.project_id:
@@ -820,7 +843,10 @@ def task_list(request, workspace_id=None):
         if workstream_ref is not None:
             task.workstream = workstream_ref.name
         if payload.get('phase_id'):
-            phase_ref = LookupValue.objects.filter(id=payload['phase_id'], workspace_id=workspace_id, kind='phase').first()
+            phase_id, id_error = parse_int(payload['phase_id'], 'Phase')
+            if id_error:
+                return JsonResponse({'error': id_error}, status=400)
+            phase_ref = LookupValue.objects.filter(id=phase_id, workspace_id=workspace_id, kind='phase').first()
             if phase_ref is None:
                 return JsonResponse({'error': 'Phase was not found in this workspace.'}, status=404)
             task.phase_ref = phase_ref
@@ -1122,8 +1148,11 @@ def project_resource_list(request, workspace_id, project_id):
     resource_type = payload.get('resource_type', 'person')
     if resource_type not in dict(ProjectResource.RESOURCE_TYPES):
         return JsonResponse({'error': 'Invalid resource type.'}, status=400)
-    task = Task.objects.filter(id=payload.get('task_id'), workspace_id=workspace_id, project_ref_id=project_id).first() if payload.get('task_id') else None
-    if payload.get('task_id') and task is None:
+    task_id, id_error = parse_int(payload.get('task_id'), 'Task')
+    if id_error:
+        return JsonResponse({'error': id_error}, status=400)
+    task = Task.objects.filter(id=task_id, workspace_id=workspace_id, project_ref_id=project_id).first() if task_id else None
+    if task_id and task is None:
         return JsonResponse({'error': 'Task was not found in this project.'}, status=404)
     for field in ('capacity_percent', 'allocation_percent'):
         if payload.get(field) not in (None, ''):
@@ -1171,8 +1200,11 @@ def project_resource_detail(request, workspace_id, project_id, resource_id):
     if 'file_url' in payload:
         resource.file_url = str(payload['file_url']).strip()
     if 'task_id' in payload:
-        resource.task = Task.objects.filter(id=payload['task_id'], workspace_id=workspace_id, project_ref_id=project_id).first() if payload['task_id'] else None
-        if payload['task_id'] and resource.task is None:
+        task_id, id_error = parse_int(payload['task_id'], 'Task')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        resource.task = Task.objects.filter(id=task_id, workspace_id=workspace_id, project_ref_id=project_id).first() if task_id else None
+        if task_id and resource.task is None:
             return JsonResponse({'error': 'Task was not found in this project.'}, status=404)
     for field in ('capacity_percent', 'allocation_percent'):
         if field in payload:
@@ -1366,15 +1398,21 @@ def task_template_list(request, workspace_id):
     recurrence = payload.get('recurrence', 'none')
     if recurrence not in dict(Task.RECURRENCE_CHOICES):
         return JsonResponse({'error': 'Invalid recurrence.'}, status=400)
-    project = Project.objects.filter(id=payload.get('project_id'), workspace_id=workspace_id).first() if payload.get('project_id') else None
-    if payload.get('project_id') and project is None:
+    project_id, id_error = parse_int(payload.get('project_id'), 'Project')
+    if id_error:
+        return JsonResponse({'error': id_error}, status=400)
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first() if project_id else None
+    if project_id and project is None:
         return JsonResponse({'error': 'Project was not found.'}, status=404)
     # Scoped to the workspace like every other assignee lookup - the id alone is
     # global, so an unfiltered lookup let a template name an outsider and then
     # assign a real in-workspace task to them when the template was applied.
     assignee = None
     if payload.get('assignee_id'):
-        assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=workspace_id).first()
+        assignee_id, id_error = parse_int(payload['assignee_id'], 'Assignee')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        assignee = User.objects.filter(id=assignee_id, workspace_memberships__workspace_id=workspace_id).first()
         if assignee is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     labels = payload.get('labels')
@@ -1702,12 +1740,18 @@ def task_detail(request, task_id):
         task.blocker_details = str(payload['blocker_details'] or '').strip()
 
     if 'assignee_id' in payload:
-        task.assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=task.workspace_id).first() if payload['assignee_id'] else None
-        if payload['assignee_id'] and task.assignee is None:
+        assignee_id, id_error = parse_int(payload['assignee_id'], 'Assignee')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        task.assignee = User.objects.filter(id=assignee_id, workspace_memberships__workspace_id=task.workspace_id).first() if assignee_id else None
+        if assignee_id and task.assignee is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     if 'project_id' in payload:
-        task.project_ref = Project.objects.filter(id=payload['project_id'], workspace_id=task.workspace_id).first() if payload['project_id'] else None
-        if payload['project_id'] and task.project_ref is None:
+        project_id, id_error = parse_int(payload['project_id'], 'Project')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        task.project_ref = Project.objects.filter(id=project_id, workspace_id=task.workspace_id).first() if project_id else None
+        if project_id and task.project_ref is None:
             return JsonResponse({'error': 'Project was not found in this workspace.'}, status=404)
 
     for payload_field, relation_field, legacy_field, kind in (
@@ -1715,8 +1759,11 @@ def task_detail(request, task_id):
         ('phase_id', 'phase_ref', 'phase', 'phase'),
     ):
         if payload_field in payload:
-            lookup = LookupValue.objects.filter(id=payload[payload_field], workspace_id=task.workspace_id, kind=kind).first() if payload[payload_field] else None
-            if payload[payload_field] and lookup is None:
+            lookup_id, id_error = parse_int(payload[payload_field], kind.title())
+            if id_error:
+                return JsonResponse({'error': id_error}, status=400)
+            lookup = LookupValue.objects.filter(id=lookup_id, workspace_id=task.workspace_id, kind=kind).first() if lookup_id else None
+            if lookup_id and lookup is None:
                 return JsonResponse({'error': f'{kind.title()} was not found in this workspace.'}, status=404)
             setattr(task, relation_field, lookup)
             setattr(task, legacy_field, lookup.name if lookup else '')
@@ -1852,7 +1899,10 @@ def task_subtask_list(request, task_id):
         return JsonResponse({'error': 'Subtask title must be between 1 and 200 characters.'}, status=400)
     assignee = None
     if payload.get('assignee_id'):
-        assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=task.workspace_id).first()
+        assignee_id, id_error = parse_int(payload['assignee_id'], 'Assignee')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        assignee = User.objects.filter(id=assignee_id, workspace_memberships__workspace_id=task.workspace_id).first()
         if assignee is None:
             return JsonResponse({'error': 'Subtask assignee was not found in this workspace.'}, status=404)
     subtask = TaskSubtask.objects.create(task=task, title=title, assignee=assignee)
@@ -2671,7 +2721,10 @@ def lookup_value_list(request, workspace_id):
         return JsonResponse({'error': 'name must be between 1 and 120 characters.'}, status=400)
     project = None
     if payload.get('project_id'):
-        project = Project.objects.filter(id=payload['project_id'], workspace_id=workspace_id).first()
+        project_id, id_error = parse_int(payload['project_id'], 'Project')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first()
         if project is None:
             return JsonResponse({'error': 'Project was not found.'}, status=404)
     value_slug = slugify(name)[:140] or kind
@@ -2746,11 +2799,17 @@ def validate_risk_issue_status(kind, status):
 
 
 def risk_issue_related_records(payload, workspace_id, project):
-    task = Task.objects.filter(id=payload.get('task_id'), workspace_id=workspace_id, project_ref=project).first() if payload.get('task_id') else None
-    if payload.get('task_id') and task is None:
+    task_id, id_error = parse_int(payload.get('task_id'), 'Task')
+    if id_error:
+        return None, None, JsonResponse({'error': id_error}, status=400)
+    task = Task.objects.filter(id=task_id, workspace_id=workspace_id, project_ref=project).first() if task_id else None
+    if task_id and task is None:
         return None, None, JsonResponse({'error': 'Task was not found in this project.'}, status=404)
-    expense = ProjectExpense.objects.filter(id=payload.get('expense_id'), project=project, is_active=True).first() if payload.get('expense_id') else None
-    if payload.get('expense_id') and expense is None:
+    expense_id, id_error = parse_int(payload.get('expense_id'), 'Expense')
+    if id_error:
+        return None, None, JsonResponse({'error': id_error}, status=400)
+    expense = ProjectExpense.objects.filter(id=expense_id, project=project, is_active=True).first() if expense_id else None
+    if expense_id and expense is None:
         return None, None, JsonResponse({'error': 'Expense was not found in this project.'}, status=404)
     return task, expense, None
 
@@ -2802,11 +2861,17 @@ def risk_issue_list(request, workspace_id):
         return JsonResponse({'error': 'A valid kind and title are required.'}, status=400)
     if severity not in dict(RiskIssue.SEVERITY_CHOICES) or not validate_risk_issue_status(kind, status):
         return JsonResponse({'error': 'Invalid severity or status for this record type.'}, status=400)
-    project = Project.objects.filter(id=payload.get('project_id'), workspace_id=workspace_id).first() if payload.get('project_id') else None
-    if payload.get('project_id') and project is None:
+    project_id, id_error = parse_int(payload.get('project_id'), 'Project')
+    if id_error:
+        return JsonResponse({'error': id_error}, status=400)
+    project = Project.objects.filter(id=project_id, workspace_id=workspace_id).first() if project_id else None
+    if project_id and project is None:
         return JsonResponse({'error': 'Project was not found.'}, status=404)
-    owner = User.objects.filter(id=payload.get('owner_id'), workspace_memberships__workspace_id=workspace_id).first() if payload.get('owner_id') else None
-    if payload.get('owner_id') and owner is None:
+    owner_id, id_error = parse_int(payload.get('owner_id'), 'Owner')
+    if id_error:
+        return JsonResponse({'error': id_error}, status=400)
+    owner = User.objects.filter(id=owner_id, workspace_memberships__workspace_id=workspace_id).first() if owner_id else None
+    if owner_id and owner is None:
         return JsonResponse({'error': 'Owner was not found in this workspace.'}, status=404)
     due_date, date_error = parse_iso_date(payload.get('due_date', payload.get('due')), 'Due date')
     if date_error:
@@ -2873,8 +2938,11 @@ def risk_issue_detail(request, workspace_id, record_id):
             setattr(record, field, int(payload[field]) if payload[field] not in (None, '') else None)
     previous_owner_id = record.owner_id
     if 'owner_id' in payload:
-        record.owner = User.objects.filter(id=payload['owner_id'], workspace_memberships__workspace_id=workspace_id).first() if payload['owner_id'] else None
-        if payload['owner_id'] and record.owner is None:
+        owner_id, id_error = parse_int(payload['owner_id'], 'Owner')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        record.owner = User.objects.filter(id=owner_id, workspace_memberships__workspace_id=workspace_id).first() if owner_id else None
+        if owner_id and record.owner is None:
             return JsonResponse({'error': 'Owner was not found in this workspace.'}, status=404)
     if 'owner' in payload:
         record.owner_name = str(payload['owner'] or '').strip()
@@ -3364,7 +3432,10 @@ def chat_message_list(request, workspace_id):
         allowed_channels.add(channel)
     parent = None
     if payload.get('parent_id'):
-        parent = ChatMessage.objects.filter(id=payload['parent_id'], workspace_id=workspace_id, channel=channel, parent__isnull=True).first()
+        parent_id, id_error = parse_int(payload['parent_id'], 'Parent message')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        parent = ChatMessage.objects.filter(id=parent_id, workspace_id=workspace_id, channel=channel, parent__isnull=True).first()
         if parent is None:
             return JsonResponse({'error': 'The parent message was not found in this channel.'}, status=404)
     shared_documents, shared_files = shared_chat_items(workspace_id, payload)
@@ -3428,7 +3499,10 @@ def direct_message_list(request, conversation_id):
         return JsonResponse({'error': 'Message must be 4000 characters or fewer.'}, status=400)
     parent = None
     if data.get('parent_id'):
-        parent = DirectMessage.objects.filter(id=data['parent_id'], conversation=conversation, parent__isnull=True).first()
+        parent_id, id_error = parse_int(data['parent_id'], 'Parent message')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        parent = DirectMessage.objects.filter(id=parent_id, conversation=conversation, parent__isnull=True).first()
         if parent is None:
             return JsonResponse({'error': 'The parent message was not found in this conversation.'}, status=404)
     shared_documents, shared_files = shared_chat_items(conversation.workspace_id, data)
@@ -3502,12 +3576,18 @@ def follow_up_list(request, workspace_id):
             return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
     task = None
     if payload.get('task_id'):
-        task = Task.objects.filter(id=payload['task_id'], workspace_id=workspace_id).first()
+        task_id, id_error = parse_int(payload['task_id'], 'Task')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        task = Task.objects.filter(id=task_id, workspace_id=workspace_id).first()
         if task is None:
             return JsonResponse({'error': 'Task was not found in this workspace.'}, status=404)
     assigned_to = None
     if payload.get('assigned_to'):
-        assigned_to = User.objects.filter(id=payload['assigned_to'], workspace_memberships__workspace_id=workspace_id).first()
+        assigned_to_id, id_error = parse_int(payload['assigned_to'], 'Assignee')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        assigned_to = User.objects.filter(id=assigned_to_id, workspace_memberships__workspace_id=workspace_id).first()
         if assigned_to is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     follow_up = FollowUp.objects.create(workspace_id=workspace_id, task=task, created_by=request.user, assigned_to=assigned_to, note=note, due_date=due_date)
@@ -3607,12 +3687,18 @@ def follow_up_detail(request, follow_up_id):
         except ValueError:
             return JsonResponse({'error': 'Due date must use YYYY-MM-DD format.'}, status=400)
     if 'assigned_to' in payload:
-        follow_up.assigned_to = User.objects.filter(id=payload['assigned_to'], workspace_memberships__workspace_id=follow_up.workspace_id).first() if payload['assigned_to'] else None
-        if payload['assigned_to'] and follow_up.assigned_to is None:
+        assigned_to_id, id_error = parse_int(payload['assigned_to'], 'Assignee')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        follow_up.assigned_to = User.objects.filter(id=assigned_to_id, workspace_memberships__workspace_id=follow_up.workspace_id).first() if assigned_to_id else None
+        if assigned_to_id and follow_up.assigned_to is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     if 'task_id' in payload:
-        follow_up.task = Task.objects.filter(id=payload['task_id'], workspace_id=follow_up.workspace_id).first() if payload['task_id'] else None
-        if payload['task_id'] and follow_up.task is None:
+        task_id, id_error = parse_int(payload['task_id'], 'Task')
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        follow_up.task = Task.objects.filter(id=task_id, workspace_id=follow_up.workspace_id).first() if task_id else None
+        if task_id and follow_up.task is None:
             return JsonResponse({'error': 'Task was not found in this workspace.'}, status=404)
     follow_up.save()
     completed = previous_status != 'completed' and follow_up.status == 'completed'

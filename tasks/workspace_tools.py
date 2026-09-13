@@ -22,7 +22,7 @@ from django.views.decorators.http import require_http_methods
 from .models import Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
 from .file_responses import stored_file_response
 from .sanitize import sanitize_document_content
-from .views import require_workspace_member
+from .views import parse_int, require_workspace_member
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +492,9 @@ def workspace_document_share_list(request, workspace_id, document_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    user_id = payload.get('user_id')
+    user_id, id_error = parse_int(payload.get('user_id'), 'Member')
+    if id_error:
+        return JsonResponse({'error': id_error}, status=400)
     permission = payload.get('permission', 'view')
     if permission not in {'view', 'comment', 'edit'}:
         return JsonResponse({'error': 'Permission must be view, comment, or edit.'}, status=400)
@@ -549,7 +551,10 @@ def workspace_document_comment_list(request, workspace_id, document_id):
     body = str(payload.get('body', '')).strip()
     if not body or len(body) > 4000:
         return JsonResponse({'error': 'Comment must be between 1 and 4,000 characters.'}, status=400)
-    parent = document.comments.filter(id=payload.get('parent_id')).first() if payload.get('parent_id') else None
+    parent_id, id_error = parse_int(payload.get('parent_id'), 'Parent comment')
+    if id_error:
+        return JsonResponse({'error': id_error}, status=400)
+    parent = document.comments.filter(id=parent_id).first() if parent_id else None
     comment = WorkspaceDocumentComment.objects.create(document=document, author=request.user, parent=parent, body=body, anchor=payload.get('anchor') if isinstance(payload.get('anchor'), dict) else {})
     from .views import create_notification, notify_mentions
     # The document owner and everyone already in the thread hear about a new

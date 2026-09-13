@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .models import AuditLog, Membership, ScreenCapture, ScreenShareSession, WorkspaceSetting
-from .views import create_notification
+from .views import create_notification, parse_int
 
 
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024
@@ -159,7 +159,10 @@ def screen_share_session_list(request, workspace_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    employee = User.objects.filter(id=payload.get('employee_id'), workspace_memberships__workspace_id=workspace_id).first()
+    employee_id, id_error = parse_int(payload.get('employee_id'), 'Employee')
+    if id_error:
+        return JsonResponse({'error': id_error}, status=400)
+    employee = User.objects.filter(id=employee_id, workspace_memberships__workspace_id=workspace_id).first()
     if employee is None:
         return JsonResponse({'error': 'Employee was not found in this workspace.'}, status=404)
     if employee.id == request.user.id:
