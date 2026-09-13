@@ -3380,7 +3380,9 @@ class WorkspaceAiSettingsApiTests(TestCase):
 
     def test_action_proposal_is_rejected_when_the_member_lacks_permission(self):
         manager = User.objects.create_user(username='limited-manager@example.com', email='limited-manager@example.com', password='secure-pass-123')
-        Membership.objects.create(workspace=self.workspace, user=manager, role='manager', permissions=[])
+        # `use_ai` is held so the request reaches the assistant at all; the
+        # rejection under test is the action-level one for `create_projects`.
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager', permissions=['use_ai'])
         self.client.force_login(manager)
         self._enable_ai()
         captured = {}
@@ -3434,6 +3436,18 @@ class WorkspaceAiSettingsApiTests(TestCase):
         rejected = self.patch({'provider_config': {'openai': {'base_url': 'http://internal.example.com/v1'}}})
         self.assertEqual(rejected.status_code, 400)
         self.assertIn('HTTPS', rejected.json()['error'])
+
+    def test_manager_without_use_ai_cannot_reach_the_assistant(self):
+        manager = User.objects.create_user(username='ai-manager@example.com', email='ai-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager', permissions=['view_reports'])
+        self._enable_ai()
+        self.client.force_login(manager)
+        captured = {}
+        response = self._chat({'message': 'Hello'}, captured)
+        self.assertEqual(response.status_code, 403)
+        # The request is refused before the provider call, so nothing is spent
+        # and no workspace data leaves the server.
+        self.assertEqual(captured, {})
 
 
 class WorkspaceDocumentCollaborationTests(TestCase):

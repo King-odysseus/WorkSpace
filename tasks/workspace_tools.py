@@ -294,6 +294,8 @@ def workspace_ai_chat(request, workspace_id):
     if error:
         return error
     setting = _setting(workspace_id)
+    if not membership.has_permission('use_ai'):
+        return JsonResponse({'error': 'You do not have permission to use Zuri.'}, status=403)
     if not setting.ai_enabled or (membership.role == 'member' and request.user.id not in (setting.ai_user_ids or [])):
         return JsonResponse({'error': 'Zuri has not been enabled for your account.'}, status=403)
     try:
@@ -358,6 +360,8 @@ def workspace_ai_action(request, workspace_id, action_id):
     if error:
         return error
     setting = _setting(workspace_id)
+    if not membership.has_permission('use_ai'):
+        return JsonResponse({'error': 'You do not have permission to use Zuri.'}, status=403)
     if not setting.ai_enabled or (membership.role == 'member' and request.user.id not in (setting.ai_user_ids or [])):
         return JsonResponse({'error': 'Zuri has not been enabled for your account.'}, status=403)
     try:
