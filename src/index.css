@@ -1673,3 +1673,43 @@ html[data-theme='dark'] .workspace-view :is(
     justify-content: flex-start;
   }
 }
+
+/* Keep the Channels and Chats rail and feed as standalone cards on desktop.
+   This final scoped rule is needed because index.css loads after the theme
+   and its shared card treatment otherwise leaves both surfaces fused to the
+   outer chat shell. */
+.chat-workspace-view .chat-layout {
+  grid-template-columns: minmax(220px, 230px) minmax(0, 1fr);
+  gap: 14px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+
+.chat-workspace-view .chat-conversation-list,
+.chat-workspace-view .chat-feed {
+  border: 1px solid var(--dashboard-border) !important;
+  border-radius: 18px !important;
+  background: var(--dashboard-surface) !important;
+  box-shadow: var(--dashboard-shadow) !important;
+}
+
+.chat-workspace-view .chat-conversation-list {
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+.chat-workspace-view .chat-feed {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .chat-workspace-view .chat-layout {
+    grid-template-columns: 1fr;
+  }
+}
