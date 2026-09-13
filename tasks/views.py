@@ -3314,6 +3314,15 @@ def reaction_summary(reaction_model, message_ids, user):
     return grouped
 
 
+def clean_message_text(value):
+    text = str(value or '').strip()
+    if not text:
+        return None, 'Message is required.'
+    if len(text) > 4000:
+        return None, 'Message must be 4000 characters or fewer.'
+    return text, None
+
+
 def serialize_chat_messages(messages, user):
     messages = list(messages)
     reactions = reaction_summary(ChatMessageReaction, [message.id for message in messages], user)
@@ -3420,10 +3429,9 @@ def chat_message_list(request, workspace_id):
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     message_text = str(payload.get('message', '')).strip()
     channel = str(payload.get('channel', 'general')).strip()
-    if not message_text:
-        return JsonResponse({'error': 'Message is required.'}, status=400)
-    if len(message_text) > 4000:
-        return JsonResponse({'error': 'Message must be 4000 characters or fewer.'}, status=400)
+    message_text, text_error = clean_message_text(message_text)
+    if text_error:
+        return JsonResponse({'error': text_error}, status=400)
     if not channel or len(channel) > 80:
         return JsonResponse({'error': 'Channel must be between 1 and 80 characters.'}, status=400)
     if channel not in allowed_channels:
@@ -3497,10 +3505,9 @@ def direct_message_list(request, conversation_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     message_text = str(data.get('message', '')).strip()
-    if not message_text:
-        return JsonResponse({'error': 'Message is required.'}, status=400)
-    if len(message_text) > 4000:
-        return JsonResponse({'error': 'Message must be 4000 characters or fewer.'}, status=400)
+    message_text, text_error = clean_message_text(message_text)
+    if text_error:
+        return JsonResponse({'error': text_error}, status=400)
     parent = None
     if data.get('parent_id'):
         parent_id, id_error = parse_int(data['parent_id'], 'Parent message')
@@ -3516,6 +3523,43 @@ def direct_message_list(request, conversation_id):
         create_notification(conversation.workspace_id, participant, 'direct_message', f'New message from {sender}', message_text[:120], target_type='direct_conversation', target_id=conversation.id)
     notify_mentions(conversation.workspace_id, request.user, message_text, 'direct_conversation', conversation.id, Membership.objects.filter(workspace_id=conversation.workspace_id, user__in=conversation.participants.all()).select_related('user'))
     return JsonResponse({'message': serialize_direct_messages([message], request.user)[0]}, status=201)
+
+
+def apply_message_edit(request, message, serializer):
+    """Rewrite a sent message's text and stamp it as edited. Author only."""
+    if message.author_id != request.user.id:
+        return JsonResponse({'error': 'You can only edit your own messages.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    message_text, text_error = clean_message_text(payload.get('message'))
+    if text_error:
+        return JsonResponse({'error': text_error}, status=400)
+    message.message = message_text
+    message.edited_at = timezone.now()
+    message.save(update_fields=['message', 'edited_at'])
+    return JsonResponse({'message': serializer([message], request.user)[0]})
+
+
+@require_http_methods(['PATCH'])
+def chat_message_detail(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = ChatMessage.objects.filter(id=message_id, workspace_id__in=user_workspace_ids(request.user)).select_related('author').first()
+    if message is None or not accessible_chat_channels(message.workspace_id, request.user).filter(name=message.channel).exists():
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return apply_message_edit(request, message, serialize_chat_messages)
+
+
+@require_http_methods(['PATCH'])
+def direct_message_detail(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = DirectMessage.objects.filter(id=message_id, conversation__participants=request.user).select_related('author').first()
+    if message is None:
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return apply_message_edit(request, message, serialize_direct_messages)
 
 
 def toggle_message_reaction(request, message, reaction_model, serializer):

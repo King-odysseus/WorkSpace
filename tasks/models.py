@@ -579,6 +579,9 @@ class ChatMessage(models.Model):
     shared_documents = models.JSONField(default=list, blank=True)
     shared_files = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Null until the author rewrites the text. Attachments are fixed at send
+    # time, so an edit only ever changes `message`.
+    edited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['created_at']
@@ -596,6 +599,7 @@ class ChatMessage(models.Model):
             'shared_documents': self.shared_documents or [],
             'shared_files': self.shared_files or [],
             'created_at': self.created_at.isoformat(),
+            'edited_at': self.edited_at.isoformat() if self.edited_at else None,
         }
 
 
@@ -673,6 +677,9 @@ class DirectMessage(models.Model):
     shared_documents = models.JSONField(default=list, blank=True)
     shared_files = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Null until the author rewrites the text. Attachments are fixed at send
+    # time, so an edit only ever changes `message`.
+    edited_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['created_at']
@@ -689,6 +696,7 @@ class DirectMessage(models.Model):
             'shared_documents': self.shared_documents or [],
             'shared_files': self.shared_files or [],
             'created_at': self.created_at.isoformat(),
+            'edited_at': self.edited_at.isoformat() if self.edited_at else None,
         }
 
 

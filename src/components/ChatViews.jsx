@@ -86,6 +86,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [mentionOpen, setMentionOpen] = useState(false)
   const [profileMember, setProfileMember] = useState(null)
   const [reactionUpdates, setReactionUpdates] = useState({})
+  const [messageEdits, setMessageEdits] = useState({})
+  const [editingMessageId, setEditingMessageId] = useState(null)
+  const [editDraft, setEditDraft] = useState('')
   const [workspaceDocuments, setWorkspaceDocuments] = useState([])
   const [workspaceFiles, setWorkspaceFiles] = useState([])
   const [sharedDocumentIds, setSharedDocumentIds] = useState([])
@@ -352,6 +355,32 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       setReactionUpdates(current => ({ ...current, [message.id]: payload.message.reactions }))
     } catch (reactionError) { setError(reactionError.message) }
   }
+  const startEditing = message => {
+    setEditingMessageId(message.id)
+    setEditDraft(messageEdits[message.id]?.message ?? message.message)
+    setError('')
+  }
+  const cancelEditing = () => {
+    setEditingMessageId(null)
+    setEditDraft('')
+  }
+  const saveEdit = async message => {
+    const text = editDraft.trim()
+    if (!text) { setError('Message is required.'); return }
+    const direct = mode === 'direct'
+    const endpoint = direct ? `/api/direct-messages/${message.id}/` : `/api/chat-messages/${message.id}/`
+    setError('')
+    try {
+      const response = await fetch(endpoint, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ message: text }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Message could not be updated.')
+      setMessageEdits(current => ({ ...current, [message.id]: payload.message }))
+      cancelEditing()
+    } catch (editError) { setError(editError.message) }
+  }
   useEffect(() => {
     if (mode === 'channels' && selectedChannel) markConversationRead('chat_channel', selectedChannel)
   }, [mode, selectedChannel, workspaceId])
@@ -360,18 +389,30 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const reactions = reactionUpdates[message.id] || message.reactions || []
     const author = memberForMessage(message)
     const isMine = String(author.id) === String(currentUserId)
+    const edit = messageEdits[message.id]
+    const bodyText = edit ? edit.message : message.message
+    const editedAt = edit ? edit.edited_at : message.edited_at
+    const isEditing = editingMessageId === message.id
     return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''}`} key={message.id}>
       <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={effectivePresence(author)} small />
       <div className="chat-message-body">
         <div className="chat-message-meta">
           {isMine ? <strong>{message.author_name}</strong> : <button type="button" className="chat-member-name" onClick={() => setProfileMember(author)} aria-label={`View ${message.author_name}'s profile`}>{message.author_name}</button>}
           <span>{formatRelativeActivityTime(message.created_at)}</span>
+          {editedAt && <span className="chat-edited-marker" title={`Edited ${formatRelativeActivityTime(editedAt)}`}>edited</span>}
         </div>
         {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.message || 'Original message is unavailable.'}</span></div>}
         <div className={`chat-message-bubble chat-member-tone-${Number(author.id) % 5}`}>
-          <p>{renderMessageText(message.message)}</p>
-          <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />
-          {!message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
+          {isEditing ? <div className="chat-edit-form">
+            <textarea value={editDraft} onChange={event => setEditDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); cancelEditing() } }} maxLength="4000" aria-label="Edit message" autoFocus />
+            <div className="chat-edit-actions">
+              <button type="button" className="chat-edit-save" onClick={() => saveEdit(message)}>Save changes</button>
+              <button type="button" className="chat-edit-cancel" onClick={cancelEditing}>Cancel</button>
+            </div>
+          </div> : <p>{renderMessageText(bodyText)}</p>}
+          {!isEditing && <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />}
+          {!isEditing && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
+          {!isEditing && isMine && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
         </div>
         {(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}
         {(message.shared_files || []).map(file => isImageFileName(file.original_name) && file.url ? <a className="chat-shared-image" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer" aria-label={`Open image ${file.original_name}`}><img src={file.url} alt={file.original_name} loading="lazy" /></a> : <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}

@@ -4415,3 +4415,130 @@ class DocumentCommentResolutionTests(TestCase):
         self.comment.refresh_from_db()
         self.assertIsNone(self.comment.resolved_at)
         self.assertIsNone(self.comment.resolved_by)
+
+
+class ChatMessageEditApiTests(TestCase):
+    """Authors can rewrite a sent message; nobody else can."""
+
+    def setUp(self):
+        self.author = User.objects.create_user(username='edit-author@example.com', email='edit-author@example.com', password='secure-pass-123')
+        self.other = User.objects.create_user(username='edit-other@example.com', email='edit-other@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Edit Workspace', slug='edit-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.author, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
+        self.conversation = DirectConversation.objects.create(workspace=self.workspace, conversation_key=f'{self.author.id}:{self.other.id}')
+        self.conversation.participants.add(self.author, self.other)
+        self.client.force_login(self.author)
+
+    def post_channel_message(self, text='Original channel text'):
+        response = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': text}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()['message']
+
+    def post_direct_message(self, text='Original direct text'):
+        response = self.client.post(
+            reverse('direct-message-list', args=[self.conversation.id]),
+            data=json.dumps({'message': text}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()['message']
+
+    def edit_channel(self, message_id, text):
+        return self.client.patch(
+            reverse('chat-message-detail', args=[message_id]),
+            data=json.dumps({'message': text}),
+            content_type='application/json',
+        )
+
+    def edit_direct(self, message_id, text):
+        return self.client.patch(
+            reverse('direct-message-detail', args=[message_id]),
+            data=json.dumps({'message': text}),
+            content_type='application/json',
+        )
+
+    def test_author_can_edit_a_channel_message_and_it_is_marked_edited(self):
+        message = self.post_channel_message()
+        self.assertIsNone(message['edited_at'])
+
+        response = self.edit_channel(message['id'], 'Rewritten channel text')
+        self.assertEqual(response.status_code, 200)
+        updated = response.json()['message']
+        self.assertEqual(updated['message'], 'Rewritten channel text')
+        self.assertIsNotNone(updated['edited_at'])
+        self.assertEqual(ChatMessage.objects.get(id=message['id']).message, 'Rewritten channel text')
+
+    def test_author_can_edit_a_direct_message_and_it_is_marked_edited(self):
+        message = self.post_direct_message()
+        self.assertIsNone(message['edited_at'])
+
+        response = self.edit_direct(message['id'], 'Rewritten direct text')
+        self.assertEqual(response.status_code, 200)
+        updated = response.json()['message']
+        self.assertEqual(updated['message'], 'Rewritten direct text')
+        self.assertIsNotNone(updated['edited_at'])
+        self.assertEqual(DirectMessage.objects.get(id=message['id']).message, 'Rewritten direct text')
+
+    def test_the_other_participant_sees_the_edit_and_its_marker(self):
+        message = self.post_direct_message()
+        self.assertEqual(self.edit_direct(message['id'], 'Rewritten direct text').status_code, 200)
+
+        self.client.force_login(self.other)
+        listed = self.client.get(reverse('direct-message-list', args=[self.conversation.id])).json()['messages']
+        entry = next(item for item in listed if item['id'] == message['id'])
+        self.assertEqual(entry['message'], 'Rewritten direct text')
+        self.assertIsNotNone(entry['edited_at'])
+
+    def test_a_member_cannot_edit_someone_elses_channel_message(self):
+        message = self.post_channel_message()
+        self.client.force_login(self.other)
+
+        response = self.edit_channel(message['id'], 'Hijacked')
+        self.assertEqual(response.status_code, 403)
+        stored = ChatMessage.objects.get(id=message['id'])
+        self.assertEqual(stored.message, 'Original channel text')
+        self.assertIsNone(stored.edited_at)
+
+    def test_a_participant_cannot_edit_someone_elses_direct_message(self):
+        message = self.post_direct_message()
+        self.client.force_login(self.other)
+
+        response = self.edit_direct(message['id'], 'Hijacked')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(DirectMessage.objects.get(id=message['id']).message, 'Original direct text')
+
+    def test_a_non_participant_cannot_reach_someone_elses_direct_message(self):
+        message = self.post_direct_message()
+        stranger = User.objects.create_user(username='edit-stranger@example.com', email='edit-stranger@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=stranger, role='member')
+        self.client.force_login(stranger)
+
+        self.assertEqual(self.edit_direct(message['id'], 'Peeking').status_code, 404)
+
+    def test_an_empty_edit_is_rejected_and_leaves_the_message_untouched(self):
+        message = self.post_channel_message()
+
+        self.assertEqual(self.edit_channel(message['id'], '   ').status_code, 400)
+        stored = ChatMessage.objects.get(id=message['id'])
+        self.assertEqual(stored.message, 'Original channel text')
+        self.assertIsNone(stored.edited_at)
+
+    def test_an_over_length_edit_is_rejected(self):
+        message = self.post_channel_message()
+
+        self.assertEqual(self.edit_channel(message['id'], 'x' * 4001).status_code, 400)
+        self.assertEqual(ChatMessage.objects.get(id=message['id']).message, 'Original channel text')
+
+    def test_editing_does_not_change_attachments_or_the_author(self):
+        message = self.post_channel_message()
+        original_created_at = ChatMessage.objects.get(id=message['id']).created_at
+
+        self.assertEqual(self.edit_channel(message['id'], 'Rewritten channel text').status_code, 200)
+        stored = ChatMessage.objects.get(id=message['id'])
+        self.assertEqual(stored.author_id, self.author.id)
+        self.assertEqual(stored.created_at, original_created_at)
