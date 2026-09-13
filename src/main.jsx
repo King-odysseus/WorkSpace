@@ -12,6 +12,7 @@ import { AppSelect } from "./components/ui/select.jsx";
 import React, {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -42,6 +43,7 @@ import {
   LayoutGrid,
   Link2,
   LogOut,
+  Megaphone,
   MessageSquare,
   MoreHorizontal,
   NotebookPen,
@@ -158,6 +160,7 @@ const ScreenShareControl = lazy(() =>
 );
 import ImportView from "./components/ImportView.jsx";
 import PersonalPlanner from "./components/PersonalPlanner.jsx";
+import { releaseNotesUnread } from "./lib/release-notes.js";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
@@ -167,6 +170,7 @@ import {
   CookieConsent,
   HelpView,
   LegalView,
+  WhatsNew,
 } from "./components/StaticViews.jsx";
 import {
   ConfirmDialog,
@@ -244,6 +248,10 @@ function App() {
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  // Held in state rather than read on each render so opening the page clears the
+  // sidebar marker without needing a reload.
+  const [whatsNewUnread, setWhatsNewUnread] = useState(() => releaseNotesUnread());
+  const markWhatsNewSeen = useCallback(() => setWhatsNewUnread(false), []);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const notifRef = useRef(null);
   useEffect(() => {
@@ -1899,6 +1907,12 @@ function App() {
     {
       heading: "Resources",
       items: [
+        {
+          label: "What's new",
+          icon: Megaphone,
+          badge: whatsNewUnread ? 1 : 0,
+          badgeTone: "info",
+        },
         { label: "Screen sharing", icon: MonitorUp },
         { label: "Help", icon: CircleHelp },
         { label: "Legal", icon: FileText },
@@ -5244,6 +5258,7 @@ function WorkspaceView({
   }
   if (active === "Import data") return null;
   if (active === "My planner") return <PersonalPlanner workspaceId={workspaceId} />;
+  if (active === "What's new") return <WhatsNew onOpen={markWhatsNewSeen} />;
   if (active === "Help") return <HelpView onNavigate={onNavigate} />;
   if (active === "Legal") return <LegalView />;
 

@@ -2,13 +2,15 @@
 // cookie banner. None of them touch workspace data, so they stay out of the
 // application shell entirely.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   BarChart3, Bell, CalendarDays, Camera, CheckCircle2, ChevronDown, ClipboardList, Filter,
-  Hash, LayoutGrid, MessageSquare, Plus, Settings, Target, Users,
+  Hash, LayoutGrid, Megaphone, MessageSquare, Plus, Settings, Target, Users,
 } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
+import { formatDay } from '../lib/workspace-format.js'
+import { RELEASE_NOTES, markReleaseNotesSeen } from '../lib/release-notes.js'
 
 function HelpView({ onNavigate }) {
   const [openTopic, setOpenTopic] = useState(0)
@@ -207,4 +209,24 @@ function CookieConsent({ onOpenLegal }) {
   return <aside className="cookie-consent" role="dialog" aria-label="Cookie preferences"><div><strong>Cookie preferences</strong><p>We use essential cookies to keep you signed in and secure. Optional analytics cookies are currently not enabled.</p><button type="button" className="cookie-link" onClick={onOpenLegal}>Read the Cookie notice</button></div><div className="cookie-actions"><button type="button" className="secondary-button" onClick={() => save('essential')}>Essential only</button><button type="button" className="primary-button" onClick={() => save('all')}>Accept all</button></div></aside>
 }
 
-export { HelpView, LegalView, CookieConsent }
+function WhatsNew({ onOpen }) {
+  // Clearing the marker on open rather than behind a button, so the sidebar dot
+  // means "not looked at yet" rather than "not dismissed yet". The page writes
+  // the marker; `onOpen` only tells the sidebar it can drop its badge now.
+  useEffect(() => { markReleaseNotesSeen(); onOpen?.() }, [onOpen])
+  return <section className="workspace-view whats-new-view">
+    <WorkspaceViewHeading title="What's new" subtitle="What WorkSpace can do, most recent first." />
+    <div className="whats-new-list">
+      {RELEASE_NOTES.map((note, index) => <Card className={`whats-new-entry ${index === 0 ? 'is-latest' : ''}`} key={`${note.date}-${note.title}`}>
+        <header className="whats-new-header">
+          <span className="whats-new-icon"><Megaphone size={16} /></span>
+          <h2>{note.title}</h2>
+          <time dateTime={note.date}>{formatDay(note.date)}</time>
+        </header>
+        <ul className="whats-new-items">{note.items.map(item => <li key={item}>{item}</li>)}</ul>
+      </Card>)}
+    </div>
+  </section>
+}
+
+export { HelpView, LegalView, WhatsNew, CookieConsent }
