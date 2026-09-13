@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { ChatWorkspaceView } from './ChatViews.jsx'
 import { mockApi } from '../test/setup-tests.js'
@@ -342,4 +342,186 @@ it('edits the participants of a group chat', async () => {
   const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/13/') && init.method === 'PATCH')
   expect(patchCall).toBeTruthy()
   expect(JSON.parse(patchCall[1].body)).toEqual({ participant_ids: [9, 10] })
+})
+
+it('groups conversations and filters the list to unread chats', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const group = {
+    id: 12,
+    title: 'Launch team',
+    is_group: true,
+    participants: [{ id: currentUserId }, { id: 9 }, { id: 8 }],
+    last_message: 'Ready to launch',
+  }
+  renderChat({
+    ...dataFor(),
+    members: [
+      { id: currentUserId, first_name: 'Ada', last_name: 'Lane' },
+      { id: 9, first_name: 'Dana', last_name: 'Reed' },
+      { id: 8, first_name: 'Priya', last_name: 'Shah' },
+    ],
+    directConversations: [conversation, group],
+    notifications: [{ target_type: 'direct_conversation', target_id: '11', read: false }],
+  })
+
+  expect(await screen.findByRole('heading', { name: /Group chats/ })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /Direct messages/ })).toBeInTheDocument()
+  expect(screen.getByText('Launch team')).toBeInTheDocument()
+  expect(screen.getByText('Dana Reed')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('tab', { name: /^Unread/ }))
+
+  expect(screen.getByText('Dana Reed')).toBeInTheDocument()
+  expect(screen.queryByText('Launch team')).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: /Group chats/ })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('tab', { name: /^All/ }))
+
+  expect(screen.getByText('Launch team')).toBeInTheDocument()
+})
+
+it('filters the channel list to unread channels', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  render(
+    <ChatWorkspaceView
+      viewType="channels"
+      data={{
+        members: [{ id: currentUserId, first_name: 'Ada', last_name: 'Lane' }],
+        channels: [
+          { id: 20, name: 'general', created_by: 9, is_private: false, member_ids: [] },
+          { id: 21, name: 'product-launch', created_by: 9, is_private: false, member_ids: [] },
+        ],
+        messages: [],
+        directConversations: [],
+        notifications: [{ target_type: 'chat_channel', target_id: 'product-launch', read: false }],
+      }}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      onRefresh={vi.fn()}
+      onError={vi.fn()}
+      onConfirm={vi.fn()}
+      onNavigate={vi.fn()}
+    />,
+  )
+
+  expect(await screen.findByRole('button', { name: 'general' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('tab', { name: /^Unread/ }))
+
+  expect(screen.getByRole('button', { name: 'product-launch 1' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'general' })).not.toBeInTheDocument()
+})
+
+it('collects shared files and documents in the Files pane', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': {
+      messages: [{
+        id: 1,
+        author_name: 'Dana Reed',
+        message: 'Files attached.',
+        created_at: '2026-09-12T10:00:00Z',
+        shared_files: [{ id: 5, original_name: 'launch-brief.pdf', url: 'https://files.example/launch-brief.pdf' }],
+        shared_documents: [{ id: 6, title: 'Project brief' }],
+      }],
+    },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByRole('textbox', { name: 'Message' })
+
+  fireEvent.click(screen.getByRole('tab', { name: /^Files/ }))
+
+  const fileLink = screen.getByRole('link', { name: /launch-brief.pdf/ })
+  expect(fileLink).toHaveAttribute('href', 'https://files.example/launch-brief.pdf')
+  expect(screen.getByText('Project brief').closest('a')).toBeNull()
+  expect(screen.queryByRole('textbox', { name: 'Message' })).not.toBeInTheDocument()
+})
+
+it('shows conversation context in the About pane', async () => {
+  const group = {
+    id: 12,
+    title: 'Launch team',
+    is_group: true,
+    participants: [{ id: currentUserId }, { id: 9 }, { id: 8 }],
+    last_message: 'Ready to launch',
+  }
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/12/messages/': { messages: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat({
+    ...dataFor(),
+    members: [
+      { id: currentUserId, first_name: 'Ada', last_name: 'Lane' },
+      { id: 9, first_name: 'Dana', last_name: 'Reed' },
+      { id: 8, first_name: 'Priya', last_name: 'Shah' },
+    ],
+    directConversations: [group],
+  })
+  fireEvent.click(await screen.findByText('Launch team').then(element => element.closest('button')))
+
+  fireEvent.click(screen.getByRole('tab', { name: 'About' }))
+
+  const about = screen.getByLabelText('About this conversation')
+  expect(within(about).getByText('Group members')).toBeInTheDocument()
+  expect(within(about).getByText('Participants')).toBeInTheDocument()
+  expect(within(about).getByText('Ada Lane')).toBeInTheDocument()
+})
+
+it('toggles the conversation details panel', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByRole('textbox', { name: 'Message' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show conversation details' }))
+
+  const details = await screen.findByLabelText('Conversation details')
+  expect(within(details).getByText('Dana Reed')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+
+  expect(screen.queryByLabelText('Conversation details')).not.toBeInTheDocument()
+})
+
+it('restores a separate draft for each conversation', async () => {
+  window.localStorage.clear()
+  const other = { id: 12, title: 'Priya Shah', is_group: false, participants: [{ id: 8 }], last_message: '' }
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [] },
+    '/direct-conversations/12/messages/': { messages: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat({ ...dataFor(), directConversations: [conversation, other] })
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByRole('textbox', { name: 'Message' })
+
+  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), { target: { value: 'Dana draft' } })
+  fireEvent.click(screen.getByText('Priya Shah').closest('button'))
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue(''))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), { target: { value: 'Priya draft' } })
+  fireEvent.click(screen.getByText('Dana Reed').closest('button'))
+
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Dana draft'))
+  fireEvent.click(screen.getByText('Priya Shah').closest('button'))
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Priya draft'))
 })

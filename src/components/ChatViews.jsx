@@ -4,7 +4,7 @@ import { AppSelect } from './ui/select.jsx'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { ArrowUpRight, Check, CheckCheck, Download, FileText, Hash, MessageSquare, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -85,10 +85,33 @@ function MessageReactionBar({ message, reactions, isMine, onToggle }) {
   </div>
 }
 
+function readChatDraft(workspaceId, targetKey) {
+  if (!targetKey) return ''
+  try {
+    return window.localStorage.getItem(`workspace-chat-draft:${workspaceId}:${targetKey}`) || ''
+  } catch {
+    return ''
+  }
+}
+
+function writeChatDraft(workspaceId, targetKey, value) {
+  if (!targetKey) return
+  try {
+    const key = `workspace-chat-draft:${workspaceId}:${targetKey}`
+    if (value) window.localStorage.setItem(key, value)
+    else window.localStorage.removeItem(key)
+  } catch {
+    // Draft persistence is optional and must never block the composer.
+  }
+}
+
 function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefresh, onError, onConfirm, onNavigate }) {
   const mode = viewType
   const [selectedChannel, setSelectedChannel] = useState('general')
   const [selectedConversationId, setSelectedConversationId] = useState(null)
+  const [activePane, setActivePane] = useState('posts')
+  const [chatFilter, setChatFilter] = useState('all')
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [directMessages, setDirectMessages] = useState([])
   const [directMessageConversationId, setDirectMessageConversationId] = useState(null)
   const [directLoading, setDirectLoading] = useState(false)
@@ -120,20 +143,35 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [directMemberIds, setDirectMemberIds] = useState([])
   const messageScrollRef = useRef(null)
   const messageInputRef = useRef(null)
+  const draftKeyRef = useRef(null)
   const channels = data.channels || []
   const conversations = data.directConversations || []
   const selectedChannelInfo = channels.find(channel => channel.name === selectedChannel)
   const selectedConversation = conversations.find(conversation => conversation.id === selectedConversationId)
+  const draftKey = mode === 'channels' ? `channel:${selectedChannel}` : selectedConversationId ? `conversation:${selectedConversationId}` : ''
 
   useEffect(() => {
     setSearch('')
-    setDraft('')
     setReplyTo(null)
+    setActivePane('posts')
+    setChatFilter('all')
+    setDetailsOpen(false)
     setEmojiOpen(false)
     setMentionOpen(false)
     setMentionQuery('')
     setError('')
   }, [viewType])
+
+  useEffect(() => {
+    const storedDraft = draftKeyRef.current
+    if (!storedDraft || storedDraft.workspaceId !== workspaceId || storedDraft.targetKey !== draftKey) {
+      if (storedDraft?.targetKey) writeChatDraft(storedDraft.workspaceId, storedDraft.targetKey, draft)
+      setDraft(readChatDraft(workspaceId, draftKey))
+      draftKeyRef.current = { workspaceId, targetKey: draftKey }
+    } else if (draftKey) {
+      writeChatDraft(workspaceId, draftKey, draft)
+    }
+  }, [draft, draftKey, workspaceId])
 
   useEffect(() => {
     Promise.all([
@@ -176,6 +214,47 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     ;(groups[key] ||= []).push(message)
     return groups
   }, {})
+  const unreadCountFor = (targetType, targetId) => data.notifications.filter(
+    notification => notification.target_type === targetType && notification.target_id === String(targetId) && !notification.read,
+  ).length
+  const unreadTotal = mode === 'channels'
+    ? channels.reduce((total, channel) => total + unreadCountFor('chat_channel', channel.name), 0)
+    : conversations.reduce((total, conversation) => total + unreadCountFor('direct_conversation', conversation.id), 0)
+  const filteredChannels = chatFilter === 'unread' ? channels.filter(channel => unreadCountFor('chat_channel', channel.name) > 0) : channels
+  const filteredConversations = chatFilter === 'unread' ? conversations.filter(conversation => unreadCountFor('direct_conversation', conversation.id) > 0) : conversations
+  const groupConversations = filteredConversations.filter(conversation => conversation.is_group)
+  const directConversations = filteredConversations.filter(conversation => !conversation.is_group)
+  const activeMessages = mode === 'channels'
+    ? data.messages.filter(message => message.channel === selectedChannel)
+    : directThreadReady ? directMessages : []
+  const sharedItems = activeMessages.flatMap(message => {
+    if (message.deleted_at) return []
+    const files = (message.shared_files || []).map(file => ({
+      key: `file-${message.id}-${file.id}`,
+      kind: 'file',
+      id: file.id,
+      title: file.original_name || 'Shared file',
+      url: file.url,
+      author: message.author_name,
+      created_at: message.created_at,
+    }))
+    const documents = (message.shared_documents || []).map(document => ({
+      key: `document-${message.id}-${document.id}`,
+      kind: 'document',
+      id: document.id,
+      title: document.title || 'Shared document',
+      url: '',
+      author: message.author_name,
+      created_at: message.created_at,
+    }))
+    return [...files, ...documents]
+  })
+  const selectedParticipantIds = selectedConversation
+    ? [...new Set([...(selectedConversation.participants || []).map(participant => String(participant.id)), String(currentUserId)])]
+    : (selectedChannelInfo?.is_private ? selectedChannelInfo.member_ids || [] : data.members.map(member => member.id))
+  const selectedMembers = selectedParticipantIds
+    .map(id => data.members.find(member => String(member.id) === String(id)))
+    .filter(Boolean)
 
   const lastChannelMessageId = visibleChannelMessages.length ? visibleChannelMessages[visibleChannelMessages.length - 1].id : null
   const lastDirectMessageId = visibleDirectMessages.length ? visibleDirectMessages[visibleDirectMessages.length - 1].id : null
@@ -187,7 +266,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const scroller = messageScrollRef.current
     if (!scroller) return
     scroller.scrollTop = scroller.scrollHeight
-  }, [mode, selectedChannel, selectedConversationId, directLoading, lastChannelMessageId, lastDirectMessageId, visibleChannelMessages.length, visibleDirectMessages.length])
+  }, [mode, selectedChannel, selectedConversationId, activePane, directLoading, lastChannelMessageId, lastDirectMessageId, visibleChannelMessages.length, visibleDirectMessages.length])
 
   const submitChannelMessage = async event => {
     event.preventDefault()
@@ -428,6 +507,20 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       }
     } catch (readError) { console.warn('Chat notifications could not be marked read.', readError) }
   }
+  const selectChannel = channelName => {
+    setSelectedChannel(channelName)
+    setSearch('')
+    setReplyTo(null)
+    setActivePane('posts')
+    markConversationRead('chat_channel', channelName)
+  }
+  const selectConversation = conversationId => {
+    setSelectedConversationId(conversationId)
+    setSearch('')
+    setReplyTo(null)
+    setActivePane('posts')
+    markConversationRead('direct_conversation', conversationId)
+  }
   const toggleReaction = async (message, emoji) => {
     const direct = mode === 'direct'
     const endpoint = direct ? `/api/direct-messages/${message.id}/reactions/` : `/api/chat-messages/${message.id}/reactions/`
@@ -517,7 +610,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
             </div>
           </div> : deletedAt ? <p className="chat-deleted-text" title={`Deleted ${formatRelativeActivityTime(deletedAt)}`}>This message was deleted</p> : <p>{renderMessageText(bodyText)}</p>}
           {!isEditing && !deletedAt && <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />}
-          {!isEditing && !deletedAt && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
+          {!isEditing && !deletedAt && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => setReplyTo(message)}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
           {!isEditing && isMine && !deletedAt && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
           {!isEditing && isMine && !deletedAt && <button type="button" className="chat-delete-button" onClick={() => deleteMessage(message)} aria-label="Delete message">Delete</button>}
         </div>
@@ -527,12 +620,66 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     </div>
   }
 
+  const renderPostsPane = () => <div className="chat-message-scroll" ref={messageScrollRef}>
+    {mode === 'channels' ? (visibleChannelMessages.length
+      ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</h3>{messages.map(renderMessage)}</div>)
+      : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>)
+      : selectedConversation
+        ? (directThreadReady
+          ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessage) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
+      : directLoading ? <div className="chat-placeholder"><p>Loading messages...</p></div> : <div className="chat-placeholder"><h2>Messages could not be loaded</h2><p>{error || 'Open the conversation again to retry.'}</p></div>)
+        : <div className="chat-placeholder"><div className="chat-placeholder-icon"><Users size={22} /></div><h2>Start a private conversation</h2><p>Choose an existing conversation or create a new one.</p></div>}
+  </div>
+
+  const renderFilesPane = () => <div className="chat-pane-scroll" aria-label="Shared files and documents">
+    <div className="chat-pane-intro"><span className="chat-pane-icon"><FolderOpen size={19} /></span><div><h2>Files</h2><p>{sharedItems.length ? `${sharedItems.length} shared item${sharedItems.length === 1 ? '' : 's'}` : 'Files shared in this conversation will appear here.'}</p></div></div>
+    {sharedItems.length ? <div className="chat-resource-list">
+      {sharedItems.map(item => item.kind === 'file' && item.url
+        ? <a className="chat-resource-row" href={item.url} target="_blank" rel="noreferrer" key={item.key}><span className="chat-resource-icon"><FileText size={17} /></span><span><strong>{item.title}</strong><small>{item.author} - {formatRelativeActivityTime(item.created_at)}</small></span><Download size={15} /></a>
+        : <div className="chat-resource-row is-disabled" key={item.key}><span className="chat-resource-icon"><FileText size={17} /></span><span><strong>{item.title}</strong><small>{item.author} - {formatRelativeActivityTime(item.created_at)}</small></span></div>)}
+    </div> : <div className="chat-placeholder"><div className="chat-placeholder-icon"><FolderOpen size={22} /></div><h2>No shared files</h2><p>Files attached to messages will be collected here.</p></div>}
+  </div>
+
+  const renderAboutPane = () => {
+    const isChannel = mode === 'channels'
+    const title = isChannel ? `#${selectedChannel}` : selectedConversation?.title || 'Chat'
+    const description = isChannel ? (selectedChannelInfo?.description || 'No channel description yet.') : selectedConversation?.is_group ? 'Group conversation for workspace collaboration.' : 'Private one-to-one conversation.'
+    return <div className="chat-pane-scroll chat-about-panel" aria-label="About this conversation">
+      <div className="chat-about-hero"><span className="chat-about-icon">{isChannel ? <Hash size={23} /> : selectedConversation?.is_group ? <Users size={23} /> : <MessageSquare size={23} />}</span><div><p className="eyebrow">{isChannel ? 'Channel' : selectedConversation?.is_group ? 'Group chat' : 'Direct chat'}</p><h2>{title}</h2><p>{description}</p></div></div>
+      <dl className="chat-about-grid">
+        <div><dt>Participants</dt><dd>{isChannel ? selectedMembers.length : selectedConversation?.participants?.length || 0}</dd></div>
+        <div><dt>Shared items</dt><dd>{sharedItems.length}</dd></div>
+        <div><dt>Privacy</dt><dd>{isChannel ? (selectedChannelInfo?.is_private ? 'Private' : 'Workspace') : selectedConversation?.is_group ? 'Group members' : 'Private'}</dd></div>
+        <div><dt>Messages</dt><dd>{activeMessages.length}</dd></div>
+      </dl>
+      <div className="chat-about-members"><div className="chat-section-heading"><h3>People</h3><span>{selectedMembers.length}</span></div><div className="chat-details-members">{selectedMembers.slice(0, 12).map(member => <button type="button" className="chat-detail-member" key={member.id} onClick={() => setProfileMember(member)}><Avatar name={memberName(member)} avatarUrl={member.avatar_url} presence={effectivePresence(member)} small /><span><strong>{memberName(member)}</strong><small>{member.role || 'Member'}</small></span></button>)}</div>{selectedMembers.length > 12 && <p className="chat-details-more">+{selectedMembers.length - 12} more</p>}</div>
+    </div>
+  }
+
+  const renderDetailsPanel = () => <aside className="chat-details-panel" aria-label="Conversation details">
+    <div className="chat-details-heading"><h3>Details</h3><button type="button" onClick={() => setDetailsOpen(false)} aria-label="Close details"><X size={16} /></button></div>
+    <section className="chat-details-section"><div className="chat-section-heading"><h4>Participants</h4><span>{selectedMembers.length}</span></div><div className="chat-details-members">{selectedMembers.map(member => <button type="button" className="chat-detail-member" key={member.id} onClick={() => setProfileMember(member)}><Avatar name={memberName(member)} avatarUrl={member.avatar_url} presence={effectivePresence(member)} small /><span><strong>{memberName(member)}</strong><small>{member.role || 'Member'}</small></span></button>)}</div>{mode === 'channels' && selectedChannelInfo?.is_private && <p className="chat-details-note">This channel is limited to its selected members.</p>}{selectedConversation?.is_group && <button type="button" className="secondary-button chat-details-edit" onClick={() => openParticipantEditor(selectedConversation)}><Pencil size={14} /> Edit participants</button>}</section>
+    <section className="chat-details-section"><div className="chat-section-heading"><h4>Shared files</h4><span>{sharedItems.length}</span></div>{sharedItems.length ? <div className="chat-details-files">{sharedItems.slice(0, 5).map(item => item.url ? <a href={item.url} target="_blank" rel="noreferrer" key={item.key}><FileText size={15} /><span><strong>{item.title}</strong><small>{item.author}</small></span></a> : <div key={item.key}><FileText size={15} /><span><strong>{item.title}</strong><small>{item.author}</small></span></div>)}</div> : <p className="chat-details-empty">No shared files yet.</p>}{sharedItems.length > 5 && <button type="button" className="chat-details-link" onClick={() => { setActivePane('files'); setDetailsOpen(false) }}>View all {sharedItems.length} items</button>}</section>
+  </aside>
+
+  const renderChannelRow = channel => {
+    const unread = unreadCountFor('chat_channel', channel.name)
+    return <div className="channel-row-wrap" key={channel.id}>
+      <button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''}`} onClick={() => selectChannel(channel.name)}>
+        {channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}
+        <span className="channel-name">{channel.name}</span>
+        {unread > 0 && <Badge>{unread}</Badge>}
+      </button>
+      {channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}
+    </div>
+  }
+
   const renderDirectConversationRow = conversation => {
-    const unread = data.notifications.filter(notification => notification.target_type === 'direct_conversation' && notification.target_id === String(conversation.id) && !notification.read).length
+    const unread = unreadCountFor('direct_conversation', conversation.id)
     const other = directOtherMember(conversation)
     const otherPresence = other ? effectivePresence(other) : null
     return <div className="direct-row-wrap" key={conversation.id}>
-      <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''}`} onClick={() => { setSelectedConversationId(conversation.id); setSearch(''); markConversationRead('direct_conversation', conversation.id) }}>
+      <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''}`} onClick={() => selectConversation(conversation.id)}>
         <span className={`avatar blue small ${conversation.is_group ? 'group-chat-avatar' : ''}`}>{conversation.is_group ? <Users size={14} /> : conversation.title.slice(0, 2).toUpperCase()}{otherPresence && <span className={`presence-dot presence-${otherPresence}`} title={PRESENCE_LABEL[otherPresence] || otherPresence} />}</span>
         <span><strong>{conversation.title}</strong><small>{conversation.is_group ? `Group - ${conversation.participants.length} people` : conversation.last_message_deleted ? 'This message was deleted' : conversation.last_message || 'Direct chat'}</small></span>
         {unread > 0 && <Badge>{unread}</Badge>}
@@ -571,10 +718,20 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     <WorkspaceViewHeading title={mode === 'channels' ? 'Channels' : 'Chats'} subtitle={mode === 'channels' ? 'Shared rooms for workspace topics, teams, and projects.' : 'Private one-to-one and group conversations.'} />
     <div className="chat-toolbar"><label className="chat-search"><Search size={15} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={mode === 'channels' ? `Search #${selectedChannel}` : 'Search this chat'} aria-label="Search messages" /></label><button type="button" className="primary-button chat-create-button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }}><Plus size={15} /> {mode === 'channels' ? 'Create channel' : 'New chat'}</button></div>
     <div className="chat-layout">
-      <section className="chat-feed">
-        <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.title}</h2><p>{selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div></div>
-        <div className="chat-message-scroll" ref={messageScrollRef}>{mode === 'channels' ? (visibleChannelMessages.length ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</h3>{messages.map(renderMessage)}</div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>) : selectedConversation ? (directThreadReady ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessage) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>) : directLoading ? <div className="chat-placeholder"><p>Loading messages…</p></div> : <div className="chat-placeholder"><h2>Messages could not be loaded</h2><p>{error || 'Open the conversation again to retry.'}</p></div>) : <div className="chat-placeholder"><div className="chat-placeholder-icon"><Users size={22} /></div><h2>Start a private conversation</h2><p>Choose an existing conversation or create a new one.</p></div>}</div>
-        {(mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
+      <section className={`chat-feed ${detailsOpen ? 'details-open' : ''}`}>
+        <div className="chat-feed-header">
+          <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.title}</h2><p>{selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div></div>
+          <button type="button" className={`chat-details-toggle ${detailsOpen ? 'active' : ''}`} onClick={() => setDetailsOpen(open => !open)} aria-label={detailsOpen ? 'Hide conversation details' : 'Show conversation details'} aria-expanded={detailsOpen} disabled={mode === 'direct' && !selectedConversation}><PanelRight size={17} /></button>
+        </div>
+        <nav className="chat-pane-tabs" role="tablist" aria-label="Conversation views">
+          <button type="button" role="tab" aria-selected={activePane === 'posts'} className={activePane === 'posts' ? 'active' : ''} onClick={() => setActivePane('posts')}><MessageSquare size={15} /> Posts</button>
+          <button type="button" role="tab" aria-selected={activePane === 'files'} className={activePane === 'files' ? 'active' : ''} onClick={() => setActivePane('files')}><FolderOpen size={15} /> Files{sharedItems.length > 0 && <span>{sharedItems.length}</span>}</button>
+          <button type="button" role="tab" aria-selected={activePane === 'about'} className={activePane === 'about' ? 'active' : ''} onClick={() => setActivePane('about')}><Info size={15} /> About</button>
+        </nav>
+        <div className={`chat-feed-body ${detailsOpen ? 'details-open' : ''}`}>
+          <div className="chat-main-pane">
+            {activePane === 'posts' ? renderPostsPane() : activePane === 'files' ? renderFilesPane() : renderAboutPane()}
+        {activePane === 'posts' && (mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
           {replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
           {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
           <div className="chat-compose-surface">
@@ -589,10 +746,29 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           <small className="chat-compose-hint">Enter to send. Shift + Enter for a new line.</small>
           {error && <p className="auth-error" role="alert">{error}</p>}
         </form>}
+          </div>
+          {detailsOpen && renderDetailsPanel()}
+        </div>
       </section>
       <aside className="chat-conversation-list">
-        <div className="chat-list-heading"><h3>{mode === 'channels' ? 'Channels' : 'Chats'}</h3><button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button></div>
-        {mode === 'channels' ? channels.map(channel => { const unread = data.notifications.filter(notification => notification.target_type === 'chat_channel' && notification.target_id === channel.name && !notification.read).length; return <div className="channel-row-wrap" key={channel.id}><button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''}`} onClick={() => { setSelectedChannel(channel.name); setSearch(''); setReplyTo(null); markConversationRead('chat_channel', channel.name) }}>{channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}<span className="channel-name">{channel.name}</span>{unread > 0 && <Badge>{unread}</Badge>}</button>{channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}</div> }) : conversations.length ? conversations.map(renderDirectConversationRow) : <p className="chat-sidebar-empty">No chats yet.</p>}
+        <div className="chat-list-heading">
+          <div className="chat-list-heading-copy"><h3>{mode === 'channels' ? 'Channels' : 'Conversations'}</h3><span>{unreadTotal ? `${unreadTotal} unread` : 'All caught up'}</span></div>
+          <button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button>
+        </div>
+        <div className="chat-filter-tabs" role="tablist" aria-label="Filter conversations">
+          <button type="button" role="tab" aria-selected={chatFilter === 'all'} className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>All <span>{mode === 'channels' ? channels.length : conversations.length}</span></button>
+          <button type="button" role="tab" aria-selected={chatFilter === 'unread'} className={chatFilter === 'unread' ? 'active' : ''} onClick={() => setChatFilter('unread')}>Unread <span>{unreadTotal}</span></button>
+        </div>
+        <div className="chat-list-scroll">
+          {mode === 'channels'
+            ? (filteredChannels.length ? filteredChannels.map(renderChannelRow) : <p className="chat-sidebar-empty">No unread channels.</p>)
+            : filteredConversations.length
+              ? <>
+                {groupConversations.length > 0 && <section className="chat-list-group"><h4>Group chats <span>{groupConversations.length}</span></h4><div className="chat-list-group-rows">{groupConversations.map(renderDirectConversationRow)}</div></section>}
+                {directConversations.length > 0 && <section className="chat-list-group"><h4>Direct messages <span>{directConversations.length}</span></h4><div className="chat-list-group-rows">{directConversations.map(renderDirectConversationRow)}</div></section>}
+              </>
+              : <p className="chat-sidebar-empty">{chatFilter === 'unread' ? 'No unread conversations.' : 'No chats yet.'}</p>}
+        </div>
       </aside>
     </div>
     {channelDialogOpen && <div className="modal-backdrop" onMouseDown={() => setChannelDialogOpen(false)}><form className="modal chat-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-channel-title" onSubmit={createChannel} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Channels</p><h2 id="create-channel-title">Create a channel</h2></div><button type="button" className="close-button" onClick={() => setChannelDialogOpen(false)} aria-label="Close"><X size={18} /></button></div><label>Channel name<input autoFocus value={channelForm.name} onChange={event => setChannelForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. product-launch" maxLength="80" required /></label><label>Description<textarea value={channelForm.description} onChange={event => setChannelForm(current => ({ ...current, description: event.target.value }))} placeholder="What is this channel for?" maxLength="240" /></label><label className="chat-privacy-toggle"><input type="checkbox" checked={channelForm.is_private} onChange={event => setChannelForm(current => ({ ...current, is_private: event.target.checked, member_ids: [] }))} /> Private channel</label>{channelForm.is_private && <div className="chat-member-picker"><span>Add members</span>{data.members.filter(member => member.id !== currentUserId).map(member => <label key={member.id}><input type="checkbox" checked={channelForm.member_ids.includes(member.id)} onChange={() => toggleMember(member.id, channelForm.member_ids, member_ids => setChannelForm(current => ({ ...current, member_ids })))} /> {memberName(member)}</label>)}</div>}{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button modal-submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create channel'}</button></form></div>}
