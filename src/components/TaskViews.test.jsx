@@ -20,7 +20,7 @@ const task = {
   can_edit: true,
 }
 
-it('closes the task drawer and confirms an update after saving task fields', async () => {
+it('closes the task drawer and confirms an update after updating task fields', async () => {
   const onClose = vi.fn()
   const onTaskUpdated = vi.fn()
   const notices = []
@@ -43,8 +43,8 @@ it('closes the task drawer and confirms an update after saving task fields', asy
       />,
     )
 
-    const saveButton = await screen.findByRole('button', { name: 'Save task' })
-    fireEvent.submit(saveButton.closest('form'))
+    const updateButton = await screen.findByRole('button', { name: 'Update task' })
+    fireEvent.submit(updateButton.closest('form'))
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(onTaskUpdated).toHaveBeenCalledWith(expect.objectContaining({ title: 'Updated UI' }))
