@@ -1,0 +1,305 @@
+/* Selective Flowbite-inspired patterns for WorkSpace.
+   These rules reuse the house surfaces, navy/gold tokens, Radix primitives, and
+   Lucide icons. Flowbite supplies the information structure, not the skin. */
+
+.workspace-skeleton {
+  position: relative;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--workspace-border, #e2e2e6) 72%, var(--workspace-surface, #fff));
+}
+
+.workspace-skeleton::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--workspace-surface, #fff) 74%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: workspace-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+.workspace-skeleton-line { width: 100%; height: 10px; }
+.workspace-skeleton-text { width: 88%; height: 12px; }
+.workspace-skeleton-heading { width: 42%; height: 18px; border-radius: 8px; }
+.workspace-skeleton-circle,
+.workspace-skeleton-avatar { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; }
+.workspace-skeleton-card { width: 100%; min-height: 120px; border-radius: 16px; }
+.workspace-skeleton-row { width: 100%; height: 44px; border-radius: 11px; }
+
+.workspace-skeleton-group { display: grid; gap: 10px; min-width: 0; }
+.workspace-skeleton-group[data-align="row"] { grid-auto-flow: column; align-items: center; justify-content: start; }
+
+@keyframes workspace-skeleton-shimmer {
+  to { transform: translateX(100%); }
+}
+
+.workspace-alert {
+  --alert-color: var(--workspace-primary, #0b0b45);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--alert-color) 22%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--alert-color) 7%, var(--workspace-surface, #fff));
+  color: var(--workspace-text, #1f2937);
+}
+
+.workspace-alert.is-compact { padding: 7px 9px; gap: 7px; border-radius: 10px; }
+.workspace-alert[data-tone="success"] { --alert-color: #3d8b6e; }
+.workspace-alert[data-tone="warning"] { --alert-color: #b45309; }
+.workspace-alert[data-tone="danger"] { --alert-color: #c43d4b; }
+
+.workspace-alert-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alert-color) 12%, transparent);
+  color: var(--alert-color);
+}
+
+.workspace-alert.is-compact .workspace-alert-icon { width: 20px; height: 20px; border-radius: 7px; }
+.workspace-alert-copy { display: grid; gap: 2px; min-width: 0; font-size: 11px; line-height: 1.45; }
+.workspace-alert-copy strong { color: var(--workspace-text, #1f2937); font-size: 11px; }
+.workspace-alert-copy > div { color: var(--workspace-text-soft, #6b7280); }
+.workspace-alert-action { align-self: center; }
+
+.workspace-view .activity-list { position: relative; }
+
+.workspace-view .activity-list::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 31px;
+  width: 1px;
+  content: "";
+  background: color-mix(in srgb, var(--workspace-border, #e2e2e6) 82%, var(--brand-accent, #c49a6c));
+}
+
+.workspace-view .activity-item { position: relative; }
+
+.workspace-view .activity-kind {
+  position: relative;
+  z-index: 1;
+  border: 2px solid var(--workspace-surface, #fff);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--workspace-border, #e2e2e6) 85%, transparent);
+}
+
+.workspace-view :is(.planner-task-table, .project-register-table, .files-table) {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.workspace-view :is(.planner-task-table, .project-register-table, .files-table) thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1px solid var(--workspace-border, #e2e2e6);
+  background: color-mix(in srgb, var(--workspace-surface-soft, #f8f9fa) 92%, var(--brand-accent, #c49a6c));
+  color: var(--workspace-text-soft, #6b7280);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.workspace-view :is(.planner-task-table, .project-register-table, .files-table) tbody tr {
+  transition: background-color .14s ease, box-shadow .14s ease;
+}
+
+.workspace-view :is(.planner-task-table, .project-register-table, .files-table) tbody tr:hover {
+  background: color-mix(in srgb, var(--brand-accent, #c49a6c) 7%, var(--workspace-surface, #fff));
+}
+
+.workspace-view :is(.planner-task-table, .project-register-table, .files-table) tbody tr:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-accent, #c49a6c) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.workspace-view :is(.files-table-wrap, .planner-table-scroll, .project-register-table-wrap) {
+  scrollbar-gutter: stable;
+}
+
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 3px;
+  border: 1px solid var(--workspace-border, #e2e2e6);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--workspace-surface-soft, #f8f9fa) 94%, var(--brand-accent, #c49a6c));
+  scrollbar-width: none;
+}
+
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs)::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]) {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--workspace-text-soft, #6b7280);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):is(.active, [aria-selected="true"], [aria-pressed="true"]) {
+  background: var(--brand-accent, #c49a6c);
+  color: var(--workspace-on-accent, #071a2e);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-accent, #c49a6c) 26%, transparent);
+}
+
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-accent, #c49a6c) 75%, transparent);
+  outline-offset: 2px;
+}
+
+.workspace-view :is(.activity-pagination button, .planner-pagination button) {
+  border-radius: 999px;
+}
+
+.workspace-view :is(.project-progress-track, .team-member-progress, .table-progress i) {
+  overflow: hidden;
+  background: color-mix(in srgb, var(--workspace-border, #e2e2e6) 76%, transparent);
+}
+
+.workspace-view :is(.project-progress-track span, .team-member-progress i, .table-progress b) {
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-accent, #c49a6c), var(--workspace-primary, #0b0b45));
+}
+
+.workspace-view :is(.task-status, .planner-priority, .scope-badge, .invitation-status-badge) {
+  border: 1px solid color-mix(in srgb, var(--status-color, currentColor) 22%, transparent);
+  line-height: 1.15;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
+}
+
+.avatar {
+  position: relative;
+  overflow: visible;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-border, #e2e2e6) 90%, transparent);
+}
+
+.avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+
+.presence-dot {
+  box-shadow: 0 0 0 2px var(--workspace-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--workspace-border, #e2e2e6) 65%, transparent);
+}
+
+[data-slot="card"],
+.workspace-card {
+  border: 1px solid color-mix(in srgb, var(--workspace-border, #e2e2e6) 78%, transparent);
+}
+
+[data-slot="dialog-content"],
+.modal {
+  border: 1px solid color-mix(in srgb, var(--workspace-border, #e2e2e6) 86%, transparent);
+  box-shadow: 0 22px 60px rgb(7 26 46 / 20%);
+}
+
+.workspace-view :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, [data-slot="select-trigger"]):focus-visible {
+  border-color: var(--brand-accent, #c49a6c);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent, #c49a6c) 20%, transparent);
+}
+
+.auth-error,
+.settings-note,
+.workspace-inline-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--workspace-border, #e2e2e6) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--workspace-surface-soft, #f8f9fa) 92%, var(--brand-accent, #c49a6c));
+}
+
+.auth-error {
+  border-color: color-mix(in srgb, #c43d4b 24%, transparent);
+  background: color-mix(in srgb, #c43d4b 7%, var(--workspace-surface, #fff));
+  color: #a8323f;
+}
+
+.auth-error::before,
+.workspace-alert[data-tone="danger"]::before {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.workspace-alert[data-tone="danger"]::before { display: none; }
+
+.workspace-toast {
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 14px;
+  box-shadow: 0 16px 38px rgb(2 5 31 / 26%);
+}
+
+.chat-feed-skeleton { width: min(100%, 720px); margin: 12px auto; padding: 0 8px; }
+.chat-message-skeleton { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start; }
+.chat-message-skeleton + .chat-message-skeleton { margin-top: 18px; }
+.chat-message-skeleton-lines { display: grid; gap: 8px; padding-top: 2px; }
+.drawer-skeleton { padding: 8px 0; }
+.settings-inline-skeleton { width: min(100%, 320px); }
+.files-status-alert { margin: 0 0 12px; }
+
+html[data-theme="dark"] .workspace-skeleton {
+  background: color-mix(in srgb, var(--workspace-border, #2a2a5c) 78%, var(--workspace-surface, #15153a));
+}
+
+html[data-theme="dark"] .workspace-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 7%),
+    transparent
+  );
+}
+
+html[data-theme="dark"] .workspace-view .activity-kind {
+  border-color: var(--workspace-surface, #15153a);
+}
+
+html[data-theme="dark"] .auth-error {
+  background: color-mix(in srgb, #c43d4b 16%, var(--workspace-surface, #15153a));
+  color: #ffb3bd;
+}
+
+@media (max-width: 640px) {
+  .workspace-skeleton-heading { width: 58%; }
+
+  .workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) {
+    width: 100%;
+  }
+
+  .workspace-alert { grid-template-columns: auto minmax(0, 1fr); }
+  .workspace-alert-action { grid-column: 2; justify-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-skeleton::after { animation: none; }
+  .workspace-view :is(.planner-task-table, .project-register-table, .files-table) tbody tr {
+    transition: none;
+  }
+}

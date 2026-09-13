@@ -66,8 +66,10 @@ import {
 import "flowbite/dist/flowbite.css";
 import "./tijhabooks-theme.css";
 import "./index.css";
+import "./flowbite-adopted.css";
 import { Button } from "./components/ui/button.jsx";
 import { Badge } from "./components/ui/badge.jsx";
+import { Alert } from "./components/ui/alert.jsx";
 import { Card, CardContent, CardHeader } from "./components/ui/card.jsx";
 import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs.jsx";
 import {
@@ -1824,6 +1826,7 @@ function App() {
       <Toaster
         position="top-right"
         toastOptions={{
+          className: "workspace-toast",
           duration: 4000,
           style: {
             background: "rgba(11, 11, 69, 0.94)",
@@ -2422,17 +2425,20 @@ function App() {
               </div>
             )}
             {workspaceError && (
-              <div className="workspace-status error" role="alert">
-                <span>
-                  Workspace data could not be loaded: {workspaceError}
-                </span>
-                <button
-                  className="secondary-button"
-                  onClick={() => setWorkspaceReload((current) => current + 1)}
-                >
-                  Retry
-                </button>
-              </div>
+              <Alert
+                tone="danger"
+                title="Workspace data could not be loaded"
+                action={
+                  <button
+                    className="secondary-button"
+                    onClick={() => setWorkspaceReload((current) => current + 1)}
+                  >
+                    Retry
+                  </button>
+                }
+              >
+                {workspaceError}
+              </Alert>
             )}
             {active !== "Today" && (
               <WorkspaceView

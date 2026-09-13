@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
 import { Card } from "./ui/card.jsx";
+import { Skeleton, SkeletonGroup } from "./ui/skeleton.jsx";
 import Avatar from "./Avatar.jsx";
 const AISettingsPanel = lazy(() =>
   import("./WorkspaceTools.jsx").then((module) => ({
@@ -1058,7 +1059,11 @@ function SettingsView({
                   </div>
                 ))
               ) : (
-                <p className="settings-note">Loading your preferences…</p>
+                <SkeletonGroup className="settings-inline-skeleton" label="Loading your preferences">
+                  <Skeleton variant="line" />
+                  <Skeleton variant="text" />
+                  <Skeleton variant="line" style={{ width: "68%" }} />
+                </SkeletonGroup>
               )}
               {prefsError && (
                 <p className="auth-error" role="alert">
@@ -1837,7 +1842,9 @@ function SettingsView({
                   </Button>
                 </div>
               ) : (
-                <p className="settings-note">Loading your subscribe link…</p>
+                <SkeletonGroup className="settings-inline-skeleton" label="Loading your subscribe link">
+                  <Skeleton variant="row" />
+                </SkeletonGroup>
               )}
               {canManageMembers && (
                 <button
