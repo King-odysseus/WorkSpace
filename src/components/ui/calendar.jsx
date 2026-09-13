@@ -59,9 +59,9 @@ function Calendar({
           '[&:first-child[data-selected=true]_button]:rounded-l-full [&:last-child[data-selected=true]_button]:rounded-r-full',
           defaultClassNames.day
         ),
-        range_start: cn('rounded-l-full bg-accent/20', defaultClassNames.range_start),
-        range_middle: cn('rounded-none bg-accent/10', defaultClassNames.range_middle),
-        range_end: cn('rounded-r-full bg-accent/20', defaultClassNames.range_end),
+        range_start: cn('rounded-l-full bg-info/20', defaultClassNames.range_start),
+        range_middle: cn('rounded-none bg-info/10', defaultClassNames.range_middle),
+        range_end: cn('rounded-r-full bg-info/20', defaultClassNames.range_end),
         today: cn('bg-secondary text-secondary-foreground rounded-full data-[selected=true]:rounded-none', defaultClassNames.today),
         outside: cn('text-muted-foreground opacity-50 aria-selected:text-muted-foreground', defaultClassNames.outside),
         disabled: cn('text-muted-foreground opacity-40', defaultClassNames.disabled),
@@ -106,11 +106,11 @@ function CalendarDayButton({ className, day, modifiers, ...props }) {
       data-range-middle={modifiers.range_middle}
       className={cn(
         'data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground data-[selected-single=true]:border-primary',
-        'data-[range-middle=true]:bg-accent/15 data-[range-middle=true]:text-foreground data-[range-middle=true]:rounded-none',
+        'data-[range-middle=true]:bg-info/15 data-[range-middle=true]:text-foreground data-[range-middle=true]:rounded-none',
         'data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[range-start=true]:rounded-l-full',
         'data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-end=true]:rounded-r-full',
         'flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 rounded-full font-semibold leading-none',
-        'group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-accent/30 group-data-[focused=true]/day:border-accent',
+        'group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-info/30 group-data-[focused=true]/day:border-info',
         defaultClassNames.day,
         className
       )}

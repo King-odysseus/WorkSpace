@@ -1763,7 +1763,7 @@ function App() {
           badge: workspaceData.notifications.filter(
             (item) => item.target_type === "chat_channel" && !item.read,
           ).length,
-          badgeTone: "accent",
+          badgeTone: "info",
         },
         {
           label: "Chats",
@@ -1771,7 +1771,7 @@ function App() {
           badge: workspaceData.notifications.filter(
             (item) => item.target_type === "direct_conversation" && !item.read,
           ).length,
-          badgeTone: "accent",
+          badgeTone: "info",
         },
         {
           label: "Follow-up",
@@ -1971,8 +1971,8 @@ function App() {
                         <span
                           className={cn(
                             "ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
-                            badgeTone === "accent"
-                              ? "bg-accent text-navy"
+                            badgeTone === "info"
+                              ? "bg-info text-white"
                               : "bg-danger text-white",
                           )}
                         >
@@ -2614,7 +2614,7 @@ function App() {
             className={cn(
               "relative flex h-12 w-[4.5rem] flex-col items-center justify-center gap-0.5 rounded-xl transition-colors",
               active === label
-                ? "bg-accent text-navy"
+                ? "bg-info text-white"
                 : "text-white/60 hover:bg-white/5 hover:text-white",
             )}
           >
@@ -2626,8 +2626,8 @@ function App() {
               <span
                 className={cn(
                   "absolute right-2.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
-                  badgeTone === "accent"
-                    ? "bg-accent text-navy"
+                  badgeTone === "info"
+                    ? "bg-info text-white"
                     : "bg-danger text-white",
                   active === label && "bg-navy text-white",
                 )}
@@ -5386,7 +5386,7 @@ function WorkspaceView({
                             day: "numeric",
                           })}
                       {toDateKey(day) === today && (
-                        <Badge variant="accent" className="today-badge">
+                        <Badge variant="info" className="today-badge">
                           Today
                         </Badge>
                       )}

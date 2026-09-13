@@ -1,6 +1,6 @@
 /* Selective Flowbite-inspired patterns for WorkSpace.
-   These rules reuse the house surfaces, navy/gold tokens, Radix primitives, and
-   Lucide icons. Flowbite supplies the information structure, not the skin. */
+   These rules reuse the house surfaces and semantic color tokens, Radix
+   primitives, and Lucide icons. Flowbite supplies the structure, not the skin. */
 
 .workspace-skeleton {
   position: relative;
@@ -83,7 +83,7 @@
   left: 31px;
   width: 1px;
   content: "";
-  background: color-mix(in srgb, var(--workspace-border, #e2e2e6) 82%, var(--brand-accent, #c49a6c));
+  background: var(--workspace-border, #e2e2e6);
 }
 
 .workspace-view .activity-item { position: relative; }
@@ -106,7 +106,7 @@
   top: 0;
   z-index: 2;
   border-bottom: 1px solid var(--workspace-border, #e2e2e6);
-  background: color-mix(in srgb, var(--workspace-surface-soft, #f8f9fa) 92%, var(--brand-accent, #c49a6c));
+  background: var(--workspace-surface-soft, #f8f9fa);
   color: var(--workspace-text-soft, #6b7280);
   font-size: 10px;
   font-weight: 800;
@@ -119,11 +119,11 @@
 }
 
 .workspace-view :is(.planner-task-table, .project-register-table, .files-table) tbody tr:hover {
-  background: color-mix(in srgb, var(--brand-accent, #c49a6c) 7%, var(--workspace-surface, #fff));
+  background: color-mix(in srgb, var(--color-info, #2563eb) 5%, var(--workspace-surface, #fff));
 }
 
 .workspace-view :is(.planner-task-table, .project-register-table, .files-table) tbody tr:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--brand-accent, #c49a6c) 72%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-info, #2563eb) 72%, transparent);
   outline-offset: -2px;
 }
 
@@ -140,7 +140,7 @@
   padding: 3px;
   border: 1px solid var(--workspace-border, #e2e2e6);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--workspace-surface-soft, #f8f9fa) 94%, var(--brand-accent, #c49a6c));
+  background: var(--workspace-surface-soft, #f8f9fa);
   scrollbar-width: none;
 }
 
@@ -161,13 +161,13 @@
 }
 
 .workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):is(.active, [aria-selected="true"], [aria-pressed="true"]) {
-  background: var(--brand-accent, #c49a6c);
-  color: var(--workspace-on-accent, #071a2e);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-accent, #c49a6c) 26%, transparent);
+  background: var(--color-info, #2563eb);
+  color: #fff;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-info, #2563eb) 24%, transparent);
 }
 
 .workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--brand-accent, #c49a6c) 75%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-info, #2563eb) 75%, transparent);
   outline-offset: 2px;
 }
 
@@ -182,7 +182,7 @@
 
 .workspace-view :is(.project-progress-track span, .team-member-progress i, .table-progress b) {
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--brand-accent, #c49a6c), var(--workspace-primary, #0b0b45));
+  background: linear-gradient(90deg, var(--color-info, #2563eb), var(--color-success, #3d8b6e));
 }
 
 .workspace-view :is(.task-status, .planner-priority, .scope-badge, .invitation-status-badge) {
@@ -215,8 +215,8 @@
 }
 
 .workspace-view :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, [data-slot="select-trigger"]):focus-visible {
-  border-color: var(--brand-accent, #c49a6c);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent, #c49a6c) 20%, transparent);
+  border-color: var(--color-info, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info, #2563eb) 20%, transparent);
 }
 
 .auth-error,
@@ -228,7 +228,7 @@
   padding: 9px 11px;
   border: 1px solid color-mix(in srgb, var(--workspace-border, #e2e2e6) 82%, transparent);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--workspace-surface-soft, #f8f9fa) 92%, var(--brand-accent, #c49a6c));
+  background: var(--workspace-surface-soft, #f8f9fa);
 }
 
 .auth-error {

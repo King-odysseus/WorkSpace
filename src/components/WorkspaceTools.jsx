@@ -1208,7 +1208,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       </button>
     </div>
 
-    {helpOpen && <div className="mt-4 rounded-xl bg-accent/10 p-4 text-sm leading-6">
+    {helpOpen && <div className="mt-4 rounded-xl bg-info/10 p-4 text-sm leading-6">
       <strong>How to connect a provider</strong>
       <p className="mt-1 text-text-muted">Create an API key in the provider's developer console, paste it below, check Enable, choose a model, then save. The default base URLs are already filled in. You only need to change one when using a compatible gateway or proxy.</p>
       <p className="mt-2 text-text-muted">Railway environment variables still work as a fallback, but they are no longer required for setup.</p>
@@ -1250,7 +1250,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
                 placeholder={config.has_api_key ? `Leave blank to keep ${config.key_hint}` : `Paste your ${label} API key`}
                 autoComplete="new-password"
                 disabled={!mayManage}
-                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent/30"
+                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-info/30"
               />
             </label>
             <label className="text-sm">Base URL
@@ -1259,7 +1259,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
                 value={config.base_url || ''}
                 onChange={event => updateProvider(provider, { base_url: event.target.value })}
                 disabled={!mayManage}
-                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent/30"
+                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-info/30"
               />
             </label>
             <label className="text-sm">Model
@@ -1267,7 +1267,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
                 value={config.model || ''}
                 onChange={event => updateProvider(provider, { model: event.target.value })}
                 disabled={!mayManage}
-                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent/30"
+                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-info/30"
               />
             </label>
           </div>

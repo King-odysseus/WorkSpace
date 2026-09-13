@@ -108,17 +108,17 @@
   --sc-popover-foreground: #1F2937;
   --sc-primary: #0B0B45;
   --sc-primary-foreground: #FFFFFF;
-  --sc-secondary: #F1E4D0;
-  --sc-secondary-foreground: #071A2E;
+  --sc-secondary: #EEF2F7;
+  --sc-secondary-foreground: #1F2937;
   --sc-muted: #F1F3F5;
   --sc-muted-foreground: #6B7280;
   --sc-accent: #C49A6C;
   --sc-accent-foreground: #071A2E;
-  --sc-destructive: #E36B43;
+  --sc-destructive: #C43D4B;
   --sc-destructive-foreground: #FFFFFF;
   --sc-border: #E2E2E6;
   --sc-input: #E2E2E6;
-  --sc-ring: #C49A6C;
+  --sc-ring: #2563EB;
   --sc-radius: 0.75rem;
 }
 
@@ -129,19 +129,19 @@ html[data-theme='dark'] {
   --sc-card-foreground: #ECECF7;
   --sc-popover: #15153A;
   --sc-popover-foreground: #ECECF7;
-  --sc-primary: #C49A6C;
-  --sc-primary-foreground: #071A2E;
+  --sc-primary: #2563EB;
+  --sc-primary-foreground: #FFFFFF;
   --sc-secondary: #1E1E4C;
   --sc-secondary-foreground: #ECECF7;
   --sc-muted: #0C0C28;
   --sc-muted-foreground: #C2C2DC;
   --sc-accent: #C49A6C;
   --sc-accent-foreground: #071A2E;
-  --sc-destructive: #E36B43;
+  --sc-destructive: #E15A67;
   --sc-destructive-foreground: #FFFFFF;
   --sc-border: #2A2A5C;
   --sc-input: #2A2A5C;
-  --sc-ring: #C49A6C;
+  --sc-ring: #60A5FA;
 }
 
 /* =============================================================================
@@ -171,10 +171,19 @@ html[data-theme='dark'] {
   --color-border: #E2E2E6;
   --color-border-light: #EFEFF2;
 
-  --color-success: #16a34a;
-  --color-warning: #f59e0b;
-  --color-danger: #dc2626;
-  --color-danger-bg: #fef2f2;
+  --color-info: #2563EB;
+  --color-info-hover: #1D4ED8;
+  --color-info-soft: #EAF2FF;
+
+  --color-success: #3D8B6E;
+  --color-success-soft: #E8F5EF;
+
+  --color-warning: #B45309;
+  --color-warning-soft: #FFF4E5;
+
+  --color-danger: #C43D4B;
+  --color-danger-soft: #FDECEE;
+  --color-danger-bg: #FEF2F2;
 
   --shadow-elevated: 0 12px 40px -12px rgb(38 34 98 / 0.16);
 }
@@ -189,6 +198,10 @@ html[data-theme='dark'] {
   --color-surface-secondary: #0c0c28;
   --color-surface-elevated: #1e1e4c;
   --color-danger-bg: #3a1a1a;
+  --color-info-soft: #132C52;
+  --color-success-soft: #153A31;
+  --color-warning-soft: #3D2A12;
+  --color-danger-soft: #3D1C23;
   --color-text-primary: #ECECF7;
   --color-text-secondary: #C2C2DC;
   --color-text-muted: #8C8CAE;
@@ -273,12 +286,10 @@ aside[class*='bg-navy'] nav::-webkit-scrollbar-thumb {
   background: rgb(255 255 255 / 0.15);
 }
 
-/* Native checkboxes/radios (subtasks, private-channel toggle, member picker,
-   legal acceptance) keep the browser's own tick shape - there's no reliable
-   cross-browser way to fully re-skin that without a custom widget - but
-   accent-color repaints it in the app's gold instead of the OS default blue. */
-input[type='checkbox'], input[type='radio'] {
-  accent-color: var(--brand-accent, #C49A6C);
+/* Native checkboxes/radios keep the browser's tick shape, while accent-color
+   uses the shared informational blue rather than the brand gold. */
+input[type='checkbox'], input[type='radio'], input[type='range'] {
+  accent-color: var(--color-info, #2563EB);
 }
 
 /* The status controls on task rows are combo boxes rather than native <select>s,
@@ -411,7 +422,7 @@ input[type='checkbox'], input[type='radio'] {
 
 .secondary-button {
   border-color: transparent !important;
-  background: color-mix(in srgb, var(--brand-accent, #C49A6C) 13%, var(--workspace-surface, #fff));
+  background: var(--workspace-surface-soft, #F8F9FA);
 }
 
 html[data-theme='dark'] :where(.project-summary > div, .today-metrics button, .my-task-summary button, .team-board-metrics button, .time-clock-totals div) {
@@ -445,7 +456,7 @@ html[data-theme='dark'] :where(.project-summary > div, .today-metrics button, .m
 ):focus {
   border-color: transparent !important;
   background-color: #f7f8fa !important;
-  box-shadow: 0 0 0 3px rgb(196 154 108 / 14%) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info, #2563EB) 14%, transparent) !important;
 }
 
 :where(.top-search input, .planner-search input, .ai-chat-input) {
@@ -548,22 +559,22 @@ html[data-theme='dark'] [data-slot='card'] {
   width: fit-content;
   margin-bottom: 11px;
   padding: 5px 10px;
-  border: 1px solid rgb(196 154 108 / 24%);
+  border: 1px solid color-mix(in srgb, var(--color-info, #2563EB) 24%, transparent);
   border-radius: 999px;
-  background: rgb(196 154 108 / 10%);
-  color: #8A633D;
+  background: color-mix(in srgb, var(--color-info, #2563EB) 9%, transparent);
+  color: var(--color-info, #2563EB);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .08em;
 }
 
 html[data-theme='dark'] .today-hero .eyebrow {
-  color: #E0BE96;
+  color: #93C5FD;
 }
 
 .today-hero h1 {
   color: var(--dashboard-text);
-  font: 800 22px/1.2 'Montserrat', sans-serif;
+  font: 400 22px/1.2 'Montserrat', sans-serif;
   letter-spacing: 0;
 }
 
@@ -619,7 +630,7 @@ html[data-theme='dark'] .today-hero .eyebrow {
 }
 
 .today-metrics > button:hover {
-  border-color: rgb(196 154 108 / 48%) !important;
+  border-color: color-mix(in srgb, var(--color-info, #2563EB) 48%, transparent) !important;
   box-shadow: var(--dashboard-shadow-hover) !important;
   transform: translateY(-2px);
 }
@@ -676,8 +687,8 @@ html[data-theme='dark'] .today-hero .eyebrow {
 }
 
 html[data-theme='dark'] .today-metric-due .today-metric-icon {
-  background: rgb(196 154 108 / 14%);
-  color: #E0BE96;
+  background: rgb(255 255 255 / 7%);
+  color: #C2C2DC;
 }
 
 html[data-theme='dark'] .today-metric-overdue .today-metric-icon {
@@ -745,12 +756,12 @@ html[data-theme='dark'] .today-metric.attention .today-metric-copy strong {
   height: 32px;
   padding: 7px;
   border-radius: 11px;
-  background: rgb(196 154 108 / 12%);
-  color: #8A633D;
+  background: color-mix(in srgb, var(--color-info, #2563EB) 11%, transparent);
+  color: var(--color-info, #2563EB);
 }
 
 html[data-theme='dark'] .today-panel-heading > svg {
-  color: #E0BE96;
+  color: #93C5FD;
 }
 
 .today-task-list {
@@ -800,7 +811,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 
 .today-event-row time {
   min-width: 54px;
-  color: #8A633D;
+  color: var(--dashboard-muted);
   font-size: 10px;
 }
 
@@ -1004,7 +1015,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 .workspace-view > .workspace-view-heading h1 {
   margin: 0;
   color: var(--dashboard-text) !important;
-  font: 800 22px/1.2 'Montserrat', sans-serif !important;
+  font: 400 22px/1.2 'Montserrat', sans-serif !important;
   letter-spacing: 0 !important;
 }
 
@@ -1132,7 +1143,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 
 .workspace-view :is(.my-task-summary, .team-board-metrics) > button:hover,
 .workspace-view :is(.my-task-summary, .team-board-metrics) > button.active {
-  border-color: rgb(196 154 108 / 48%) !important;
+  border-color: color-mix(in srgb, var(--color-info, #2563EB) 48%, transparent) !important;
   box-shadow: var(--dashboard-shadow-hover) !important;
   transform: translateY(-2px);
 }
@@ -1316,8 +1327,8 @@ html[data-theme='dark'] .today-panel-heading > svg {
 }
 
 .workspace-view :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea):focus {
-  border-color: rgb(196 154 108 / 70%) !important;
-  box-shadow: 0 0 0 3px rgb(196 154 108 / 16%) !important;
+  border-color: color-mix(in srgb, var(--color-info, #2563EB) 72%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info, #2563EB) 16%, transparent) !important;
   outline: 0 !important;
 }
 
@@ -1374,7 +1385,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 }
 
 .workspace-view .project-card:hover {
-  border-color: rgb(196 154 108 / 42%) !important;
+  border-color: color-mix(in srgb, var(--color-info, #2563EB) 42%, transparent) !important;
   box-shadow: var(--dashboard-shadow-hover) !important;
   transform: translateY(-2px);
 }
@@ -1402,7 +1413,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 .workspace-view .team-member-progress i,
 .workspace-view .report-bar-row i {
   border-radius: inherit;
-  background: linear-gradient(90deg, #C49A6C, #E36B43) !important;
+  background: linear-gradient(90deg, var(--color-info, #2563EB), var(--color-success, #3D8B6E)) !important;
 }
 
 .workspace-view .calendar-layout,
@@ -1455,20 +1466,20 @@ html[data-theme='dark'] .today-panel-heading > svg {
 
 .workspace-view .calendar-day.is-today,
 .workspace-view .calendar-time-day.is-today {
-  background: rgb(196 154 108 / 8%) !important;
+  background: color-mix(in srgb, var(--color-info, #2563EB) 7%, transparent) !important;
 }
 
 .workspace-view .event-pill {
   border: 1px solid transparent !important;
-  border-left: 3px solid #C49A6C !important;
+  border-left: 3px solid var(--color-info, #2563EB) !important;
   border-radius: 11px !important;
   background: #FAF8F5 !important;
   color: var(--dashboard-text) !important;
 }
 
 .workspace-view .event-pill:hover:not(:disabled) {
-  border-color: rgb(196 154 108 / 35%) !important;
-  background: #F5EDE2 !important;
+  border-color: color-mix(in srgb, var(--color-info, #2563EB) 35%, transparent) !important;
+  background: var(--color-info-soft, #EAF2FF) !important;
 }
 
 .workspace-view .planner-view-wrapper {
@@ -1508,7 +1519,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 
 .workspace-view .report-risk-list button:hover,
 .workspace-view .project-detail-links button:hover {
-  border-color: rgb(196 154 108 / 45%) !important;
+  border-color: color-mix(in srgb, var(--color-info, #2563EB) 45%, transparent) !important;
   background: var(--dashboard-surface) !important;
   transform: translateY(-1px);
 }
@@ -1526,17 +1537,17 @@ html[data-theme='dark'] .today-panel-heading > svg {
 
 .workspace-view .empty-workspace-icon {
   border-radius: 14px;
-  background: rgb(196 154 108 / 12%);
-  color: #8A633D;
+  background: color-mix(in srgb, var(--color-info, #2563EB) 11%, transparent);
+  color: var(--color-info, #2563EB);
 }
 
 html[data-theme='dark'] .workspace-view .empty-workspace-icon {
-  color: #E0BE96;
+  color: #93C5FD;
 }
 
 html[data-theme='dark'] .workspace-view .project-icon {
-  background: rgb(196 154 108 / 14%);
-  color: #E0BE96;
+  background: color-mix(in srgb, var(--color-info, #2563EB) 14%, transparent);
+  color: #93C5FD;
 }
 
 html[data-theme='dark'] .workspace-view .project-progress-track,
@@ -1554,8 +1565,8 @@ html[data-theme='dark'] .workspace-view .event-pill:hover:not(:disabled) {
 }
 
 html[data-theme='dark'] .workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button.active {
-  background: #C49A6C !important;
-  color: #17183E !important;
+  background: var(--color-info, #2563EB) !important;
+  color: #FFFFFF !important;
 }
 
 html[data-theme='dark'] .workspace-view :is(
@@ -1787,7 +1798,7 @@ html[data-theme='dark'] .workspace-view :is(
 
 .chat-workspace-view .chat-list-heading > button:hover,
 .chat-workspace-view .chat-list-heading > button:focus-visible {
-  border-color: var(--brand-accent);
+  border-color: var(--color-info, #2563EB);
   color: var(--workspace-primary);
 }
 
