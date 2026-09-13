@@ -1885,6 +1885,41 @@ function App() {
   const mobilePillItems = mobilePillLabels
     .map((label) => navItemsByLabel.get(label))
     .filter(Boolean);
+  // Zuri holds the bar's exact centre, so the tiles are split into two halves
+  // that each take the same half of the bar; a single run of six tiles would
+  // always leave the middle tile half a tile off centre.
+  const mobileNavLeft = mobilePillItems.slice(0, 2);
+  const mobileNavRight = mobilePillItems.slice(2);
+  const renderMobileNavItem = ({ label, icon: Icon, badge, badgeTone }) => (
+    <button
+      type="button"
+      key={label}
+      onClick={() => setActive(label)}
+      aria-current={active === label ? "page" : undefined}
+      className={cn(
+        "mobile-nav-item relative flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+        active === label
+          ? "is-active"
+          : "text-white/60 hover:bg-white/5 hover:text-white",
+      )}
+    >
+      <Icon size={18} className="shrink-0" />
+      <span className="max-w-full truncate px-0.5 text-[10px] font-semibold leading-none">
+        {label}
+      </span>
+      {badge > 0 && (
+        <span
+          className={cn(
+            "absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
+            badgeTone === "info" ? "bg-info text-white" : "bg-danger text-white",
+            active === label && "bg-navy text-white",
+          )}
+        >
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
+    </button>
+  );
 
   return (
     <div className="flex h-dvh overflow-hidden bg-surface-secondary">
@@ -2684,58 +2719,19 @@ function App() {
 
       {/* ── Mobile bottom pill nav - four primary destinations plus "More",
         which opens the same drawer as the header hamburger so the full
-        navigation stays reachable. Hidden while that drawer is open so the
+        navigation stays reachable, with Zuri's circular launcher held on the
+        bar's centre line between them. Hidden while that drawer is open so the
         pill doesn't sit dimmed under the overlay. ── */}
       <nav
         className={cn(
-          "fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-none border border-white/10 bg-navy/95 p-1.5 shadow-lg backdrop-blur transition-opacity duration-200 lg:hidden",
+          "fixed bottom-4 left-1/2 z-30 flex w-[min(calc(100vw-1rem),360px)] -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-navy/95 p-1 shadow-lg backdrop-blur transition-opacity duration-200 lg:hidden",
           mobileOpen && "pointer-events-none opacity-0",
         )}
         aria-label="Primary"
       >
-        {mobilePillItems.map(({ label, icon: Icon, badge, badgeTone }) => (
-          <button
-            type="button"
-            key={label}
-            onClick={() => setActive(label)}
-            aria-current={active === label ? "page" : undefined}
-            className={cn(
-              "mobile-nav-item relative flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-none transition-colors",
-              active === label
-                ? "is-active"
-                : "text-white/60 hover:bg-white/5 hover:text-white",
-            )}
-          >
-            <Icon size={19} className="shrink-0" />
-            <span className="max-w-full truncate px-1 text-[10px] font-semibold leading-none">
-              {label}
-            </span>
-            {badge > 0 && (
-              <span
-                className={cn(
-                  "absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
-                  badgeTone === "info"
-                    ? "bg-info text-white"
-                    : "bg-danger text-white",
-                  active === label && "bg-navy text-white",
-                )}
-              >
-                {badge > 9 ? "9+" : badge}
-              </span>
-            )}
-          </button>
-        ))}
-
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          aria-expanded={mobileOpen}
-          aria-haspopup="menu"
-          className="flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-none text-white/60 transition-colors hover:bg-white/5 hover:text-white"
-        >
-          <MoreHorizontal size={19} className="shrink-0" />
-          <span className="text-[10px] font-semibold leading-none">More</span>
-        </button>
+        <div className="flex flex-1 items-center gap-0.5">
+          {mobileNavLeft.map(renderMobileNavItem)}
+        </div>
 
         {!aiLauncherHidden && !aiMinimized && activeWorkspaceId && (
           <button
@@ -2746,9 +2742,23 @@ function App() {
             aria-haspopup="dialog"
             title="Ask Zuri"
           >
-            <Sparkles size={22} />
+            <Sparkles size={19} />
           </button>
         )}
+
+        <div className="flex flex-1 items-center gap-0.5">
+          {mobileNavRight.map(renderMobileNavItem)}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            aria-expanded={mobileOpen}
+            aria-haspopup="menu"
+            className="mobile-nav-item flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-white/60 transition-colors hover:bg-white/5 hover:text-white"
+          >
+            <MoreHorizontal size={18} className="shrink-0" />
+            <span className="text-[10px] font-semibold leading-none">More</span>
+          </button>
+        </div>
       </nav>
 
       {showModal && (

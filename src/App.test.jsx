@@ -8,7 +8,7 @@
 // It exists because the shell once rendered fine until a task was opened - the
 // drawer was handed an identifier the shell never defined - and no
 // component-level test renders the shell.
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { mockApi } from './test/setup-tests.js'
 import { toDateKey } from './lib/workspace-format.js'
@@ -67,6 +67,24 @@ it('renders the workspace shell and opens a task from the today bar', async () =
 
   // The shell is up once it has rendered its own navigation.
   await waitFor(() => expect(document.querySelectorAll('button').length).toBeGreaterThan(5), { timeout: 20000 })
+
+  // The mobile bar is a pill, and the only way its AI button can hold the bar's
+  // true centre is for the tiles to sit in two halves that each take the same
+  // share of the bar. Six tiles in one run would leave the middle one off centre.
+  const nav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
+  const zuri = within(nav).getByRole('button', { name: 'Open Zuri' })
+  const halves = [...nav.children].filter(child => child.tagName === 'DIV')
+
+  expect(nav.className).toContain('rounded-full')
+  expect(nav.children[1]).toBe(zuri)
+  expect(halves).toHaveLength(2)
+  expect(halves.every(half => half.className.includes('flex-1'))).toBe(true)
+  expect(halves[0].textContent).toContain('Today')
+  expect(halves[0].textContent).toContain('My tasks')
+  expect(halves[0].textContent).not.toContain('Planner')
+  expect(halves[1].textContent).toContain('Planner')
+  expect(halves[1].textContent).toContain('Chats')
+  expect(halves[1].textContent).toContain('More')
 
   const opener = await screen.findByText('Desingn UI', {}, { timeout: 20000 })
   fireEvent.click(opener)
