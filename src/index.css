@@ -563,7 +563,7 @@ html[data-theme='dark'] .today-hero .eyebrow {
 
 .today-hero h1 {
   color: var(--dashboard-text);
-  font: 800 30px/1.12 'Montserrat', sans-serif;
+  font: 800 22px/1.2 'Montserrat', sans-serif;
   letter-spacing: 0;
 }
 
@@ -953,7 +953,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
 
 @media (max-width: 560px) {
   .today-hero h1 {
-    font-size: 26px;
+    font-size: 20px;
   }
 
   .today-metrics {
@@ -1001,23 +1001,10 @@ html[data-theme='dark'] .today-panel-heading > svg {
   gap: 24px;
 }
 
-.workspace-view > .workspace-view-heading .eyebrow {
-  width: fit-content;
-  margin: 0 0 9px;
-  padding: 5px 10px;
-  border: 1px solid rgb(196 154 108 / 24%);
-  border-radius: 999px;
-  background: rgb(196 154 108 / 10%);
-  color: #8A633D;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .08em;
-}
-
 .workspace-view > .workspace-view-heading h1 {
   margin: 0;
   color: var(--dashboard-text) !important;
-  font: 800 30px/1.12 'Montserrat', sans-serif !important;
+  font: 800 22px/1.2 'Montserrat', sans-serif !important;
   letter-spacing: 0 !important;
 }
 
@@ -1543,7 +1530,6 @@ html[data-theme='dark'] .today-panel-heading > svg {
   color: #8A633D;
 }
 
-html[data-theme='dark'] .workspace-view > .workspace-view-heading .eyebrow,
 html[data-theme='dark'] .workspace-view .empty-workspace-icon {
   color: #E0BE96;
 }
@@ -1642,7 +1628,7 @@ html[data-theme='dark'] .workspace-view :is(
   }
 
   .workspace-view > .workspace-view-heading h1 {
-    font-size: 26px !important;
+    font-size: 20px !important;
   }
 
   .workspace-view > .workspace-view-heading [data-slot='button'] {
@@ -1777,7 +1763,7 @@ html[data-theme='dark'] .workspace-view :is(
 .chat-workspace-view .chat-list-heading-copy h3 {
   margin: 0;
   color: var(--workspace-text);
-  font: 700 14px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 14px 'Montserrat', sans-serif;
 }
 
 .chat-workspace-view .chat-list-heading-copy span {
@@ -1831,7 +1817,7 @@ html[data-theme='dark'] .workspace-view :is(
   background: transparent;
   color: var(--workspace-text-soft);
   cursor: pointer;
-  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+  font: 700 10px 'Roboto', sans-serif;
   white-space: nowrap;
 }
 
@@ -1879,7 +1865,7 @@ html[data-theme='dark'] .workspace-view :is(
   gap: 8px;
   margin: 0 5px 6px;
   color: var(--workspace-text-soft);
-  font: 700 9px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 9px 'Montserrat', sans-serif;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
@@ -1925,7 +1911,7 @@ html[data-theme='dark'] .workspace-view :is(
 
 .chat-workspace-view .chat-feed-heading h2 {
   min-width: 0;
-  font: 700 15px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 15px 'Montserrat', sans-serif;
 }
 
 .chat-workspace-view .chat-feed-heading h2 svg {
@@ -1993,7 +1979,7 @@ html[data-theme='dark'] .workspace-view :is(
   background: transparent;
   color: var(--workspace-text-soft);
   cursor: pointer;
-  font: 700 11px 'Roboto', 'DM Sans', sans-serif;
+  font: 700 11px 'Roboto', sans-serif;
   white-space: nowrap;
 }
 
@@ -2087,7 +2073,7 @@ html[data-theme='dark'] .workspace-view :is(
 .chat-workspace-view .chat-about-hero h2 {
   margin: 0;
   color: var(--workspace-text);
-  font: 700 15px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 15px 'Montserrat', sans-serif;
 }
 
 .chat-workspace-view .chat-pane-intro p,
@@ -2213,7 +2199,7 @@ html[data-theme='dark'] .workspace-view :is(
 .chat-workspace-view .chat-about-grid dd {
   margin: 0;
   color: var(--workspace-text);
-  font: 700 13px 'Roboto', 'DM Sans', sans-serif;
+  font: 700 13px 'Roboto', sans-serif;
 }
 
 .chat-workspace-view .chat-section-heading {
@@ -2228,7 +2214,7 @@ html[data-theme='dark'] .workspace-view :is(
 .chat-workspace-view .chat-section-heading h4 {
   margin: 0;
   color: var(--workspace-text);
-  font: 700 11px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 11px 'Montserrat', sans-serif;
 }
 
 .chat-workspace-view .chat-section-heading > span {
@@ -2308,7 +2294,7 @@ html[data-theme='dark'] .workspace-view :is(
 .chat-workspace-view .chat-details-heading h3 {
   margin: 0;
   color: var(--workspace-text);
-  font: 700 12px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 12px 'Montserrat', sans-serif;
 }
 
 .chat-workspace-view .chat-details-heading button {
@@ -2418,7 +2404,7 @@ html[data-theme='dark'] .workspace-view :is(
   background: transparent;
   color: var(--workspace-primary);
   cursor: pointer;
-  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+  font: 700 10px 'Roboto', sans-serif;
 }
 
 @media (max-width: 1120px) {
@@ -2527,7 +2513,7 @@ html[data-theme='dark'] .workspace-view :is(
   background: transparent;
   color: var(--workspace-text-soft);
   cursor: pointer;
-  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+  font: 700 10px 'Roboto', sans-serif;
   white-space: nowrap;
 }
 
@@ -2624,7 +2610,7 @@ html[data-theme='dark'] .workspace-view :is(
 
 .workspace-view .checkin-summary-head .card-person strong {
   color: var(--workspace-text);
-  font: 700 12px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 12px 'Montserrat', sans-serif;
 }
 
 .workspace-view .checkin-summary-head .card-person span:not(.avatar) {
@@ -2665,7 +2651,7 @@ html[data-theme='dark'] .workspace-view :is(
   align-items: center;
   gap: 5px;
   color: var(--workspace-text-soft);
-  font: 700 9px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 9px 'Montserrat', sans-serif;
   letter-spacing: .035em;
   text-transform: uppercase;
 }
@@ -2676,7 +2662,7 @@ html[data-theme='dark'] .workspace-view :is(
   overflow: hidden;
   margin: 4px 0 0;
   color: var(--workspace-text);
-  font: 500 10px/1.45 'Roboto', 'DM Sans', sans-serif;
+  font: 500 10px/1.45 'Roboto', sans-serif;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
 }
@@ -2816,7 +2802,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   border-radius: 999px;
   background: var(--workspace-surface);
   color: var(--workspace-text);
-  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+  font: 700 10px 'Roboto', sans-serif;
 }
 
 .workspace-view .planner-bucket-menu-trigger {
@@ -2840,7 +2826,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   padding: 7px 9px;
   border-radius: 8px;
   color: inherit;
-  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+  font: 700 10px 'Roboto', sans-serif;
 }
 
 .planner-bucket-menu [data-slot='dropdown-menu-item']:focus,
@@ -2883,13 +2869,13 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
 .workspace-view .planner-archive-heading h2 {
   margin: 3px 0 0;
   color: var(--workspace-text);
-  font: 800 18px/1.25 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 800 18px/1.25 'Montserrat', sans-serif;
 }
 
 .workspace-view .planner-archive-heading p:last-child {
   margin: 5px 0 0;
   color: var(--workspace-text-soft);
-  font: 500 10px/1.5 'Roboto', 'DM Sans', sans-serif;
+  font: 500 10px/1.5 'Roboto', sans-serif;
 }
 
 .workspace-view .planner-archive-close {
@@ -2962,7 +2948,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   overflow: hidden;
   margin: 0;
   color: var(--workspace-text);
-  font: 700 12px/1.35 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 12px/1.35 'Montserrat', sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2971,7 +2957,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   overflow: hidden;
   margin: 3px 0 0;
   color: var(--workspace-text-soft);
-  font: 500 9px/1.4 'Roboto', 'DM Sans', sans-serif;
+  font: 500 9px/1.4 'Roboto', sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3029,7 +3015,7 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
 
 .workspace-view .planner-archive-empty strong {
   color: var(--workspace-text);
-  font: 700 12px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  font: 700 12px 'Montserrat', sans-serif;
 }
 
 .workspace-view .planner-archive-empty p {

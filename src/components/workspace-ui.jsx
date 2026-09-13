@@ -13,7 +13,7 @@ import { Brush, CalendarDays, Plus } from 'lucide-react'
 import { formatCalendarDate, toDateKey } from '../lib/workspace-format.js'
 
 function WorkspaceViewHeading({ title, subtitle, action, onAction }) {
-  return <div className="workspace-view-heading"><div><p className="eyebrow">Workspace operations</p><h1>{title}</h1><p className="subtitle">{subtitle}</p></div>{action && <Button onClick={onAction}><Plus size={17} /> {action}</Button>}</div>
+  return <div className="workspace-view-heading"><div><h1>{title}</h1><p className="subtitle">{subtitle}</p></div>{action && <Button onClick={onAction}><Plus size={17} /> {action}</Button>}</div>
 }
 
 function SelectField({ label, name, value, onChange, options }) {
