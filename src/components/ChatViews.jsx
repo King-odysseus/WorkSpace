@@ -3,6 +3,7 @@ import { AppSelect } from './ui/select.jsx'
 // "create a record" flow (events, projects, check-ins, chat, follow-ups, invites).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import * as Popover from '@radix-ui/react-popover'
 import { ArrowUpRight, Download, FileText, Hash, MessageSquare, Paperclip, Plus, Search, Smile, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
@@ -35,15 +36,34 @@ function renderMessageText(text) {
   return <LinkedText text={text} />
 }
 
-function EmojiPicker({ onSelect }) {
+function EmojiPicker({ onSelect, actionLabel = 'Insert' }) {
   const [category, setCategory] = useState(0)
   return <div className="chat-emoji-picker" aria-label="Choose an emoji">
     <div className="chat-emoji-categories" role="tablist" aria-label="Emoji categories">
       {EMOJI_CATEGORIES.map(([label, icon], index) => <button type="button" role="tab" aria-selected={category === index} className={category === index ? 'active' : ''} key={label} title={label} onClick={() => setCategory(index)}><span aria-hidden="true">{icon}</span><small>{label}</small></button>)}
     </div>
     <div className="chat-emoji-grid" role="listbox" aria-label={EMOJI_CATEGORIES[category][0]}>
-      {EMOJI_CATEGORIES[category][2].map((emoji, index) => <button type="button" role="option" key={`${emoji}-${index}`} onClick={() => onSelect(emoji)} aria-label={`Insert ${emoji}`}>{emoji}</button>)}
+      {EMOJI_CATEGORIES[category][2].map((emoji, index) => <button type="button" role="option" key={`${emoji}-${index}`} onClick={() => onSelect(emoji)} aria-label={`${actionLabel} ${emoji}`}>{emoji}</button>)}
     </div>
+  </div>
+}
+
+function MessageReactionBar({ message, reactions, isMine, onToggle }) {
+  const [open, setOpen] = useState(false)
+  const availableReactions = MESSAGE_REACTIONS.filter(([emoji]) => !reactions.some(reaction => reaction.emoji === emoji))
+
+  return <div className={`chat-reactions ${reactions.length ? 'has-reactions' : ''} ${open ? 'reaction-picker-open' : ''}`} aria-label="Message reactions">
+    {reactions.map(reaction => <button type="button" key={reaction.emoji} className={reaction.reacted ? 'active' : ''} onClick={() => onToggle(message, reaction.emoji)} aria-pressed={reaction.reacted}>{reaction.emoji} {reaction.count}</button>)}
+    {availableReactions.map(([emoji, label]) => <button type="button" className="chat-reaction-add" key={emoji} onClick={() => onToggle(message, emoji)} aria-label={`React with ${label}`} title={`React with ${label}`}>{emoji}</button>)}
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild><button type="button" className="chat-reaction-more" aria-label="More reactions" title="More reactions"><Plus size={14} /></button></Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className="chat-reaction-picker" side="top" align={isMine ? 'start' : 'end'} sideOffset={8} collisionPadding={12} aria-label={`More reactions for ${message.author_name}`}>
+          <EmojiPicker actionLabel="React with" onSelect={emoji => { setOpen(false); onToggle(message, emoji) }} />
+          <Popover.Arrow className="chat-reaction-picker-arrow" />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   </div>
 }
 
@@ -338,12 +358,25 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const renderMessage = message => {
     const parent = message.parent_id ? (mode === 'channels' ? data.messages : directMessages).find(item => item.id === message.parent_id) : null
     const reactions = reactionUpdates[message.id] || message.reactions || []
-    const availableReactions = MESSAGE_REACTIONS.filter(([emoji]) => !reactions.some(reaction => reaction.emoji === emoji))
     const author = memberForMessage(message)
-    return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${String(author.id) === String(currentUserId) ? 'chat-message-mine' : ''}`} key={message.id}>
-    <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={effectivePresence(author)} small />
-    <div className="chat-message-body"><div className="chat-message-meta">{String(author.id) === String(currentUserId) ? <strong>{message.author_name}</strong> : <button type="button" className="chat-member-name" onClick={() => setProfileMember(author)} aria-label={`View ${message.author_name}'s profile`}>{message.author_name}</button>}<span>{formatRelativeActivityTime(message.created_at)}</span></div>{message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.message || 'Original message is unavailable.'}</span></div>}<div className={`chat-message-bubble chat-member-tone-${Number(author.id) % 5}`}><p>{renderMessageText(message.message)}</p><div className={`chat-reactions ${reactions.length ? 'has-reactions' : ''}`} aria-label="Message reactions">{reactions.map(reaction => <button type="button" key={reaction.emoji} className={reaction.reacted ? 'active' : ''} onClick={() => toggleReaction(message, reaction.emoji)} aria-pressed={reaction.reacted}>{reaction.emoji} {reaction.count}</button>)}{availableReactions.map(([emoji, label]) => <button type="button" className="chat-reaction-add" key={emoji} onClick={() => toggleReaction(message, emoji)} aria-label={`React with ${label}`} title={`React with ${label}`}>{emoji}</button>)}</div>{!message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}</div>{(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}{(message.shared_files || []).map(file => isImageFileName(file.original_name) && file.url ? <a className="chat-shared-image" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer" aria-label={`Open image ${file.original_name}`}><img src={file.url} alt={file.original_name} loading="lazy" /></a> : <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}</div>
-  </div>
+    const isMine = String(author.id) === String(currentUserId)
+    return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''}`} key={message.id}>
+      <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={effectivePresence(author)} small />
+      <div className="chat-message-body">
+        <div className="chat-message-meta">
+          {isMine ? <strong>{message.author_name}</strong> : <button type="button" className="chat-member-name" onClick={() => setProfileMember(author)} aria-label={`View ${message.author_name}'s profile`}>{message.author_name}</button>}
+          <span>{formatRelativeActivityTime(message.created_at)}</span>
+        </div>
+        {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.message || 'Original message is unavailable.'}</span></div>}
+        <div className={`chat-message-bubble chat-member-tone-${Number(author.id) % 5}`}>
+          <p>{renderMessageText(message.message)}</p>
+          <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />
+          {!message.parent_id && <button type="button" className="chat-reply-button" onClick={() => { setReplyTo(message); setDraft('') }}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
+        </div>
+        {(message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}
+        {(message.shared_files || []).map(file => isImageFileName(file.original_name) && file.url ? <a className="chat-shared-image" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer" aria-label={`Open image ${file.original_name}`}><img src={file.url} alt={file.original_name} loading="lazy" /></a> : <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}
+      </div>
+    </div>
   }
 
   const uploadChatFile = async event => {
