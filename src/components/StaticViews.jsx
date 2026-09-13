@@ -217,14 +217,17 @@ function WhatsNew({ onOpen }) {
   return <section className="workspace-view whats-new-view">
     <WorkspaceViewHeading title="What's new" subtitle="What WorkSpace can do, most recent first." />
     <div className="whats-new-list">
-      {RELEASE_NOTES.map((note, index) => <Card className={`whats-new-entry ${index === 0 ? 'is-latest' : ''}`} key={`${note.date}-${note.title}`}>
-        <header className="whats-new-header">
+      {RELEASE_NOTES.map((note, index) => <details className={`whats-new-entry ${index === 0 ? 'is-latest' : ''}`} key={`${note.date}-${note.title}`}>
+        <summary className="whats-new-header">
           <span className="whats-new-icon"><Megaphone size={16} /></span>
           <h2>{note.title}</h2>
           <time dateTime={note.date}>{formatDay(note.date)}</time>
-        </header>
-        <ul className="whats-new-items">{note.items.map(item => <li key={item}>{item}</li>)}</ul>
-      </Card>)}
+          <ChevronDown className="whats-new-chevron" size={16} aria-hidden="true" />
+        </summary>
+        <div className="whats-new-body">
+          <ul className="whats-new-items">{note.items.map(item => <li key={item}>{item}</li>)}</ul>
+        </div>
+      </details>)}
     </div>
   </section>
 }

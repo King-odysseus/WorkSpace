@@ -69,9 +69,7 @@ import {
   Moon,
 } from "lucide-react";
 import "flowbite/dist/flowbite.css";
-import "./tijhabooks-theme.css";
-import "./index.css";
-import "./flowbite-adopted.css";
+import "./workspace.css";
 import { Button } from "./components/ui/button.jsx";
 import { Badge } from "./components/ui/badge.jsx";
 import { Alert } from "./components/ui/alert.jsx";

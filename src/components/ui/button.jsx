@@ -36,9 +36,9 @@ const buttonVariants = cva(
   }
 )
 
-// Mirrors TijhaBooks' Button: a `loading` prop swaps the label region for a
-// spinner and disables the control, so callers don't juggle disabled+spinner
-// markup at every call site (see tijhabooks/frontend button.tsx).
+// A `loading` prop swaps the label region for a spinner and disables the
+// control, so callers do not have to juggle disabled and spinner markup at
+// every call site.
 function Button({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }) {
   const Comp = asChild ? Slot : 'button'
   return (
