@@ -5171,29 +5171,91 @@ html[data-theme='dark'] .today-panel-heading > svg {
   font-size: 11px;
 }
 
-.today-change-list {
-  display: flex;
+.today-change-viewport {
   min-width: 0;
-  gap: 7px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
 }
 
-.today-change-list > span {
-  max-width: 260px;
+.today-change-track {
+  display: flex;
+  width: max-content;
+  animation: today-change-ticker var(--today-ticker-duration, 28s) linear infinite;
+  will-change: transform;
+}
+
+.today-change-viewport:hover .today-change-track,
+.today-change-viewport:focus-within .today-change-track {
+  animation-play-state: paused;
+}
+
+.today-change-list {
+  display: flex;
   flex: 0 0 auto;
+  gap: 7px;
+  padding-right: 7px;
+}
+
+.today-change-item {
+  display: inline-flex;
+  max-width: 320px;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
   overflow: hidden;
   padding: 7px 10px;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: var(--dashboard-surface-soft);
   color: var(--dashboard-muted);
+  font: inherit;
   font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.today-change-list b {
+button.today-change-item {
+  cursor: pointer;
+}
+
+button.today-change-item:hover {
+  border-color: color-mix(in srgb, var(--color-info) 34%, transparent);
   color: var(--dashboard-text);
+}
+
+button.today-change-item:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+.today-change-item b {
+  flex: 0 0 auto;
+  color: var(--dashboard-text);
+}
+
+@keyframes today-change-ticker {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today-change-viewport {
+    overflow-x: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+    scrollbar-width: thin;
+  }
+
+  .today-change-track {
+    animation: none;
+  }
+
+  .today-change-track > [aria-hidden='true'] {
+    display: none;
+  }
 }
 
 .today-agenda-list {

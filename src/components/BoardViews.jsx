@@ -3495,6 +3495,7 @@ function TodayDashboard({
   onOpenEvent,
   onOpenFollowUp,
   onNavigate,
+  onOpenActivity,
   onOpenBoard,
   onComplete,
   onStatusChange,
@@ -3654,7 +3655,7 @@ function TodayDashboard({
   todayStart.setHours(0, 0, 0, 0);
   const todaysChanges = activity
     .filter((event) => new Date(event.created_at).getTime() >= todayStart.getTime())
-    .slice(0, 4);
+    .slice(0, 20);
   const dueAge = (task) => {
     if (!task.due_date || task.due === "Due today") return "Due today";
     const days = Math.max(
@@ -3785,12 +3786,37 @@ function TodayDashboard({
             <strong>Changed today</strong>
             <span>Latest workspace updates</span>
           </div>
-          <div className="today-change-list">
-            {todaysChanges.map((event) => (
-              <span key={event.id}>
-                <b>{event.actor_name}</b> {event.message}
-              </span>
-            ))}
+          <div className="today-change-viewport">
+            <div
+              className="today-change-track"
+              style={{ '--today-ticker-duration': `${Math.max(28, todaysChanges.length * 7)}s` }}
+            >
+              {[false, true].map((isDuplicate) => (
+                <div
+                  className="today-change-list"
+                  key={isDuplicate ? 'duplicate' : 'primary'}
+                  aria-hidden={isDuplicate ? 'true' : undefined}
+                >
+                  {todaysChanges.map((event) =>
+                    isDuplicate ? (
+                      <span className="today-change-item" key={`duplicate-${event.id}`}>
+                        <b>{event.actor_name}</b> {event.message}
+                      </span>
+                    ) : (
+                      <button
+                        className="today-change-item"
+                        type="button"
+                        key={event.id}
+                        onClick={() => onOpenActivity?.(event)}
+                        title="View this activity"
+                      >
+                        <b>{event.actor_name}</b> {event.message}
+                      </button>
+                    ),
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
           <Button
             type="button"

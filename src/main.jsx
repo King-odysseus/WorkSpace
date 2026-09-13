@@ -825,7 +825,7 @@ function App() {
         read(`/api/workspaces/${workspaceId}/notifications/`, {
           notifications: [],
         }),
-        read(`/api/workspaces/${workspaceId}/activity/?page_size=200`, {
+        read(`/api/workspaces/${workspaceId}/activity/?page_size=50&date_from=${today}&include_filters=0&include_summary=0`, {
           activity: [],
         }),
         read(`/api/workspaces/${workspaceId}/plan-buckets/`, { buckets: [] }),
@@ -2699,6 +2699,16 @@ function App() {
                   setActive("Follow-up");
                 }}
                 onNavigate={setActive}
+                onOpenActivity={(event) => {
+                  const eventDate = toDateKey(event.created_at);
+                  setActivitySearch(event.message || "");
+                  setActivityActor(event.actor_id == null ? "system" : String(event.actor_id));
+                  setActivityKind(event.kind || "all");
+                  setActivityDateFrom(eventDate);
+                  setActivityDateTo(eventDate);
+                  setActivityPage(1);
+                  setActive("Activity");
+                }}
                 onOpenBoard={(focus) => {
                   setTeamBoardFocus(focus);
                   setActive("Team");

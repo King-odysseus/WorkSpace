@@ -108,10 +108,14 @@ def next_recurrence_date(due_date, recurrence):
     return None
 
 
-def record_activity(workspace_id, actor, kind, message):
+def record_activity(workspace_id, actor, kind, message, related_user_ids=None):
     from .models import ActivityEvent
     AuditLog.objects.create(workspace_id=workspace_id, actor=actor, action=kind, target_type='workspace', details={'message': message})
-    return ActivityEvent.objects.create(workspace_id=workspace_id, actor=actor, kind=kind, message=message)
+    event = ActivityEvent.objects.create(workspace_id=workspace_id, actor=actor, kind=kind, message=message)
+    related_ids = {int(user_id) for user_id in (related_user_ids or []) if user_id}
+    if related_ids:
+        event.related_users.set(related_ids)
+    return event
 
 
 NOTIFICATION_KIND_PREFERENCE = {
@@ -221,13 +225,55 @@ def notify_managers(workspace_id, actor, verb, object_label, target_type='', tar
         )
 
 
+def task_activity_user_ids(task, include_commenters=False):
+    user_ids = set(task.supporters.values_list('id', flat=True))
+    user_ids.update(task.assignees.values_list('id', flat=True))
+    if task.assignee_id:
+        user_ids.add(task.assignee_id)
+    if task.supporter_id:
+        user_ids.add(task.supporter_id)
+    if include_commenters:
+        user_ids.update(TaskComment.objects.filter(task=task).values_list('author_id', flat=True))
+    return user_ids
+
+
 def task_activity_recipients(task, actor):
-    recipient_ids = set(TaskComment.objects.filter(task=task).exclude(author_id=actor.id).values_list('author_id', flat=True))
-    recipient_ids.update(task.supporters.exclude(id=actor.id).values_list('id', flat=True))
-    recipient_ids.update(task.assignees.exclude(id=actor.id).values_list('id', flat=True))
-    if task.assignee_id and task.assignee_id != actor.id:
-        recipient_ids.add(task.assignee_id)
+    recipient_ids = task_activity_user_ids(task, include_commenters=True)
+    recipient_ids.discard(actor.id)
     return User.objects.filter(id__in=recipient_ids)
+
+
+def record_task_activity(task, actor, kind, message, include_commenters=False):
+    return record_activity(
+        task.workspace_id,
+        actor,
+        kind,
+        message,
+        related_user_ids=task_activity_user_ids(task, include_commenters=include_commenters),
+    )
+
+
+def follow_up_activity_user_ids(follow_up, include_commenters=False):
+    user_ids = {follow_up.created_by_id}
+    if follow_up.assigned_to_id:
+        user_ids.add(follow_up.assigned_to_id)
+    if follow_up.task_id:
+        user_ids.update(task_activity_user_ids(follow_up.task, include_commenters=True))
+    if include_commenters:
+        user_ids.update(FollowUpComment.objects.filter(follow_up=follow_up).values_list('author_id', flat=True))
+    return user_ids
+
+
+def record_follow_up_activity(follow_up, actor, kind, message, include_commenters=False, extra_user_ids=None):
+    related_user_ids = follow_up_activity_user_ids(follow_up, include_commenters=include_commenters)
+    related_user_ids.update(extra_user_ids or [])
+    return record_activity(
+        follow_up.workspace_id,
+        actor,
+        kind,
+        message,
+        related_user_ids=related_user_ids,
+    )
 
 
 def notify_task_activity(task, actor, kind, title, body, immediate=False):
@@ -1024,7 +1070,7 @@ def task_list(request, workspace_id=None):
             transaction.set_rollback(True)
             return assignee_error
         TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=workspace_id, actor=request.user, field='created', previous_value=None, new_value={'title': task.title, 'status': task.status})
-    record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')
+    record_task_activity(task, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title}.')
     for recipient in task.assignees.exclude(id=request.user.id):
         create_notification(workspace_id, recipient, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
     notify_managers(workspace_id, request.user, 'created task', task.title, target_type='task', target_id=task.id, dedup_key=f'created_task:{task.id}')
@@ -1649,7 +1695,7 @@ def task_template_apply(request, workspace_id, template_id):
         task.save()
         TaskCodeRegistry.objects.create(workspace_id=workspace_id, code=code, task_id=task.id)
         TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=workspace_id, actor=request.user, field='created', previous_value=None, new_value={'title': task.title, 'status': task.status})
-    record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title} from template {template.name}.')
+    record_task_activity(task, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title} from template {template.name}.')
     return JsonResponse({'task': task.as_dict()}, status=201)
 
 
@@ -1780,11 +1826,12 @@ def task_detail(request, task_id):
             if membership.role != 'owner':
                 return JsonResponse({'error': 'Only workspace owners can permanently delete tasks.'}, status=403)
             task_title = task.title
+            related_user_ids = task_activity_user_ids(task, include_commenters=True)
             TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=task.workspace_id, actor=request.user, field='permanently_deleted', previous_value={'title': task.title, 'state': task.state}, new_value=None)
             for attachment in task.attachments.all():
                 attachment.file.delete(save=False)
             task.delete()
-            record_activity(task.workspace_id, request.user, 'task_permanently_deleted', f'{request.user.get_full_name() or request.user.email} permanently deleted task {task_title}.')
+            record_activity(task.workspace_id, request.user, 'task_permanently_deleted', f'{request.user.get_full_name() or request.user.email} permanently deleted task {task_title}.', related_user_ids=related_user_ids)
             notify_managers(task.workspace_id, request.user, 'deleted task', task_title, target_type='task', target_id=task_id, immediate=True, dedup_key=f'deleted_task:{task_id}')
             return JsonResponse({'deleted': task_id, 'permanent': True})
         previous_state = task.state
@@ -1793,7 +1840,7 @@ def task_detail(request, task_id):
         task.archived_by = request.user
         task.save(update_fields=['state', 'archived_at', 'archived_by', 'updated_at'])
         record_task_changes(task, request.user, {'state': previous_state}, ['state'])
-        record_activity(task.workspace_id, request.user, 'task_archived', f'{request.user.get_full_name() or request.user.email} archived task {task.title}.')
+        record_task_activity(task, request.user, 'task_archived', f'{request.user.get_full_name() or request.user.email} archived task {task.title}.')
         notify_managers(task.workspace_id, request.user, 'archived task', task.title, target_type='task', target_id=task.id, immediate=True, dedup_key=f'archived_task:{task.id}')
         return JsonResponse({'deleted': task_id, 'archived': True, 'task': task.as_dict()})
 
@@ -1983,31 +2030,32 @@ def task_detail(request, task_id):
     elif manager_changes:
         notify_managers(task.workspace_id, request.user, 'updated task', task.title, target_type='task', target_id=task.id)
     actor_name = request.user.get_full_name() or request.user.email
+    task_related_user_ids = task_activity_user_ids(task, include_commenters=True)
     if previous_status != task.status:
-        record_activity(task.workspace_id, request.user, 'task_status', f'{actor_name} moved {task.title} to {task.get_status_display()}.')
+        record_activity(task.workspace_id, request.user, 'task_status', f'{actor_name} moved {task.title} to {task.get_status_display()}.', related_user_ids=task_related_user_ids)
         notify_task_activity(task, request.user, 'task_status', f'Task status changed: {task.title}', task.get_status_display(), immediate=True)
     if previous_title != task.title:
-        record_activity(task.workspace_id, request.user, 'task_title', f'{actor_name} renamed task {previous_title} to {task.title}.')
+        record_activity(task.workspace_id, request.user, 'task_title', f'{actor_name} renamed task {previous_title} to {task.title}.', related_user_ids=task_related_user_ids)
     if previous_priority != task.priority:
-        record_activity(task.workspace_id, request.user, 'task_priority', f'{actor_name} changed the priority of {task.title} to {task.get_priority_display()}.')
+        record_activity(task.workspace_id, request.user, 'task_priority', f'{actor_name} changed the priority of {task.title} to {task.get_priority_display()}.', related_user_ids=task_related_user_ids)
     if previous_due_date != task.due_date:
         due_label = display_date(task.due_date) if task.due_date else 'no due date'
-        record_activity(task.workspace_id, request.user, 'task_due_date', f'{actor_name} changed the due date of {task.title} to {due_label}.')
+        record_activity(task.workspace_id, request.user, 'task_due_date', f'{actor_name} changed the due date of {task.title} to {due_label}.', related_user_ids=task_related_user_ids)
     if previous_recurrence != task.recurrence:
-        record_activity(task.workspace_id, request.user, 'task_recurrence', f'{actor_name} changed recurrence for {task.title} to {task.get_recurrence_display()}.')
+        record_activity(task.workspace_id, request.user, 'task_recurrence', f'{actor_name} changed recurrence for {task.title} to {task.get_recurrence_display()}.', related_user_ids=task_related_user_ids)
     if previous_bucket != task.bucket:
-        record_activity(task.workspace_id, request.user, 'task_bucket', f'{actor_name} moved {task.title} to the {task.bucket} bucket.')
+        record_activity(task.workspace_id, request.user, 'task_bucket', f'{actor_name} moved {task.title} to the {task.bucket} bucket.', related_user_ids=task_related_user_ids)
     if previous_labels != list(task.labels or []):
-        record_activity(task.workspace_id, request.user, 'task_labels', f'{actor_name} updated labels for {task.title}.')
+        record_activity(task.workspace_id, request.user, 'task_labels', f'{actor_name} updated labels for {task.title}.', related_user_ids=task_related_user_ids)
     if previous_project != task.project_ref:
         if task.project_ref:
-            record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} assigned {task.title} to project {task.project_ref.name}.')
+            record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} assigned {task.title} to project {task.project_ref.name}.', related_user_ids=task_related_user_ids)
         else:
-            record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} removed {task.title} from its project.')
+            record_activity(task.workspace_id, request.user, 'task_project', f'{actor_name} removed {task.title} from its project.', related_user_ids=task_related_user_ids)
     added_assignees = [user for user in task.assignee_users() if user.id not in previous_assignee_ids and user.id != request.user.id]
     if added_assignees:
         names = ', '.join(user.get_full_name() or user.email for user in added_assignees)
-        record_activity(task.workspace_id, request.user, 'task_assigned', f'{actor_name} assigned {task.title} to {names}.')
+        record_activity(task.workspace_id, request.user, 'task_assigned', f'{actor_name} assigned {task.title} to {names}.', related_user_ids=task_related_user_ids)
         for recipient in added_assignees:
             create_notification(task.workspace_id, recipient, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
     next_task = None
@@ -2029,7 +2077,7 @@ def task_detail(request, task_id):
             for link in task.assignee_links.all():
                 TaskAssignee.objects.create(task=next_task, user_id=link.user_id, added_by=request.user, position=link.position)
             TaskChangeHistory.objects.create(task=next_task, task_code=next_code, workspace=task.workspace, actor=request.user, field='created_by_recurrence', previous_value=None, new_value={'source_task_id': task.id})
-        record_activity(task.workspace_id, request.user, 'task_recurred', f'Created the next {task.recurrence} occurrence of {task.title}.')
+        record_activity(task.workspace_id, request.user, 'task_recurred', f'Created the next {task.recurrence} occurrence of {task.title}.', related_user_ids=task_related_user_ids)
     return JsonResponse({'task': task.as_dict(), 'next_task': next_task.as_dict() if next_task else None})
 
 
@@ -2052,7 +2100,7 @@ def task_comment_list(request, task_id):
     if not body or len(body) > 4000:
         return JsonResponse({'error': 'Comment must be between 1 and 4000 characters.'}, status=400)
     comment = TaskComment.objects.create(task=task, author=request.user, body=body)
-    record_activity(task.workspace_id, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.')
+    record_task_activity(task, request.user, 'task_comment', f'{request.user.get_full_name() or request.user.email} commented on {task.title}.', include_commenters=True)
     notify_task_activity(task, request.user, 'task_comment', f'New comment on {task.title}', body[:120], immediate=True)
     notify_managers(task.workspace_id, request.user, 'commented on task', task.title, target_type='task', target_id=task.id)
     notify_mentions(task.workspace_id, request.user, body, 'task', task.id, exclude_user_ids={recipient.id for recipient in task_activity_recipients(task, request.user)})
@@ -2090,7 +2138,7 @@ def task_subtask_list(request, task_id):
         if assignee is None:
             return JsonResponse({'error': 'Subtask assignee was not found in this workspace.'}, status=404)
     subtask = TaskSubtask.objects.create(task=task, title=title, assignee=assignee)
-    record_activity(task.workspace_id, request.user, 'subtask_created', f'{request.user.get_full_name() or request.user.email} added a subtask to {task.title}.')
+    record_task_activity(task, request.user, 'subtask_created', f'{request.user.get_full_name() or request.user.email} added a subtask to {task.title}.')
     return JsonResponse({'subtask': subtask.as_dict()}, status=201)
 
 
@@ -2106,7 +2154,7 @@ def task_subtask_detail(request, subtask_id):
     if permission_error:
         return permission_error
     if request.method == 'DELETE':
-        record_activity(subtask.task.workspace_id, request.user, 'subtask_deleted', f'{request.user.get_full_name() or request.user.email} deleted a subtask from {subtask.task.title}.')
+        record_task_activity(subtask.task, request.user, 'subtask_deleted', f'{request.user.get_full_name() or request.user.email} deleted a subtask from {subtask.task.title}.')
         subtask.delete()
         return JsonResponse({'deleted': subtask_id})
     try:
@@ -2125,7 +2173,7 @@ def task_subtask_detail(request, subtask_id):
             return JsonResponse({'error': 'Completed must be true or false.'}, status=400)
         subtask.completed = payload['completed']
     subtask.save()
-    record_activity(subtask.task.workspace_id, request.user, 'subtask_updated', f'{request.user.get_full_name() or request.user.email} updated a subtask on {subtask.task.title}.')
+    record_task_activity(subtask.task, request.user, 'subtask_updated', f'{request.user.get_full_name() or request.user.email} updated a subtask on {subtask.task.title}.')
     return JsonResponse({'subtask': subtask.as_dict()})
 
 
@@ -2152,7 +2200,7 @@ def task_attachment_list(request, task_id):
     if Path(uploaded_file.name).suffix.lower() not in allowed_extensions:
         return JsonResponse({'error': 'This file type is not supported.'}, status=400)
     attachment = TaskAttachment.objects.create(task=task, uploaded_by=request.user, file=uploaded_file, original_name=uploaded_file.name[:255])
-    record_activity(task.workspace_id, request.user, 'task_attachment', f'{request.user.get_full_name() or request.user.email} attached {attachment.original_name} to {task.title}.')
+    record_task_activity(task, request.user, 'task_attachment', f'{request.user.get_full_name() or request.user.email} attached {attachment.original_name} to {task.title}.')
     notify_task_activity(task, request.user, 'task_attachment', f'New attachment on {task.title}', attachment.original_name, immediate=True)
     return JsonResponse({'attachment': attachment.as_dict()}, status=201)
 
@@ -2168,7 +2216,7 @@ def task_attachment_detail(request, attachment_id):
     permission_error = require_task_editor(request, attachment.task)
     if permission_error:
         return permission_error
-    record_activity(attachment.task.workspace_id, request.user, 'task_attachment_deleted', f'{request.user.get_full_name() or request.user.email} deleted {attachment.original_name} from {attachment.task.title}.')
+    record_task_activity(attachment.task, request.user, 'task_attachment_deleted', f'{request.user.get_full_name() or request.user.email} deleted {attachment.original_name} from {attachment.task.title}.')
     attachment.file.delete(save=False)
     attachment.delete()
     return JsonResponse({'deleted': attachment_id})
@@ -2367,11 +2415,13 @@ def workspace_webhook_detail(request, workspace_id, webhook_id):
 
 @require_http_methods(['GET'])
 def activity_list(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
+    membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     from .models import ActivityEvent
     events = ActivityEvent.objects.filter(workspace_id=workspace_id).select_related('actor')
+    if membership.role == 'member':
+        events = events.filter(Q(actor=request.user) | Q(related_users=request.user)).distinct()
 
     search = request.GET.get('search', '').strip()
     if search:
@@ -2424,27 +2474,33 @@ def activity_list(request, workspace_id):
     except EmptyPage:
         page = paginator.page(1 if paginator.num_pages == 0 else paginator.num_pages)
 
-    today = timezone.localdate()
-    actor_rows = (
-        ActivityEvent.objects.filter(workspace_id=workspace_id)
-        .values('actor_id', 'actor__first_name', 'actor__last_name', 'actor__email')
-        .annotate(event_count=Count('id'))
-        .order_by('-event_count', 'actor__first_name', 'actor__email')
-    )
+    include_filters = request.GET.get('include_filters', '1').lower() not in {'0', 'false', 'no'}
+    include_summary = request.GET.get('include_summary', '1').lower() not in {'0', 'false', 'no'}
     actors = []
-    for row in actor_rows:
-        name = ' '.join(filter(None, [row['actor__first_name'], row['actor__last_name']])).strip() or row['actor__email']
-        actors.append({
-            'id': str(row['actor_id']) if row['actor_id'] is not None else 'system',
-            'name': name or 'System',
-            'event_count': row['event_count'],
-        })
-    kinds = list(
-        ActivityEvent.objects.filter(workspace_id=workspace_id)
-        .values_list('kind', flat=True)
-        .distinct()
-        .order_by('kind')
-    )
+    if include_filters:
+        actor_rows = (
+            events
+            .values('actor_id', 'actor__first_name', 'actor__last_name', 'actor__email')
+            .annotate(event_count=Count('id'))
+            .order_by('-event_count', 'actor__first_name', 'actor__email')
+        )
+        for row in actor_rows:
+            name = ' '.join(filter(None, [row['actor__first_name'], row['actor__last_name']])).strip() or row['actor__email']
+            actors.append({
+                'id': str(row['actor_id']) if row['actor_id'] is not None else 'system',
+                'name': name or 'System',
+                'event_count': row['event_count'],
+            })
+    kinds = list(events.values_list('kind', flat=True).distinct().order_by('kind')) if include_filters else []
+    summary = None
+    if include_summary:
+        today = timezone.localdate()
+        summary = {
+            'total_events': paginator.count,
+            'today_events': events.filter(created_at__date=today).count(),
+            'week_events': events.filter(created_at__date__gte=today - timedelta(days=6)).count(),
+            'active_actors': events.filter(actor__isnull=False).values('actor_id').distinct().count(),
+        }
     return JsonResponse({
         'activity': [event.as_dict() for event in page.object_list],
         'pagination': {
@@ -2456,12 +2512,7 @@ def activity_list(request, workspace_id):
             'has_previous': page.has_previous(),
         },
         'filters': {'actors': actors, 'kinds': kinds},
-        'summary': {
-            'total_events': paginator.count,
-            'today_events': events.filter(created_at__date=today).count(),
-            'week_events': events.filter(created_at__date__gte=today - timedelta(days=6)).count(),
-            'active_actors': events.filter(actor__isnull=False).values('actor_id').distinct().count(),
-        },
+        'summary': summary,
     })
 
 
@@ -3230,7 +3281,7 @@ def risk_issue_list(request, workspace_id):
     if relation_error:
         return relation_error
     record = RiskIssue.objects.create(workspace_id=workspace_id, project=project, kind=kind, title=title, detail=str(payload.get('detail', '') or '').strip(), severity=severity, likelihood=payload.get('likelihood') or None, impact=payload.get('impact') or None, mitigation=str(payload.get('mitigation', '') or '').strip(), escalation=str(payload.get('escalation', '') or '').strip(), status=status, owner=owner, owner_name=str(payload.get('owner', '') or '').strip(), due_date=due_date, task=task, expense=expense, created_by=request.user)
-    record_activity(workspace_id, request.user, f'{kind}_created', f'{request.user.get_full_name() or request.user.email} created {kind} {record.title}.')
+    record_activity(workspace_id, request.user, f'{kind}_created', f'{request.user.get_full_name() or request.user.email} created {kind} {record.title}.', related_user_ids={owner.id} if owner else None)
     notify_managers(workspace_id, request.user, f'created {kind}', record.title, target_type='risk_issue', target_id=record.id, dedup_key=f'created_{kind}:{record.id}')
     if owner is not None and owner.id != request.user.id:
         actor_name = request.user.get_full_name() or request.user.email
@@ -3591,7 +3642,7 @@ def check_in_comment_list(request, workspace_id, check_in_id):
         return JsonResponse({'error': 'Comment is required.'}, status=400)
     comment = CheckInComment.objects.create(check_in=check_in, author=request.user, body=body)
     actor_name = request.user.get_full_name() or request.user.email
-    record_activity(workspace_id, request.user, 'check_in_comment', f'{actor_name} commented on {check_in.user.get_full_name() or check_in.user.email}\'s check-in.')
+    record_activity(workspace_id, request.user, 'check_in_comment', f'{actor_name} commented on {check_in.user.get_full_name() or check_in.user.email}\'s check-in.', related_user_ids={check_in.user_id})
     # Notify the check-in owner plus anyone else already in this comment thread
     # (not just the owner) so the discussion reaches the whole team, not one person.
     participant_ids = set(CheckInComment.objects.filter(check_in=check_in).exclude(author_id=request.user.id).values_list('author_id', flat=True))
@@ -4204,7 +4255,7 @@ def follow_up_list(request, workspace_id):
         if assigned_to is None:
             return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     follow_up = FollowUp.objects.create(workspace_id=workspace_id, task=task, created_by=request.user, assigned_to=assigned_to, note=note, due_date=due_date)
-    record_activity(workspace_id, request.user, 'follow_up_created', f'{request.user.get_full_name() or request.user.email} created a follow-up.')
+    record_follow_up_activity(follow_up, request.user, 'follow_up_created', f'{request.user.get_full_name() or request.user.email} created a follow-up.')
     if assigned_to and assigned_to != request.user:
         create_notification(workspace_id, assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', note, target_type='follow_up', target_id=follow_up.id)
     notify_managers(workspace_id, request.user, 'created a follow-up', note[:120], target_type='follow_up', target_id=follow_up.id, dedup_key=f'created_follow_up:{follow_up.id}')
@@ -4235,7 +4286,7 @@ def follow_up_comment_list(request, follow_up_id):
         return JsonResponse({'error': 'Comment is required.'}, status=400)
     comment = FollowUpComment.objects.create(follow_up=follow_up, author=request.user, body=body)
     actor_name = request.user.get_full_name() or request.user.email
-    record_activity(follow_up.workspace_id, request.user, 'follow_up_comment', f'{actor_name} commented on a follow-up.')
+    record_follow_up_activity(follow_up, request.user, 'follow_up_comment', f'{actor_name} commented on a follow-up.', include_commenters=True)
     recipient_ids = set(FollowUpComment.objects.filter(follow_up=follow_up).exclude(author=request.user).values_list('author_id', flat=True))
     recipient_ids.add(follow_up.created_by_id)
     recipient_ids.discard(request.user.id)
@@ -4268,7 +4319,7 @@ def follow_up_detail(request, follow_up_id):
         if membership.role not in {'owner', 'manager'} and follow_up.created_by_id != request.user.id:
             return JsonResponse({'error': 'Only the follow-up creator or a workspace leader can delete it.'}, status=403)
         follow_up_note = follow_up.note
-        record_activity(follow_up.workspace_id, request.user, 'follow_up_deleted', f'{request.user.get_full_name() or request.user.email} deleted a follow-up.')
+        record_follow_up_activity(follow_up, request.user, 'follow_up_deleted', f'{request.user.get_full_name() or request.user.email} deleted a follow-up.', include_commenters=True)
         follow_up.delete()
         notify_managers(follow_up.workspace_id, request.user, 'deleted a follow-up', follow_up_note[:120], target_type='follow_up', target_id=follow_up_id, immediate=True, dedup_key=f'deleted_follow_up:{follow_up_id}')
         return JsonResponse({'deleted': follow_up_id})
@@ -4321,23 +4372,25 @@ def follow_up_detail(request, follow_up_id):
         notify_managers(follow_up.workspace_id, request.user, 'updated a follow-up', follow_up.note[:120], target_type='follow_up', target_id=follow_up.id)
     actor_name = request.user.get_full_name() or request.user.email
     if previous_status != follow_up.status:
-        record_activity(follow_up.workspace_id, request.user, 'follow_up_status', f'{actor_name} marked a follow-up {follow_up.status}.')
+        record_follow_up_activity(follow_up, request.user, 'follow_up_status', f'{actor_name} marked a follow-up {follow_up.status}.', include_commenters=True)
         if follow_up.status == 'completed' and follow_up.created_by != request.user:
             create_notification(follow_up.workspace_id, follow_up.created_by, 'follow_up_completed', 'Follow-up completed.', follow_up.note, target_type='follow_up', target_id=follow_up.id)
     if previous_assignee != follow_up.assigned_to:
         if follow_up.assigned_to:
-            record_activity(follow_up.workspace_id, request.user, 'follow_up_assigned', f'{actor_name} assigned a follow-up to {follow_up.assigned_to.get_full_name() or follow_up.assigned_to.email}.')
+            extra_user_ids = {previous_assignee.id} if previous_assignee else set()
+            record_follow_up_activity(follow_up, request.user, 'follow_up_assigned', f'{actor_name} assigned a follow-up to {follow_up.assigned_to.get_full_name() or follow_up.assigned_to.email}.', extra_user_ids=extra_user_ids)
         else:
-            record_activity(follow_up.workspace_id, request.user, 'follow_up_assigned', f'{actor_name} unassigned a follow-up.')
+            extra_user_ids = {previous_assignee.id} if previous_assignee else set()
+            record_follow_up_activity(follow_up, request.user, 'follow_up_assigned', f'{actor_name} unassigned a follow-up.', extra_user_ids=extra_user_ids)
         if follow_up.assigned_to and follow_up.assigned_to != request.user:
             create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note, target_type='follow_up', target_id=follow_up.id)
     if previous_due_date != follow_up.due_date:
         if follow_up.due_date:
-            record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} set the follow-up due date to {display_date(follow_up.due_date)}.')
+            record_follow_up_activity(follow_up, request.user, 'follow_up_due_date', f'{actor_name} set the follow-up due date to {display_date(follow_up.due_date)}.')
         else:
-            record_activity(follow_up.workspace_id, request.user, 'follow_up_due_date', f'{actor_name} cleared the follow-up due date.')
+            record_follow_up_activity(follow_up, request.user, 'follow_up_due_date', f'{actor_name} cleared the follow-up due date.')
     if previous_task != follow_up.task:
-        record_activity(follow_up.workspace_id, request.user, 'follow_up_task', f'{actor_name} linked a task to a follow-up.' if follow_up.task else f'{actor_name} removed a task link from a follow-up.')
+        record_follow_up_activity(follow_up, request.user, 'follow_up_task', f'{actor_name} linked a task to a follow-up.' if follow_up.task else f'{actor_name} removed a task link from a follow-up.')
     return JsonResponse({'follow_up': follow_up.as_dict()})
 
 

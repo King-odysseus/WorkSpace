@@ -3186,6 +3186,60 @@ class ActivityPaginationApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class ActivityVisibilityApiTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='activity-owner@example.com', email='activity-owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='activity-member@example.com', email='activity-member@example.com', password='secure-pass-123')
+        self.other_member = User.objects.create_user(username='activity-other-member@example.com', email='activity-other-member@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Activity Visibility', slug='activity-visibility')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        Membership.objects.create(workspace=self.workspace, user=self.other_member, role='member')
+
+    def fetch_for(self, user, query=''):
+        self.client.force_login(user)
+        response = self.client.get(f"{reverse('activity-list', args=[self.workspace.id])}{query}")
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_members_see_only_their_actions_and_related_records(self):
+        own_event = ActivityEvent.objects.create(workspace=self.workspace, actor=self.member, kind='clocked_in', message='Clocked in')
+        related_event = ActivityEvent.objects.create(workspace=self.workspace, actor=self.owner, kind='task_status', message='Moved your task')
+        related_event.related_users.add(self.member)
+        ActivityEvent.objects.create(workspace=self.workspace, actor=self.owner, kind='manager_note', message='Not related')
+
+        payload = self.fetch_for(self.member)
+        event_ids = {event['id'] for event in payload['activity']}
+        self.assertEqual(event_ids, {own_event.id, related_event.id})
+        self.assertEqual(payload['pagination']['total_items'], 2)
+        self.assertEqual(set(payload['filters']['kinds']), {'clocked_in', 'task_status'})
+
+        owner_payload = self.fetch_for(self.owner)
+        self.assertEqual(owner_payload['pagination']['total_items'], 3)
+
+    def test_task_activity_is_related_to_its_assignees(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse('task-list'),
+            data=json.dumps({'title': 'Member-owned task', 'assignee_id': self.member.id}),
+            content_type='application/json',
+            HTTP_X_WORKSPACE_ID=str(self.workspace.id),
+        )
+        self.assertEqual(response.status_code, 201)
+        event = ActivityEvent.objects.get(workspace=self.workspace, kind='task_created')
+        self.assertTrue(event.related_users.filter(id=self.member.id).exists())
+
+        payload = self.fetch_for(self.member, '?kind=task_created')
+        self.assertEqual(payload['pagination']['total_items'], 1)
+        self.assertEqual(payload['activity'][0]['id'], event.id)
+
+    def test_compact_activity_payload_skips_filter_and_summary_work(self):
+        ActivityEvent.objects.create(workspace=self.workspace, actor=self.owner, kind='task_created', message='Created a task')
+        payload = self.fetch_for(self.owner, '?include_filters=0&include_summary=0')
+        self.assertEqual(payload['filters'], {'actors': [], 'kinds': []})
+        self.assertIsNone(payload['summary'])
+
+
 class ScreenSharingApiTests(TestCase):
     ONE_PIXEL_PNG = base64.b64decode(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='

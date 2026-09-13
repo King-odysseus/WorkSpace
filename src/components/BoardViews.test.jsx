@@ -148,6 +148,30 @@ it('shows only tasks assigned to the current user in My day', () => {
   expect(panel.queryByText('Someone else owns this')).not.toBeInTheDocument()
 })
 
+it('renders today changes as an accessible ticker that opens the selected event', () => {
+  const onOpenActivity = vi.fn()
+  const { container } = renderDashboard([], noop, [], {
+    activity: [
+      {
+        id: 31,
+        actor_id: 7,
+        actor_name: 'Nate Foster',
+        kind: 'task_created',
+        message: 'created task Check-In Reminder.',
+        created_at: new Date().toISOString(),
+      },
+    ],
+    onOpenActivity,
+  })
+
+  const copies = container.querySelectorAll('.today-change-list')
+  expect(copies).toHaveLength(2)
+  expect(copies[1]).toHaveAttribute('aria-hidden', 'true')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Nate Foster created task Check-In Reminder.' }))
+  expect(onOpenActivity).toHaveBeenCalledWith(expect.objectContaining({ id: 31 }))
+})
+
 it('does not treat an unassigned task as yours when the name lookup fails', () => {
   // The filter used to compare the displayed name against member.email, so the
   // lookup fell through to "" and "" === "" put every unassigned task in here.

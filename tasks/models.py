@@ -1185,6 +1185,7 @@ class WorkspaceNotification(models.Model):
 class ActivityEvent(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='activity_events')
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_activity_events')
+    related_users = models.ManyToManyField(User, related_name='related_workspace_activity_events', blank=True)
     kind = models.CharField(max_length=40)
     message = models.CharField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
