@@ -256,6 +256,90 @@ class DirectConversationManagementTests(TestCase):
         self.assertEqual(removed.status_code, 200)
         self.assertFalse(DirectConversationRead.objects.filter(conversation_id=conversation['id'], user=self.third).exists())
 
+    def test_removing_a_workspace_member_prunes_them_from_group_chat(self):
+        conversation = self.create_conversation([self.member.id, self.third.id])
+        self.client.post(
+            reverse('direct-message-list', args=[conversation['id']]),
+            data=json.dumps({'message': 'Keep this history'}),
+            content_type='application/json',
+        )
+        DirectConversationRead.objects.create(conversation_id=conversation['id'], user=self.third, last_read_at=timezone.now())
+
+        removed = self.client.delete(reverse('member-detail', args=[self.workspace.id, self.third.id]))
+
+        self.assertEqual(removed.status_code, 200)
+        stored = DirectConversation.objects.get(id=conversation['id'])
+        self.assertEqual(set(stored.participants.values_list('id', flat=True)), {self.owner.id, self.member.id})
+        self.assertEqual(
+            stored.conversation_key,
+            ':'.join(str(value) for value in sorted([self.owner.id, self.member.id])),
+        )
+        self.assertFalse(stored.as_dict(self.owner)['is_group'])
+        self.assertNotIn(self.third.email, stored.as_dict(self.owner)['title'])
+        self.assertFalse(DirectConversationRead.objects.filter(conversation=stored, user=self.third).exists())
+        messages = self.client.get(reverse('direct-message-list', args=[conversation['id']])).json()['messages']
+        self.assertEqual([message['message'] for message in messages], ['Keep this history'])
+
+        self.client.force_login(self.third)
+        self.assertEqual(self.client.get(reverse('direct-message-list', args=[conversation['id']])).status_code, 404)
+
+    def test_leaving_workspace_prunes_the_member_from_group_chat(self):
+        conversation = self.create_conversation([self.member.id, self.third.id])
+
+        self.client.force_login(self.third)
+        left = self.client.post(reverse('workspace-leave', args=[self.workspace.id]))
+
+        self.assertEqual(left.status_code, 200)
+        stored = DirectConversation.objects.get(id=conversation['id'])
+        self.assertEqual(set(stored.participants.values_list('id', flat=True)), {self.owner.id, self.member.id})
+        self.assertEqual(
+            stored.conversation_key,
+            ':'.join(str(value) for value in sorted([self.owner.id, self.member.id])),
+        )
+
+    def test_removing_the_last_other_participant_archives_the_chat(self):
+        conversation = self.create_conversation([self.member.id])
+
+        removed = self.client.delete(reverse('member-detail', args=[self.workspace.id, self.member.id]))
+
+        self.assertEqual(removed.status_code, 200)
+        stored = DirectConversation.objects.get(id=conversation['id'])
+        self.assertEqual(set(stored.participants.values_list('id', flat=True)), {self.owner.id})
+        self.assertIsNotNone(stored.archived_at)
+        self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.owner))
+        self.assertIn(conversation['id'], self.listed_conversation_ids(self.owner, archived=True))
+
+    def test_removing_a_member_from_a_group_uses_the_existing_direct_chat_on_key_collision(self):
+        pair = self.create_conversation([self.member.id])
+        group = self.create_conversation([self.member.id, self.third.id])
+        self.client.post(
+            reverse('direct-message-list', args=[pair['id']]),
+            data=json.dumps({'message': 'Existing direct history'}),
+            content_type='application/json',
+        )
+        self.client.post(
+            reverse('direct-message-list', args=[group['id']]),
+            data=json.dumps({'message': 'Group history'}),
+            content_type='application/json',
+        )
+
+        removed = self.client.delete(reverse('member-detail', args=[self.workspace.id, self.third.id]))
+
+        self.assertEqual(removed.status_code, 200)
+        stored_pair = DirectConversation.objects.get(id=pair['id'])
+        stored_group = DirectConversation.objects.get(id=group['id'])
+        self.assertIsNone(stored_pair.archived_at)
+        self.assertIsNotNone(stored_group.archived_at)
+        self.assertEqual(set(stored_group.participants.values_list('id', flat=True)), {self.owner.id, self.member.id})
+        self.assertEqual(
+            [message.message for message in stored_pair.messages.order_by('created_at')],
+            ['Existing direct history'],
+        )
+        self.assertEqual(
+            [message.message for message in stored_group.messages.order_by('created_at')],
+            ['Group history'],
+        )
+
     def test_direct_chats_cannot_be_converted_to_groups(self):
         conversation = self.create_conversation([self.member.id])
         response = self.client.patch(

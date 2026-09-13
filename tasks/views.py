@@ -2254,7 +2254,9 @@ def member_detail(request, workspace_id, user_id):
         return JsonResponse({'error': 'Managers can only manage regular members.'}, status=403)
     if request.method == 'DELETE':
         removed_name = membership.user.get_full_name() or membership.user.email
-        membership.delete()
+        with transaction.atomic():
+            membership.delete()
+            _remove_workspace_member_from_direct_conversations(workspace_id, user_id)
         # Notify the remaining leaders. The removed user cannot be told in-app:
         # the notification list is workspace scoped, so once membership is gone
         # that row would be unreachable.
@@ -2311,6 +2313,53 @@ def _reassign_default_workspace(user, leaving_workspace_id):
     profile.save(update_fields=['default_workspace', 'updated_at'])
 
 
+def _remove_workspace_member_from_direct_conversations(workspace_id, user_id):
+    """Keep chat membership in step with workspace membership.
+
+    Messages keep their original author, so removing somebody from the
+    workspace must not erase history. If fewer than two active members remain,
+    or the smaller participant set already has a chat, archive this thread
+    rather than merging histories or deleting messages.
+    """
+    active_user_ids = set(
+        Membership.objects.filter(workspace_id=workspace_id)
+        .values_list('user_id', flat=True)
+    )
+    conversations = (
+        DirectConversation.objects.filter(workspace_id=workspace_id, participants__id=user_id)
+        .distinct()
+    )
+    for conversation in conversations:
+        existing_user_ids = set(conversation.participants.values_list('id', flat=True))
+        remaining_user_ids = sorted(existing_user_ids & active_user_ids)
+        conversation.participants.set(User.objects.filter(id__in=remaining_user_ids))
+        DirectConversationRead.objects.filter(conversation=conversation).exclude(
+            user_id__in=remaining_user_ids
+        ).delete()
+
+        if len(remaining_user_ids) < 2:
+            if conversation.archived_at is None:
+                conversation.archived_at = timezone.now()
+                conversation.save(update_fields=['archived_at', 'updated_at'])
+            continue
+
+        conversation_key = ':'.join(str(value) for value in remaining_user_ids)
+        key_in_use = (
+            DirectConversation.objects
+            .filter(workspace_id=workspace_id, conversation_key=conversation_key)
+            .exclude(id=conversation.id)
+            .exists()
+        )
+        if key_in_use:
+            if conversation.archived_at is None:
+                conversation.archived_at = timezone.now()
+                conversation.save(update_fields=['archived_at', 'updated_at'])
+            continue
+
+        conversation.conversation_key = conversation_key
+        conversation.save(update_fields=['conversation_key', 'updated_at'])
+
+
 @require_http_methods(['POST'])
 def workspace_leave(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
@@ -2319,7 +2368,9 @@ def workspace_leave(request, workspace_id):
     if membership.role == 'owner':
         return JsonResponse({'error': 'Owners cannot leave their own workspace. Archive or delete it instead.'}, status=403)
     workspace_name = membership.workspace.name
-    membership.delete()
+    with transaction.atomic():
+        membership.delete()
+        _remove_workspace_member_from_direct_conversations(workspace_id, request.user.id)
     _reassign_default_workspace(request.user, workspace_id)
     record_activity(workspace_id, request.user, 'member_left', f'{request.user.get_full_name() or request.user.email} left the workspace.')
     return JsonResponse({'left': workspace_id, 'workspace_name': workspace_name})

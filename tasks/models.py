@@ -661,7 +661,11 @@ class DirectConversation(models.Model):
         constraints = [models.UniqueConstraint(fields=['workspace', 'conversation_key'], name='unique_direct_conversation')]
 
     def as_dict(self, viewer=None):
-        participants = list(self.participants.all())
+        participants = list(
+            self.participants
+            .filter(workspace_memberships__workspace_id=self.workspace_id)
+            .distinct()
+        )
         others = [user for user in participants if viewer is None or user.id != viewer.id]
         title_users = others or participants
         last_message = self.messages.select_related('author').order_by('-created_at').first()
