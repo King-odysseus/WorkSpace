@@ -2453,7 +2453,7 @@ function App() {
               </button>
 
               {profileMenuOpen && (
-                <div className="fixed left-4 right-4 top-16 z-[60] mt-2 w-auto max-w-xs animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-56">
+                <div className="absolute right-0 top-full z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
                   <div className="border-b border-border-light px-3 py-2.5">
                     <p className="truncate text-sm font-semibold text-text-primary">
                       {currentUserName}
