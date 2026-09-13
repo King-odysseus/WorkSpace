@@ -1830,7 +1830,7 @@ html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; ba
 .team-checkin-progress i { display:block; height:100%; border-radius:inherit; background:var(--teal); }
 .team-checkin-roster { display:grid; gap:7px; margin-top:12px; }
 .team-checkin-roster button { display:grid; grid-template-columns:22px minmax(0, 1fr) auto; align-items:center; gap:8px; width:100%; padding:7px 8px; border:1px solid var(--workspace-border); border-radius:9px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); text-align:left; cursor:pointer; }
-.team-checkin-roster button span { overflow:hidden; color:var(--workspace-text); font-size:10px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.team-checkin-roster button > span:not(.avatar) { overflow:hidden; color:var(--workspace-text); font-size:10px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
 .team-checkin-roster button.is-complete { border-color:color-mix(in srgb, var(--teal) 35%, var(--workspace-border)); }
 .team-checkin-roster button.is-complete > svg { color:var(--teal); }
 .team-watch-list { display:grid; gap:7px; }
