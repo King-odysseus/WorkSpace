@@ -2704,3 +2704,269 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Planner bucket lifecycle and archive. */
+.workspace-view .planner-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-view .planner-archive-trigger {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text-soft);
+  cursor: pointer;
+}
+
+.workspace-view .planner-archive-trigger:hover,
+.workspace-view .planner-archive-trigger:focus-visible,
+.workspace-view .planner-archive-trigger.active {
+  border-color: color-mix(in srgb, var(--workspace-primary) 35%, var(--workspace-border));
+  background: color-mix(in srgb, var(--workspace-primary) 8%, var(--workspace-surface));
+  color: var(--workspace-primary);
+}
+
+.workspace-view .planner-archive-trigger:focus-visible,
+.workspace-view .planner-archive-close:focus-visible,
+.workspace-view .planner-manage-chip button:focus-visible,
+.workspace-view .planner-archive-actions button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--workspace-primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.workspace-view .planner-manage-chip-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-view .planner-manage-chip button:hover {
+  background: color-mix(in srgb, var(--workspace-primary) 10%, transparent);
+  color: var(--workspace-primary);
+}
+
+.workspace-view .planner-manage-chip button.planner-bucket-delete:hover {
+  background: color-mix(in srgb, #C43D4B 11%, transparent);
+  color: #B83243;
+}
+
+.workspace-view .planner-bucket-edit {
+  gap: 4px;
+  padding: 4px 5px;
+}
+
+.workspace-view .planner-bucket-edit input {
+  width: 132px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 999px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text);
+  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+}
+
+.workspace-view .planner-bucket-archive {
+  display: grid;
+  min-height: 360px;
+  align-content: start;
+  gap: 18px;
+}
+
+.workspace-view .planner-archive-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--workspace-border);
+}
+
+.workspace-view .planner-archive-heading h2 {
+  margin: 3px 0 0;
+  color: var(--workspace-text);
+  font: 800 18px/1.25 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+}
+
+.workspace-view .planner-archive-heading p:last-child {
+  margin: 5px 0 0;
+  color: var(--workspace-text-soft);
+  font: 500 10px/1.5 'Roboto', 'DM Sans', sans-serif;
+}
+
+.workspace-view .planner-archive-close {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--workspace-border);
+  border-radius: 9px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text-soft);
+  cursor: pointer;
+}
+
+.workspace-view .planner-archive-close:hover {
+  color: var(--workspace-text);
+}
+
+.workspace-view .planner-archive-state {
+  margin: 0;
+  padding: 28px 0;
+  color: var(--workspace-text-soft);
+  text-align: center;
+}
+
+.workspace-view .planner-archive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.workspace-view .planner-archive-card {
+  display: flex;
+  min-height: 152px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 13px;
+  background: var(--workspace-surface);
+  box-shadow: 0 7px 20px rgb(7 26 46 / 7%);
+}
+
+.workspace-view .planner-archive-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.workspace-view .planner-archive-card-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text-soft);
+}
+
+.workspace-view .planner-archive-card-heading > div {
+  min-width: 0;
+}
+
+.workspace-view .planner-archive-card h3 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--workspace-text);
+  font: 700 12px/1.35 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-view .planner-archive-card p {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: var(--workspace-text-soft);
+  font: 500 9px/1.4 'Roboto', 'DM Sans', sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-view .planner-archive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+}
+
+.workspace-view .planner-archive-actions button {
+  display: inline-flex;
+  width: auto;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.workspace-view .planner-archive-actions .secondary-button {
+  border: 1px solid var(--workspace-border);
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text);
+}
+
+.workspace-view .planner-archive-delete {
+  border: 1px solid color-mix(in srgb, #C43D4B 28%, var(--workspace-border));
+  background: color-mix(in srgb, #C43D4B 7%, var(--workspace-surface));
+  color: #B83243;
+  cursor: pointer;
+}
+
+.workspace-view .planner-archive-delete:hover {
+  background: color-mix(in srgb, #C43D4B 12%, var(--workspace-surface));
+}
+
+.workspace-view .planner-archive-empty {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  border: 1px dashed var(--workspace-border);
+  border-radius: 13px;
+  color: var(--workspace-text-soft);
+  text-align: center;
+}
+
+.workspace-view .planner-archive-empty strong {
+  color: var(--workspace-text);
+  font: 700 12px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+}
+
+.workspace-view .planner-archive-empty p {
+  margin: 0;
+  font-size: 10px;
+}
+
+html[data-theme='dark'] .workspace-view .planner-archive-card {
+  box-shadow: 0 10px 25px rgb(2 5 31 / 34%);
+}
+
+@media (max-width: 700px) {
+  .workspace-view .planner-heading-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .workspace-view .planner-archive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-view .planner-bucket-edit input {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

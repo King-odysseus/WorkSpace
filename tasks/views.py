@@ -936,7 +936,8 @@ def plan_bucket_list(request, workspace_id):
                 scope_workstream_id = int(request.GET['workstream_id'])
         except ValueError:
             return JsonResponse({'error': 'Project and workstream filters must be integers.'}, status=400)
-        buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)
+        archived_only = request.GET.get('archived') == '1'
+        buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=not archived_only)
         if scope_project_id:
             buckets = buckets.filter(project_id=scope_project_id, workstream__isnull=True)
         elif scope_workstream_id:

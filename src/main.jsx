@@ -2922,6 +2922,10 @@ function WorkspaceView({
   const [newBucketName, setNewBucketName] = useState("");
   const [bucketError, setBucketError] = useState("");
   const [bucketSubmitting, setBucketSubmitting] = useState(false);
+  const [bucketArchiveOpen, setBucketArchiveOpen] = useState(false);
+  const [archivedBuckets, setArchivedBuckets] = useState([]);
+  const [bucketArchiveLoading, setBucketArchiveLoading] = useState(false);
+  const [bucketArchiveError, setBucketArchiveError] = useState("");
   const [newWorkstreamName, setNewWorkstreamName] = useState("");
   const [workstreamSubmitting, setWorkstreamSubmitting] = useState(false);
   const [workstreamError, setWorkstreamError] = useState("");
@@ -3084,10 +3088,16 @@ function WorkspaceView({
       setSelectedFollowUp(null);
       setSelectedCheckIn(null);
       setSelectedEvent(null);
+      setBucketArchiveOpen(false);
     };
     window.addEventListener("keydown", closeOverlays);
     return () => window.removeEventListener("keydown", closeOverlays);
   }, []);
+  useEffect(() => {
+    setBucketArchiveOpen(false);
+    setArchivedBuckets([]);
+    setBucketArchiveError("");
+  }, [active, workspaceId]);
   useEffect(
     () =>
       setLocalData((current) => ({
@@ -3461,6 +3471,41 @@ function WorkspaceView({
     }));
     onRefresh();
   };
+  const loadArchivedBuckets = async () => {
+    setBucketArchiveLoading(true);
+    setBucketArchiveError("");
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/plan-buckets/?archived=1`,
+        { credentials: "include" },
+      );
+      const data = await readJsonResponse(
+        response,
+        "Archived buckets could not be loaded.",
+      );
+      if (!response.ok)
+        throw new Error(
+          data.error || "Archived buckets could not be loaded.",
+        );
+      setArchivedBuckets(data.buckets || []);
+    } catch (error) {
+      setBucketArchiveError(
+        error.message || "Archived buckets could not be loaded.",
+      );
+    } finally {
+      setBucketArchiveLoading(false);
+    }
+  };
+
+  const toggleBucketArchive = () => {
+    if (bucketArchiveOpen) {
+      setBucketArchiveOpen(false);
+      return;
+    }
+    setBucketArchiveOpen(true);
+    loadArchivedBuckets();
+  };
+
   const createBucket = async (event, scope = null) => {
     event.preventDefault();
     if (bucketSubmitting) return;
@@ -3516,6 +3561,53 @@ function WorkspaceView({
       setBucketError(error.message || "Bucket could not be created.");
     } finally {
       setBucketSubmitting(false);
+    }
+  };
+
+  const renameBucket = async (bucket, requestedName) => {
+    if (!canManageMembers) {
+      setBucketError("Only workspace leaders can rename Planner buckets.");
+      return false;
+    }
+    const name = requestedName.trim();
+    if (!name || name === bucket.name) return true;
+    setBucketError("");
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/plan-buckets/${bucket.id}/`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": await getCsrfToken(),
+            "X-Workspace-Id": String(workspaceId),
+          },
+          body: JSON.stringify({ name }),
+        },
+      );
+      const data = await readJsonResponse(
+        response,
+        "Bucket could not be renamed.",
+      );
+      if (!response.ok)
+        throw new Error(data.error || "Bucket could not be renamed.");
+      setLocalData((current) => ({
+        ...current,
+        buckets: current.buckets.map((item) =>
+          item.id === bucket.id ? data.bucket : item,
+        ),
+      }));
+      window.dispatchEvent(
+        new CustomEvent("workspace:notice", {
+          detail: `Bucket renamed to ${data.bucket.name}.`,
+        }),
+      );
+      onRefresh();
+      return true;
+    } catch (error) {
+      setBucketError(error.message || "Bucket could not be renamed.");
+      return false;
     }
   };
 
@@ -3605,6 +3697,11 @@ function WorkspaceView({
         ...current,
         buckets: current.buckets.filter((item) => item.id !== bucket.id),
       }));
+      setArchivedBuckets((current) =>
+        current.some((item) => item.id === bucket.id)
+          ? current
+          : [...current, { ...bucket, is_active: false }],
+      );
       window.dispatchEvent(
         new CustomEvent("workspace:notice", {
           detail: `${bucket.name} archived.`,
@@ -3617,14 +3714,19 @@ function WorkspaceView({
   };
 
   const deleteBucket = async (bucket) => {
+    const isArchived = bucket.is_active === false;
     if (
       !canManageMembers ||
       !(await onConfirm(
-        `Delete ${bucket.name}? Tasks in this bucket will keep their task history but become unbucketed.`,
+        isArchived
+          ? `Delete ${bucket.name} permanently? Any tasks still using it will move to Backlog.`
+          : `Delete ${bucket.name}? Tasks in this bucket will move to Backlog.`,
         { title: "Delete bucket", confirmLabel: "Delete bucket" },
       ))
     )
       return;
+    setBucketError("");
+    setBucketArchiveError("");
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/plan-buckets/${bucket.id}/?permanent=1`,
@@ -3644,9 +3746,71 @@ function WorkspaceView({
         ...current,
         buckets: current.buckets.filter((item) => item.id !== bucket.id),
       }));
+      setArchivedBuckets((current) =>
+        current.filter((item) => item.id !== bucket.id),
+      );
+      window.dispatchEvent(
+        new CustomEvent("workspace:notice", {
+          detail: `${bucket.name} deleted.`,
+        }),
+      );
       onRefresh();
     } catch (error) {
-      setBucketError(error.message || "Bucket could not be deleted.");
+      const message = error.message || "Bucket could not be deleted.";
+      setBucketError(message);
+      setBucketArchiveError(message);
+    }
+  };
+
+  const restoreBucket = async (bucket) => {
+    if (!canManageMembers) {
+      setBucketArchiveError(
+        "Only workspace leaders can restore Planner buckets.",
+      );
+      return;
+    }
+    setBucketArchiveError("");
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/plan-buckets/${bucket.id}/`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": await getCsrfToken(),
+            "X-Workspace-Id": String(workspaceId),
+          },
+          body: JSON.stringify({ is_active: true }),
+        },
+      );
+      const data = await readJsonResponse(
+        response,
+        "Bucket could not be restored.",
+      );
+      if (!response.ok)
+        throw new Error(data.error || "Bucket could not be restored.");
+      setLocalData((current) => ({
+        ...current,
+        buckets: current.buckets.some((item) => item.id === data.bucket.id)
+          ? current.buckets.map((item) =>
+              item.id === data.bucket.id ? data.bucket : item,
+            )
+          : [...current.buckets, data.bucket],
+      }));
+      setArchivedBuckets((current) =>
+        current.filter((item) => item.id !== bucket.id),
+      );
+      window.dispatchEvent(
+        new CustomEvent("workspace:notice", {
+          detail: `${bucket.name} restored and ready to use.`,
+        }),
+      );
+      onRefresh();
+    } catch (error) {
+      setBucketArchiveError(
+        error.message || "Bucket could not be restored.",
+      );
     }
   };
 
@@ -4001,6 +4165,14 @@ function WorkspaceView({
           onCreateWorkstream={createWorkstream}
           onArchiveWorkstream={archiveWorkstream}
           onArchiveBucket={archiveBucket}
+          onRenameBucket={renameBucket}
+          onDeleteBucket={deleteBucket}
+          onRestoreBucket={restoreBucket}
+          onToggleBucketArchive={toggleBucketArchive}
+          bucketArchiveOpen={bucketArchiveOpen}
+          archivedBuckets={archivedBuckets}
+          bucketArchiveLoading={bucketArchiveLoading}
+          bucketArchiveError={bucketArchiveError}
           externalFilter={plannerFilter}
         />
       </section>
@@ -4173,6 +4345,14 @@ function WorkspaceView({
           bucketError={bucketError}
           onCreateBucket={createBucket}
           onArchiveBucket={archiveBucket}
+          onRenameBucket={renameBucket}
+          onDeleteBucket={deleteBucket}
+          onRestoreBucket={restoreBucket}
+          onToggleBucketArchive={toggleBucketArchive}
+          bucketArchiveOpen={bucketArchiveOpen}
+          archivedBuckets={archivedBuckets}
+          bucketArchiveLoading={bucketArchiveLoading}
+          bucketArchiveError={bucketArchiveError}
           externalFilter={plannerFilter}
         />
       </section>

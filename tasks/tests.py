@@ -432,6 +432,28 @@ class TaskApiTests(TestCase):
         self.assertEqual(list_response.json()['buckets'][0]['name'], 'Review queue')
         self.assertEqual(PlanBucket.objects.count(), 1)
 
+    def test_owner_can_list_and_restore_archived_plan_buckets(self):
+        active = PlanBucket.objects.create(workspace=self.workspace, name='Active', position=0)
+        archived = PlanBucket.objects.create(workspace=self.workspace, name='Retired', position=1, is_active=False)
+
+        active_response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]))
+        self.assertEqual(active_response.status_code, 200)
+        self.assertEqual([bucket['id'] for bucket in active_response.json()['buckets']], [active.id])
+
+        archived_response = self.client.get(reverse('plan-bucket-list', args=[self.workspace.id]) + '?archived=1')
+        self.assertEqual(archived_response.status_code, 200)
+        self.assertEqual([bucket['id'] for bucket in archived_response.json()['buckets']], [archived.id])
+        self.assertFalse(archived_response.json()['buckets'][0]['is_active'])
+
+        restore_response = self.client.patch(
+            reverse('plan-bucket-detail', args=[self.workspace.id, archived.id]),
+            data=json.dumps({'is_active': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(restore_response.status_code, 200, restore_response.content)
+        archived.refresh_from_db()
+        self.assertTrue(archived.is_active)
+
     def test_owner_can_persist_bucket_order(self):
         project = Project.objects.create(workspace=self.workspace, name='Atlas')
         first = PlanBucket.objects.create(workspace=self.workspace, project=project, name='First', position=0)

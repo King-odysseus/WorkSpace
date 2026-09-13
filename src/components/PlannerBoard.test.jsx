@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import PlannerBoard from './PlannerBoard.jsx'
 
@@ -184,4 +184,56 @@ it('leaves a borrowed lane out of the reorder controls', () => {
 
   expect(columnNames(container)).toEqual(['Design'])
   expect(container.querySelectorAll('.planner-bucket-move')).toHaveLength(0)
+})
+
+it('offers lifecycle actions for custom buckets and protects the default Backlog', () => {
+  renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null },
+      { id: 19, name: 'Prototyping', project_id: 2 },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+  })
+
+  expect(screen.getByRole('button', { name: 'Rename Prototyping' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Archive Prototyping' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Delete Prototyping' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Rename Backlog' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Delete Backlog' })).not.toBeInTheDocument()
+})
+
+it('renames a custom bucket inline', async () => {
+  const onRenameBucket = vi.fn().mockResolvedValue(true)
+  renderPlanner({
+    buckets: [{ id: 19, name: 'Prototyping', project_id: 2 }],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+    onRenameBucket,
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Rename Prototyping' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Rename Prototyping' }), { target: { value: 'Discovery' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save Prototyping name' }))
+
+  expect(onRenameBucket).toHaveBeenCalledWith(expect.objectContaining({ id: 19 }), 'Discovery')
+})
+
+it('opens the archive view and restores an archived bucket', () => {
+  const onRestoreBucket = vi.fn()
+  renderPlanner({
+    canManageBuckets: true,
+    bucketArchiveOpen: true,
+    archivedBuckets: [{ id: 31, name: 'Old lane', project_id: 2, workstream_id: null, is_active: false }],
+    projects: [{ id: 2, name: 'Atlas' }],
+    onRestoreBucket,
+  })
+
+  expect(screen.getByRole('heading', { name: 'Bucket archive' })).toBeInTheDocument()
+  expect(screen.getByText('Old lane')).toBeInTheDocument()
+  expect(screen.getByText('Atlas')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+  expect(onRestoreBucket).toHaveBeenCalledWith(expect.objectContaining({ id: 31 }))
 })

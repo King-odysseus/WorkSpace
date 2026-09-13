@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, GanttChartSquare, GripVertical, LayoutGrid, List, Archive, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, GanttChartSquare, GripVertical, LayoutGrid, List, Archive, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react'
 import { toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
@@ -54,7 +54,7 @@ function PlannerTaskCard({ task, buckets, canReorder, onOpen, onDelete, onMove, 
   </article>
 }
 
-export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, initialWorkstream = 'all' }) {
+export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all' }) {
   const [status, setStatus] = useState('all')
   const [priority, setPriority] = useState('all')
   const [assignee, setAssignee] = useState('all')
@@ -75,6 +75,8 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [selectedIds, setSelectedIds] = useState([])
   const [bulkStatus, setBulkStatus] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [editingBucketId, setEditingBucketId] = useState(null)
+  const [bucketNameDraft, setBucketNameDraft] = useState('')
 
   // externalFilter carries one filter token in from Reports drill-throughs and
   // saved views (main.jsx's plannerFilter) - it can name a status, a bucket, an
@@ -234,6 +236,26 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     next.splice(targetIndex, 0, moved)
     onBucketReorder(next)
   }
+  const startBucketRename = bucket => {
+    setEditingBucketId(bucket.id)
+    setBucketNameDraft(bucket.name)
+  }
+  const submitBucketRename = async (event, bucket) => {
+    event.preventDefault()
+    const name = bucketNameDraft.trim()
+    if (!name || name === bucket.name) {
+      setEditingBucketId(null)
+      return
+    }
+    const saved = await onRenameBucket?.(bucket, name)
+    if (saved !== false) setEditingBucketId(null)
+  }
+  const bucketScopeLabel = bucket => {
+    if (bucket.project_id) return projects.find(project => String(project.id) === String(bucket.project_id))?.name || 'Project'
+    if (bucket.workstream_id) return lookupValues.find(value => value.kind === 'workstream' && String(value.id) === String(bucket.workstream_id))?.name || 'Workstream'
+    return 'Workspace'
+  }
+  const isDefaultBacklog = bucket => !bucket.project_id && !bucket.workstream_id && bucket.name === 'Backlog'
   const ganttSource = visibleTasks.filter(task => task.status !== 'done' || task.due_date)
   const toDay = value => { const date = new Date(value); date.setHours(0, 0, 0, 0); return date }
   const ganttStart = ganttSource.length ? new Date(Math.min(...ganttSource.map(task => toDay(task.start_date || task.created_at || task.due_date || today).getTime()))) : toDay(today)
@@ -257,8 +279,23 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     <div className="planner-pagination"><span>{visibleTasks.length ? `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, visibleTasks.length)} of ${visibleTasks.length}` : '0 tasks'}</span><div><button type="button" disabled={page === 1} onClick={() => setPage(current => current - 1)} aria-label="Previous page"><ChevronLeft size={15} /></button><span>Page {page} of {totalPages}</span><button type="button" disabled={page === totalPages} onClick={() => setPage(current => current + 1)} aria-label="Next page"><ChevronRight size={15} /></button></div></div>
   </div>
 
+  const archiveContent = <section className="planner-bucket-archive" aria-labelledby="bucket-archive-title">
+    <header className="planner-archive-heading">
+      <div><p className="eyebrow">Planner storage</p><h2 id="bucket-archive-title">Bucket archive</h2><p>Restore a bucket to reuse it, or delete it permanently.</p></div>
+      <button type="button" className="planner-archive-close" onClick={onToggleBucketArchive} aria-label="Close bucket archive" title="Close bucket archive"><X size={16} /></button>
+    </header>
+    {bucketArchiveError && <p className="auth-error" role="alert">{bucketArchiveError}</p>}
+    {bucketArchiveLoading ? <p className="planner-archive-state">Loading archived buckets...</p> : archivedBuckets.length ? <div className="planner-archive-grid">
+      {archivedBuckets.map(bucket => <article className="planner-archive-card" key={bucket.id}>
+        <div className="planner-archive-card-heading"><span className="planner-archive-card-icon"><Archive size={16} /></span><div><h3>{bucket.name}</h3><p>{bucketScopeLabel(bucket)}</p></div></div>
+        <div className="planner-archive-actions"><button type="button" className="secondary-button" onClick={() => onRestoreBucket?.(bucket)}><RotateCcw size={14} /> Restore</button><button type="button" className="planner-archive-delete" onClick={() => onDeleteBucket?.(bucket)}><Trash2 size={14} /> Delete</button></div>
+      </article>)}
+    </div> : <div className="planner-archive-empty"><Archive size={22} /><strong>No archived buckets</strong><p>Buckets you archive will appear here.</p></div>}
+  </section>
+
   return <section className="workspace-view planner-view">
-    <div className="workspace-view-heading"><div><p className="eyebrow">{isOperations ? 'Daily operations workspace' : 'Project delivery workspace'}</p><h1>{isOperations ? 'Operations planner' : 'Project planner'}</h1><p className="subtitle">{isOperations ? 'Manage recurring and day-to-day work outside projects.' : 'Plan and track delivery work within projects.'}</p></div><button className="primary-button" onClick={onAddTask}><Plus size={17} /> Add {isOperations ? 'operation' : 'project task'}</button></div>
+    <div className="workspace-view-heading"><div><p className="eyebrow">{isOperations ? 'Daily operations workspace' : 'Project delivery workspace'}</p><h1>{isOperations ? 'Operations planner' : 'Project planner'}</h1><p className="subtitle">{isOperations ? 'Manage recurring and day-to-day work outside projects.' : 'Plan and track delivery work within projects.'}</p></div><div className="planner-heading-actions">{canManageBuckets && <button type="button" className={`planner-archive-trigger${bucketArchiveOpen ? ' active' : ''}`} onClick={onToggleBucketArchive} aria-label="Bucket archive" aria-pressed={bucketArchiveOpen} title="Bucket archive"><Archive size={16} /></button>}<button className="primary-button" onClick={onAddTask}><Plus size={17} /> Add {isOperations ? 'operation' : 'project task'}</button></div></div>
+    {bucketArchiveOpen ? archiveContent : <>
     {scopeMode === 'switch' && <div className="planner-scope-switch" role="group" aria-label="Planner workspace">
       <button type="button" className={isOperations ? 'active' : ''} aria-pressed={isOperations} onClick={() => onProjectFilterChange?.('operations')}>Daily Operations <span>{tasks.filter(task => !task.project_id).length}</span></button>
       <button type="button" className={!isOperations ? 'active' : ''} aria-pressed={!isOperations} onClick={() => onProjectFilterChange?.('all')}>Projects <span>{tasks.filter(task => task.project_id).length}</span></button>
@@ -291,7 +328,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     {canManageBuckets && activeWorkstreams.length > 0 && <div className="planner-manage-row">{activeWorkstreams.map(value => <span className="planner-manage-chip" key={value.id}>{value.name}<button type="button" onClick={() => onArchiveWorkstream?.(value)} aria-label={`Archive ${value.name}`}><Archive size={12} /></button></span>)}</div>}
     {workstreamError && <p className="auth-error" role="alert">{workstreamError}</p>}
     {canManageBuckets && <form className="planner-add-bucket" onSubmit={event => onCreateBucket(event, bucketScope)}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket name" maxLength="80" required disabled={!bucketScope} /><button type="submit" className="secondary-button" disabled={bucketSubmitting || !bucketScope}>{bucketSubmitting ? 'Adding…' : 'Add bucket'}</button>{!bucketScope && <span>Select a workstream or project before adding buckets.</span>}</form>}
-    {canManageBuckets && persistedBuckets.length > 0 && <div className="planner-manage-row">{persistedBuckets.map(bucket => <span className="planner-manage-chip" key={bucket.id}>{bucket.name}<button type="button" onClick={() => onArchiveBucket?.(bucket)} aria-label={`Archive ${bucket.name}`}><Archive size={12} /></button></span>)}</div>}
+    {canManageBuckets && persistedBuckets.length > 0 && <div className="planner-manage-row planner-bucket-manage-row">{persistedBuckets.map(bucket => editingBucketId === bucket.id ? <form className="planner-manage-chip planner-bucket-edit" key={bucket.id} onSubmit={event => submitBucketRename(event, bucket)}><input value={bucketNameDraft} onChange={event => setBucketNameDraft(event.target.value)} aria-label={`Rename ${bucket.name}`} maxLength="80" autoFocus /><button type="submit" aria-label={`Save ${bucket.name} name`} title="Save name"><Check size={12} /></button><button type="button" onClick={() => setEditingBucketId(null)} aria-label="Cancel rename" title="Cancel"><X size={12} /></button></form> : <span className="planner-manage-chip" key={bucket.id}><span className="planner-manage-chip-name">{bucket.name}</span>{!isDefaultBacklog(bucket) && <><button type="button" onClick={() => startBucketRename(bucket)} aria-label={`Rename ${bucket.name}`} title="Rename bucket"><Pencil size={12} /></button><button type="button" onClick={() => onArchiveBucket?.(bucket)} aria-label={`Archive ${bucket.name}`} title="Archive bucket"><Archive size={12} /></button><button type="button" className="planner-bucket-delete" onClick={() => onDeleteBucket?.(bucket)} aria-label={`Delete ${bucket.name}`} title="Delete bucket"><Trash2 size={12} /></button></>}</span>)}</div>}
     {bucketError && <p className="auth-error" role="alert">{bucketError}</p>}
     {view === 'gantt' ? ganttContent : view === 'table' ? tableContent : <div className="planner-board" aria-label="Planner board">
       {buckets.map(bucket => {
@@ -322,5 +359,6 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       </section>})}
       {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}
     </div>}
+    </>}
   </section>
 }
