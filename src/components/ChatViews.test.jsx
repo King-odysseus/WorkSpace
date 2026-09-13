@@ -187,3 +187,36 @@ it('opens the compact composer emoji popup and inserts the choice', async () => 
   expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('🥳')
   expect(screen.queryByRole('dialog', { name: 'Choose an emoji' })).not.toBeInTheDocument()
 })
+
+it('opens the full mention picker immediately and filters as the user types', async () => {
+  const data = {
+    ...dataFor(),
+    members: [
+      { id: 9, first_name: 'Dana', last_name: 'Reed', email: 'dana@example.com' },
+      { id: 8, first_name: 'Priya', last_name: 'Shah', email: 'priya@example.com' },
+    ],
+  }
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(data)
+  await openConversation()
+
+  const input = screen.getByRole('textbox', { name: 'Message' })
+  fireEvent.change(input, { target: { value: '@', selectionStart: 1, selectionEnd: 1 } })
+
+  expect(await screen.findByRole('listbox', { name: 'Mention a workspace member' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Mention Dana Reed' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Mention Priya Shah' })).toBeInTheDocument()
+
+  fireEvent.change(input, { target: { value: '@Pr', selectionStart: 3, selectionEnd: 3 } })
+
+  expect(screen.getByRole('option', { name: 'Mention Priya Shah' })).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: 'Mention Dana Reed' })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('option', { name: 'Mention Priya Shah' }))
+  expect(input).toHaveValue('@priya ')
+})

@@ -48,6 +48,24 @@ function EmojiPicker({ onSelect, actionLabel = 'Insert' }) {
   </div>
 }
 
+function getMentionContext(value, caret) {
+  const beforeCaret = value.slice(0, caret)
+  const match = beforeCaret.match(/(^|\s)@([^\s@]*)$/)
+  if (!match) return null
+  return {
+    start: match.index + match[1].length,
+    end: caret,
+    query: match[2],
+  }
+}
+
+function MentionPicker({ members, getMemberName, onSelect }) {
+  if (!members.length) return <p className="chat-mention-empty">No matching workspace members.</p>
+  return <div className="chat-mention-picker" role="listbox" aria-label="Mention a workspace member">
+    {members.map(member => <button type="button" role="option" key={member.id} onClick={() => onSelect(member)} aria-label={`Mention ${getMemberName(member)}`}><strong>{getMemberName(member)}</strong><span>@{(member.email || '').split('@')[0]}</span></button>)}
+  </div>
+}
+
 function MessageReactionBar({ message, reactions, isMine, onToggle }) {
   const [open, setOpen] = useState(false)
   const availableReactions = MESSAGE_REACTIONS.filter(([emoji]) => !reactions.some(reaction => reaction.emoji === emoji))
@@ -84,6 +102,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [shareOpen, setShareOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
   const [profileMember, setProfileMember] = useState(null)
   const [reactionUpdates, setReactionUpdates] = useState({})
   const [messageEdits, setMessageEdits] = useState({})
@@ -109,6 +128,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setReplyTo(null)
     setEmojiOpen(false)
     setMentionOpen(false)
+    setMentionQuery('')
     setError('')
   }, [viewType])
 
@@ -316,17 +336,28 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const input = messageInputRef.current
     const start = input?.selectionStart ?? draft.length
     const end = input?.selectionEnd ?? start
-    const alias = member.email.split('@')[0]
-    const prefix = start && !/\s/.test(draft[start - 1]) ? ' ' : ''
+    const context = getMentionContext(draft, start)
+    const replaceStart = context?.start ?? start
+    const replaceEnd = context?.end ?? end
+    const alias = (member.email || memberName(member)).split('@')[0].trim().toLowerCase().replace(/\s+/g, '')
+    const prefix = !context && start && !/\s/.test(draft[start - 1]) ? ' ' : ''
     const mention = `${prefix}@${alias} `
-    setDraft(`${draft.slice(0, start)}${mention}${draft.slice(end)}`.slice(0, 4000))
+    setDraft(`${draft.slice(0, replaceStart)}${mention}${draft.slice(replaceEnd)}`.slice(0, 4000))
     setMentionOpen(false)
+    setMentionQuery('')
     requestAnimationFrame(() => {
-      const cursor = Math.min(start + mention.length, 4000)
+      const cursor = Math.min(replaceStart + mention.length, 4000)
       messageInputRef.current?.focus()
       messageInputRef.current?.setSelectionRange(cursor, cursor)
     })
   }
+  const normalizedMentionQuery = mentionQuery.trim().toLowerCase()
+  const mentionMembers = data.members.filter(member => {
+    if (String(member.id) === String(currentUserId)) return false
+    if (!normalizedMentionQuery) return true
+    const alias = (member.email || '').split('@')[0].toLowerCase()
+    return memberName(member).toLowerCase().includes(normalizedMentionQuery) || alias.includes(normalizedMentionQuery)
+  })
   const markConversationRead = async (targetType, targetId) => {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/notifications/`, {
@@ -453,11 +484,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         {(mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
           {replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
           {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
-          {mentionOpen && <div className="chat-mention-picker" role="listbox" aria-label="Mention a workspace member">{data.members.filter(member => member.id !== currentUserId).map(member => <button type="button" role="option" key={member.id} onClick={() => insertMention(member)}><strong>{memberName(member)}</strong><span>@{member.email.split('@')[0]}</span></button>)}</div>}
           <div className="chat-compose-surface">
-            <textarea ref={messageInputRef} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
+            <textarea ref={messageInputRef} value={draft} onChange={event => { const nextDraft = event.target.value; setDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
             <div className="chat-compose-toolbar">
-            <button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} onClick={() => { setMentionOpen(current => !current); setEmojiOpen(false) }} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button>
+            <Popover.Root open={mentionOpen} onOpenChange={nextOpen => { setMentionOpen(nextOpen); setMentionQuery(''); if (nextOpen) { setEmojiOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-mention-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Mention a workspace member"><MentionPicker members={mentionMembers} getMemberName={memberName} onSelect={insertMention} /><Popover.Arrow className="chat-mention-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
             <Popover.Root open={emojiOpen} onOpenChange={nextOpen => { setEmojiOpen(nextOpen); if (nextOpen) { setMentionOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-emoji-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Choose an emoji"><EmojiPicker onSelect={insertEmoji} /><Popover.Arrow className="chat-emoji-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
             <label className="secondary-button chat-upload-button" aria-label="Upload and attach a file"><Paperclip size={15} /> {uploadingFile ? 'Uploading...' : 'Attach file'}<input type="file" hidden onChange={uploadChatFile} disabled={uploadingFile} /></label>
             <button type="submit" className="primary-button" disabled={submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
