@@ -3079,6 +3079,236 @@ html[data-theme='dark'] .planner-bucket-menu {
   }
 }
 
+/* Projects and Daily Operations containment.
+   Both views mix long user-authored names with compact controls. The shared
+   card/flex defaults keep min-content width, so a single long label can widen a
+   card or push a control past its parent. These rules keep every child inside
+   its own surface while leaving the planner board's horizontal scroll intact. */
+.workspace-view.projects-view .project-toolbar {
+  min-width: 0;
+}
+
+.workspace-view.projects-view .project-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-view.projects-view .project-card > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workspace-view.projects-view .project-card-top {
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.workspace-view.projects-view .project-card-top .project-icon {
+  flex: 0 0 auto;
+}
+
+.workspace-view.projects-view .project-card-top .project-health {
+  margin-left: auto;
+}
+
+.workspace-view.projects-view .project-card-top .project-status {
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.workspace-view.projects-view .project-card h3 {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.workspace-view.projects-view .project-card p,
+.workspace-view.projects-view .project-footer small {
+  overflow-wrap: anywhere;
+}
+
+.workspace-view.projects-view .project-task-stats,
+.workspace-view.projects-view .project-footer {
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.workspace-view.projects-view .project-task-stats span,
+.workspace-view.projects-view .project-task-link {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.workspace-view.projects-view .project-footer > div {
+  min-width: 0;
+  flex: 1 1 130px;
+}
+
+@media (max-width: 1100px) {
+  .workspace-view.projects-view .project-toolbar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: center;
+  }
+
+  .workspace-view.projects-view .project-search,
+  .workspace-view.projects-view .project-toolbar > span {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .workspace-view.projects-view .project-toolbar [data-slot='select-trigger'] {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.workspace-view.planner-view .planner-scope-switch,
+.workspace-view.planner-view .planner-commandbar,
+.workspace-view.planner-view .operations-workstream-create,
+.workspace-view.planner-view .planner-add-bucket,
+.workspace-view.planner-view .planner-manage-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workspace-view.planner-view .planner-scope-switch label,
+.workspace-view.planner-view .planner-scope-switch [data-slot='select-trigger'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workspace-view.planner-view .operations-workstream-create > div {
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.workspace-view.planner-view .operations-workstream-create input {
+  min-width: 0;
+  flex: 1 1 220px;
+  width: auto;
+}
+
+.workspace-view.planner-view .operations-workstream-create .secondary-button {
+  flex: 0 0 auto;
+}
+
+.workspace-view.planner-view .planner-manage-row {
+  align-items: center;
+}
+
+.workspace-view.planner-view .planner-manage-chip {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.workspace-view.planner-view .planner-manage-chip > button,
+.workspace-view.planner-view .planner-manage-chip > [data-slot='dropdown-menu-trigger'] {
+  flex: 0 0 auto;
+}
+
+.workspace-view.planner-view .planner-add-bucket {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) auto minmax(0, 1fr);
+  justify-content: start;
+  align-items: center;
+}
+
+.workspace-view.planner-view .planner-add-bucket input {
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-view.planner-view .planner-add-bucket .secondary-button {
+  flex: 0 0 auto;
+}
+
+.workspace-view.planner-view .planner-add-bucket > span {
+  min-width: 0;
+  color: var(--dashboard-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.workspace-view.planner-view .planner-column,
+.workspace-view.planner-view .planner-column-heading,
+.workspace-view.planner-view .planner-card-heading,
+.workspace-view.planner-view .planner-card-meta,
+.workspace-view.planner-view .planner-card-footer {
+  min-width: 0;
+}
+
+.workspace-view.planner-view .planner-column {
+  overflow: hidden;
+}
+
+.workspace-view.planner-view .planner-column-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-view.planner-view .planner-card-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workspace-view.planner-view .planner-card-meta,
+.workspace-view.planner-view .planner-card-footer {
+  flex-wrap: wrap;
+}
+
+.workspace-view.planner-view :is(.planner-card-meta, .planner-card-footer) > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 700px) {
+  .workspace-view.projects-view .project-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-view.planner-view .operations-workstream-create {
+    align-items: stretch;
+  }
+
+  .workspace-view.planner-view .operations-workstream-create > div,
+  .workspace-view.planner-view .operations-workstream-create input,
+  .workspace-view.planner-view .operations-workstream-create .secondary-button {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .workspace-view.planner-view .planner-add-bucket {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .workspace-view.planner-view .planner-add-bucket > span {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 440px) {
+  .workspace-view.projects-view .project-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-view.planner-view .planner-add-bucket {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-view.planner-view .planner-add-bucket .secondary-button {
+    width: 100%;
+  }
+}
+
 /* Controls are pills. A button that carried a class but no radius of its own used
    to fall through to square corners; this gives it the pill the rest of the app
    uses. It stays at a single element selector on purpose, because that loses to
