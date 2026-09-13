@@ -2684,7 +2684,17 @@ def invitation_accept(request, invitation_id):
         invitation, error = _resolve_actionable_invitation(request, invitation_id)
         if error:
             return error
+        # Read before the membership row exists, because the get_or_create below
+        # is what makes the account a member. An account that already belonged
+        # somewhere keeps the default it picked for itself - switching stays its
+        # own choice - while one that belonged nowhere lands on the workspace it
+        # was just invited to, rather than on no workspace at all.
+        had_no_workspace = not Membership.objects.filter(user=request.user).exists()
         membership, member_created = Membership.objects.get_or_create(workspace=invitation.workspace, user=request.user, defaults={'role': invitation.role})
+        if had_no_workspace and invitation.workspace.status == 'active':
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            profile.default_workspace = invitation.workspace
+            profile.save(update_fields=['default_workspace', 'updated_at'])
         invitation.status = 'accepted'
         invitation.save(update_fields=['status'])
     actor_name = request.user.get_full_name() or request.user.email
