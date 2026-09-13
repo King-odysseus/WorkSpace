@@ -909,7 +909,7 @@ function writeAiHistory(workspaceId, turns) {
   }
 }
 
-export function AssistantFlyout({ workspaceId, onClose, onHide }) {
+export function AssistantFlyout({ workspaceId, onClose, onHide, onMinimize }) {
   const launcherRef = useRef(document.activeElement)
   const feedEndRef = useRef(null)
   const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
@@ -952,6 +952,7 @@ export function AssistantFlyout({ workspaceId, onClose, onHide }) {
         <DialogTitle className="ai-chat-title"><CircleUserRound size={24} /> Zuri</DialogTitle>
         <div className="ai-chat-actions">
           {turns.length > 0 && <button type="button" onClick={clearConversation} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={19} /></button>}
+          {onMinimize && <button type="button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={19} /></button>}
           {onHide && <button type="button" onClick={onHide} aria-label="Hide Zuri button" title="Hide Zuri button (restore from your profile menu)"><EyeOff size={19} /></button>}
           <button type="button" onClick={onClose} aria-label="Close Zuri"><X size={22} /></button>
         </div>

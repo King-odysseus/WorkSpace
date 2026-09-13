@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { FilesWorkspaceView } from './WorkspaceTools.jsx'
+import { AssistantFlyout, FilesWorkspaceView } from './WorkspaceTools.jsx'
 import { mockApi } from '../test/setup-tests.js'
 
 afterEach(() => {
@@ -71,4 +71,31 @@ it('saves again once the content changes after a failure', async () => {
   await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
 
   expect(saveAttempts(fetchMock)).toHaveLength(2)
+})
+
+it('minimizes the assistant without hiding its launcher', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  const onClose = vi.fn()
+  const onHide = vi.fn()
+  const onMinimize = vi.fn()
+
+  render(
+    <AssistantFlyout
+      workspaceId={4}
+      onClose={onClose}
+      onHide={onHide}
+      onMinimize={onMinimize}
+    />,
+  )
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Minimize Zuri' }))
+
+  expect(onMinimize).toHaveBeenCalledTimes(1)
+  expect(onHide).not.toHaveBeenCalled()
+  expect(onClose).not.toHaveBeenCalled()
 })

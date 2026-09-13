@@ -331,6 +331,7 @@ function App() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [aiFlyoutOpen, setAiFlyoutOpen] = useState(false);
+  const [aiMinimized, setAiMinimized] = useState(false);
   const [aiLauncherHidden, setAiLauncherHidden] = useState(false);
   const aiPreferenceKey = session.user?.id
     ? `workspace-ai-hidden-${session.user.id}`
@@ -349,6 +350,7 @@ function App() {
   }, [aiPreferenceKey]);
   const setAiLauncherVisibility = (hidden) => {
     setAiLauncherHidden(hidden);
+    setAiMinimized(false);
     if (hidden) setAiFlyoutOpen(false);
     try {
       if (aiPreferenceKey)
@@ -1850,6 +1852,11 @@ function App() {
           <AssistantFlyout
             workspaceId={activeWorkspaceId}
             onClose={() => setAiFlyoutOpen(false)}
+            onMinimize={() => {
+              setAiFlyoutOpen(false);
+              setAiLauncherVisibility(false);
+              setAiMinimized(true);
+            }}
             onHide={() => setAiLauncherVisibility(true)}
           />
         </Suspense>
@@ -2159,7 +2166,7 @@ function App() {
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
-            {!aiLauncherHidden && activeWorkspaceId && (
+            {!aiLauncherHidden && !aiMinimized && activeWorkspaceId && (
               <button
                 type="button"
                 onClick={() => setAiFlyoutOpen(true)}
@@ -2539,10 +2546,32 @@ function App() {
           <ChevronLeft size={20} />
         </button>
       )}
-      {!aiLauncherHidden && activeWorkspaceId && (
+      {aiMinimized && !aiLauncherHidden && activeWorkspaceId && (
+        <div className="ai-minimized-toast" role="status" aria-live="polite">
+          <span className="ai-minimized-icon"><Sparkles size={17} /></span>
+          <span className="ai-minimized-copy">
+            <strong>Zuri</strong>
+            <small>Conversation minimized</small>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setAiMinimized(false);
+              setAiLauncherVisibility(false);
+              setAiFlyoutOpen(true);
+            }}
+          >
+            Open
+          </button>
+        </div>
+      )}
+      {!aiLauncherHidden && !aiMinimized && activeWorkspaceId && (
         <button
           type="button"
-          onClick={() => setAiFlyoutOpen(true)}
+          onClick={() => {
+            setAiMinimized(false);
+            setAiFlyoutOpen(true);
+          }}
           className="ai-desktop-launcher"
           aria-label="Open Zuri"
           aria-haspopup="dialog"
