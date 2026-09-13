@@ -1305,6 +1305,42 @@ function App() {
       return false;
     }
   };
+  // Archiving keeps the task and its history; this is the only path that destroys
+  // it, and the API reserves it for workspace owners (tasks/views.py task_detail).
+  // It exists because archive was previously the only outcome available anywhere in
+  // the UI, which left the endpoint unreachable.
+  const deleteTaskPermanently = async (task) => {
+    if (
+      !(await confirmAction(
+        `Delete "${task.title}" permanently? Its history and attachments are removed and this cannot be undone.`,
+        { title: "Delete task permanently", confirmLabel: "Delete permanently" },
+      ))
+    )
+      return false;
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/?permanent=1`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "X-CSRFToken": await getCsrfToken(),
+          "X-Workspace-Id": String(activeWorkspaceId || ""),
+        },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        toast.error(body.error || "Task could not be deleted.");
+        return false;
+      }
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      setSelectedTask(null);
+      setWorkspaceNotice("Task deleted.");
+      setWorkspaceReload((current) => current + 1);
+      return true;
+    } catch (error) {
+      toast.error(error.message || "Task could not be deleted.");
+      return false;
+    }
+  };
   const applyTaskTemplate = (event) => {
     const templateId = event.target.value;
     setNewTaskTemplate(templateId);
@@ -2545,6 +2581,7 @@ function App() {
                 onStatusChange={changeTaskStatus}
                 onBucketChange={changeTaskBucket}
                 onDelete={deleteTask}
+                onDeletePermanently={deleteTaskPermanently}
                 onAddTask={() => openTaskModal()}
                 onOpenTask={setSelectedTask}
                 onOpenNotification={openNotification}
@@ -2973,6 +3010,7 @@ function WorkspaceView({
   onStatusChange,
   onBucketChange,
   onDelete,
+  onDeletePermanently,
   onAddTask,
   onOpenTask,
   onOpenNotification,
@@ -4226,6 +4264,8 @@ function WorkspaceView({
           onStatusChange={onStatusChange}
           onOpenTask={onOpenTask}
           onDeleteTask={onDelete}
+          onDeletePermanently={onDeletePermanently}
+          canDeletePermanently={currentWorkspace?.role === "owner"}
           onAddTask={() => {
             sessionStorage.setItem("workspace-new-task-scope", "operations");
             onAddTask();
@@ -4409,6 +4449,8 @@ function WorkspaceView({
           onStatusChange={onStatusChange}
           onOpenTask={onOpenTask}
           onDeleteTask={onDelete}
+          onDeletePermanently={onDeletePermanently}
+          canDeletePermanently={currentWorkspace?.role === "owner"}
           onAddTask={() => {
             const projectId =
               plannerProjectFilter && plannerProjectFilter !== "all"

@@ -8,7 +8,7 @@ import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
 const statusLabel = { todo: 'To do', 'in progress': 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
 
-function PlannerTaskCard({ task, buckets, canReorder, onOpen, onDelete, onMove, onStatusChange, onDropBefore, draggedTaskId, setDraggedTaskId, dropTaskId, setDropTaskId }) {
+function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, onDropBefore, draggedTaskId, setDraggedTaskId, dropTaskId, setDropTaskId }) {
   const bucketIndex = buckets.findIndex(bucket => bucket.name === task.bucket)
   const moveTo = direction => {
     const target = buckets[bucketIndex + direction]
@@ -37,7 +37,7 @@ function PlannerTaskCard({ task, buckets, canReorder, onOpen, onDelete, onMove, 
     <div className="planner-card-heading">
       <span className={`planner-drag-handle${canReorder ? '' : ' is-inactive'}`} aria-hidden="true"><GripVertical size={15} /></span>
       <button type="button" className="planner-card-title" onClick={() => onOpen(task)}>{task.title}</button>
-      {canReorder ? <button type="button" className="planner-card-menu" onClick={() => onDelete(task.id)} aria-label={`Archive ${task.title}`} title="Archive task"><Archive size={14} /></button> : <button type="button" className="planner-card-menu" onClick={() => onOpen(task)} aria-label={`Open ${task.title}`}><MoreHorizontal size={16} /></button>}
+      <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="planner-card-menu" aria-label={`Actions for ${task.title}`} title={`Actions for ${task.title}`}><MoreHorizontal size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="planner-bucket-menu"><DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Open ${task.title}`} onSelect={() => onOpen(task)}><Pencil size={13} /><span>Open task</span></DropdownMenuItem>{canReorder && <><DropdownMenuSeparator className="planner-bucket-menu-separator" /><DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Archive ${task.title}`} onSelect={() => onDelete(task.id)}><Archive size={13} /><span>Archive</span></DropdownMenuItem>{canDeletePermanently && <><DropdownMenuSeparator className="planner-bucket-menu-separator" /><DropdownMenuItem variant="destructive" className="planner-bucket-menu-item" aria-label={`Delete ${task.title} permanently`} onSelect={() => onDeletePermanently(task)}><Trash2 size={13} /><span>Delete permanently</span></DropdownMenuItem></>}</>}</DropdownMenuContent></DropdownMenu>
     </div>
     <div className="planner-card-meta">
       <span className={`planner-priority ${task.priority}`}>{task.priority}</span>
@@ -57,7 +57,7 @@ function PlannerTaskCard({ task, buckets, canReorder, onOpen, onDelete, onMove, 
   </article>
 }
 
-export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all' }) {
+export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all' }) {
   const [status, setStatus] = useState('all')
   const [priority, setPriority] = useState('all')
   const [assignee, setAssignee] = useState('all')
@@ -357,7 +357,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
           onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null) }}>
           <GripVertical size={15} aria-hidden="true" /><strong>{bucket.name}</strong><span>{orderedFor(bucket.name).length}</span>{bucketDraggable && <div className="planner-bucket-move"><button type="button" disabled={persistedIndex <= 1} onClick={() => nudgeBucket(bucket.id, -1)} aria-label={`Move ${bucket.name} left`}><ArrowLeft size={12} /></button><button type="button" disabled={persistedIndex < 0 || persistedIndex >= persistedBuckets.length - 1} onClick={() => nudgeBucket(bucket.id, 1)} aria-label={`Move ${bucket.name} right`}><ArrowRight size={12} /></button></div>}
         </header>
-        <div className="planner-column-tasks">{orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || String(task.assignee_id || '') === String(currentUserId)} onOpen={onOpenTask} onDelete={onDeleteTask} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}{!orderedFor(bucket.name).length && <div className="planner-empty">Drop tasks here</div>}</div>
+        <div className="planner-column-tasks">{orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || String(task.assignee_id || '') === String(currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}{!orderedFor(bucket.name).length && <div className="planner-empty">Drop tasks here</div>}</div>
         <button type="button" className="planner-column-add" onClick={() => addToBucket(bucket.name)}><Plus size={14} /> Add task</button>
       </section>})}
       {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}

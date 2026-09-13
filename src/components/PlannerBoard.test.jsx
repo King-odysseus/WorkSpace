@@ -206,6 +206,54 @@ it('offers lifecycle actions for custom buckets through an overflow menu and pro
   expect(screen.queryByRole('button', { name: 'Open actions for Backlog' })).not.toBeInTheDocument()
 })
 
+const cardTask = { id: 91, title: 'Design UI', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal' }
+const cardPlanner = (props = {}) => renderPlanner({
+  buckets: [{ id: 2, name: 'Backlog', project_id: null }],
+  scopeMode: 'projects',
+  projectFilter: 'all',
+  tasks: [cardTask],
+  canManageTasks: true,
+  ...props,
+})
+
+it('routes each planner card action to its own handler', async () => {
+  const onOpenTask = vi.fn()
+  const onDeleteTask = vi.fn()
+  const onDeletePermanently = vi.fn()
+  const user = userEvent.setup()
+  cardPlanner({ canDeletePermanently: true, onOpenTask, onDeleteTask, onDeletePermanently })
+
+  await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Archive Design UI' }))
+  expect(onDeleteTask).toHaveBeenCalledWith(91)
+
+  await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Open Design UI' }))
+  expect(onOpenTask).toHaveBeenCalledWith(cardTask)
+
+  await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Delete Design UI permanently' }))
+  expect(onDeletePermanently).toHaveBeenCalledWith(cardTask)
+})
+
+it('keeps permanent delete out of the card menu for everyone but an owner', async () => {
+  const user = userEvent.setup()
+  cardPlanner()
+
+  await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
+  expect(screen.getByRole('menuitem', { name: 'Archive Design UI' })).toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: 'Delete Design UI permanently' })).not.toBeInTheDocument()
+})
+
+it('shows a plain task only the open action', async () => {
+  const user = userEvent.setup()
+  cardPlanner({ canManageTasks: false, currentUserId: 7 })
+
+  await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
+  expect(screen.getByRole('menuitem', { name: 'Open Design UI' })).toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: 'Archive Design UI' })).not.toBeInTheDocument()
+})
+
 it('renames a custom bucket inline', async () => {
   const onRenameBucket = vi.fn().mockResolvedValue(true)
   const user = userEvent.setup()
