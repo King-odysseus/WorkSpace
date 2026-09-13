@@ -12,6 +12,7 @@ import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { PRESENCE_LABEL, effectivePresence, formatDate, formatDay, formatRelativeActivityTime, getCsrfToken, isImageFileName, toDateKey } from '../lib/workspace-format.js'
+import { takePendingDirectMessage } from '../lib/chat-navigation.js'
 
 const EMOJI_CATEGORIES = [
   ['Smileys', '😀', ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😋', '😛', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '🥺', '😢', '😭', '😤', '😠', '😡', '🤯', '😳', '🥵', '🥶', '😱', '😨', '🤗', '🤔', '🫡', '🤭', '🫢', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😴', '🤤', '😷', '🤒', '🤕']],
@@ -377,13 +378,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     }
   }
   const createDirectConversation = async event => { event.preventDefault(); await openDirectConversation(directMemberIds) }
+  // Today and the Team board hand a target over here instead of firing a window
+  // event, because this view is lazy-loaded and mounts after the click, so the
+  // event used to arrive before this effect had registered a listener.
   useEffect(() => {
-    const openFromToday = event => {
-      const memberId = Number(event.detail?.memberId)
-      if (memberId && memberId !== Number(currentUserId)) openDirectConversation([memberId])
-    }
-    window.addEventListener('chat:direct', openFromToday)
-    return () => window.removeEventListener('chat:direct', openFromToday)
+    const memberId = Number(takePendingDirectMessage())
+    if (memberId && memberId !== Number(currentUserId)) openDirectConversation([memberId])
   }, [currentUserId, workspaceId, submitting])
 
   const deleteChannel = async channel => {

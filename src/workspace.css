@@ -1762,7 +1762,7 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .today-empty .text-button { margin: 0; }
 .today-event-row { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--workspace-border); }
 .today-event-row:last-child { border-bottom: 0; }
-.today-event-row time { min-width: 50px; color: var(--teal); font-size: 10px; font-weight: 700; }
+.today-event-row time { min-width: 62px; color: var(--teal); font-size: 10px; font-weight: 700; }
 .today-event-row div { display: grid; gap: 3px; min-width: 0; }
 .today-event-row strong { overflow: hidden; color: var(--workspace-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .today-event-row span { color: var(--workspace-text-soft); font-size: 9px; text-transform: capitalize; }

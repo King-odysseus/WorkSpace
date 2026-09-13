@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { MyTasksView, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
+import { takePendingDirectMessage } from '../lib/chat-navigation.js'
 
 const noop = vi.fn()
 
@@ -11,7 +12,7 @@ const dayOffset = days => {
   return toDateKey(date)
 }
 
-const renderDashboard = (tasks, onOpenBoard = noop, followUps = []) =>
+const renderDashboard = (tasks, onOpenBoard = noop, followUps = [], overrides = {}) =>
   render(
     <TodayDashboard
       today="2026-09-12"
@@ -36,6 +37,7 @@ const renderDashboard = (tasks, onOpenBoard = noop, followUps = []) =>
       onStatusChange={noop}
       onSubmitShift={noop}
       onChangePresence={noop}
+      {...overrides}
     />,
   )
 
@@ -106,6 +108,66 @@ it('formats dashboard follow-up dates in the app date format', () => {
 
   expect(screen.getByText('05-09-2026')).toBeInTheDocument()
   expect(screen.queryByText('2026-09-05')).not.toBeInTheDocument()
+})
+
+it('shows the real check-in denominator instead of inventing one for an empty workspace', () => {
+  // This read `{count} of {members.length || 1}`, so a workspace with nobody in
+  // it claimed "0 of 1".
+  renderDashboard([])
+
+  expect(screen.queryByText('0 of 1')).not.toBeInTheDocument()
+})
+
+it('keeps overdue follow-ups visible when an undated one is in the list', () => {
+  // The list slices to four in source order, so an undated item sitting first
+  // used to take a slot from a genuinely overdue follow-up.
+  renderDashboard([], noop, [
+    { id: 1, note: 'Undated ask', status: 'open', due_date: null },
+    { id: 2, note: 'Overdue one', status: 'open', due_date: '2026-09-01' },
+    { id: 3, note: 'Overdue two', status: 'open', due_date: '2026-09-02' },
+    { id: 4, note: 'Overdue three', status: 'open', due_date: '2026-09-03' },
+    { id: 5, note: 'Overdue four', status: 'open', due_date: '2026-09-04' },
+  ])
+
+  expect(screen.getByText('Overdue one')).toBeInTheDocument()
+  expect(screen.getByText('Overdue two')).toBeInTheDocument()
+  expect(screen.getByText('Overdue three')).toBeInTheDocument()
+  expect(screen.getByText('Overdue four')).toBeInTheDocument()
+})
+
+it('lists an event that started earlier but runs into today', () => {
+  // Matching on start_at === today dropped every event carried over from a
+  // previous day.
+  renderDashboard([], noop, [], {
+    events: [
+      { id: 1, title: 'Offsite', event_type: 'meeting', start_at: '2026-09-11T12:00:00Z', end_at: '2026-09-12T12:00:00Z' },
+      { id: 2, title: 'Future thing', event_type: 'meeting', start_at: '2026-09-13T12:00:00Z', end_at: '2026-09-13T13:00:00Z' },
+    ],
+  })
+
+  expect(screen.getByText('Offsite')).toBeInTheDocument()
+  expect(screen.queryByText('Future thing')).not.toBeInTheDocument()
+  // A carried-over event shows the day it began, not a bare time that reads as
+  // if it started today.
+  expect(screen.getByText('11-09-2026')).toBeInTheDocument()
+})
+
+it('hands a messaging target to Chats instead of racing a window event', () => {
+  // The Chats view is lazy-loaded, so the old setTimeout(0) event fired before
+  // anything was listening and the conversation silently never opened.
+  const onNavigate = vi.fn()
+  renderDashboard([], noop, [], {
+    members: [{ id: 9, first_name: 'Dana', last_name: 'Reed', email: 'dana@example.com', role: 'member' }],
+    onNavigate,
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Open Dana Reed profile' }))
+  fireEvent.click(screen.getByRole('button', { name: /Send message/ }))
+
+  expect(onNavigate).toHaveBeenCalledWith('Chats')
+  expect(takePendingDirectMessage()).toBe(9)
+  // Claimed once, so a remount cannot reopen the same conversation.
+  expect(takePendingDirectMessage()).toBeNull()
 })
 
 it('shows an assigned task in My tasks and keeps unassigned work out of the queue', () => {

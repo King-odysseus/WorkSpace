@@ -70,6 +70,7 @@ import {
   taskIsAssignedTo,
   toDateKey,
 } from "../lib/workspace-format.js";
+import { requestDirectMessage } from "../lib/chat-navigation.js";
 
 const isTerminalTask = (task) =>
   task.status === "done" || task.status === "cancelled";
@@ -322,7 +323,7 @@ function TeamBoardView({
   const [showTerminal, setShowTerminal] = useState(false);
   const [query, setQuery] = useState("");
   const [profileMember, setProfileMember] = useState(null);
-  const sendMemberMessage = (member) => { onNavigate("Chats"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("chat:direct", { detail: { memberId: member.id } })), 0); };
+  const sendMemberMessage = (member) => { requestDirectMessage(member.id); onNavigate("Chats"); };
   const statuses = [
     ["todo", "To do"],
     ["in progress", "In progress"],
@@ -3209,7 +3210,13 @@ function TodayDashboard({
     })
     .slice(0, 8);
   const todaysEvents = events
-    .filter((event) => toDateKey(event.start_at) === today)
+    // An event that began earlier but runs into today is still today's, so this
+    // matches on overlap rather than an exact start date.
+    .filter(
+      (event) =>
+        toDateKey(event.start_at) <= today &&
+        toDateKey(event.end_at || event.start_at) >= today,
+    )
     .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
     .slice(0, 4);
   const dueFollowUps = followUps
@@ -3217,6 +3224,11 @@ function TodayDashboard({
       (item) =>
         item.status !== "completed" &&
         (!item.due_date || item.due_date <= today),
+    )
+    // Soonest first, undated last, so an undated item cannot push a genuinely
+    // overdue follow-up out of the four that are shown.
+    .sort((a, b) =>
+      (a.due_date || "9999-12-31").localeCompare(b.due_date || "9999-12-31"),
     )
     .slice(0, 4);
   const openExceptions = [
@@ -3241,14 +3253,8 @@ function TodayDashboard({
     member.email;
   const onlineMembers = sortMembersByRecentActivity(members, currentUserId);
   const messageOnlineMember = (member) => {
+    requestDirectMessage(member.id);
     onNavigate("Chats");
-    window.setTimeout(
-      () =>
-        window.dispatchEvent(
-          new CustomEvent("chat:direct", { detail: { memberId: member.id } }),
-        ),
-      0,
-    );
   };
   const greetingHour = new Date().getHours();
   const greeting =
@@ -3501,10 +3507,12 @@ function TodayDashboard({
               todaysEvents.map((event) => (
                 <div className="today-event-row" key={event.id}>
                   <time>
-                    {new Date(event.start_at).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
+                    {toDateKey(event.start_at) === today
+                      ? new Date(event.start_at).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
+                      : formatDate(event.start_at)}
                   </time>
                   <div>
                     <strong>{event.title}</strong>
@@ -3597,7 +3605,7 @@ function TodayDashboard({
             <Hash size={17} />
           </div>
           <strong className="today-checkin-count">
-            {checkInsToday} of {members.length || 1}
+            {members.length ? `${checkInsToday} of ${members.length}` : checkInsToday}
           </strong>
           <span className="today-muted">check-ins received today</span>
           <Button
