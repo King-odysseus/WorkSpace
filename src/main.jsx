@@ -4670,7 +4670,12 @@ function WorkspaceView({
   }
 
   if (active === "Reports") {
-    const summaryReport = data.reports || {
+    // The summary endpoint sends workspace-wide counters only - it has no
+    // progress_by_project/priority, stale, on_hold, cancelled, or kpis. Spreading
+    // it over the defaults keeps those at their empty value instead of letting
+    // them reach the render as undefined and throw while the detail report is
+    // still loading.
+    const summaryReport = {
       total_tasks: 0,
       overdue_tasks: 0,
       due_this_week: 0,
@@ -4689,6 +4694,7 @@ function WorkspaceView({
       progress_by_project: [],
       progress_by_priority: [],
       kpis: {},
+      ...(data.reports || {}),
     };
     const detailedReport = reportDetail;
     const serverReport = detailedReport
