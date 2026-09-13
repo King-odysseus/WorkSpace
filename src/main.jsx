@@ -315,6 +315,7 @@ function App() {
     messages: [],
     channels: [],
     directConversations: [],
+    archivedConversations: [],
     followUps: [],
     invitations: [],
     notifications: [],
@@ -619,6 +620,7 @@ function App() {
       messages: [],
       channels: [],
       directConversations: [],
+      archivedConversations: [],
       followUps: [],
       invitations: [],
       notifications: [],
@@ -763,6 +765,9 @@ function App() {
         read(`/api/workspaces/${workspaceId}/direct-conversations/`, {
           conversations: [],
         }),
+        read(`/api/workspaces/${workspaceId}/direct-conversations/?archived=true`, {
+          conversations: [],
+        }),
         read(`/api/workspaces/${workspaceId}/follow-ups/`, { follow_ups: [] }),
         read(`/api/workspaces/${workspaceId}/calendar-events/`, { events: [] }),
         read(`/api/workspaces/${workspaceId}/check-ins/?date=${today}`, {
@@ -801,6 +806,7 @@ function App() {
             messageData,
             channelData,
             directData,
+            archivedDirectData,
             followUpData,
             eventData,
             checkInData,
@@ -830,6 +836,7 @@ function App() {
               messages: messageData.messages,
               channels: channelData.channels,
               directConversations: directData.conversations,
+              archivedConversations: archivedDirectData.conversations,
               followUps: followUpData.follow_ups,
               events: eventData.events,
               checkIns: checkInData.check_ins,

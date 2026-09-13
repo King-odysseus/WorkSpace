@@ -286,22 +286,25 @@ it('never ticks a message the viewer did not send', async () => {
   expect(document.querySelector('.chat-receipt')).not.toBeInTheDocument()
 })
 
-it('deletes a conversation from the current user chat list', async () => {
+it('archives a conversation through the confirm dialog', async () => {
   const onRefresh = vi.fn()
   const onConfirm = vi.fn().mockResolvedValue(true)
   const fetchMock = mockApi({
     '/documents/': { documents: [] },
     '/files/': { files: [] },
-    '/direct-conversations/11/': { dismissed: true },
+    '/direct-conversations/11/': { archived: 11 },
     '/notifications/': { status: 200, body: {} },
   })
   renderChat(dataFor(), onRefresh, onConfirm)
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Delete Dana Reed chat' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Archive Dana Reed chat' }))
 
   await waitFor(() => expect(onConfirm).toHaveBeenCalled())
-  const deleteCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/11/') && init.method === 'DELETE')
-  expect(deleteCall).toBeTruthy()
+  // The prompt has to say the chat goes away for both sides, because that is
+  // what it does now - the old copy promised new messages would bring it back.
+  expect(onConfirm.mock.calls[0][0]).toMatch(/everyone in the chat/i)
+  const archiveCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/11/') && init.method === 'DELETE')
+  expect(archiveCall).toBeTruthy()
   expect(onRefresh).toHaveBeenCalled()
 })
 

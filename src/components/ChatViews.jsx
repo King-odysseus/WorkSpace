@@ -4,7 +4,7 @@ import { AppSelect } from './ui/select.jsx'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -146,8 +146,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const draftKeyRef = useRef(null)
   const channels = data.channels || []
   const conversations = data.directConversations || []
+  const archivedConversations = data.archivedConversations || []
   const selectedChannelInfo = channels.find(channel => channel.name === selectedChannel)
-  const selectedConversation = conversations.find(conversation => conversation.id === selectedConversationId)
+  // Archived chats are still readable, so the selection has to resolve across
+  // both lists - otherwise restoring or archiving while a chat is open would
+  // drop the thread out from under the reader.
+  const selectedConversation = [...conversations, ...archivedConversations].find(conversation => conversation.id === selectedConversationId)
   const draftKey = mode === 'channels' ? `channel:${selectedChannel}` : selectedConversationId ? `conversation:${selectedConversationId}` : ''
 
   useEffect(() => {
@@ -197,7 +201,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       .catch(loadError => { if (current) setError(loadError.message) })
       .finally(() => { if (current) setDirectLoading(false) })
     return () => { current = false }
-  }, [selectedConversationId, data.directConversations])
+  }, [selectedConversationId, data.directConversations, data.archivedConversations])
 
   // Which conversation the fetched messages belong to. The workspace refresh
   // hands back directConversations as a fresh array whenever anything in the
@@ -393,10 +397,17 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     }
   }
 
-  const deleteConversation = async conversation => {
+  const closeConversationIfOpen = conversationId => {
+    if (selectedConversationId !== conversationId) return
+    setSelectedConversationId(null)
+    setDirectMessages([])
+    setDirectMessageConversationId(null)
+  }
+
+  const archiveConversation = async conversation => {
     const confirmed = await onConfirm(
-      'Delete this chat from your chat list? New messages will bring it back.',
-      { title: 'Delete chat', confirmLabel: 'Delete chat' },
+      'Move this chat to Archived? It disappears from everyone in the chat, and only a restore brings it back.',
+      { title: 'Archive chat', confirmLabel: 'Archive chat' },
     )
     if (!confirmed) return
     try {
@@ -404,15 +415,24 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() },
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'Chat could not be deleted.')
-      if (selectedConversationId === conversation.id) {
-        setSelectedConversationId(null)
-        setDirectMessages([])
-        setDirectMessageConversationId(null)
-      }
+      if (!response.ok) throw new Error(payload.error || 'Chat could not be archived.')
+      closeConversationIfOpen(conversation.id)
       onRefresh()
-    } catch (deleteError) {
-      onError(deleteError.message)
+    } catch (archiveError) {
+      onError(archiveError.message)
+    }
+  }
+
+  const restoreConversation = async conversation => {
+    try {
+      const response = await fetch(`/api/direct-conversations/${conversation.id}/restore/`, {
+        method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() },
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Chat could not be restored.')
+      onRefresh()
+    } catch (restoreError) {
+      onError(restoreError.message)
     }
   }
 
@@ -674,7 +694,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     </div>
   }
 
-  const renderDirectConversationRow = conversation => {
+  const renderDirectConversationRow = (conversation, archived = false) => {
     const unread = unreadCountFor('direct_conversation', conversation.id)
     const other = directOtherMember(conversation)
     const otherPresence = other ? effectivePresence(other) : null
@@ -685,8 +705,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         {unread > 0 && <Badge>{unread}</Badge>}
       </button>
       <div className="direct-row-actions">
-        {conversation.is_group && <button type="button" onClick={() => openParticipantEditor(conversation)} aria-label={`Edit participants for ${conversation.title}`} title="Edit participants"><Pencil size={13} /></button>}
-        <button type="button" className="direct-row-delete" onClick={() => deleteConversation(conversation)} aria-label={`Delete ${conversation.title} chat`} title="Delete chat"><Trash2 size={13} /></button>
+        {!archived && conversation.is_group && <button type="button" onClick={() => openParticipantEditor(conversation)} aria-label={`Edit participants for ${conversation.title}`} title="Edit participants"><Pencil size={13} /></button>}
+        {archived
+          ? <button type="button" className="direct-row-restore" onClick={() => restoreConversation(conversation)} aria-label={`Restore ${conversation.title} chat`} title="Restore chat"><ArchiveRestore size={13} /></button>
+          : <button type="button" className="direct-row-archive" onClick={() => archiveConversation(conversation)} aria-label={`Archive ${conversation.title} chat`} title="Archive chat"><Archive size={13} /></button>}
       </div>
     </div>
   }
@@ -758,16 +780,21 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         <div className="chat-filter-tabs" role="tablist" aria-label="Filter conversations">
           <button type="button" role="tab" aria-selected={chatFilter === 'all'} className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>All <span>{mode === 'channels' ? channels.length : conversations.length}</span></button>
           <button type="button" role="tab" aria-selected={chatFilter === 'unread'} className={chatFilter === 'unread' ? 'active' : ''} onClick={() => setChatFilter('unread')}>Unread <span>{unreadTotal}</span></button>
+          {mode === 'direct' && <button type="button" role="tab" aria-selected={chatFilter === 'archived'} className={chatFilter === 'archived' ? 'active' : ''} onClick={() => setChatFilter('archived')}>Archived <span>{archivedConversations.length}</span></button>}
         </div>
         <div className="chat-list-scroll">
           {mode === 'channels'
             ? (filteredChannels.length ? filteredChannels.map(renderChannelRow) : <p className="chat-sidebar-empty">No unread channels.</p>)
-            : filteredConversations.length
-              ? <>
-                {groupConversations.length > 0 && <section className="chat-list-group"><h4>Group chats <span>{groupConversations.length}</span></h4><div className="chat-list-group-rows">{groupConversations.map(renderDirectConversationRow)}</div></section>}
-                {directConversations.length > 0 && <section className="chat-list-group"><h4>Direct messages <span>{directConversations.length}</span></h4><div className="chat-list-group-rows">{directConversations.map(renderDirectConversationRow)}</div></section>}
-              </>
-              : <p className="chat-sidebar-empty">{chatFilter === 'unread' ? 'No unread conversations.' : 'No chats yet.'}</p>}
+            : chatFilter === 'archived'
+              ? (archivedConversations.length
+                ? <section className="chat-list-group"><h4>Archived <span>{archivedConversations.length}</span></h4><div className="chat-list-group-rows">{archivedConversations.map(conversation => renderDirectConversationRow(conversation, true))}</div></section>
+                : <p className="chat-sidebar-empty">No archived chats.</p>)
+              : filteredConversations.length
+                ? <>
+                  {groupConversations.length > 0 && <section className="chat-list-group"><h4>Group chats <span>{groupConversations.length}</span></h4><div className="chat-list-group-rows">{groupConversations.map(conversation => renderDirectConversationRow(conversation))}</div></section>}
+                  {directConversations.length > 0 && <section className="chat-list-group"><h4>Direct messages <span>{directConversations.length}</span></h4><div className="chat-list-group-rows">{directConversations.map(conversation => renderDirectConversationRow(conversation))}</div></section>}
+                </>
+                : <p className="chat-sidebar-empty">{chatFilter === 'unread' ? 'No unread conversations.' : 'No chats yet.'}</p>}
         </div>
       </aside>
     </div>
