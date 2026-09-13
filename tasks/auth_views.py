@@ -152,8 +152,6 @@ def workspace_create(request):
         return JsonResponse({'error': 'Workspace name is required.'}, status=400)
     if len(name) > 120:
         return JsonResponse({'error': 'Workspace name must be 120 characters or fewer.'}, status=400)
-    if not Membership.objects.filter(user=request.user, role='owner').exists():
-        return JsonResponse({'error': 'Only workspace owners can create another workspace.'}, status=403)
     with transaction.atomic():
         workspace, membership = _create_owned_workspace(request.user, name)
     return JsonResponse({

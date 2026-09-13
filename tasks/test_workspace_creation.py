@@ -46,15 +46,37 @@ class WorkspaceCreationApiTests(TestCase):
         self.assertEqual(second.status_code, 201)
         self.assertNotEqual(first.json()['workspace']['slug'], second.json()['workspace']['slug'])
 
-    def test_only_existing_owners_can_create_workspaces(self):
-        payload = json.dumps({'name': 'Not allowed'})
+    def test_any_account_can_create_and_own_a_workspace(self):
+        # Being only a member of someone else's workspace does not stop an
+        # account from owning one of its own.
+        payload = json.dumps({'name': 'My Own Company'})
         for user in (self.manager, self.member):
             with self.subTest(role=user.username):
                 self.client.force_login(user)
                 response = self.client.post(reverse('workspace-create'), data=payload, content_type='application/json')
-                self.assertEqual(response.status_code, 403)
-        self.client.logout()
-        self.assertEqual(self.client.post(reverse('workspace-create'), data=payload, content_type='application/json').status_code, 401)
+                self.assertEqual(response.status_code, 201)
+                workspace_id = response.json()['workspace']['id']
+                self.assertTrue(Membership.objects.filter(workspace_id=workspace_id, user=user, role='owner').exists())
+
+    def test_an_account_with_no_workspace_can_create_one(self):
+        # The join_only signup path creates an account with no workspace at all;
+        # this endpoint is how such an account gets its own.
+        newcomer = User.objects.create_user(username='newcomer@example.com', email='newcomer@example.com', password='secure-pass-123')
+        self.client.force_login(newcomer)
+        response = self.client.post(
+            reverse('workspace-create'),
+            data=json.dumps({'name': 'Fresh Start'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        workspace_id = response.json()['workspace']['id']
+        self.assertTrue(Membership.objects.filter(workspace_id=workspace_id, user=newcomer, role='owner').exists())
+
+    def test_anonymous_callers_cannot_create_a_workspace(self):
+        payload = json.dumps({'name': 'Not allowed'})
+        response = self.client.post(reverse('workspace-create'), data=payload, content_type='application/json')
+        self.assertEqual(response.status_code, 401)
 
     def test_workspace_creation_validates_the_name(self):
         self.client.force_login(self.owner)
