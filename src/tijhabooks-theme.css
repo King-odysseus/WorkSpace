@@ -107,23 +107,25 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
   bottom: 0;
   z-index: 1;
   display: block;
+  flex: 0 0 auto;
   width: 9px;
   height: 9px;
   border: 0;
   border-radius: 50%;
-  background: #98a2b3;
+  background-color: #98a2b3;
   opacity: 1;
-  box-shadow: 0 0 0 2px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
+  visibility: visible;
+  box-shadow: 0 0 0 1.5px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
 }
 .avatar.small .presence-dot {
-  width: 7px;
-  height: 7px;
-  box-shadow: 0 0 0 2px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 1.5px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
 }
-.presence-dot.presence-available { background: #16a34a; }
-.presence-dot.presence-busy { background: #dc2626; }
-.presence-dot.presence-away { background: #d97706; }
-.presence-dot.presence-offline { background: #98a2b3; }
+.presence-dot.presence-available { background-color: #16a34a; }
+.presence-dot.presence-busy { background-color: #dc2626; }
+.presence-dot.presence-away { background-color: #d97706; }
+.presence-dot.presence-offline { background-color: #98a2b3; }
 
 .avatar-upload {
   position: relative;
@@ -1850,10 +1852,10 @@ html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; ba
 .team-watch-list strong { grid-column:2; grid-row:1 / span 2; align-self:center; color:var(--teal); font-size:10px; }
 .team-presence-strip { display:flex; flex-wrap:wrap; gap:7px 11px; margin-top:14px; padding-top:12px; border-top:1px solid var(--workspace-border); }
 .team-presence-strip span { display:inline-flex; align-items:center; gap:5px; color:var(--workspace-text-soft); font-size:9px; }
-.team-presence-strip i { width:7px; height:7px; border-radius:999px; background:var(--workspace-text-soft); }
-.team-presence-strip .presence-available { background:var(--teal); }
-.team-presence-strip .presence-busy { background:#E36B43; }
-.team-presence-strip .presence-away { background:#C78A1B; }
+.team-presence-strip i { display:block; flex:0 0 auto; width:8px; height:8px; border-radius:999px; background-color:var(--workspace-text-soft); opacity:1; }
+.team-presence-strip .presence-available { background-color:var(--teal); }
+.team-presence-strip .presence-busy { background-color:#E36B43; }
+.team-presence-strip .presence-away { background-color:#C78A1B; }
 .team-workload-list { display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:12px; }
 .team-workload-card { display:grid; gap:14px; width:100%; padding:17px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); color:inherit; text-align:left; cursor:pointer; }
 .team-workload-card:hover, .team-workload-card:focus-visible { border-color:var(--teal); }
