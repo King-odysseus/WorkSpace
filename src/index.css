@@ -46,7 +46,7 @@
 .screen-share-active { position: fixed; z-index: 95; left: 50%; top: .65rem; transform: translateX(-50%); display: flex; align-items: center; gap: .75rem; min-width: min(94vw, 520px); padding: .7rem .85rem; border: 1px solid rgb(255 255 255 / .18); border-radius: .8rem; color: white; background: #7f1d1d; box-shadow: 0 10px 32px rgb(0 0 0 / .28); }
 .screen-share-active div { display: flex; flex: 1; flex-direction: column; font-size: .78rem; }
 .screen-share-active strong { font-size: .9rem; }
-.screen-share-active button { display: inline-flex; align-items: center; gap: .3rem; padding: .45rem .65rem; border-radius: .5rem; background: white; color: #7f1d1d; font-weight: 700; }
+.screen-share-active button { display: inline-flex; align-items: center; gap: .3rem; padding: .45rem .65rem; border-radius: 999px; background: white; color: #7f1d1d; font-weight: 700; }
 .screen-share-live-dot { width: .65rem; height: .65rem; border-radius: 50%; background: #fca5a5; box-shadow: 0 0 0 5px rgb(252 165 165 / .2); }
 .screen-share-floating-error { position: fixed; z-index: 96; top: 5rem; left: 50%; transform: translateX(-50%); padding: .6rem 1rem; border-radius: .5rem; color: #991b1b; background: #fee2e2; }
 .screen-sharing-view { display: grid; gap: 1rem; }
@@ -334,7 +334,7 @@ input[type='checkbox'], input[type='radio'] {
 .chat-share-picker select { width:100%; }
 .chat-emoji-picker { width:100%; margin:0 0 .65rem; padding:.55rem; border-radius:1rem; background:var(--surface); box-shadow:0 12px 30px rgba(15, 23, 42, .12); }
 .chat-emoji-categories { display:grid; grid-template-columns:repeat(9, minmax(0, 1fr)); gap:.2rem; margin-bottom:.45rem; padding-bottom:.45rem; border-bottom:1px solid color-mix(in srgb, var(--text-muted) 14%, transparent); }
-.chat-emoji-categories button { display:flex; min-width:0; flex-direction:column; align-items:center; gap:.12rem; padding:.35rem .2rem; border:0; border-radius:.65rem; background:transparent; cursor:pointer; }
+.chat-emoji-categories button { display:flex; min-width:0; flex-direction:column; align-items:center; gap:.12rem; padding:.35rem .2rem; border:0; border-radius: 999px; background:transparent; cursor:pointer; }
 .chat-emoji-categories button span { font-size:1rem; }
 .chat-emoji-categories button small { max-width:100%; overflow:hidden; color:var(--text-muted); font-size:.58rem; text-overflow:ellipsis; }
 .chat-emoji-categories button:hover, .chat-emoji-categories button.active { background:var(--surface-secondary); }
@@ -382,7 +382,7 @@ input[type='checkbox'], input[type='radio'] {
 .ai-provider-default input:focus-visible { outline:2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset:2px; }
 .ai-provider-switch:has(input:disabled),
 .ai-provider-default:has(input:disabled) { cursor:not-allowed; opacity:.55; }
-.chat-emoji-trigger { display:grid; width:42px; height:42px; flex:0 0 42px; place-items:center; border:0; border-radius:.75rem; background:transparent; color:var(--text-muted); cursor:pointer; }
+.chat-emoji-trigger { display:grid; width:42px; height:42px; flex:0 0 42px; place-items:center; border:0; border-radius: 999px; background:transparent; color:var(--text-muted); cursor:pointer; }
 .chat-emoji-trigger:hover, .chat-emoji-trigger.active { background:var(--surface-secondary); color:var(--accent); }
 .chat-mention { padding:0 .15rem; border-radius:.25rem; background:color-mix(in srgb, var(--accent) 24%, transparent); color:var(--text-primary); }
 
@@ -1348,6 +1348,8 @@ html[data-theme='dark'] .today-panel-heading > svg {
 }
 
 .workspace-view :is(input, textarea)::placeholder {
+  color: #98A2B3;
+}
 
 /* The four search fields below carry their own outline - their wrapper is a bare
    flex row with the icon parked over the field - so the pill is drawn on the input
@@ -1358,8 +1360,6 @@ html[data-theme='dark'] .today-panel-heading > svg {
 .activity-search input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .conversation-search input:not([type='checkbox']):not([type='radio']):not([type='file']) {
   border-radius: 999px !important;
-}
-  color: #98A2B3;
 }
 
 .workspace-view :is(
@@ -3062,4 +3062,14 @@ html[data-theme='dark'] .planner-bucket-menu {
     flex: 1 1 auto;
     width: 100%;
   }
+}
+
+/* Controls are pills. A button that carried a class but no radius of its own used
+   to fall through to square corners; this gives it the pill the rest of the app
+   uses. It stays at a single element selector on purpose, because that loses to
+   every class rule above it: cards, metric tiles, list rows, checkbox squares, the
+   spreadsheet cells and the slide rail keep whatever corner their own rule asks
+   for. */
+button {
+  border-radius: 999px;
 }
