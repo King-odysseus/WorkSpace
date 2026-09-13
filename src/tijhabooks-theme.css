@@ -1923,7 +1923,7 @@ html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; ba
 .team-presence-strip .presence-busy { background-color:#E36B43; }
 .team-presence-strip .presence-away { background-color:#C78A1B; }
 .team-workload-list { display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:12px; }
-.team-workload-card { display:grid; gap:14px; width:100%; padding:17px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); color:inherit; text-align:left; cursor:pointer; }
+.team-workload-card { display:grid; gap:14px; width:100%; padding:20px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); color:inherit; text-align:left; cursor:pointer; }
 .team-workload-card:hover, .team-workload-card:focus-visible { border-color:var(--teal); }
 .team-workload-heading { display:flex; min-width:0; align-items:center; gap:10px; }
 .team-workload-heading > div { min-width:0; flex:1; display:grid; gap:3px; }
@@ -1932,7 +1932,7 @@ html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; ba
 .team-workload-heading em { flex:0 0 auto; padding:4px 7px; border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font:700 9px 'Roboto'; font-style:normal; }
 .team-workload-heading em.is-warning { background:#FFF0E9; color:#C2410C; }
 .team-workload-stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:7px; }
-.team-workload-stats > div { display:grid; gap:3px; padding:9px; border-radius:8px; background:var(--workspace-surface-soft); }
+.team-workload-stats > div { display:grid; gap:3px; padding:10px 11px; border-radius:8px; background:var(--workspace-surface-soft); }
 .team-workload-stats strong { color:var(--workspace-text); font:800 17px 'Montserrat'; }
 .team-workload-stats span { color:var(--workspace-text-soft); font-size:8px; }
 .team-workload-stats .is-warning strong, .member-profile-stats .is-warning strong { color:#C2410C; }
