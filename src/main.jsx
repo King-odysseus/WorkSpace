@@ -264,6 +264,7 @@ function App() {
   const searchRef = useRef(null);
   const profileMenuRef = useRef(null);
   const workspaceMenuRef = useRef(null);
+  const workspaceMenuRefMobile = useRef(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("workspace-sidebar-collapsed") === "true",
   );
@@ -523,9 +524,12 @@ function App() {
         !profileMenuRef.current.contains(event.target)
       )
         setProfileMenuOpen(false);
+      // The switcher renders in the sidebar and again in the mobile drawer, and
+      // both stay mounted (the drawer is only translated off-screen), so a click
+      // counts as "outside" only when it misses both.
       if (
-        workspaceMenuRef.current &&
-        !workspaceMenuRef.current.contains(event.target)
+        !workspaceMenuRef.current?.contains(event.target) &&
+        !workspaceMenuRefMobile.current?.contains(event.target)
       )
         setWorkspaceMenuOpen(false);
       if (searchRef.current && !searchRef.current.contains(event.target))
@@ -1652,6 +1656,31 @@ function App() {
     currentWorkspace?.role,
   );
   const canManageTasks = ["owner", "manager"].includes(currentWorkspace?.role);
+  const workspaceMenu = (
+    <div className="absolute left-0 top-full z-[60] mt-2 w-56 animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
+      {session.user.workspaces.map((workspace) => (
+        <button
+          type="button"
+          key={workspace.id}
+          onClick={() => {
+            setActiveWorkspaceId(workspace.id);
+            setWorkspaceMenuOpen(false);
+          }}
+          className={cn(
+            "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-secondary",
+            workspace.id === activeWorkspaceId
+              ? "text-primary font-semibold"
+              : "text-text-secondary",
+          )}
+        >
+          <span className="truncate">{workspace.name}</span>
+          {workspace.id === activeWorkspaceId && (
+            <Check size={14} className="shrink-0" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
   const teamMembers = workspaceData.members.map((member) => ({
     id: member.id,
     name:
@@ -1896,7 +1925,9 @@ function App() {
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
-        {/* Logo / brand - desktop only. Mobile header already shows the brand. */}
+        {/* Logo / brand - desktop only, and the workspace switcher. The header
+            used to carry this; it now holds only the page title and search.
+            Collapsed to the rail the logo alone is the trigger. */}
         <div
           className={cn(
             "hidden lg:flex items-center border-b border-white/10 pb-4",
@@ -1905,26 +1936,114 @@ function App() {
               : "gap-3 px-4 pt-8 pb-4",
           )}
         >
-          <img
-            src="/tijha-logo.png"
-            alt="TijhaBooks"
-            className="h-7 w-7 shrink-0 rounded-lg object-contain"
-          />
-          {!railCollapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-bold tracking-tight">
-                WorkSpace
-              </p>
-              <p className="truncate text-[11px] uppercase tracking-wider text-white/40">
-                Team Manager
-              </p>
+          {railCollapsed ? (
+            <div className="relative" ref={workspaceMenuRef}>
+              <button
+                type="button"
+                onClick={() =>
+                  session.user.workspaces.length > 1 &&
+                  setWorkspaceMenuOpen((current) => !current)
+                }
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-lg",
+                  session.user.workspaces.length > 1 &&
+                    "transition-colors hover:bg-white/10",
+                )}
+                aria-haspopup={
+                  session.user.workspaces.length > 1 ? "true" : undefined
+                }
+                aria-expanded={
+                  session.user.workspaces.length > 1
+                    ? workspaceMenuOpen
+                    : undefined
+                }
+                aria-label={`Workspace: ${currentWorkspace?.name || "Workspace"}`}
+                title={currentWorkspace?.name || "Workspace"}
+              >
+                <img
+                  src="/tijha-logo.png"
+                  alt=""
+                  className="h-7 w-7 shrink-0 rounded-lg object-contain"
+                />
+              </button>
+              {workspaceMenuOpen && workspaceMenu}
             </div>
+          ) : (
+            <>
+              <img
+                src="/tijha-logo.png"
+                alt="TijhaBooks"
+                className="h-7 w-7 shrink-0 rounded-lg object-contain"
+              />
+              {session.user.workspaces.length > 0 && (
+                <div className="relative min-w-0 flex-1" ref={workspaceMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      session.user.workspaces.length > 1 &&
+                      setWorkspaceMenuOpen((current) => !current)
+                    }
+                    className={cn(
+                      "flex w-full items-center gap-1.5 rounded-lg text-left",
+                      session.user.workspaces.length > 1 &&
+                        "transition-colors hover:opacity-80",
+                    )}
+                    aria-haspopup={
+                      session.user.workspaces.length > 1 ? "true" : undefined
+                    }
+                    aria-expanded={
+                      session.user.workspaces.length > 1
+                        ? workspaceMenuOpen
+                        : undefined
+                    }
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-base font-bold tracking-tight">
+                        {currentWorkspace?.name || "Workspace"}
+                      </span>
+                      <span className="block truncate text-[11px] uppercase tracking-wider text-white/40">
+                        Team Manager
+                      </span>
+                    </span>
+                    {session.user.workspaces.length > 1 && (
+                      <ChevronDown
+                        size={14}
+                        className="shrink-0 text-white/40"
+                      />
+                    )}
+                  </button>
+                  {workspaceMenuOpen && workspaceMenu}
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Mobile close button - outside the logo block so it survives on phones */}
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 lg:hidden">
-          <span className="text-sm font-bold text-white/60">Navigation</span>
+        {/* Mobile drawer header - carries the workspace switcher, since the
+            header no longer does and the sidebar brand block is desktop only.
+            Close button sits outside the switcher so it survives on phones. */}
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3 lg:hidden">
+          {session.user.workspaces.length > 1 ? (
+            <div className="relative min-w-0" ref={workspaceMenuRefMobile}>
+              <button
+                type="button"
+                onClick={() => setWorkspaceMenuOpen((current) => !current)}
+                className="flex min-w-0 items-center gap-1.5 rounded-lg py-1 text-sm font-bold text-white/70 transition-colors hover:text-white"
+                aria-haspopup="true"
+                aria-expanded={workspaceMenuOpen}
+              >
+                <span className="truncate">
+                  {currentWorkspace?.name || "Workspace"}
+                </span>
+                <ChevronDown size={14} className="shrink-0" />
+              </button>
+              {workspaceMenuOpen && workspaceMenu}
+            </div>
+          ) : (
+            <span className="min-w-0 truncate text-sm font-bold text-white/60">
+              {currentWorkspace?.name || "Workspace"}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
@@ -2063,63 +2182,6 @@ function App() {
           <h1 className="hidden text-base font-bold tracking-tight text-navy lg:block">
             {active}
           </h1>
-
-          {/* Workspace switcher - lives in the header (mirrors TijhaBooks'
-            BusinessSwitcher), not the sidebar. Collapses to a static label
-            when there's only one workspace to switch to. */}
-          {session.user.workspaces.length > 0 && (
-            <div className="relative hidden sm:block" ref={workspaceMenuRef}>
-              <button
-                type="button"
-                onClick={() =>
-                  session.user.workspaces.length > 1 &&
-                  setWorkspaceMenuOpen((current) => !current)
-                }
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full border border-border bg-surface-secondary px-3 py-1.5 text-xs font-semibold text-text-primary",
-                  session.user.workspaces.length > 1 &&
-                    "hover:bg-border-light transition-colors",
-                )}
-                aria-haspopup={
-                  session.user.workspaces.length > 1 ? "true" : undefined
-                }
-                aria-expanded={workspaceMenuOpen}
-              >
-                <Building2 size={14} className="shrink-0 text-text-muted" />
-                <span className="max-w-[140px] truncate">
-                  {currentWorkspace?.name || "Workspace"}
-                </span>
-                {session.user.workspaces.length > 1 && (
-                  <ChevronDown size={14} className="shrink-0 text-text-muted" />
-                )}
-              </button>
-              {workspaceMenuOpen && (
-                <div className="absolute left-0 top-full z-[60] mt-2 w-56 animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
-                  {session.user.workspaces.map((workspace) => (
-                    <button
-                      type="button"
-                      key={workspace.id}
-                      onClick={() => {
-                        setActiveWorkspaceId(workspace.id);
-                        setWorkspaceMenuOpen(false);
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-secondary",
-                        workspace.id === activeWorkspaceId
-                          ? "text-primary font-semibold"
-                          : "text-text-secondary",
-                      )}
-                    >
-                      <span className="truncate">{workspace.name}</span>
-                      {workspace.id === activeWorkspaceId && (
-                        <Check size={14} className="shrink-0" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="hidden flex-1 justify-center md:flex" ref={searchRef}>
             <div className="relative w-full max-w-md">
@@ -2352,7 +2414,7 @@ function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        setWorkspaceMenuOpen(true);
+                        setMobileOpen(true);
                         setProfileMenuOpen(false);
                       }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary sm:hidden"
