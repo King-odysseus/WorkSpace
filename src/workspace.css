@@ -6099,6 +6099,16 @@ html[data-theme='dark'] .today-exception-priority.urgent {
   padding: 12px 14px;
 }
 
+/* Same as the rows above: these two are in the card list, but their base rules
+   only set vertical padding, so the text ran into the filled edge. */
+.workspace-view .report-member-row {
+  padding: 12px 14px;
+}
+
+.workspace-view .audit-row {
+  padding: 11px 14px;
+}
+
 .workspace-view :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea) {
   border: 1px solid var(--dashboard-border) !important;
   border-radius: 12px !important;
