@@ -1845,7 +1845,7 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .team-member-heading { display: flex; align-items: center; gap: 9px; }
 .team-member-heading div { min-width: 0; flex: 1; }
 .team-member-heading h2, .team-column-heading h2 { margin: 0; color: var(--workspace-text); font: 700 13px 'Montserrat'; }
-.team-member-heading span { color: var(--workspace-text-soft); font-size: 9px; text-transform: capitalize; }
+.team-member-heading > div > span { color: var(--workspace-text-soft); font-size: 9px; text-transform: capitalize; }
 .team-member-last-seen { display: block; margin-top: 2px; text-transform: none; }
 .team-member-heading strong { color: var(--teal); font-size: 11px; }
 .team-member-progress { height: 5px; margin: 12px 0 9px; overflow: hidden; border-radius: 5px; background: var(--workspace-surface-soft); }
@@ -1928,7 +1928,7 @@ html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; ba
 .team-workload-heading { display:flex; min-width:0; align-items:center; gap:10px; }
 .team-workload-heading > div { min-width:0; flex:1; display:grid; gap:3px; }
 .team-workload-heading h2 { margin:0; color:var(--workspace-text); font:700 13px 'Montserrat'; }
-.team-workload-heading span { overflow:hidden; color:var(--workspace-text-soft); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.team-workload-heading > div > span { overflow:hidden; color:var(--workspace-text-soft); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
 .team-workload-heading em { flex:0 0 auto; padding:4px 7px; border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font:700 9px 'Roboto'; font-style:normal; }
 .team-workload-heading em.is-warning { background:#FFF0E9; color:#C2410C; }
 .team-workload-stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:7px; }
@@ -1949,7 +1949,7 @@ html[data-theme='dark'] .invitation-status-badge.is-expired { color: #B9CCDD; ba
 .team-availability-card { min-width:0; padding:16px; border:1px solid var(--workspace-border); border-radius:11px; background:var(--workspace-surface); }
 .team-availability-card .team-member-heading { display:grid; grid-template-columns:22px minmax(0,1fr) auto; align-items:center; gap:9px; }
 .team-availability-card .team-member-heading > div { min-width:0; display:grid; gap:3px; }
-.team-availability-card .team-member-heading span { overflow:hidden; color:var(--workspace-text-soft); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.team-availability-card .team-member-heading > div > span { overflow:hidden; color:var(--workspace-text-soft); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
 .team-availability-card .team-member-heading em { padding:4px 7px; border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font:700 8px 'Roboto'; font-style:normal; }
 .team-availability-card .team-member-heading em.is-working { background:color-mix(in srgb, var(--teal) 12%, var(--workspace-surface)); color:var(--teal); }
 .team-availability-chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
