@@ -97,11 +97,14 @@ self.addEventListener('push', event => {
   try { data = { ...data, ...event.data.json() } } catch { /* use default */ }
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    // Native notifications are the single sound source in every app state.
-    // Using the same path while visible, backgrounded, or minimized prevents
-    // duplicate foreground chimes and makes the setting reliable.
+    const hasFocusedClient = clients.some(client => client.visibilityState === 'visible' && client.focused === true)
+    // A focused app plays its selected sound, so suppress the native duplicate.
+    // Backgrounded, minimized, and closed clients use the OS notification sound
+    // instead; browsers do not expose a custom sound file or app-controlled
+    // volume there. A merely visible window is not enough: browser windows can
+    // stay "visible" while another window has focus.
     const notification = self.registration.showNotification(data.title, {
-      body: data.body, icon: '/icon-192.png', silent: data.sound === false, requireInteraction: false, data: { url: data.url || '/' },
+      body: data.body, icon: '/icon-192.png', silent: data.sound === false || hasFocusedClient, requireInteraction: false, data: { url: data.url || '/' },
     })
     const badge = (async () => {
       try {

@@ -7,16 +7,22 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
-from .models import WorkspaceNotification
+from .models import NotificationPreference, WorkspaceNotification
 
 
 def _notification_summary(user):
-    summary = WorkspaceNotification.objects.filter(
+    unread = WorkspaceNotification.objects.filter(
         recipient=user,
         workspace__members=user,
         read_at__isnull=True,
-    ).aggregate(unread_count=Count('id'), latest_unread_id=Max('id'))
+    )
+    summary = unread.aggregate(unread_count=Count('id'), latest_unread_id=Max('id'))
     summary['latest_unread_id'] = summary['latest_unread_id'] or 0
+    latest = unread.order_by('-id').only('workspace_id').first() if summary['latest_unread_id'] else None
+    preference = NotificationPreference.objects.filter(workspace_id=latest.workspace_id, user=user).first() if latest else None
+    summary['sound'] = preference.notification_sound if preference else True
+    summary['sound_name'] = preference.notification_sound_name if preference else 'chime'
+    summary['volume'] = preference.notification_volume if preference else 70
     return summary
 
 

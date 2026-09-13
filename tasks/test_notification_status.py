@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from .models import Workspace, Membership, WorkspaceNotification
+from .models import NotificationPreference, Workspace, Membership, WorkspaceNotification
 
 
 class NotificationSummaryTests(TestCase):
@@ -20,15 +20,19 @@ class NotificationSummaryTests(TestCase):
         for _ in range(25):
             WorkspaceNotification.objects.create(workspace=workspace, recipient=user, kind='mention', title='Unread')
         newest = WorkspaceNotification.objects.create(workspace=second, recipient=user, kind='mention', title='Other workspace')
+        NotificationPreference.objects.create(
+            workspace=second, user=user,
+            notification_sound=False, notification_sound_name='bell', notification_volume=35,
+        )
         WorkspaceNotification.objects.create(workspace=workspace, recipient=user, kind='mention', title='Read', read_at=timezone.now())
         WorkspaceNotification.objects.create(workspace=workspace, recipient=other, kind='mention', title='Private')
         WorkspaceNotification.objects.create(workspace=removed, recipient=user, kind='mention', title='No longer a member')
         self.client.force_login(user)
         response = self.client.get(reverse('notification-summary'))
-        self.assertEqual(response.json(), {'unread_count': 26, 'latest_unread_id': newest.id})
+        self.assertEqual(response.json(), {'unread_count': 26, 'latest_unread_id': newest.id, 'sound': False, 'sound_name': 'bell', 'volume': 35})
         self.assertIn('no-store', response['Cache-Control'])
         WorkspaceNotification.objects.filter(recipient=user).update(read_at=timezone.now())
-        self.assertEqual(self.client.get(reverse('notification-summary')).json(), {'unread_count': 0, 'latest_unread_id': 0})
+        self.assertEqual(self.client.get(reverse('notification-summary')).json(), {'unread_count': 0, 'latest_unread_id': 0, 'sound': True, 'sound_name': 'chime', 'volume': 70})
 
     def test_stream_requires_login(self):
         self.assertEqual(self.client.get(reverse('notification-stream')).status_code, 401)
@@ -38,6 +42,7 @@ class NotificationSummaryTests(TestCase):
         workspace = Workspace.objects.create(name='Stream', slug='stream')
         Membership.objects.create(workspace=workspace, user=user)
         notification = WorkspaceNotification.objects.create(workspace=workspace, recipient=user, kind='mention', title='New')
+        NotificationPreference.objects.create(workspace=workspace, user=user, notification_sound_name='pop', notification_volume=45)
         self.client.force_login(user)
         response = self.client.get(f"{reverse('notification-stream')}?since=0")
         body = b''.join(response.streaming_content).decode()
@@ -45,3 +50,5 @@ class NotificationSummaryTests(TestCase):
         self.assertEqual(response['Content-Type'], 'text/event-stream')
         self.assertIn(f'id: {notification.id}', body)
         self.assertIn('"unread_count": 1', body)
+        self.assertIn('"sound_name": "pop"', body)
+        self.assertIn('"volume": 45', body)

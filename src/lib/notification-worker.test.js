@@ -3,10 +3,10 @@ import vm from 'node:vm'
 import { expect, it, vi } from 'vitest'
 
 it.each([
-  ['focused visible', 'visible', true],
-  ['visible but backgrounded', 'visible', false],
-  ['minimized', 'hidden', false],
-])('plays the enabled native sound and updates the badge with a %s app', async (_, visibilityState, focused) => {
+  ['focused visible', 'visible', true, true],
+  ['visible but backgrounded', 'visible', false, false],
+  ['minimized', 'hidden', false, false],
+])('uses the expected sound path and updates the badge with a %s app', async (_, visibilityState, focused, silent) => {
   const handlers = {}
   const client = { visibilityState, focused, postMessage: vi.fn() }
   const self = {
@@ -21,7 +21,7 @@ it.each([
   handlers.push({ data: { json: () => ({ title: 'New message', body: 'Hello' }) }, waitUntil: promise => { work = promise } })
   await work
   expect(self.navigator.setAppBadge).toHaveBeenCalledWith(31)
-  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent: false, requireInteraction: false }))
+  expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent, requireInteraction: false }))
   expect(client.postMessage).toHaveBeenCalledWith({ type: 'NOTIFICATIONS_CHANGED' })
 })
 

@@ -1192,6 +1192,13 @@ class AuditLog(models.Model):
 
 
 class NotificationPreference(models.Model):
+    NOTIFICATION_SOUND_CHOICES = [
+        ('chime', 'Chime'),
+        ('bell', 'Bell'),
+        ('pop', 'Pop'),
+        ('pulse', 'Pulse'),
+    ]
+
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='notification_preferences')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_notification_preferences')
     mentions = models.BooleanField(default=True)
@@ -1200,6 +1207,8 @@ class NotificationPreference(models.Model):
     task_updates = models.BooleanField(default=True)
     calendar_reminders = models.BooleanField(default=True)
     notification_sound = models.BooleanField(default=True)
+    notification_sound_name = models.CharField(max_length=16, choices=NOTIFICATION_SOUND_CHOICES, default='chime')
+    notification_volume = models.PositiveSmallIntegerField(default=70)
     # Manager activity: owners/managers are notified when teammates create,
     # complete, delete, or materially update shared records. Default on so
     # oversight is not silently lost, but each leader can opt out.
@@ -1217,6 +1226,8 @@ class NotificationPreference(models.Model):
             'task_updates': self.task_updates,
             'calendar_reminders': self.calendar_reminders,
             'notification_sound': self.notification_sound,
+            'notification_sound_name': self.notification_sound_name,
+            'notification_volume': self.notification_volume,
             'manager_activity': self.manager_activity,
         }
 

@@ -907,16 +907,18 @@ class TaskApiTests(TestCase):
     def test_notification_preferences_default_to_enabled_and_can_be_updated(self):
         response = self.client.get(reverse('notification-preference-detail', args=[self.workspace.id]))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['preferences'], {'mentions': True, 'direct_messages': True, 'channel_messages': True, 'task_updates': True, 'calendar_reminders': True, 'notification_sound': True, 'manager_activity': True})
+        self.assertEqual(response.json()['preferences'], {'mentions': True, 'direct_messages': True, 'channel_messages': True, 'task_updates': True, 'calendar_reminders': True, 'notification_sound': True, 'notification_sound_name': 'chime', 'notification_volume': 70, 'manager_activity': True})
 
         update_response = self.client.patch(
             reverse('notification-preference-detail', args=[self.workspace.id]),
-            data=json.dumps({'task_updates': False, 'notification_sound': False}),
+            data=json.dumps({'task_updates': False, 'notification_sound': False, 'notification_sound_name': 'bell', 'notification_volume': 35}),
             content_type='application/json',
         )
         self.assertEqual(update_response.status_code, 200)
         self.assertFalse(update_response.json()['preferences']['task_updates'])
         self.assertFalse(update_response.json()['preferences']['notification_sound'])
+        self.assertEqual(update_response.json()['preferences']['notification_sound_name'], 'bell')
+        self.assertEqual(update_response.json()['preferences']['notification_volume'], 35)
         self.assertTrue(update_response.json()['preferences']['mentions'])
 
         rejected_response = self.client.patch(
@@ -925,6 +927,20 @@ class TaskApiTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(rejected_response.status_code, 400)
+
+        invalid_sound = self.client.patch(
+            reverse('notification-preference-detail', args=[self.workspace.id]),
+            data=json.dumps({'notification_sound_name': 'airhorn'}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid_sound.status_code, 400)
+
+        invalid_volume = self.client.patch(
+            reverse('notification-preference-detail', args=[self.workspace.id]),
+            data=json.dumps({'notification_volume': 101}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid_volume.status_code, 400)
 
     def test_disabled_task_update_preference_suppresses_notification(self):
         teammate = User.objects.create_user(username='notif-pref@example.com', email='notif-pref@example.com', password='secure-pass-123')
@@ -4442,6 +4458,10 @@ class NotificationCoverageTests(TestCase):
 
     def test_task_comment_pushes_to_the_assignee_straight_away(self):
         task = Task.objects.create(workspace=self.workspace, title='Prepare brief', assignee=self.member)
+        NotificationPreference.objects.update_or_create(
+            workspace=self.workspace, user=self.member,
+            defaults={'notification_sound': False, 'notification_sound_name': 'pulse', 'notification_volume': 25},
+        )
         self._login(self.owner)
         with mock.patch('tasks.views.send_push_to_user') as push:
             response = self.client.post(
@@ -4452,6 +4472,9 @@ class NotificationCoverageTests(TestCase):
         self.assertEqual(response.status_code, 201)
         push.assert_called_once()
         self.assertEqual(push.call_args.args[0], self.member)
+        self.assertFalse(push.call_args.kwargs['sound'])
+        self.assertEqual(push.call_args.kwargs['sound_name'], 'pulse')
+        self.assertEqual(push.call_args.kwargs['volume'], 25)
 
 
 class PushDeepLinkTests(TestCase):

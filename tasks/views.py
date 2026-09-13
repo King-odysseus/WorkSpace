@@ -139,6 +139,8 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
             recipient, title, body,
             url=notification_deep_link(notification.id, target_type, target_id),
             sound=preference.notification_sound if preference else True,
+            sound_name=preference.notification_sound_name if preference else 'chime',
+            volume=preference.notification_volume if preference else 70,
         )
     return notification
 
@@ -2099,16 +2101,24 @@ def notification_preference_detail(request, workspace_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'notification_sound', 'manager_activity']
+    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'notification_sound', 'notification_sound_name', 'notification_volume', 'manager_activity']
     unknown_fields = sorted(set(payload) - set(fields))
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported preference fields: {", ".join(unknown_fields)}.'}, status=400)
     updated_fields = []
     for field in fields:
         if field in payload:
-            if not isinstance(payload[field], bool):
+            value = payload[field]
+            if field == 'notification_sound_name':
+                allowed = {choice[0] for choice in NotificationPreference.NOTIFICATION_SOUND_CHOICES}
+                if not isinstance(value, str) or value not in allowed:
+                    return JsonResponse({'error': 'notification_sound_name must be one of: chime, bell, pop, pulse.'}, status=400)
+            elif field == 'notification_volume':
+                if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 100:
+                    return JsonResponse({'error': 'notification_volume must be an integer between 0 and 100.'}, status=400)
+            elif not isinstance(value, bool):
                 return JsonResponse({'error': f'{field} must be true or false.'}, status=400)
-            setattr(preference, field, payload[field])
+            setattr(preference, field, value)
             updated_fields.append(field)
     if updated_fields:
         preference.save(update_fields=updated_fields)

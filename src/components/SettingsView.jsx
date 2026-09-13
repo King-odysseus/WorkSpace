@@ -15,6 +15,7 @@ import {
   Sparkles,
   Sun,
   Users,
+  Volume2,
   Webhook,
   X,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const AISettingsPanel = lazy(() =>
 );
 import { WorkspaceViewHeading } from "./workspace-ui.jsx";
 import { effectivePresence, getCsrfToken } from "../lib/workspace-format.js";
+import { NOTIFICATION_SOUND_OPTIONS, playNotificationSound } from "../lib/notification-sounds.js";
 
 // Mirrors tasks/models.py PERMISSION_KEYS - keep in sync with the backend list.
 const PERMISSION_LABELS = [
@@ -76,6 +78,7 @@ function SettingsView({
 }) {
   const [section, setSection] = useState("appearance");
   const [notificationPrefs, setNotificationPrefs] = useState(null);
+  const [notificationVolume, setNotificationVolume] = useState(70);
   const [checkInSettings, setCheckInSettings] = useState(null);
   const [checkInSettingsError, setCheckInSettingsError] = useState("");
   const [prefsError, setPrefsError] = useState("");
@@ -259,7 +262,7 @@ function SettingsView({
     [
       "notification_sound",
       "Notification sound",
-      "Play the browser notification sound whether WorkSpace is open, backgrounded, or minimized.",
+      "Play the selected sound while WorkSpace is focused. Minimized or closed notifications use the operating system sound.",
     ],
     ...(canManageMembers
       ? [
@@ -282,7 +285,10 @@ function SettingsView({
         response.json().then((data) => ({ ok: response.ok, data })),
       )
       .then(({ ok, data }) => {
-        if (isCurrent && ok) setNotificationPrefs(data.preferences);
+        if (isCurrent && ok) {
+          setNotificationPrefs(data.preferences);
+          setNotificationVolume(data.preferences.notification_volume ?? 70);
+        }
       })
       .catch(() => {
         if (isCurrent)
@@ -347,10 +353,30 @@ function SettingsView({
       if (!response.ok)
         throw new Error(data.error || "Preference could not be saved.");
       setNotificationPrefs(data.preferences);
+      setNotificationVolume(data.preferences.notification_volume ?? 70);
+      return true;
     } catch (error) {
       setNotificationPrefs(previous);
       setPrefsError(error.message || "Preference could not be saved.");
+      return false;
     }
+  };
+  const previewNotificationSound = () => {
+    if (!notificationPrefs?.notification_sound || notificationVolume <= 0) return;
+    void playNotificationSound(notificationPrefs.notification_sound_name, notificationVolume);
+  };
+  const updateNotificationSound = async (value) => {
+    const saved = await updatePreference("notification_sound_name", value);
+    if (saved && notificationPrefs?.notification_sound && notificationVolume > 0) {
+      void playNotificationSound(value, notificationVolume);
+    }
+  };
+  const commitNotificationVolume = async (value) => {
+    if (value === notificationPrefs?.notification_volume) return;
+    const previous = notificationVolume;
+    setNotificationVolume(value);
+    const saved = await updatePreference("notification_volume", value);
+    if (!saved) setNotificationVolume(previous);
   };
   useEffect(() => {
     if (!workspaceId || section !== "integrations") return undefined;
@@ -1039,25 +1065,80 @@ function SettingsView({
                 </div>
               </div>
               {notificationPrefs ? (
-                preferenceRows.map(([key, label, description]) => (
-                  <div className="settings-row settings-control-row" key={key}>
-                    <div>
-                      <strong>{label}</strong>
-                      <span>{description}</span>
+                <>
+                  {preferenceRows.map(([key, label, description]) => (
+                    <div className="settings-row settings-control-row" key={key}>
+                      <div>
+                        <strong>{label}</strong>
+                        <span>{description}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={`settings-switch ${notificationPrefs[key] ? "is-on" : ""}`}
+                        aria-pressed={notificationPrefs[key]}
+                        onClick={() =>
+                          updatePreference(key, !notificationPrefs[key])
+                        }
+                      >
+                        <span />
+                        {notificationPrefs[key] ? "On" : "Off"}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className={`settings-switch ${notificationPrefs[key] ? "is-on" : ""}`}
-                      aria-pressed={notificationPrefs[key]}
-                      onClick={() =>
-                        updatePreference(key, !notificationPrefs[key])
-                      }
-                    >
-                      <span />
-                      {notificationPrefs[key] ? "On" : "Off"}
-                    </button>
+                  ))}
+                  <div className="settings-row settings-control-row">
+                    <div>
+                      <strong>Sound style</strong>
+                      <span>
+                        {NOTIFICATION_SOUND_OPTIONS.find(option => option.value === notificationPrefs.notification_sound_name)?.description || "Choose the sound played while WorkSpace is focused."}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <AppSelect
+                        value={notificationPrefs.notification_sound_name}
+                        onChange={(event) => updateNotificationSound(event.target.value)}
+                        aria-label="Notification sound style"
+                      >
+                        {NOTIFICATION_SOUND_OPTIONS.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </AppSelect>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={previewNotificationSound}
+                        disabled={!notificationPrefs.notification_sound || notificationVolume <= 0}
+                      >
+                        <Volume2 size={14} /> Preview
+                      </button>
+                    </div>
                   </div>
-                ))
+                  <div className="settings-row settings-control-row">
+                    <div>
+                      <strong>Sound volume</strong>
+                      <span>Volume for sounds played while WorkSpace is focused.</span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={notificationVolume}
+                        onChange={(event) => setNotificationVolume(Number(event.target.value))}
+                        onPointerUp={(event) => commitNotificationVolume(Number(event.currentTarget.value))}
+                        onKeyUp={(event) => commitNotificationVolume(Number(event.currentTarget.value))}
+                        onBlur={(event) => commitNotificationVolume(Number(event.currentTarget.value))}
+                        aria-label="Notification sound volume"
+                        className="h-2 w-32 cursor-pointer"
+                        style={{ accentColor: "var(--brand-accent)" }}
+                      />
+                      <span className="min-w-9 text-right text-xs font-bold tabular-nums">{notificationVolume}%</span>
+                    </div>
+                  </div>
+                  <p className="settings-note">
+                    Sound style and volume apply while WorkSpace is focused. When WorkSpace is backgrounded, minimized, or closed, desktop notifications use your operating system&apos;s notification sound and system volume.
+                  </p>
+                </>
               ) : (
                 <SkeletonGroup className="settings-inline-skeleton" label="Loading your preferences">
                   <Skeleton variant="line" />

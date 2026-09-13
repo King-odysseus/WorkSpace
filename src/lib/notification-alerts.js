@@ -1,3 +1,5 @@
+import { playNotificationSound } from './notification-sounds.js'
+
 // A separate lightweight poll keeps badges current without loading every workspace
 // collection. Push wakes this poll immediately, including while minimized.
 export async function updateAppBadge(count) {
@@ -9,13 +11,30 @@ export async function updateAppBadge(count) {
   }
 }
 
-export function startNotificationAlerts(onSummary = () => {}) {
+export function startNotificationAlerts(onSummary = () => {}, playSound = playNotificationSound) {
   let stopped = false
   let pending = false
   let stream = null
   let streamReconnect = null
   let latestUnreadId = 0
+  let hasBaseline = false
+  let lastPlayedId = 0
   const originalTitle = document.title
+  const canPlayCustomSound = () =>
+    document.visibilityState === 'visible'
+    && (typeof document.hasFocus !== 'function' || document.hasFocus())
+  const applySummary = data => {
+    const nextUnreadId = Number(data.latest_unread_id || 0)
+    if (hasBaseline && nextUnreadId > lastPlayedId && data.sound !== false && canPlayCustomSound()) {
+      playSound(data.sound_name || 'chime', data.volume ?? 70)
+    }
+    lastPlayedId = Math.max(lastPlayedId, nextUnreadId)
+    latestUnreadId = nextUnreadId
+    hasBaseline = true
+    onSummary(data)
+    document.title = data.unread_count ? `(${data.unread_count}) ${originalTitle}` : originalTitle
+    updateAppBadge(data.unread_count)
+  }
   const refresh = async () => {
     if (stopped || pending) return
     pending = true
@@ -24,12 +43,7 @@ export function startNotificationAlerts(onSummary = () => {}) {
       if (!response.ok) throw new Error(`Notification summary returned ${response.status}`)
       const data = await response.json()
       if (stopped) return
-      // Baseline existing history silently. The service worker is the only
-      // sound source, so a foreground alert cannot chime twice.
-      onSummary(data)
-      latestUnreadId = data.latest_unread_id || 0
-      document.title = data.unread_count ? `(${data.unread_count}) ${originalTitle}` : originalTitle
-      await updateAppBadge(data.unread_count)
+      applySummary(data)
     } catch (error) {
       if (!stopped) console.warn('Notification alerts could not be refreshed.', error)
     } finally {
@@ -43,10 +57,7 @@ export function startNotificationAlerts(onSummary = () => {}) {
     stream.onmessage = event => {
       try {
         const data = JSON.parse(event.data)
-        latestUnreadId = data.latest_unread_id || latestUnreadId
-        onSummary(data)
-        document.title = data.unread_count ? `(${data.unread_count}) ${originalTitle}` : originalTitle
-        updateAppBadge(data.unread_count)
+        applySummary(data)
       } catch (error) {
         console.warn('Notification stream payload could not be read.', error)
       }

@@ -28,7 +28,11 @@ async function setup(permission = 'default', saveStatus = 201) {
   const api = mockApi({
     '/api/push/public-key/': { public_key: 'AQID', configured: true },
     '/api/push/subscriptions/': { status: saveStatus, body: saveStatus === 201 ? {} : { error: 'Subscription could not be saved.' } },
-    '/notification-preferences/': { preferences: { notification_sound: true } },
+    '/notification-preferences/': { preferences: {
+      notification_sound: true,
+      notification_sound_name: 'chime',
+      notification_volume: 70,
+    } },
     '/calendar-feed-token/': {},
   })
   render(<SettingsView currentWorkspace={{ role: 'member' }} currentUserName="Test" currentUserEmail="test@example.test" members={[]} notifications={[]} workspaceId={1} />)
@@ -71,4 +75,26 @@ it('saves the Notification sound choice from notification settings', async () =>
   await waitFor(() => expectRequest(api, '/notification-preferences/', 'PATCH'))
   const [, request] = expectRequest(api, '/notification-preferences/', 'PATCH')
   expect(JSON.parse(request.body)).toEqual({ notification_sound: false })
+})
+
+it('saves the sound style and volume from notification settings', async () => {
+  const { api } = await setup()
+  fireEvent.click(screen.getByRole('combobox', { name: 'Notification sound style' }))
+  fireEvent.click(await screen.findByRole('option', { name: 'Bell' }))
+  await waitFor(() => {
+    const updates = api.mock.calls.filter(([url, init = {}]) =>
+      String(url).includes('/notification-preferences/') && init.method === 'PATCH')
+    expect(updates).toHaveLength(1)
+    expect(JSON.parse(updates[0][1].body)).toEqual({ notification_sound_name: 'bell' })
+  })
+
+  const volume = screen.getByRole('slider', { name: 'Notification sound volume' })
+  fireEvent.change(volume, { target: { value: '35' } })
+  fireEvent.pointerUp(volume)
+  await waitFor(() => {
+    const updates = api.mock.calls.filter(([url, init = {}]) =>
+      String(url).includes('/notification-preferences/') && init.method === 'PATCH')
+    expect(updates).toHaveLength(2)
+    expect(JSON.parse(updates[1][1].body)).toEqual({ notification_volume: 35 })
+  })
 })
