@@ -2347,6 +2347,7 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .follow-up-toolbar label,
 .report-toolbar label,
 .activity-toolbar label {
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 .follow-up-toolbar label [data-slot='select-trigger'].app-select-trigger,
