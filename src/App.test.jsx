@@ -11,6 +11,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { mockApi } from './test/setup-tests.js'
+import { toDateKey } from './lib/workspace-format.js'
 
 const session = {
   user: {
@@ -33,7 +34,9 @@ const task = {
   project_id: null,
   status: 'todo',
   priority: 'normal',
-  due_date: '2026-09-12',
+  // The today bar only lists tasks due today or later, so a fixed date made this
+  // test pass until that date and fail every day after. Keep it relative.
+  due_date: toDateKey(new Date()),
   bucket: 'Backlog',
   recurrence: 'none',
   labels: [],
