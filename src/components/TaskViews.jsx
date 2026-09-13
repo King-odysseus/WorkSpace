@@ -57,7 +57,8 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
       const data = await readJsonResponse(response, 'Task details could not be saved.')
       if (!response.ok) return setError(data.error || 'Task details could not be saved.')
       onTaskUpdated(data.task)
-      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: 'Task saved.' }))
+      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: 'Task updated.' }))
+      onClose()
     } catch (saveError) {
       setError(saveError.message || 'Task details could not be saved.')
     } finally {
