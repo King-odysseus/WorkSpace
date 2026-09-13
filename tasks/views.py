@@ -20,7 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationDismissal, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .file_responses import stored_file_response
 from .mailer import send_invitation_email, send_reminder_email
@@ -3584,8 +3584,16 @@ def direct_conversation_list(request, workspace_id):
         return error
     if request.method == 'GET':
         conversations = DirectConversation.objects.filter(workspace_id=workspace_id, participants=request.user).prefetch_related('participants')
-        conversations = sorted(conversations, key=lambda item: item.messages.order_by('-created_at').values_list('created_at', flat=True).first() or item.created_at, reverse=True)
-        return JsonResponse({'conversations': [conversation.as_dict(request.user) for conversation in conversations]})
+        dismissals = dict(DirectConversationDismissal.objects.filter(conversation__in=conversations, user=request.user).values_list('conversation_id', 'hidden_at'))
+        ordered = []
+        for conversation in conversations:
+            latest_at = conversation.messages.order_by('-created_at').values_list('created_at', flat=True).first()
+            hidden_at = dismissals.get(conversation.id)
+            if hidden_at is not None and (latest_at is None or latest_at <= hidden_at):
+                continue
+            ordered.append((conversation, latest_at or conversation.created_at))
+        ordered.sort(key=lambda item: item[1], reverse=True)
+        return JsonResponse({'conversations': [conversation.as_dict(request.user) for conversation, _ in ordered]})
     try:
         data = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -3602,6 +3610,72 @@ def direct_conversation_list(request, workspace_id):
     if created:
         conversation.participants.add(*User.objects.filter(id__in=all_ids))
     return JsonResponse({'conversation': conversation.as_dict(request.user)}, status=201 if created else 200)
+
+
+@require_http_methods(['PATCH', 'DELETE'])
+def direct_conversation_detail(request, conversation_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    conversation = DirectConversation.objects.filter(id=conversation_id, participants=request.user).prefetch_related('participants').first()
+    if conversation is None:
+        return JsonResponse({'error': 'Conversation was not found.'}, status=404)
+    _, error = require_workspace_member(request, conversation.workspace_id)
+    if error:
+        return error
+
+    if request.method == 'DELETE':
+        hidden_at = timezone.now()
+        DirectConversationDismissal.objects.update_or_create(
+            conversation=conversation,
+            user=request.user,
+            defaults={'hidden_at': hidden_at},
+        )
+        WorkspaceNotification.objects.filter(
+            workspace_id=conversation.workspace_id,
+            recipient=request.user,
+            target_type='direct_conversation',
+            target_id=str(conversation.id),
+            read_at__isnull=True,
+        ).update(read_at=hidden_at)
+        return JsonResponse({'dismissed': True})
+
+    if conversation.participants.count() <= 2:
+        return JsonResponse({'error': 'Only group chats can have their participants edited.'}, status=400)
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    raw_participant_ids = data.get('participant_ids')
+    if not isinstance(raw_participant_ids, list):
+        return JsonResponse({'error': 'participant_ids must be a list of workspace member ids.'}, status=400)
+    participant_ids = set()
+    for value in raw_participant_ids:
+        participant_id, id_error = parse_int(value, 'Participant', allow_null=False)
+        if id_error:
+            return JsonResponse({'error': id_error}, status=400)
+        participant_ids.add(participant_id)
+    participant_ids.discard(request.user.id)
+    all_ids = sorted(participant_ids | {request.user.id})
+    if len(all_ids) < 3:
+        return JsonResponse({'error': 'A group chat must keep at least three participants.'}, status=400)
+    if len(':'.join(str(value) for value in all_ids)) > 255:
+        return JsonResponse({'error': 'This group has too many participants.'}, status=400)
+    valid_ids = set(Membership.objects.filter(workspace_id=conversation.workspace_id, user_id__in=participant_ids).values_list('user_id', flat=True))
+    if valid_ids != participant_ids:
+        return JsonResponse({'error': 'Choose group participants from this workspace.'}, status=400)
+    conversation_key = ':'.join(str(value) for value in all_ids)
+    if DirectConversation.objects.filter(workspace_id=conversation.workspace_id, conversation_key=conversation_key).exclude(id=conversation.id).exists():
+        return JsonResponse({'error': 'A conversation with those participants already exists.'}, status=409)
+
+    previous_ids = set(conversation.participants.values_list('id', flat=True))
+    with transaction.atomic():
+        conversation.participants.set(User.objects.filter(id__in=all_ids))
+        conversation.conversation_key = conversation_key
+        conversation.save(update_fields=['conversation_key', 'updated_at'])
+        DirectConversationDismissal.objects.filter(conversation=conversation).delete()
+        DirectConversationRead.objects.filter(conversation=conversation, user_id__in=previous_ids - participant_ids).delete()
+    conversation = DirectConversation.objects.prefetch_related('participants').get(id=conversation.id)
+    return JsonResponse({'conversation': conversation.as_dict(request.user)})
 
 
 @require_http_methods(['GET', 'POST'])
@@ -3635,6 +3709,7 @@ def direct_message_list(request, conversation_id):
             return JsonResponse({'error': 'The parent message was not found in this conversation.'}, status=404)
     shared_documents, shared_files = shared_chat_items(conversation.workspace_id, data)
     message = DirectMessage.objects.create(conversation=conversation, author=request.user, parent=parent, message=message_text, shared_documents=shared_documents, shared_files=shared_files)
+    DirectConversationDismissal.objects.filter(conversation=conversation).delete()
     sender = request.user.get_full_name() or request.user.email
     for participant in conversation.participants.exclude(id=request.user.id):
         create_notification(conversation.workspace_id, participant, 'direct_message', f'New message from {sender}', message_text[:120], target_type='direct_conversation', target_id=conversation.id)

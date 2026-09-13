@@ -16,7 +16,7 @@ const dataFor = () => ({
   notifications: [],
 })
 
-const renderChat = (data, onRefresh = vi.fn()) => {
+const renderChat = (data, onRefresh = vi.fn(), onConfirm = vi.fn().mockResolvedValue(true), onError = vi.fn()) => {
   const result = render(
     <ChatWorkspaceView
       viewType="direct"
@@ -24,8 +24,8 @@ const renderChat = (data, onRefresh = vi.fn()) => {
       workspaceId={workspaceId}
       currentUserId={currentUserId}
       onRefresh={onRefresh}
-      onError={vi.fn()}
-      onConfirm={vi.fn()}
+      onError={onError}
+      onConfirm={onConfirm}
       onNavigate={vi.fn()}
     />,
   )
@@ -33,7 +33,7 @@ const renderChat = (data, onRefresh = vi.fn()) => {
 }
 
 const openConversation = async () => {
-  fireEvent.click(await screen.findByRole('button', { name: /Dana Reed/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
   await screen.findByText('See you then.')
 }
 
@@ -124,7 +124,7 @@ it('shows no messages yet rather than the previous conversation', async () => {
       onNavigate={vi.fn()}
     />,
   )
-  fireEvent.click(screen.getByRole('button', { name: /Priya Shah/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^PR Priya Shah/ }))
 
   expect(await screen.findByText('No messages yet')).toBeInTheDocument()
   expect(screen.queryByText('See you then.')).not.toBeInTheDocument()
@@ -284,4 +284,62 @@ it('never ticks a message the viewer did not send', async () => {
   await renderThreadWith([tickedMessage(true, true, { author_id: 9, author_name: 'Dana Reed' })])
 
   expect(document.querySelector('.chat-receipt')).not.toBeInTheDocument()
+})
+
+it('deletes a conversation from the current user chat list', async () => {
+  const onRefresh = vi.fn()
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/': { dismissed: true },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor(), onRefresh, onConfirm)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete Dana Reed chat' }))
+
+  await waitFor(() => expect(onConfirm).toHaveBeenCalled())
+  const deleteCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/11/') && init.method === 'DELETE')
+  expect(deleteCall).toBeTruthy()
+  expect(onRefresh).toHaveBeenCalled()
+})
+
+it('edits the participants of a group chat', async () => {
+  const group = {
+    id: 13,
+    title: 'Launch team',
+    is_group: true,
+    participants: [{ id: currentUserId }, { id: 9 }, { id: 8 }],
+    last_message: 'Ready to launch',
+  }
+  const data = {
+    ...dataFor(),
+    members: [
+      { id: currentUserId, first_name: 'Ada', last_name: 'Lane' },
+      { id: 9, first_name: 'Dana', last_name: 'Reed' },
+      { id: 8, first_name: 'Priya', last_name: 'Shah' },
+      { id: 10, first_name: 'Omar', last_name: 'Khan' },
+    ],
+    directConversations: [group],
+  }
+  const onRefresh = vi.fn()
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/13/': { conversation: group },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(data, onRefresh)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit participants for Launch team' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Edit participants' })
+  fireEvent.click(screen.getByLabelText('Priya Shah'))
+  fireEvent.click(screen.getByLabelText('Omar Khan'))
+  fireEvent.submit(dialog)
+
+  await waitFor(() => expect(onRefresh).toHaveBeenCalled())
+  const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/13/') && init.method === 'PATCH')
+  expect(patchCall).toBeTruthy()
+  expect(JSON.parse(patchCall[1].body)).toEqual({ participant_ids: [9, 10] })
 })

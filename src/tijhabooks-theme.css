@@ -1872,6 +1872,12 @@ html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, va
 .channel-row .badge, .direct-row .badge { flex: 0 0 auto; margin-left: auto; }
 .channel-delete { flex: 0 0 26px; opacity: .45; }
 .channel-delete:hover { color: #E36B43; opacity: 1; }
+.direct-row-wrap { display:flex; align-items:center; gap:3px; }
+.direct-row-wrap .direct-row { min-width:0; flex:1; }
+.direct-row-actions { display:flex; flex:0 0 auto; align-items:center; gap:2px; }
+.direct-row-actions button { display:grid; place-items:center; width:26px; height:26px; padding:0; border:0; border-radius:7px; background:transparent; color:var(--workspace-text-soft); cursor:pointer; opacity:.55; }
+.direct-row-actions button:hover, .direct-row-actions button:focus-visible { background:var(--workspace-surface-soft); color:#1D4ED8; opacity:1; }
+.direct-row-actions .direct-row-delete:hover, .direct-row-actions .direct-row-delete:focus-visible { color:#B42318; }
 .direct-row { display: flex; width: 100%; align-items: center; gap: 9px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: var(--workspace-text); text-align: left; cursor: pointer; }
 .direct-row.active { background: #EAF0FF; color: #1D4ED8; }
 .direct-row > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
@@ -1888,6 +1894,9 @@ html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, va
 .chat-member-picker > span { margin-bottom: 5px; color: var(--workspace-text-soft); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .chat-member-picker label { display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 7px; border-radius: 6px; cursor: pointer; }
 .chat-member-picker label:hover { background: var(--workspace-surface-soft); }
+.chat-selection-error { margin:0; color:#B42318; font-size:11px; font-weight:700; }
+.chat-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:2px; }
+.chat-modal-actions button { width:auto; }
 html[data-theme='dark'] .channel-row-wrap .channel-row.active, html[data-theme='dark'] .direct-row.active { background: #0E2A46; color: #DAB68D; }
 @media (max-width: 850px) { .chat-feed { max-height: none; } .chat-conversation-list { grid-row: 1; } }
 @media (max-width: 600px) { .chat-toolbar { align-items: stretch; flex-direction: column; } .chat-create-button { justify-content: center; } .chat-feed { min-height: 480px; } }

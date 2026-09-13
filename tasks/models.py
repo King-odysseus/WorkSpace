@@ -649,6 +649,7 @@ class DirectConversation(models.Model):
     participants = models.ManyToManyField(User, related_name='direct_conversations')
     conversation_key = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -735,6 +736,22 @@ class DirectConversationRead(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['conversation', 'user'], name='unique_direct_conversation_read')]
+
+
+class DirectConversationDismissal(models.Model):
+    """A conversation one user has removed from their own chat list.
+
+    This is intentionally a per-user row rather than a change to the shared
+    conversation. The conversation and its messages remain available to every
+    other participant, and a later message restores it for the user who hid it.
+    """
+
+    conversation = models.ForeignKey(DirectConversation, on_delete=models.CASCADE, related_name='dismissals')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_conversation_dismissals')
+    hidden_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['conversation', 'user'], name='unique_direct_conversation_dismissal')]
 
 
 class ChannelReadState(models.Model):

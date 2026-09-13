@@ -4,7 +4,7 @@ import { AppSelect } from './ui/select.jsx'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { ArrowUpRight, Check, CheckCheck, Download, FileText, Hash, MessageSquare, Paperclip, Plus, Search, Smile, Users, X } from 'lucide-react'
+import { ArrowUpRight, Check, CheckCheck, Download, FileText, Hash, MessageSquare, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -99,6 +99,8 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [error, setError] = useState('')
   const [channelDialogOpen, setChannelDialogOpen] = useState(false)
   const [directDialogOpen, setDirectDialogOpen] = useState(false)
+  const [participantConversation, setParticipantConversation] = useState(null)
+  const [groupMemberIds, setGroupMemberIds] = useState([])
   const [shareOpen, setShareOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -312,6 +314,60 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     }
   }
 
+  const deleteConversation = async conversation => {
+    const confirmed = await onConfirm(
+      'Delete this chat from your chat list? New messages will bring it back.',
+      { title: 'Delete chat', confirmLabel: 'Delete chat' },
+    )
+    if (!confirmed) return
+    try {
+      const response = await fetch(`/api/direct-conversations/${conversation.id}/`, {
+        method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() },
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Chat could not be deleted.')
+      if (selectedConversationId === conversation.id) {
+        setSelectedConversationId(null)
+        setDirectMessages([])
+        setDirectMessageConversationId(null)
+      }
+      onRefresh()
+    } catch (deleteError) {
+      onError(deleteError.message)
+    }
+  }
+
+  const openParticipantEditor = conversation => {
+    setParticipantConversation(conversation)
+    setGroupMemberIds((conversation.participants || [])
+      .filter(participant => String(participant.id) !== String(currentUserId))
+      .map(participant => Number(participant.id)))
+    setError('')
+  }
+
+  const saveGroupParticipants = async event => {
+    event.preventDefault()
+    if (!participantConversation || groupMemberIds.length < 2 || submitting) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/direct-conversations/${participantConversation.id}/`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
+        body: JSON.stringify({ participant_ids: groupMemberIds }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Participants could not be updated.')
+      setParticipantConversation(null)
+      setGroupMemberIds([])
+      onRefresh()
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const memberName = member => [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email
   const memberForMessage = message => data.members.find(member => String(member.id) === String(message.author_id)) || { id: message.author_id, email: message.author_name, role: 'member' }
   const directOtherMember = conversation => {
@@ -471,6 +527,23 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     </div>
   }
 
+  const renderDirectConversationRow = conversation => {
+    const unread = data.notifications.filter(notification => notification.target_type === 'direct_conversation' && notification.target_id === String(conversation.id) && !notification.read).length
+    const other = directOtherMember(conversation)
+    const otherPresence = other ? effectivePresence(other) : null
+    return <div className="direct-row-wrap" key={conversation.id}>
+      <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''}`} onClick={() => { setSelectedConversationId(conversation.id); setSearch(''); markConversationRead('direct_conversation', conversation.id) }}>
+        <span className={`avatar blue small ${conversation.is_group ? 'group-chat-avatar' : ''}`}>{conversation.is_group ? <Users size={14} /> : conversation.title.slice(0, 2).toUpperCase()}{otherPresence && <span className={`presence-dot presence-${otherPresence}`} title={PRESENCE_LABEL[otherPresence] || otherPresence} />}</span>
+        <span><strong>{conversation.title}</strong><small>{conversation.is_group ? `Group - ${conversation.participants.length} people` : conversation.last_message_deleted ? 'This message was deleted' : conversation.last_message || 'Direct chat'}</small></span>
+        {unread > 0 && <Badge>{unread}</Badge>}
+      </button>
+      <div className="direct-row-actions">
+        {conversation.is_group && <button type="button" onClick={() => openParticipantEditor(conversation)} aria-label={`Edit participants for ${conversation.title}`} title="Edit participants"><Pencil size={13} /></button>}
+        <button type="button" className="direct-row-delete" onClick={() => deleteConversation(conversation)} aria-label={`Delete ${conversation.title} chat`} title="Delete chat"><Trash2 size={13} /></button>
+      </div>
+    </div>
+  }
+
   const uploadChatFile = async event => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -517,11 +590,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {error && <p className="auth-error" role="alert">{error}</p>}
         </form>}
       </section>
-      <aside className="chat-conversation-list"><div className="chat-list-heading"><h3>{mode === 'channels' ? 'Channels' : 'Chats'}</h3><button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button></div>{mode === 'channels' ? channels.map(channel => { const unread = data.notifications.filter(notification => notification.target_type === 'chat_channel' && notification.target_id === channel.name && !notification.read).length; return <div className="channel-row-wrap" key={channel.id}><button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''}`} onClick={() => { setSelectedChannel(channel.name); setSearch(''); setReplyTo(null); markConversationRead('chat_channel', channel.name) }}>{channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}<span className="channel-name">{channel.name}</span>{unread > 0 && <Badge>{unread}</Badge>}</button>{channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}</div> }) : conversations.length ? conversations.map(conversation => { const unread = data.notifications.filter(notification => notification.target_type === 'direct_conversation' && notification.target_id === String(conversation.id) && !notification.read).length; const other = directOtherMember(conversation); const otherPresence = other ? effectivePresence(other) : null; return <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''}`} key={conversation.id} onClick={() => { setSelectedConversationId(conversation.id); setSearch(''); markConversationRead('direct_conversation', conversation.id) }}><span className={`avatar blue small ${conversation.is_group ? 'group-chat-avatar' : ''}`}>{conversation.is_group ? <Users size={14} /> : conversation.title.slice(0, 2).toUpperCase()}{otherPresence && <span className={`presence-dot presence-${otherPresence}`} title={PRESENCE_LABEL[otherPresence] || otherPresence} />}</span><span><strong>{conversation.title}</strong><small>{conversation.is_group ? `Group · ${conversation.participants.length} people` : conversation.last_message || 'Direct chat'}</small></span>{unread > 0 && <Badge>{unread}</Badge>}</button> }) : <p className="chat-sidebar-empty">No chats yet.</p>}</aside>
+      <aside className="chat-conversation-list">
+        <div className="chat-list-heading"><h3>{mode === 'channels' ? 'Channels' : 'Chats'}</h3><button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button></div>
+        {mode === 'channels' ? channels.map(channel => { const unread = data.notifications.filter(notification => notification.target_type === 'chat_channel' && notification.target_id === channel.name && !notification.read).length; return <div className="channel-row-wrap" key={channel.id}><button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''}`} onClick={() => { setSelectedChannel(channel.name); setSearch(''); setReplyTo(null); markConversationRead('chat_channel', channel.name) }}>{channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}<span className="channel-name">{channel.name}</span>{unread > 0 && <Badge>{unread}</Badge>}</button>{channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}</div> }) : conversations.length ? conversations.map(renderDirectConversationRow) : <p className="chat-sidebar-empty">No chats yet.</p>}
+      </aside>
     </div>
     {channelDialogOpen && <div className="modal-backdrop" onMouseDown={() => setChannelDialogOpen(false)}><form className="modal chat-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-channel-title" onSubmit={createChannel} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Channels</p><h2 id="create-channel-title">Create a channel</h2></div><button type="button" className="close-button" onClick={() => setChannelDialogOpen(false)} aria-label="Close"><X size={18} /></button></div><label>Channel name<input autoFocus value={channelForm.name} onChange={event => setChannelForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. product-launch" maxLength="80" required /></label><label>Description<textarea value={channelForm.description} onChange={event => setChannelForm(current => ({ ...current, description: event.target.value }))} placeholder="What is this channel for?" maxLength="240" /></label><label className="chat-privacy-toggle"><input type="checkbox" checked={channelForm.is_private} onChange={event => setChannelForm(current => ({ ...current, is_private: event.target.checked, member_ids: [] }))} /> Private channel</label>{channelForm.is_private && <div className="chat-member-picker"><span>Add members</span>{data.members.filter(member => member.id !== currentUserId).map(member => <label key={member.id}><input type="checkbox" checked={channelForm.member_ids.includes(member.id)} onChange={() => toggleMember(member.id, channelForm.member_ids, member_ids => setChannelForm(current => ({ ...current, member_ids })))} /> {memberName(member)}</label>)}</div>}{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button modal-submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create channel'}</button></form></div>}
     {directDialogOpen && <div className="modal-backdrop" onMouseDown={() => setDirectDialogOpen(false)}><form className="modal chat-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-direct-title" onSubmit={createDirectConversation} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Private chats</p><h2 id="create-direct-title">New chat</h2><p className="modal-subtitle">Choose one person for a direct chat or several people for a group chat.</p></div><button type="button" className="close-button" onClick={() => setDirectDialogOpen(false)} aria-label="Close"><X size={18} /></button></div><div className="chat-member-picker"><span>Choose people</span>{data.members.filter(member => member.id !== currentUserId).map(member => <label key={member.id}><input type="checkbox" checked={directMemberIds.includes(member.id)} onChange={() => toggleMember(member.id, directMemberIds, setDirectMemberIds)} /> {memberName(member)}</label>)}</div>{directMemberIds.length > 0 && <p className="chat-selection-summary">{directMemberIds.length === 1 ? 'Direct chat' : `Group chat with ${directMemberIds.length + 1} people`}</p>}{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button modal-submit" disabled={submitting || !directMemberIds.length}>{submitting ? 'Starting…' : directMemberIds.length > 1 ? 'Start group chat' : 'Start direct chat'}</button></form></div>}
     {profileMember && <div className="modal-backdrop" onMouseDown={() => setProfileMember(null)}><section className="modal chat-member-profile" role="dialog" aria-modal="true" aria-labelledby="chat-member-profile-title" onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Workspace member</p><h2 id="chat-member-profile-title">{memberName(profileMember)}</h2></div><button type="button" className="close-button" onClick={() => setProfileMember(null)} aria-label="Close profile"><X size={18} /></button></div><div className="chat-member-profile-summary"><span className="avatar blue">{memberName(profileMember).slice(0, 2).toUpperCase()}</span><div><strong>{memberName(profileMember)}</strong><span>{profileMember.email}</span></div></div><dl><div><dt>Role</dt><dd>{profileMember.role || 'Member'}</dd></div><div><dt>Availability</dt><dd>{profileMember.presence || 'Available'}</dd></div><div><dt>Member since</dt><dd>{profileMember.joined_at ? new Date(profileMember.joined_at).toLocaleDateString() : 'Not available'}</dd></div></dl></section></div>}
+    {participantConversation && <div className="modal-backdrop" onMouseDown={() => { setParticipantConversation(null); setGroupMemberIds([]); setError('') }}><form className="modal chat-create-modal chat-participant-modal" role="dialog" aria-modal="true" aria-labelledby="edit-group-participants-title" onSubmit={saveGroupParticipants} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Group chat</p><h2 id="edit-group-participants-title">Edit participants</h2><p className="modal-subtitle">Choose at least two other workspace members. You will stay in this group chat.</p></div><button type="button" className="close-button" onClick={() => { setParticipantConversation(null); setGroupMemberIds([]); setError('') }} aria-label="Close"><X size={18} /></button></div><div className="chat-member-picker"><span>Choose participants</span>{data.members.filter(member => String(member.id) !== String(currentUserId)).map(member => <label key={member.id}><input type="checkbox" checked={groupMemberIds.includes(member.id)} onChange={() => toggleMember(member.id, groupMemberIds, setGroupMemberIds)} /> {memberName(member)}</label>)}</div><p className="chat-selection-summary">Group chat with {groupMemberIds.length + 1} people</p>{groupMemberIds.length < 2 && <p className="chat-selection-error">Choose at least two other members.</p>}{error && <p className="auth-error" role="alert">{error}</p>}<div className="chat-modal-actions"><button type="button" className="secondary-button" onClick={() => { setParticipantConversation(null); setGroupMemberIds([]); setError('') }}>Cancel</button><button type="submit" className="primary-button" disabled={submitting || groupMemberIds.length < 2}>{submitting ? 'Saving...' : 'Save participants'}</button></div></form></div>}
   </section>
 }
 

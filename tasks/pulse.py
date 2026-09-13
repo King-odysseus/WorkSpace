@@ -30,6 +30,7 @@ from .models import (
     ChatMessage,
     CheckIn,
     DirectConversation,
+    DirectConversationDismissal,
     DirectConversationRead,
     DirectMessage,
     FollowUp,
@@ -57,6 +58,7 @@ WORKSPACE_COLLECTIONS = [
     ('risks', RiskIssue, 'updated_at'),
     ('messages', ChatMessage, 'created_at'),
     ('channels', ChatChannel, 'created_at'),
+    ('direct_conversations', DirectConversation, 'updated_at'),
     ('activity', ActivityEvent, 'created_at'),
     ('buckets', PlanBucket, 'created_at'),
     ('invitations', WorkspaceInvitation, 'created_at'),
@@ -153,6 +155,18 @@ def _read_state_selects(workspace_id, user):
         f'AND {through_table}.{quote(participants.m2m_reverse_name())} = %s'
     )
     params.extend(['conversation_reads', workspace_id, user.id])
+
+    dismissal = DirectConversationDismissal._meta
+    dismissal_table = quote(dismissal.db_table)
+    selects.append(
+        f'SELECT %s AS label, MAX({dismissal_table}.{quote(dismissal.get_field("hidden_at").column)}) AS newest, '
+        f'COUNT({dismissal_table}.{quote(dismissal.pk.column)}) AS total '
+        f'FROM {dismissal_table} JOIN {conversation_table} '
+        f'ON {conversation_table}.{quote(conversation.pk.column)} = {dismissal_table}.{quote(dismissal.get_field("conversation").column)} '
+        f'WHERE {conversation_table}.{quote(conversation.get_field("workspace").column)} = %s '
+        f'AND {dismissal_table}.{quote(dismissal.get_field("user").column)} = %s'
+    )
+    params.extend(['conversation_dismissals', workspace_id, user.id])
 
     return selects, params
 
