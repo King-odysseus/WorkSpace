@@ -2609,6 +2609,7 @@ function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 onNavigate={setActive}
+                onWhatsNewSeen={markWhatsNewSeen}
                 teamBoardFocus={teamBoardFocus}
                 onTeamBoardFocusChange={setTeamBoardFocus}
                 theme={theme}
@@ -3034,6 +3035,7 @@ function WorkspaceView({
   searchQuery,
   onSearchChange,
   onNavigate,
+  onWhatsNewSeen,
   teamBoardFocus,
   onTeamBoardFocusChange,
   theme,
@@ -5258,7 +5260,7 @@ function WorkspaceView({
   }
   if (active === "Import data") return null;
   if (active === "My planner") return <PersonalPlanner workspaceId={workspaceId} />;
-  if (active === "What's new") return <WhatsNew onOpen={markWhatsNewSeen} />;
+  if (active === "What's new") return <WhatsNew onOpen={onWhatsNewSeen} />;
   if (active === "Help") return <HelpView onNavigate={onNavigate} />;
   if (active === "Legal") return <LegalView />;
 
