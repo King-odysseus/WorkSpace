@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effectivePresence, filterCheckInsByRange, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -128,6 +128,34 @@ describe('filterCheckInsByRange', () => {
     const source = [...checkIns]
     expect(filterCheckInsByRange(source, 'all', '2026-09-13').map(item => item.id)).toEqual([6, 5, 4, 3, 2, 1])
     expect(source.map(item => item.id)).toEqual([1, 2, 3, 4, 5, 6])
+  })
+})
+
+describe('calendarUpcomingGroup', () => {
+  const reference = new Date(2026, 8, 13, 12)
+
+  it('uses local calendar days for the upcoming buckets', () => {
+    expect(calendarDayOffset(new Date(2026, 8, 20, 8), reference)).toBe(7)
+    expect(calendarUpcomingGroup(new Date(2026, 8, 13, 23), reference).key).toBe('today')
+    expect(calendarUpcomingGroup(new Date(2026, 8, 14, 9), reference).key).toBe('tomorrow')
+    expect(calendarUpcomingGroup(new Date(2026, 8, 20, 9), reference).key).toBe('next-seven-days')
+    expect(calendarUpcomingGroup(new Date(2026, 8, 21, 9), reference).key).toBe('later')
+  })
+})
+
+describe('calendarEventConflictCounts', () => {
+  it('counts overlapping events and ignores ranges that only touch', () => {
+    const conflicts = calendarEventConflictCounts([
+      { id: 1, start_at: '2026-09-13T09:00:00Z', end_at: '2026-09-13T10:00:00Z' },
+      { id: 2, start_at: '2026-09-13T09:30:00Z', end_at: '2026-09-13T10:30:00Z' },
+      { id: 3, start_at: '2026-09-13T10:00:00Z', end_at: '2026-09-13T11:00:00Z' },
+      { id: 4, start_at: '2026-09-13T14:00:00Z', end_at: '2026-09-13T15:00:00Z' },
+    ])
+
+    expect(conflicts.get(1)).toBe(1)
+    expect(conflicts.get(2)).toBe(2)
+    expect(conflicts.get(3)).toBe(1)
+    expect(conflicts.has(4)).toBe(false)
   })
 })
 

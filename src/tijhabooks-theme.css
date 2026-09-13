@@ -882,6 +882,31 @@ html[data-theme='dark'] .chat-day h3 { border-color: var(--workspace-border); co
 .calendar-upcoming-toggle[aria-expanded='true'] .calendar-upcoming-chevron { transform: rotate(180deg); }
 .calendar-upcoming-count { display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 10px; font-weight: 800; }
 .calendar-upcoming-content { display: grid; min-width: 0; }
+.calendar-upcoming-collapsed-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--workspace-border); border-radius: 8px; background: var(--workspace-surface-soft); }
+.calendar-upcoming-collapsed-summary > span:first-child { color: var(--workspace-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.calendar-upcoming-collapsed-summary strong { min-width: 0; overflow: hidden; color: var(--workspace-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-upcoming-collapsed-summary small { grid-column: 2; color: var(--workspace-text-soft); font-size: 10px; }
+.calendar-upcoming-groups { display: grid; gap: 16px; }
+.calendar-upcoming-group { display: grid; gap: 2px; }
+.calendar-upcoming-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid var(--workspace-border); }
+.calendar-upcoming-group-heading h4 { margin: 0; color: var(--workspace-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.calendar-upcoming-group-heading span { display: inline-flex; min-width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 9px; font-weight: 800; }
+.calendar-upcoming-event { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 2px; padding-left: 8px; border-bottom: 1px solid var(--workspace-border); border-left: 3px solid var(--teal); }
+.calendar-upcoming-event:last-child { border-bottom: 0; }
+.calendar-upcoming-event-main { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 9px; width: 100%; min-width: 0; padding: 10px 0; border: 0; background: transparent; color: var(--workspace-text); cursor: pointer; text-align: left; }
+.calendar-upcoming-event-main:hover { color: var(--blue); }
+.calendar-upcoming-event-main:hover strong { color: var(--blue); }
+.calendar-upcoming-event-main > span { display: grid; min-width: 0; gap: 3px; }
+.calendar-upcoming-event-main strong,
+.calendar-upcoming-event-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-upcoming-event-main strong { color: var(--workspace-text); font-size: 12px; }
+.calendar-upcoming-event-main small { color: var(--workspace-text-soft); font-size: 10px; }
+.calendar-upcoming-conflict { display: flex; align-items: center; gap: 4px; color: #B42318; font-size: 9px; font-style: normal; font-weight: 700; }
+.calendar-upcoming-google { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 6px; color: var(--blue); }
+.calendar-upcoming-google:hover { background: var(--workspace-surface-soft); }
+.calendar-task-deadline.calendar-upcoming-task { border-left: 3px solid var(--warning); padding-left: 8px; }
+.calendar-upcoming-task > span { padding-left: 0; }
+html[data-theme='dark'] .calendar-upcoming-conflict { color: #FDA29B; }
 .calendar-export { color: #1D4ED8; font-size: 11px; font-weight: 700; text-decoration: none; }
 .calendar-export-links { display: flex; align-items: center; gap: 12px; }
 button.calendar-export { padding: 0; border: none; background: none; cursor: pointer; font-family: inherit; }

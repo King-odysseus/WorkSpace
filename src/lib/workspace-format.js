@@ -202,6 +202,48 @@ function googleCalendarUrl(event) {
   return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
+function calendarDayOffset(value, referenceDate = new Date()) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime()) || Number.isNaN(referenceDate.getTime())) return Number.POSITIVE_INFINITY
+  const dayStart = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  const referenceStart = Date.UTC(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate())
+  return Math.round((dayStart - referenceStart) / 86400000)
+}
+
+function calendarUpcomingGroup(value, referenceDate = new Date()) {
+  const offset = calendarDayOffset(value, referenceDate)
+  if (offset <= 0) return { key: 'today', label: 'Today', order: 0 }
+  if (offset === 1) return { key: 'tomorrow', label: 'Tomorrow', order: 1 }
+  if (offset <= 7) return { key: 'next-seven-days', label: 'Next 7 days', order: 2 }
+  return { key: 'later', label: 'Later', order: 3 }
+}
+
+function calendarEventConflictCounts(events = []) {
+  const conflicts = new Map()
+  const ranges = (events || [])
+    .map(event => {
+      const start = new Date(event.start_at).getTime()
+      const end = new Date(event.end_at || event.start_at).getTime()
+      return { id: event.id, start, end }
+    })
+    .filter(event => Number.isFinite(event.start) && Number.isFinite(event.end) && event.end > event.start)
+    .sort((left, right) => left.start - right.start)
+
+  for (let index = 0; index < ranges.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < ranges.length; otherIndex += 1) {
+      const current = ranges[index]
+      const other = ranges[otherIndex]
+      if (other.start >= current.end) break
+      if (current.start < other.end && other.start < current.end) {
+        conflicts.set(current.id, (conflicts.get(current.id) || 0) + 1)
+        conflicts.set(other.id, (conflicts.get(other.id) || 0) + 1)
+      }
+    }
+  }
+
+  return conflicts
+}
+
 function getCalendarDays(view, referenceDate) {
   const year = referenceDate.getFullYear()
   const month = referenceDate.getMonth()
@@ -269,6 +311,9 @@ export {
   formatCalendarDate,
   toDateTimeLocal,
   googleCalendarUrl,
+  calendarDayOffset,
+  calendarUpcomingGroup,
+  calendarEventConflictCounts,
   getCalendarDays,
   getCsrfToken,
   readJsonResponse,

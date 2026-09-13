@@ -195,6 +195,8 @@ import {
   toDateKey,
   toDateTimeLocal,
   googleCalendarUrl,
+  calendarEventConflictCounts,
+  calendarUpcomingGroup,
 } from "./lib/workspace-format.js";
 
 function App() {
@@ -5218,12 +5220,36 @@ function WorkspaceView({
     );
     const upcomingTaskDeadlines = calendarVisibleTasks
       .filter((task) => task.due_date >= today)
-      .sort((a, b) => a.due_date.localeCompare(b.due_date))
-      .slice(0, 8);
+      .sort((a, b) => a.due_date.localeCompare(b.due_date));
     const upcomingVisibleEvents = visibleCalendarEvents
       .filter((event) => new Date(event.start_at) >= new Date())
-      .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
-      .slice(0, 8);
+      .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+    const calendarEventConflicts =
+      calendarEventConflictCounts(visibleCalendarEvents);
+    const upcomingItems = [
+      ...upcomingVisibleEvents.map((event) => ({
+        kind: "event",
+        key: `event-${event.id}`,
+        date: new Date(event.start_at),
+        event,
+      })),
+      ...upcomingTaskDeadlines.map((task) => ({
+        kind: "task",
+        key: `task-${task.id}`,
+        date: new Date(`${task.due_date}T12:00:00`),
+        task,
+      })),
+    ].sort((left, right) => left.date - right.date);
+    const upcomingGroups = upcomingItems.slice(0, 12).reduce((groups, item) => {
+      const group = calendarUpcomingGroup(item.date);
+      let current = groups.find((entry) => entry.key === group.key);
+      if (!current) {
+        current = { ...group, items: [] };
+        groups.push(current);
+      }
+      current.items.push(item);
+      return groups;
+    }, []);
     const agendaStart = new Date(calendarDate);
     agendaStart.setHours(0, 0, 0, 0);
     const agendaEvents = visibleCalendarEvents
@@ -5300,6 +5326,88 @@ function WorkspaceView({
         ))}
       </div>
     );
+    const openCalendarEvent = (event) => {
+      setCalendarDate(new Date(event.start_at));
+      setSelectedEvent(event);
+    };
+    const upcomingItemDateLabel = (item) => {
+      if (item.kind === "task") {
+        return formatCalendarDate(item.date, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        });
+      }
+      const event = item.event;
+      const start = new Date(event.start_at);
+      const end = new Date(event.end_at || event.start_at);
+      const timeRange = `${formatCalendarDate(start, {
+        hour: "numeric",
+        minute: "2-digit",
+      })} - ${formatCalendarDate(end, {
+        hour: "numeric",
+        minute: "2-digit",
+      })}`;
+      const group = calendarUpcomingGroup(item.date);
+      if (group.key === "today" || group.key === "tomorrow") return timeRange;
+      return `${formatCalendarDate(start, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })} · ${timeRange}`;
+    };
+    const renderUpcomingEvent = (item) => {
+      const event = item.event;
+      const conflictCount = calendarEventConflicts.get(event.id) || 0;
+      return (
+        <div
+          className={`calendar-upcoming-event event-type-${event.event_type || "meeting"}`}
+          key={item.key}
+        >
+          <button
+            type="button"
+            className="calendar-upcoming-event-main"
+            onClick={() => openCalendarEvent(event)}
+            aria-label={`View ${event.title} in the calendar`}
+          >
+            <CalendarDays size={15} />
+            <span>
+              <strong>{event.title}</strong>
+              <small>
+                {upcomingItemDateLabel(item)} · {event.event_type || "event"}
+              </small>
+              {conflictCount > 0 && (
+                <em className="calendar-upcoming-conflict">
+                  <AlertCircle size={12} /> Conflicts with {conflictCount} other
+                  event{conflictCount === 1 ? "" : "s"}
+                </em>
+              )}
+            </span>
+          </button>
+          <a
+            className="calendar-upcoming-google"
+            href={googleCalendarUrl(event)}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Add ${event.title} to Google Calendar`}
+            title="Add to Google Calendar"
+          >
+            <ArrowUpRight size={14} />
+          </a>
+          {(canManageMembers || event.created_by === currentUserId) && (
+            <button
+              type="button"
+              className="inline-delete"
+              onClick={() => deleteCalendarEvent(event.id)}
+              aria-label={`Delete ${event.title}`}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      );
+    };
+    const nextUpcomingItem = upcomingItems[0];
     return (
       <section className="workspace-view">
         <WorkspaceViewHeading
@@ -5567,7 +5675,7 @@ function WorkspaceView({
                   />
                   <span>Upcoming</span>
                   <span className="calendar-upcoming-count">
-                    {upcomingVisibleEvents.length + upcomingTaskDeadlines.length}
+                    {upcomingItems.length}
                   </span>
                 </button>
               </h3>
@@ -5589,89 +5697,72 @@ function WorkspaceView({
                 </button>
               </span>
             </div>
+            {!calendarUpcomingOpen && (
+              <div className="calendar-upcoming-collapsed-summary">
+                {nextUpcomingItem ? (
+                  <>
+                    <span>Next up</span>
+                    <strong>
+                      {nextUpcomingItem.kind === "event"
+                        ? nextUpcomingItem.event.title
+                        : nextUpcomingItem.task.title}
+                    </strong>
+                    <small>{upcomingItemDateLabel(nextUpcomingItem)}</small>
+                  </>
+                ) : (
+                  <span>Nothing scheduled in this calendar view.</span>
+                )}
+              </div>
+            )}
             {calendarUpcomingOpen && (
               <div
                 className="calendar-upcoming-content"
                 id="calendar-upcoming-content"
               >
-                {upcomingVisibleEvents.length ? (
-                  upcomingVisibleEvents.map((event) => (
-                    <div
-                      className={`compact-row event-type-row-${event.event_type || "meeting"}`}
-                      key={event.id}
-                    >
-                      <CalendarDays size={15} />
-                      <div>
-                        <strong>{event.title}</strong>
-                        <span>
-                          {formatCalendarDate(new Date(event.start_at), {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })}{" "}
-                          · {event.event_type || "event"}
-                        </span>
-                        <a
-                          className="calendar-google-link"
-                          href={googleCalendarUrl(event)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Add to Google Calendar
-                        </a>
-                      </div>
-                      <button
-                        type="button"
-                        className="inline-edit"
-                        onClick={() => setSelectedEvent(event)}
-                        aria-label={`View ${event.title}`}
+                {upcomingGroups.length ? (
+                  <div className="calendar-upcoming-groups">
+                    {upcomingGroups.map((group) => (
+                      <section
+                        className="calendar-upcoming-group"
+                        key={group.key}
+                        aria-labelledby={`calendar-upcoming-${group.key}`}
                       >
-                        View
-                      </button>
-                      {(canManageMembers ||
-                        event.created_by === currentUserId) && (
-                        <button
-                          type="button"
-                          className="inline-delete"
-                          onClick={() => deleteCalendarEvent(event.id)}
-                          aria-label={`Delete ${event.title}`}
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState text="No upcoming events match this filter." />
-                )}
-                <div className="calendar-side-section">
-                  <div className="calendar-side-heading">
-                    <h3>Task deadlines</h3>
-                    <span>{upcomingTaskDeadlines.length}</span>
+                        <div className="calendar-upcoming-group-heading">
+                          <h4 id={`calendar-upcoming-${group.key}`}>
+                            {group.label}
+                          </h4>
+                          <span>{group.items.length}</span>
+                        </div>
+                        {group.items.map((item) =>
+                          item.kind === "event" ? (
+                            renderUpcomingEvent(item)
+                          ) : (
+                            <button
+                              type="button"
+                              className="calendar-task-deadline calendar-upcoming-task"
+                              key={item.key}
+                              onClick={() => onOpenTask(item.task)}
+                            >
+                              <CalendarDays size={15} />
+                              <span>
+                                <strong>{item.task.title}</strong>
+                                <small>
+                                  {item.task.due_date}
+                                  {item.task.tag &&
+                                  item.task.tag !== "General"
+                                    ? ` · ${item.task.tag}`
+                                    : ""}
+                                </small>
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </section>
+                    ))}
                   </div>
-                  {upcomingTaskDeadlines.length ? (
-                    upcomingTaskDeadlines.map((task) => (
-                      <button
-                        type="button"
-                        className="calendar-task-deadline"
-                        key={`calendar-task-${task.id}`}
-                        onClick={() => onOpenTask(task)}
-                      >
-                        <CalendarDays size={15} />
-                        <span>
-                          <strong>{task.title}</strong>
-                          <small>
-                            {task.due_date}
-                            {task.tag && task.tag !== "General"
-                              ? ` · ${task.tag}`
-                              : ""}
-                          </small>
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <EmptyState text="No upcoming task deadlines." />
-                  )}
-                </div>
+                ) : (
+                  <EmptyState text="No upcoming events or task deadlines match this filter." />
+                )}
               </div>
             )}
           </Card>
