@@ -35,6 +35,33 @@ function toDateKey(value) {
   return `${year}-${month}-${day}`
 }
 
+const CHECK_IN_RANGES = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'Past week' },
+  { value: 'month', label: 'Past month' },
+  { value: 'all', label: 'All' },
+]
+
+function shiftDateKey(dateKey, days) {
+  const date = new Date(`${dateKey}T12:00:00`)
+  date.setDate(date.getDate() + days)
+  return toDateKey(date)
+}
+
+function filterCheckInsByRange(checkIns, range, todayKey = toDateKey(new Date())) {
+  const sorted = [...(checkIns || [])].sort((left, right) => {
+    const dateOrder = String(right.date || '').localeCompare(String(left.date || ''))
+    if (dateOrder !== 0) return dateOrder
+    return String(right.id || '').localeCompare(String(left.id || ''), undefined, { numeric: true })
+  })
+  if (range === 'all') return sorted
+  if (range === 'today') return sorted.filter(checkIn => checkIn.date === todayKey)
+
+  const dayCount = range === 'month' ? 30 : 7
+  const startKey = shiftDateKey(todayKey, -(dayCount - 1))
+  return sorted.filter(checkIn => checkIn.date >= startKey && checkIn.date <= todayKey)
+}
+
 function taskDueLabel(dueDate, today) {
   if (!dueDate) return 'No due date'
   return dueDate < today ? 'Overdue' : dueDate
@@ -208,6 +235,8 @@ export {
   formatShiftClock,
   initialsFor,
   toDateKey,
+  CHECK_IN_RANGES,
+  filterCheckInsByRange,
   taskDueLabel,
   taskSearchText,
   mapTaskFromApi,

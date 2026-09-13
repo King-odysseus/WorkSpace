@@ -2441,3 +2441,266 @@ html[data-theme='dark'] .workspace-view :is(
     border-bottom: 0;
   }
 }
+
+/* Check-ins: range controls and compact summary cards. */
+.workspace-view .checkin-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace-view .checkin-range-filter {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  overflow-x: auto;
+  border: 1px solid var(--workspace-border);
+  border-radius: 11px;
+  background: var(--workspace-surface-soft);
+  scrollbar-width: none;
+}
+
+.workspace-view .checkin-range-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-view .checkin-range-filter button {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--workspace-text-soft);
+  cursor: pointer;
+  font: 700 10px 'Roboto', 'DM Sans', sans-serif;
+  white-space: nowrap;
+}
+
+.workspace-view .checkin-range-filter button:hover,
+.workspace-view .checkin-range-filter button:focus-visible {
+  color: var(--workspace-primary);
+}
+
+.workspace-view .checkin-range-filter button.active {
+  background: var(--workspace-surface);
+  color: var(--workspace-primary);
+  box-shadow: 0 1px 4px rgb(7 26 46 / 11%);
+}
+
+.workspace-view .checkin-range-filter button > span {
+  display: inline-grid;
+  min-width: 17px;
+  height: 17px;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--workspace-border);
+  color: var(--workspace-text-soft);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-view .checkin-range-filter button.active > span {
+  background: color-mix(in srgb, var(--workspace-primary) 12%, transparent);
+  color: var(--workspace-primary);
+}
+
+.workspace-view .checkin-toolbar > span {
+  margin-left: auto;
+  color: var(--workspace-text-soft);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.workspace-view .checkin-grid {
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.workspace-view .checkin-summary-card {
+  min-height: 220px;
+  gap: 10px;
+  padding: 14px !important;
+  overflow: hidden;
+  border: 1px solid var(--workspace-border) !important;
+  border-radius: 14px !important;
+  background: var(--workspace-surface) !important;
+  box-shadow: 0 7px 20px rgb(7 26 46 / 7%), 0 1px 0 rgb(255 255 255 / 80%) inset !important;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.workspace-view .checkin-summary-card:hover {
+  border-color: color-mix(in srgb, var(--workspace-primary) 28%, var(--workspace-border)) !important;
+  box-shadow: 0 11px 26px rgb(7 26 46 / 11%), 0 1px 0 rgb(255 255 255 / 85%) inset !important;
+  transform: translateY(-2px);
+}
+
+.workspace-view .checkin-summary-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--workspace-primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.workspace-view .checkin-summary-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workspace-view .checkin-summary-head .card-person {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.workspace-view .checkin-summary-head .card-person > div {
+  min-width: 0;
+}
+
+.workspace-view .checkin-summary-head .card-person strong,
+.workspace-view .checkin-summary-head .card-person span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-view .checkin-summary-head .card-person strong {
+  color: var(--workspace-text);
+  font: 700 12px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+}
+
+.workspace-view .checkin-summary-head .card-person span:not(.avatar) {
+  color: var(--workspace-text-soft);
+  font-size: 9px;
+}
+
+.workspace-view .checkin-summary-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  color: var(--workspace-text-soft);
+}
+
+.workspace-view .checkin-summary-actions [data-slot='button'] {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+.workspace-view .checkin-summary-fields {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-view .checkin-summary-field {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--workspace-border) 78%, transparent);
+  border-radius: 9px;
+  background: var(--workspace-surface-soft);
+}
+
+.workspace-view .checkin-summary-field > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--workspace-text-soft);
+  font: 700 9px 'Montserrat', 'Plus Jakarta Sans', sans-serif;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.workspace-view .checkin-summary-field p {
+  display: -webkit-box;
+  min-height: 15px;
+  overflow: hidden;
+  margin: 4px 0 0;
+  color: var(--workspace-text);
+  font: 500 10px/1.45 'Roboto', 'DM Sans', sans-serif;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.workspace-view .checkin-summary-field.has-blocker {
+  border-color: color-mix(in srgb, #C43D4B 35%, var(--workspace-border));
+  background: color-mix(in srgb, #C43D4B 6%, var(--workspace-surface-soft));
+}
+
+.workspace-view .checkin-summary-field.has-blocker > span {
+  color: #B83243;
+}
+
+.workspace-view .checkin-summary-footer {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--workspace-border);
+  color: var(--workspace-text-soft);
+  font-size: 9px;
+}
+
+.workspace-view .checkin-blocker-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #C43D4B 10%, transparent);
+  color: #B83243;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workspace-view .checkin-no-blocker {
+  white-space: nowrap;
+}
+
+html[data-theme='dark'] .workspace-view .checkin-summary-card {
+  box-shadow: 0 10px 25px rgb(2 5 31 / 34%), 0 1px 0 rgb(255 255 255 / 6%) inset !important;
+}
+
+html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
+  box-shadow: 0 13px 30px rgb(2 5 31 / 45%), 0 1px 0 rgb(255 255 255 / 8%) inset !important;
+}
+
+@media (max-width: 700px) {
+  .workspace-view .checkin-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-view .checkin-range-filter {
+    width: 100%;
+  }
+
+  .workspace-view .checkin-range-filter button {
+    flex: 1 0 auto;
+  }
+
+  .workspace-view .checkin-toolbar > span {
+    margin-left: 0;
+    white-space: normal;
+  }
+
+  .workspace-view .checkin-grid {
+    grid-template-columns: 1fr;
+  }
+}

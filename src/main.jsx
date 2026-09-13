@@ -168,9 +168,11 @@ import {
 import {
   BREAK_PRESETS,
   BREAK_PRESET_LABEL,
+  CHECK_IN_RANGES,
   PRESENCE_LABEL,
   PRESENCE_OPTIONS,
   WORK_SHIFT_TOAST,
+  filterCheckInsByRange,
   formatCalendarDate,
   formatHoursLabel,
   formatRelativeActivityTime,
@@ -2909,7 +2911,7 @@ function WorkspaceView({
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarFilter, setCalendarFilter] = useState("all");
   const [calendarTaskScope, setCalendarTaskScope] = useState("all");
-  const [checkInDate, setCheckInDate] = useState(today);
+  const [checkInRange, setCheckInRange] = useState("today");
   const [pendingCheckInId, setPendingCheckInId] = useState(null);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState("");
@@ -3210,7 +3212,7 @@ function WorkspaceView({
     let isCurrent = true;
     setCheckInLoading(true);
     setCheckInError("");
-    fetch(`/api/workspaces/${workspaceId}/check-ins/?date=${checkInDate}`, {
+    fetch(`/api/workspaces/${workspaceId}/check-ins/`, {
       credentials: "include",
     })
       .then((response) =>
@@ -3245,7 +3247,7 @@ function WorkspaceView({
     return () => {
       isCurrent = false;
     };
-  }, [active, checkInDate, workspaceId, pendingCheckInId]);
+  }, [active, workspaceId, pendingCheckInId]);
 
   const openComposer = (type) => {
     setComposerType(type);
@@ -3267,7 +3269,7 @@ function WorkspaceView({
       due_date: "",
       assigned_to: "",
       task_id: "",
-      date: type === "checkin" ? checkInDate : today,
+      date: today,
       email: "",
       role: "member",
     }));
@@ -5365,6 +5367,29 @@ function WorkspaceView({
   }
 
   if (active === "Check-ins") {
+    const checkInRangeCounts = Object.fromEntries(
+      CHECK_IN_RANGES.map((range) => [
+        range.value,
+        filterCheckInsByRange(localData.checkIns, range.value, today).length,
+      ]),
+    );
+    const visibleCheckIns = filterCheckInsByRange(
+      localData.checkIns,
+      checkInRange,
+      today,
+    );
+    const activeRangeLabel =
+      CHECK_IN_RANGES.find((range) => range.value === checkInRange)?.label ||
+      "Today";
+    const checkInDateLabel = (value) =>
+      value === today
+        ? "Today"
+        : formatCalendarDate(new Date(`${value}T12:00:00`), {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          });
+
     return (
       <section className="workspace-view">
         <WorkspaceViewHeading
@@ -5374,13 +5399,28 @@ function WorkspaceView({
           onAction={() => openComposer("checkin")}
         />
         <div className="checkin-toolbar">
-          <DateField
-            label="View date"
-            value={checkInDate}
-            onChange={(event) => setCheckInDate(event.target.value)}
-          />
-          <span>
-            {checkInDate === today ? "Today" : "Updates for " + checkInDate}
+          <div
+            className="checkin-range-filter"
+            role="tablist"
+            aria-label="Filter check-ins by date range"
+          >
+            {CHECK_IN_RANGES.map((range) => (
+              <button
+                type="button"
+                role="tab"
+                key={range.value}
+                aria-selected={checkInRange === range.value}
+                className={checkInRange === range.value ? "active" : ""}
+                onClick={() => setCheckInRange(range.value)}
+              >
+                {range.label}
+                <span>{checkInRangeCounts[range.value]}</span>
+              </button>
+            ))}
+          </div>
+          <span aria-live="polite">
+            {visibleCheckIns.length} check-in
+            {visibleCheckIns.length === 1 ? "" : "s"} in {activeRangeLabel.toLowerCase()}
           </span>
         </div>
         {checkInLoading && (
@@ -5394,52 +5434,87 @@ function WorkspaceView({
           </p>
         )}
         <div className="checkin-grid">
-          {localData.checkIns.length ? (
-            localData.checkIns.map((checkIn) => (
-              <Card className="px-5" key={checkIn.id}>
-                <div className="card-person">
-                  <span className="avatar blue small">
-                    {checkIn.user_initials}
-                  </span>
-                  <div>
-                    <strong>{checkIn.user_name}</strong>
-                    <span>{checkIn.date}</span>
+          {visibleCheckIns.length ? (
+            visibleCheckIns.map((checkIn) => (
+              <Card
+                className="checkin-summary-card"
+                key={checkIn.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`View ${checkIn.user_name}'s check-in for ${checkIn.date}`}
+                onClick={() => setSelectedCheckInDetail(checkIn)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setSelectedCheckInDetail(checkIn);
+                }}
+              >
+                <div className="checkin-summary-head">
+                  <div className="card-person">
+                    <span className="avatar blue small">
+                      {checkIn.user_initials}
+                    </span>
+                    <div>
+                      <strong>{checkIn.user_name}</strong>
+                      <span>{checkInDateLabel(checkIn.date)}</span>
+                    </div>
                   </div>
-                  {checkIn.user_id === currentUserId && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="ml-auto"
-                      onClick={() => setSelectedCheckIn(checkIn)}
-                      aria-label={`Edit ${checkIn.user_name}'s check-in`}
-                    >
-                      <MoreHorizontal size={14} />
-                    </Button>
+                  <div className="checkin-summary-actions">
+                    {checkIn.user_id === currentUserId && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedCheckIn(checkIn);
+                        }}
+                        aria-label={`Edit ${checkIn.user_name}'s check-in`}
+                      >
+                        <MoreHorizontal size={14} />
+                      </Button>
+                    )}
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </div>
+                </div>
+                <div className="checkin-summary-fields">
+                  <div className="checkin-summary-field">
+                    <span>
+                      <CheckCircle2 size={12} aria-hidden="true" /> Completed
+                    </span>
+                    <p>{checkIn.completed || "No update yet"}</p>
+                  </div>
+                  <div className="checkin-summary-field">
+                    <span>
+                      <ArrowUpRight size={12} aria-hidden="true" /> Next
+                    </span>
+                    <p>{checkIn.next_steps || "No next step recorded"}</p>
+                  </div>
+                  <div
+                    className={`checkin-summary-field ${checkIn.blockers ? "has-blocker" : ""}`}
+                  >
+                    <span>
+                      <AlertCircle size={12} aria-hidden="true" /> Blockers
+                    </span>
+                    <p>{checkIn.blockers || "None reported"}</p>
+                  </div>
+                </div>
+                <div className="checkin-summary-footer">
+                  <span>{checkInDateLabel(checkIn.date)}</span>
+                  {checkIn.blockers ? (
+                    <span className="checkin-blocker-flag">
+                      <AlertCircle size={11} aria-hidden="true" /> Blocked
+                    </span>
+                  ) : (
+                    <span className="checkin-no-blocker">No blocker</span>
                   )}
                 </div>
-                <p>
-                  <b>Completed</b> {checkIn.completed || "No update yet"}
-                </p>
-                <p>
-                  <b>Next</b> {checkIn.next_steps || "No next step recorded"}
-                </p>
-                <p>
-                  <b>Blockers</b> {checkIn.blockers || "None reported"}
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedCheckInDetail(checkIn)}
-                >
-                  View details
-                </Button>
               </Card>
             ))
           ) : (
             <EmptyState
-              text={`No check-ins for ${checkInDate === today ? "today" : checkInDate}. Start the first update.`}
+              text={`No check-ins in ${activeRangeLabel.toLowerCase()}. Start the first update.`}
             />
           )}
         </div>

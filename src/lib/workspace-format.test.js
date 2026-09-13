@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effectivePresence, mapTaskFromApi, sortMembersByRecentActivity, taskDueLabel, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { effectivePresence, filterCheckInsByRange, mapTaskFromApi, sortMembersByRecentActivity, taskDueLabel, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -51,6 +51,35 @@ describe('taskSearchText', () => {
   it('folds the searchable fields into one lowercase haystack', () => {
     const text = taskSearchText({ title: 'Ship Release', member: 'Ada', tag: 'Apollo', labels: ['Urgent'] })
     expect(text).toBe('ship release ada apollo urgent')
+  })
+})
+
+describe('filterCheckInsByRange', () => {
+  const checkIns = [
+    { id: 1, date: '2026-08-14' },
+    { id: 2, date: '2026-08-15' },
+    { id: 3, date: '2026-09-06' },
+    { id: 4, date: '2026-09-07' },
+    { id: 5, date: '2026-09-13' },
+    { id: 6, date: '2026-09-14' },
+  ]
+
+  it('shows only today for the today range', () => {
+    expect(filterCheckInsByRange(checkIns, 'today', '2026-09-13').map(item => item.id)).toEqual([5])
+  })
+
+  it('uses an inclusive seven-day window for the past week', () => {
+    expect(filterCheckInsByRange(checkIns, 'week', '2026-09-13').map(item => item.id)).toEqual([5, 4])
+  })
+
+  it('uses an inclusive thirty-day window for the past month', () => {
+    expect(filterCheckInsByRange(checkIns, 'month', '2026-09-13').map(item => item.id)).toEqual([5, 4, 3, 2])
+  })
+
+  it('returns every check-in newest first for all time without mutating the input', () => {
+    const source = [...checkIns]
+    expect(filterCheckInsByRange(source, 'all', '2026-09-13').map(item => item.id)).toEqual([6, 5, 4, 3, 2, 1])
+    expect(source.map(item => item.id)).toEqual([1, 2, 3, 4, 5, 6])
   })
 })
 
