@@ -33,6 +33,36 @@ it('uses a mobile settings index before opening one section', () => {
   expect(shell).toHaveClass('is-mobile-index')
 })
 
+it('orders settings by everyday priority with Profile first', () => {
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  const navigation = screen.getByRole('navigation', { name: 'Settings sections' })
+  const labels = within(navigation)
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label'))
+
+  expect(labels).toEqual([
+    'Profile',
+    'Appearance',
+    'Notifications',
+    'Workspaces',
+    'Workspace access',
+    'Integrations',
+    'Templates',
+    'Zuri',
+  ])
+})
+
 async function setup(permission = 'default', saveStatus = 201) {
   const requestPermission = vi.fn(async () => { Notification.permission = 'granted'; return 'granted' })
   vi.stubGlobal('Notification', { permission, requestPermission })

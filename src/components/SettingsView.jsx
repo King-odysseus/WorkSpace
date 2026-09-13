@@ -236,15 +236,15 @@ function SettingsView({
   // This is a UI convenience, not the authorization boundary - every endpoint
   // behind these panels re-checks the actor's permission server-side.
   const sections = [
+    { value: "profile", label: "Profile", Icon: Users, description: "Your identity and presence.", group: "Personal" },
     { value: "appearance", label: "Appearance", Icon: Sun, description: "Theme and navigation layout.", group: "Personal" },
     { value: "notifications", label: "Notifications", Icon: Bell, description: "Alerts, sounds, and device delivery.", group: "Personal" },
-    { value: "profile", label: "Profile", Icon: Users, description: "Your identity and presence.", group: "Personal" },
     { value: "workspaces", label: "Workspaces", Icon: Layers, description: "Switch, open, or create a workspace.", group: "Personal" },
     ...(canManageMembers
       ? [
-          { value: "templates", label: "Templates", Icon: ClipboardList, description: "Reusable task and project setup.", group: "Workspace" },
           { value: "workspace", label: "Workspace access", Icon: Building2, description: "Members, roles, and permissions.", group: "Workspace" },
           { value: "integrations", label: "Integrations", Icon: Webhook, description: "Calendar feeds and team webhooks.", group: "Workspace" },
+          { value: "templates", label: "Templates", Icon: ClipboardList, description: "Reusable task and project setup.", group: "Workspace" },
           { value: "ai", label: "Zuri", Icon: Sparkles, description: "Assistant access and providers.", group: "Workspace" },
         ]
       : []),
