@@ -44,6 +44,7 @@ import {
   LogOut,
   MessageSquare,
   MoreHorizontal,
+  NotebookPen,
   ChevronLeft,
   ChevronRight,
   EyeOff,
@@ -156,6 +157,7 @@ const ScreenShareControl = lazy(() =>
   })),
 );
 import ImportView from "./components/ImportView.jsx";
+import PersonalPlanner from "./components/PersonalPlanner.jsx";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
@@ -1845,6 +1847,7 @@ function App() {
       items: [
         { label: "Today", icon: LayoutDashboard },
         { label: "My tasks", icon: CheckCircle2 },
+        { label: "My planner", icon: NotebookPen },
         { label: "Daily operations", icon: ClipboardList },
         { label: "Team", icon: Users },
       ],
@@ -5240,6 +5243,7 @@ function WorkspaceView({
     );
   }
   if (active === "Import data") return null;
+  if (active === "My planner") return <PersonalPlanner workspaceId={workspaceId} />;
   if (active === "Help") return <HelpView onNavigate={onNavigate} />;
   if (active === "Legal") return <LegalView />;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, formatDay, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -14,6 +14,23 @@ describe('taskDueLabel', () => {
     expect(taskDueLabel('2026-09-04', '2026-09-05')).toBe('Overdue')
     expect(taskDueLabel('2026-09-05', '2026-09-05')).toBe('2026-09-05')
     expect(taskDueLabel('', '2026-09-05')).toBe('No due date')
+  })
+})
+
+describe('formatDay', () => {
+  it('writes a day as DD/MM/YYYY', () => {
+    expect(formatDay('2026-09-05')).toBe('05/09/2026')
+  })
+
+  it('takes the day off a timestamp without shifting it', () => {
+    // Read as text, not through Date: a UTC timestamp late in the evening is the
+    // previous day for anyone west of UTC, and a due date must not move.
+    expect(formatDay('2026-09-05T23:30:00Z')).toBe('05/09/2026')
+  })
+
+  it('renders nothing rather than a broken date', () => {
+    expect(formatDay('')).toBe('')
+    expect(formatDay('next tuesday')).toBe('')
   })
 })
 

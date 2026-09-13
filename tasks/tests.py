@@ -22,7 +22,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, ChatMessageReaction, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, ChatMessageReaction, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PersonalPlanner, PersonalTask, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .automation import run_workspace_automation
 from .ai_actions import PrivacyBoundaryError, PrivacyRegistry
 from .document_text import DOCUMENT_MAX_CHARS, extract_document_text
@@ -5549,3 +5549,183 @@ class ChatReceiptApiTests(TestCase):
 
         self.assertFalse(DirectConversationRead.objects.exists())
         self.assertFalse(ChannelReadState.objects.exists())
+
+
+class PersonalPlannerApiTests(TestCase):
+    """A member's own planner, and the fact that it belongs to nobody else.
+
+    The isolation assertions here are the feature, not extra coverage. These rows
+    live in the same database as team tasks, so what makes them private is that
+    every read is scoped to the caller - if one of these fails, the planner is not
+    private, whatever the UI shows.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='planner-owner@example.com', email='planner-owner@example.com', password='secure-pass-123')
+        self.member = User.objects.create_user(username='planner-member@example.com', email='planner-member@example.com', password='secure-pass-123')
+        self.other_member = User.objects.create_user(username='planner-other@example.com', email='planner-other@example.com', password='secure-pass-123')
+        self.outsider = User.objects.create_user(username='planner-outsider@example.com', email='planner-outsider@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Planner Workspace', slug='planner-workspace')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        # A manager stripped of every capability. Planning a day is not team work,
+        # so an empty permission set must not cost them this.
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='manager', permissions=[])
+        Membership.objects.create(workspace=self.workspace, user=self.other_member, role='member')
+        self.elsewhere = Workspace.objects.create(name='Planner Elsewhere', slug='planner-elsewhere')
+        Membership.objects.create(workspace=self.elsewhere, user=self.owner, role='owner')
+
+    def _as(self, user):
+        self.client.force_login(user)
+
+    def _planners_url(self, workspace=None):
+        return reverse('personal-planner-list', args=[(workspace or self.workspace).id])
+
+    def _planner_detail_url(self, planner_id, workspace=None):
+        return reverse('personal-planner-detail', args=[(workspace or self.workspace).id, planner_id])
+
+    def _task_detail_url(self, task_id, workspace=None):
+        return reverse('personal-task-detail', args=[(workspace or self.workspace).id, task_id])
+
+    def _add_task(self, title, workspace=None, **extra):
+        return self.client.post(
+            reverse('personal-task-list', args=[(workspace or self.workspace).id]),
+            data=json.dumps({'title': title, **extra}),
+            content_type='application/json',
+        )
+
+    def test_a_member_with_no_team_capabilities_can_still_plan_their_day(self):
+        self._as(self.member)
+        response = self._add_task('Draft the handover notes')
+        self.assertEqual(response.status_code, 201)
+
+        listed = self.client.get(self._planners_url()).json()
+        # A default planner appears on first use, so the page needs no setup step.
+        self.assertEqual([planner['name'] for planner in listed['planners']], ['My day'])
+        self.assertEqual([task['title'] for task in listed['tasks']], ['Draft the handover notes'])
+        self.assertEqual(response.json()['task']['planner_id'], listed['planners'][0]['id'])
+        self.assertEqual(listed['planners'][0]['task_count'], 1)
+
+    def test_a_personal_task_never_reaches_the_team_task_reads(self):
+        self._as(self.member)
+        self._add_task('Private errand')
+
+        team = self.client.get(reverse('task-list'), HTTP_X_WORKSPACE_ID=str(self.workspace.id))
+        self.assertEqual(team.status_code, 200)
+        self.assertEqual(team.json()['tasks'], [])
+        self.assertEqual(Task.objects.count(), 0)
+
+    def test_another_member_cannot_see_or_change_what_is_not_theirs(self):
+        self._as(self.member)
+        self._add_task('Private errand')
+        mine = self.client.get(self._planners_url()).json()
+        planner_id, task_id = mine['planners'][0]['id'], mine['tasks'][0]['id']
+
+        self._as(self.other_member)
+        theirs = self.client.get(self._planners_url()).json()
+        self.assertEqual(theirs['planners'], [])
+        self.assertEqual(theirs['tasks'], [])
+
+        # Reported as missing rather than forbidden, so the response does not even
+        # confirm that another member's planner exists.
+        self.assertEqual(self.client.patch(self._planner_detail_url(planner_id), data=json.dumps({'name': 'Renamed'}), content_type='application/json').status_code, 404)
+        self.assertEqual(self.client.delete(self._planner_detail_url(planner_id)).status_code, 404)
+        self.assertEqual(self.client.patch(self._task_detail_url(task_id), data=json.dumps({'title': 'Renamed'}), content_type='application/json').status_code, 404)
+        self.assertEqual(self.client.delete(self._task_detail_url(task_id)).status_code, 404)
+
+        self.assertEqual(PersonalTask.objects.get(id=task_id).title, 'Private errand')
+
+    def test_a_task_cannot_be_filed_into_somebody_elses_planner(self):
+        self._as(self.member)
+        self._add_task('Private errand')
+        planner_id = self.client.get(self._planners_url()).json()['planners'][0]['id']
+
+        self._as(self.other_member)
+        self.assertEqual(self._add_task('Snuck in', planner_id=planner_id).status_code, 404)
+        self.assertEqual(PersonalTask.objects.count(), 1)
+
+    def test_the_owner_comes_from_the_session_not_the_request_body(self):
+        self._as(self.member)
+        response = self.client.post(
+            reverse('personal-task-list', args=[self.workspace.id]),
+            data=json.dumps({'title': 'Mine', 'owner': self.other_member.id, 'owner_id': self.other_member.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(PersonalTask.objects.get(id=response.json()['task']['id']).owner, self.member)
+
+    def test_completion_is_stamped_from_the_server_clock(self):
+        self._as(self.member)
+        task_id = self._add_task('Book the room').json()['task']['id']
+        url = self._task_detail_url(task_id)
+
+        done = self.client.patch(url, data=json.dumps({'is_done': True, 'completed_at': '1999-01-01T00:00:00Z'}), content_type='application/json').json()['task']
+        self.assertTrue(done['is_done'])
+        self.assertNotEqual(done['completed_at'], '')
+        self.assertFalse(done['completed_at'].startswith('1999'))
+
+        reopened = self.client.patch(url, data=json.dumps({'is_done': False}), content_type='application/json').json()['task']
+        self.assertEqual(reopened['completed_at'], '')
+
+    def test_a_planner_is_scoped_to_the_workspace_it_was_made_in(self):
+        # The same person can belong to several workspaces; a planner made in one
+        # must not be reachable through another, or the URL becomes a way round the
+        # membership check.
+        self._as(self.owner)
+        self._add_task('Private errand')
+        planner_id = self.client.get(self._planners_url()).json()['planners'][0]['id']
+
+        self.assertEqual(self.client.get(self._planners_url(self.elsewhere)).json()['planners'], [])
+        self.assertEqual(self.client.delete(self._planner_detail_url(planner_id, self.elsewhere)).status_code, 404)
+        self.assertEqual(PersonalPlanner.objects.count(), 1)
+
+    def test_a_task_is_scoped_to_the_workspace_it_was_made_in(self):
+        # Same reason as the planner above, and the same way round the membership
+        # check: reaching the row by id through a workspace it is not in.
+        self._as(self.owner)
+        task_id = self._add_task('Private errand').json()['task']['id']
+
+        self.assertEqual(self.client.get(self._planners_url(self.elsewhere)).json()['tasks'], [])
+        self.assertEqual(self.client.patch(self._task_detail_url(task_id, self.elsewhere), data=json.dumps({'title': 'Taken'}), content_type='application/json').status_code, 404)
+        self.assertEqual(self.client.delete(self._task_detail_url(task_id, self.elsewhere)).status_code, 404)
+        self.assertEqual(PersonalTask.objects.get(id=task_id).title, 'Private errand')
+
+    def test_tasks_can_be_moved_between_planners(self):
+        self._as(self.member)
+        task_id = self._add_task('Private errand').json()['task']['id']
+        created = self.client.post(self._planners_url(), data=json.dumps({'name': 'Weekend'}), content_type='application/json')
+        self.assertEqual(created.status_code, 201)
+
+        moved = self.client.patch(self._task_detail_url(task_id), data=json.dumps({'planner_id': created.json()['planner']['id']}), content_type='application/json')
+        self.assertEqual(moved.status_code, 200)
+        self.assertEqual(moved.json()['task']['planner_id'], created.json()['planner']['id'])
+
+    def test_deleting_a_planner_takes_its_tasks_with_it(self):
+        self._as(self.member)
+        self._add_task('Private errand')
+        planner_id = self.client.get(self._planners_url()).json()['planners'][0]['id']
+
+        self.assertEqual(self.client.delete(self._planner_detail_url(planner_id)).status_code, 200)
+        self.assertEqual(PersonalTask.objects.count(), 0)
+
+    def test_duplicate_planner_names_are_rejected(self):
+        self._as(self.member)
+        body = json.dumps({'name': 'Weekend'})
+        self.assertEqual(self.client.post(self._planners_url(), data=body, content_type='application/json').status_code, 201)
+        self.assertEqual(self.client.post(self._planners_url(), data=body, content_type='application/json').status_code, 400)
+
+    def test_a_non_member_cannot_reach_the_planner(self):
+        self._as(self.outsider)
+        self.assertEqual(self.client.get(self._planners_url()).status_code, 403)
+        self.assertEqual(self._add_task('Not mine').status_code, 403)
+
+    def test_a_task_needs_a_title(self):
+        self._as(self.member)
+        self.assertEqual(self._add_task('   ').status_code, 400)
+
+    def test_a_due_date_must_be_a_day_rather_than_a_timestamp(self):
+        self._as(self.member)
+        self.assertEqual(self._add_task('Errand', due_date='2026-09-05T10:00:00Z').status_code, 400)
+
+        accepted = self._add_task('Errand', due_date='2026-09-05')
+        self.assertEqual(accepted.status_code, 201)
+        self.assertEqual(accepted.json()['task']['due_date'], '2026-09-05')

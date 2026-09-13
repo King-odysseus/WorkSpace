@@ -1771,3 +1771,76 @@ class WebhookDelivery(models.Model):
             'attempts': self.attempts,
             'created_at': self.created_at.isoformat(),
         }
+
+
+class PersonalPlanner(models.Model):
+    """A member's own day planner, private to that member.
+
+    Deliberately not a Task. Team tasks are read by boards, reports, reminders,
+    notifications and every member's My Tasks list; a "private" flag on Task
+    would mean auditing all of those, and one missed queryset would put someone's
+    personal list in front of the team. Here, privacy is a property of the
+    queries rather than a filter everyone has to remember: these rows are
+    reachable only through ``owner=request.user``.
+    """
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='personal_planners')
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='personal_planners')
+    name = models.CharField(max_length=120)
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        constraints = [models.UniqueConstraint(fields=['workspace', 'owner', 'name'], name='unique_personal_planner_name')]
+        indexes = [models.Index(fields=['workspace', 'owner', 'position'])]
+
+    def as_dict(self):
+        # The list view annotates task_count; a single planner read falls back to
+        # a count so the payload shape is the same either way.
+        count = getattr(self, 'task_count', None)
+        if count is None:
+            count = self.tasks.count()
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'name': self.name,
+            'position': self.position,
+            'created_at': self.created_at.isoformat(),
+            'task_count': count,
+        }
+
+
+class PersonalTask(models.Model):
+    """One line on a member's planner."""
+
+    planner = models.ForeignKey(PersonalPlanner, on_delete=models.CASCADE, related_name='tasks')
+    # Denormalised from planner.owner on purpose. Every read is then guarded by a
+    # single owner=request.user clause with no join, so the privacy of the whole
+    # feature can be checked by reading one line instead of following a relation.
+    # The only writer is the view layer, which takes the owner from the session.
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='personal_tasks')
+    title = models.CharField(max_length=300)
+    notes = models.TextField(blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    is_done = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        indexes = [models.Index(fields=['owner', 'is_done', 'due_date'])]
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'planner_id': self.planner_id,
+            'title': self.title,
+            'notes': self.notes,
+            'due_date': self.due_date.isoformat() if self.due_date else '',
+            'is_done': self.is_done,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else '',
+            'position': self.position,
+        }

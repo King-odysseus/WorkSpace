@@ -67,6 +67,16 @@ function taskDueLabel(dueDate, today) {
   return dueDate < today ? 'Overdue' : dueDate
 }
 
+// The day as the user reads it: DD/MM/YYYY.
+//
+// Read straight off the ISO string rather than through Date, because a
+// date-only value parsed as an instant lands on the previous day for anyone west
+// of UTC, and a due date must not move because of where someone is sitting.
+function formatDay(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : ''
+}
+
 function taskSearchText(task) {
   return [task.title, task.description, task.member, task.tag, task.bucket, ...(task.labels || [])].filter(Boolean).join(' ').toLowerCase()
 }
@@ -300,6 +310,7 @@ export {
   CHECK_IN_RANGES,
   filterCheckInsByRange,
   taskDueLabel,
+  formatDay,
   taskSearchText,
   mapTaskFromApi,
   taskAssigneeLabel,

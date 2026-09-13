@@ -4024,3 +4024,164 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 .drawer-task-form {
   grid-template-columns: 1fr;
 }
+
+/* My planner - a member's private list. Two columns: the planners they keep on
+   the left, the open one on the right. */
+.personal-planner-view { gap: 18px; }
+.personal-planner-error {
+  margin: 0;
+  padding: 9px 13px;
+  border: 1px solid var(--sc-destructive);
+  border-radius: 12px;
+  background: var(--workspace-surface-soft);
+  color: var(--sc-destructive);
+  font-size: 12px;
+}
+.personal-planner-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.personal-planner-list { display: flex; flex-direction: column; gap: 6px; }
+.personal-planner-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+.personal-planner-item.is-active {
+  border-color: var(--workspace-border);
+  background: var(--workspace-surface);
+  box-shadow: inset 3px 0 0 var(--brand-accent);
+}
+.personal-planner-pick {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--workspace-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.personal-planner-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.personal-planner-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+.personal-planner-item-actions, .personal-planner-confirm, .personal-planner-rename { display: flex; align-items: center; gap: 4px; }
+.personal-planner-rename { padding: 0 2px; }
+.personal-planner-rename input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 9px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.personal-planner-new { align-self: flex-start; color: var(--workspace-text-soft); }
+.personal-planner-main { min-width: 0; }
+.personal-planner-card { padding: 20px; }
+.personal-planner-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.personal-planner-header h2 { margin: 0; color: var(--workspace-text); font-size: 17px; }
+.personal-planner-header svg { flex-shrink: 0; color: var(--workspace-text-soft); }
+.personal-planner-summary { margin: 3px 0 0; color: var(--workspace-text-soft); font-size: 12px; }
+.personal-planner-composer { display: flex; gap: 8px; }
+.personal-planner-composer input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.personal-task-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.personal-task { display: flex; align-items: flex-start; gap: 10px; padding: 9px 2px; border-top: 1px solid var(--workspace-border); }
+.personal-task:first-child { border-top: 0; }
+.personal-task-tick {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 6px;
+  background: var(--workspace-surface);
+  color: #071A2E;
+  cursor: pointer;
+}
+.personal-task.is-done .personal-task-tick { border-color: var(--brand-accent); background: var(--brand-accent); }
+.personal-task-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.personal-task-title {
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--workspace-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.personal-task-title:focus { outline: none; }
+.personal-task-title:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+.personal-task.is-done .personal-task-title { color: var(--workspace-text-soft); text-decoration: line-through; }
+.personal-task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--workspace-text-soft); font-size: 11px; }
+.personal-task-date, .personal-task-move {
+  max-width: 160px;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--workspace-text-soft);
+  font-family: inherit;
+  font-size: 11px;
+}
+.personal-task-date:hover, .personal-task-move:hover { border-color: var(--workspace-border); }
+.personal-task-link { border: 0; background: transparent; color: var(--workspace-text-soft); font-family: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.personal-task-flag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--workspace-surface-soft);
+  color: var(--sc-destructive);
+  font-weight: 600;
+}
+.personal-task-flag.is-quiet { color: var(--workspace-text-soft); }
+.personal-task-notes {
+  min-height: 68px;
+  padding: 9px 11px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text);
+  font-family: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+@media (max-width: 900px) {
+  .personal-planner-layout { grid-template-columns: 1fr; }
+}

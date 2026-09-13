@@ -8,6 +8,7 @@ from .screen_sharing import screen_capture_detail, screen_capture_list, screen_s
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .import_templates import import_template
 from .workspace_tools import workspace_ai_action, workspace_ai_chat, workspace_ai_settings, workspace_check_in_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
+from .personal_views import personal_planner_detail, personal_planner_list, personal_task_detail, personal_task_list
 
 urlpatterns = [
     path('notifications/summary/', notification_summary, name='notification-summary'),
@@ -131,4 +132,8 @@ urlpatterns = [
     path('attachments/<int:attachment_id>/', task_attachment_detail, name='task-attachment-detail'),
     path('attachments/<int:attachment_id>/download/', task_attachment_download, name='task-attachment-download'),
     path('screen-captures/<uuid:capture_id>/', screen_capture_detail, name='screen-capture-detail'),
+    path('workspaces/<int:workspace_id>/personal/planners/', personal_planner_list, name='personal-planner-list'),
+    path('workspaces/<int:workspace_id>/personal/planners/<int:planner_id>/', personal_planner_detail, name='personal-planner-detail'),
+    path('workspaces/<int:workspace_id>/personal/tasks/', personal_task_list, name='personal-task-list'),
+    path('workspaces/<int:workspace_id>/personal/tasks/<int:task_id>/', personal_task_detail, name='personal-task-detail'),
 ]
