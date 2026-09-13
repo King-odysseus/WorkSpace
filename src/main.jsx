@@ -212,12 +212,7 @@ import {
 
 function App() {
   const today = toDateKey(new Date());
-  const todayLabel = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(`${today}T12:00:00`));
+  const todayLabel = formatDay(today);
   // Supports PWA shortcuts (manifest.webmanifest) and any other deep link that
   // wants to land on a specific view, e.g. /?view=My+tasks.
   const [active, setActive] = useState(() => {
@@ -5945,7 +5940,7 @@ function WorkspaceView({
                 key={checkIn.id}
                 role="button"
                 tabIndex={0}
-                aria-label={`View ${checkIn.user_name}'s check-in for ${checkIn.date}`}
+                aria-label={`View ${checkIn.user_name}'s check-in for ${formatDay(checkIn.date)}`}
                 onClick={() => setSelectedCheckInDetail(checkIn)}
                 onKeyDown={(event) => {
                   if (event.target !== event.currentTarget) return;

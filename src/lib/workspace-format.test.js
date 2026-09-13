@@ -12,20 +12,20 @@ const jsonResponse = (body, { ok = true, status = 200, contentType = 'applicatio
 describe('taskDueLabel', () => {
   it('reports overdue only for dates strictly before today', () => {
     expect(taskDueLabel('2026-09-04', '2026-09-05')).toBe('Overdue')
-    expect(taskDueLabel('2026-09-05', '2026-09-05')).toBe('05/09/2026')
+    expect(taskDueLabel('2026-09-05', '2026-09-05')).toBe('05-09-2026')
     expect(taskDueLabel('', '2026-09-05')).toBe('No due date')
   })
 })
 
 describe('formatDay', () => {
-  it('writes a day as DD/MM/YYYY', () => {
-    expect(formatDay('2026-09-05')).toBe('05/09/2026')
+  it('writes a day as DD-MM-YYYY', () => {
+    expect(formatDay('2026-09-05')).toBe('05-09-2026')
   })
 
   it('takes the day off a timestamp without shifting it', () => {
     // Read as text, not through Date: a UTC timestamp late in the evening is the
     // previous day for anyone west of UTC, and a due date must not move.
-    expect(formatDay('2026-09-05T23:30:00Z')).toBe('05/09/2026')
+    expect(formatDay('2026-09-05T23:30:00Z')).toBe('05-09-2026')
   })
 
   it('renders nothing rather than a broken date', () => {
@@ -37,8 +37,8 @@ describe('formatDay', () => {
 describe('formatDate', () => {
   // Built from local parts rather than an ISO string, so the expectation holds
   // wherever the suite runs.
-  it('writes a timestamp in the reader own time zone as DD/MM/YYYY', () => {
-    expect(formatDate(new Date(2026, 8, 5, 23, 30))).toBe('05/09/2026')
+  it('writes a timestamp in the reader own time zone as DD-MM-YYYY', () => {
+    expect(formatDate(new Date(2026, 8, 5, 23, 30))).toBe('05-09-2026')
   })
 
   it('renders nothing rather than a broken date', () => {
@@ -49,8 +49,8 @@ describe('formatDate', () => {
 
 describe('formatDateTime', () => {
   it('puts a 24 hour clock beside the day', () => {
-    expect(formatDateTime(new Date(2026, 8, 5, 9, 5))).toBe('05/09/2026 09:05')
-    expect(formatDateTime(new Date(2026, 8, 5, 18, 45))).toBe('05/09/2026 18:45')
+    expect(formatDateTime(new Date(2026, 8, 5, 9, 5))).toBe('05-09-2026 09:05')
+    expect(formatDateTime(new Date(2026, 8, 5, 18, 45))).toBe('05-09-2026 18:45')
   })
 
   it('renders nothing rather than a broken date', () => {
@@ -60,7 +60,7 @@ describe('formatDateTime', () => {
 
 describe('formatDayMonth', () => {
   it('drops the year for the narrow slots', () => {
-    expect(formatDayMonth(new Date(2026, 8, 5, 12))).toBe('05/09')
+    expect(formatDayMonth(new Date(2026, 8, 5, 12))).toBe('05-09')
   })
 
   it('renders nothing rather than a broken date', () => {
@@ -70,7 +70,7 @@ describe('formatDayMonth', () => {
 
 describe('formatLastSeen', () => {
   it('gives the day in the app wide format once relative wording runs out', () => {
-    expect(formatLastSeen(new Date(2020, 0, 5, 12).toISOString())).toBe('Last seen 05/01/2020')
+    expect(formatLastSeen(new Date(2020, 0, 5, 12).toISOString())).toBe('Last seen 05-01-2020')
   })
 })
 

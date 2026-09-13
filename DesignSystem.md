@@ -22,6 +22,16 @@ Do not add another application stylesheet. Extend the relevant current layer in
 `workspace.css` and reuse the React primitives in `src/components/ui/` where one
 already exists.
 
+### Date Formatting
+
+Use one numeric format for dates everywhere: `DD-MM-YYYY` (`13-09-2026`). Date
+and time values keep a 24-hour clock after the date (`13-09-2026 14:05`).
+
+Keep ISO values such as `YYYY-MM-DD` inside API payloads, date keys, comparisons,
+and `datetime` attributes. Format only the value shown to the reader, using the
+shared helpers in `src/lib/workspace-format.js` on the frontend and
+`display_date()` in `tasks/views.py` on the server.
+
 ## Visual Direction
 
 WorkSpace should feel calm, focused, and operational:

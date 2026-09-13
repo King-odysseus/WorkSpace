@@ -3540,7 +3540,7 @@ function TodayDashboard({
                 >
                   <span className="priority-dot" />
                   <span>{item.note}</span>
-                  <small>{item.due_date || "No due date"}</small>
+                  <small>{formatDay(item.due_date) || "No due date"}</small>
                 </button>
               ))
             ) : (

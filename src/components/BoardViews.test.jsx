@@ -11,7 +11,7 @@ const dayOffset = days => {
   return toDateKey(date)
 }
 
-const renderDashboard = (tasks, onOpenBoard = noop) =>
+const renderDashboard = (tasks, onOpenBoard = noop, followUps = []) =>
   render(
     <TodayDashboard
       today="2026-09-12"
@@ -22,7 +22,7 @@ const renderDashboard = (tasks, onOpenBoard = noop) =>
       workspaceName="Northstar"
       tasks={tasks}
       events={[]}
-      followUps={[]}
+      followUps={followUps}
       checkIns={[]}
       workShifts={[]}
       members={[]}
@@ -97,6 +97,15 @@ it('does not treat an unassigned task as yours when the name lookup fails', () =
   ])
 
   expect(within(myDayPanel()).getByText('Your day is clear.')).toBeInTheDocument()
+})
+
+it('formats dashboard follow-up dates in the app date format', () => {
+  renderDashboard([], noop, [
+    { id: 1, note: 'Confirm launch approval', status: 'open', due_date: '2026-09-05' },
+  ])
+
+  expect(screen.getByText('05-09-2026')).toBeInTheDocument()
+  expect(screen.queryByText('2026-09-05')).not.toBeInTheDocument()
 })
 
 it('shows an assigned task in My tasks and keeps unassigned work out of the queue', () => {

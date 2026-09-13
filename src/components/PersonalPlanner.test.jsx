@@ -25,7 +25,7 @@ it('lists the member own planners and tasks, with no team data in the request', 
   expect(screen.getByText('0 of 2 done - 1 overdue')).toBeInTheDocument()
   expect(screen.getByDisplayValue('Draft handover')).toBeInTheDocument()
   // The due date is shown the way the rest of the app shows days.
-  expect(screen.getByText('Due 05/01/2020')).toBeInTheDocument()
+  expect(screen.getByText('Due 05-01-2020')).toBeInTheDocument()
 
   const [url] = expectRequest(fetchMock, '/personal/planners/')
   expect(String(url)).toContain('/api/workspaces/4/')
@@ -39,9 +39,9 @@ it('ticks an item off and shows the day it was finished', async () => {
   render(<PersonalPlanner workspaceId={4} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Finish Draft handover' }))
 
-  expect(await screen.findByText('Done 09/03/2024')).toBeInTheDocument()
+  expect(await screen.findByText('Done 09-03-2024')).toBeInTheDocument()
   expect(screen.getByText('1 of 2 done')).toBeInTheDocument()
-  expect(screen.queryByText('Due 05/01/2020')).not.toBeInTheDocument()
+  expect(screen.queryByText('Due 05-01-2020')).not.toBeInTheDocument()
 
   const [, init] = expectRequest(fetchMock, '/personal/tasks/7/', 'PATCH')
   expect(JSON.parse(init.body)).toEqual({ is_done: true })

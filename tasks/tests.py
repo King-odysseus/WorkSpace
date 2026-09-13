@@ -5732,7 +5732,7 @@ class PersonalPlannerApiTests(TestCase):
 
 
 class DisplayDateTests(TestCase):
-    """The server writes dates for people the same way the UI does: DD/MM/YYYY.
+    """The server writes dates for people the same way the UI does: DD-MM-YYYY.
 
     Wording that reaches a person - an activity line, a notification body, a
     search result title - is formatted here, while anything a client reads back
@@ -5740,12 +5740,12 @@ class DisplayDateTests(TestCase):
     """
 
     def test_a_date_only_value_reads_as_day_month_year(self):
-        self.assertEqual(display_date(date(2026, 9, 5)), '05/09/2026')
+        self.assertEqual(display_date(date(2026, 9, 5)), '05-09-2026')
 
     def test_a_moment_in_time_keeps_the_clock_beside_it_when_asked(self):
         moment = timezone.make_aware(datetime(2026, 9, 5, 14, 5))
-        self.assertEqual(display_date(moment), '05/09/2026')
-        self.assertEqual(display_date(moment, with_time=True), '05/09/2026 14:05')
+        self.assertEqual(display_date(moment), '05-09-2026')
+        self.assertEqual(display_date(moment, with_time=True), '05-09-2026 14:05')
 
     def test_nothing_rather_than_a_broken_date(self):
         self.assertEqual(display_date(None), '')

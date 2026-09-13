@@ -286,7 +286,7 @@ def json_value(value):
 
 
 def display_date(value, with_time=False):
-    """A date the way the app writes it for people: DD/MM/YYYY, and the time
+    """A date the way the app writes it for people: DD-MM-YYYY, and the time
     after it when asked.
 
     For the text that reaches a person - activity lines, notification bodies,
@@ -297,7 +297,7 @@ def display_date(value, with_time=False):
         return ''
     if isinstance(value, datetime) and timezone.is_aware(value):
         value = timezone.localtime(value)
-    formatted = value.strftime('%d/%m/%Y')
+    formatted = value.strftime('%d-%m-%Y')
     return f'{formatted} {value.strftime("%H:%M")}' if with_time else formatted
 
 
