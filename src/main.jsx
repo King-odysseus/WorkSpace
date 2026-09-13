@@ -2732,7 +2732,7 @@ function App() {
           </button>
         </div>
       )}
-      {!aiLauncherHidden && !aiMinimized && activeWorkspaceId && (
+      {!aiLauncherHidden && !aiMinimized && !aiFlyoutOpen && activeWorkspaceId && (
         <button
           type="button"
           onClick={() => {

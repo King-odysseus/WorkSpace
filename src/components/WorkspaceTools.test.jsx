@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AssistantFlyout, FilesWorkspaceView, describeDocument } from './WorkspaceTools.jsx'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
@@ -97,6 +97,27 @@ it('minimizes the assistant without hiding its launcher', async () => {
   expect(onMinimize).toHaveBeenCalledTimes(1)
   expect(onClose).not.toHaveBeenCalled()
   expect(screen.queryByRole('button', { name: 'Hide Zuri button' })).not.toBeInTheDocument()
+})
+
+it('keeps new assistant messages inside the transcript scroller', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/ai/chat/': { answer: 'The latest workspace update is ready.' },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  const transcript = await screen.findByRole('log', { name: 'Zuri conversation' })
+  Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 720 })
+  const input = screen.getByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'What changed?' } })
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByText('The latest workspace update is ready.')).toBeInTheDocument()
+  await waitFor(() => expect(transcript.scrollTop).toBe(720))
 })
 
 it('shows a workspace action for confirmation before reporting success', async () => {

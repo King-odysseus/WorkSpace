@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
 import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
@@ -895,6 +895,11 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
 // between devices. AI_HISTORY_TURNS bounds both what is stored and what is
 // sent back as context, matching the server's own cap.
 const AI_HISTORY_TURNS = 20
+const AI_STARTER_PROMPTS = [
+  ['What needs my attention?', ListOrdered],
+  ['Summarise this week', History],
+  ['Draft a task', Plus],
+]
 const aiHistoryKey = workspaceId => `workspace-ai-chat:${workspaceId}`
 const aiPendingActionKey = workspaceId => `workspace-ai-action:${workspaceId}`
 
@@ -953,14 +958,18 @@ export function describeDocument(info) {
 
 export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
   const launcherRef = useRef(document.activeElement)
-  const feedEndRef = useRef(null)
+  const transcriptRef = useRef(null)
   const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   const [attachment, setAttachment] = useState(null); const [attaching, setAttaching] = useState(false); const [documentNote, setDocumentNote] = useState('')
   const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
   const [pendingAction, setPendingAction] = useState(() => readAiPendingAction(workspaceId))
   useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
   useEffect(() => { setPendingAction(readAiPendingAction(workspaceId)) }, [workspaceId])
-  useEffect(() => { feedEndRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy])
+  useLayoutEffect(() => {
+    const transcript = transcriptRef.current
+    if (!transcript) return
+    transcript.scrollTop = transcript.scrollHeight
+  }, [turns, busy, pendingAction, documentNote, error])
   useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
   const attachFile = async event => {
     const chosen = event.target.files?.[0]
@@ -1056,23 +1065,33 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
     }
   }
   const providers = data?.providers || {}; const enabled = data?.settings?.ai_enabled_providers || Object.keys(providers).filter(key => providers[key])
-  return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
-    <DialogContent className="ai-chat-window" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
+  return <Dialog open modal={false} onOpenChange={open => { if (!open) onClose() }}>
+    <DialogContent className="ai-chat-window" overlayClassName="ai-chat-overlay" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
         <div className="ai-chat-heading-copy">
           <span className="ai-chat-title-icon" aria-hidden="true"><Sparkles size={17} /></span>
           <div>
-            <DialogTitle className="ai-chat-title">Zuri</DialogTitle>
+            <div className="ai-chat-title-row">
+              <DialogTitle className="ai-chat-title">Zuri</DialogTitle>
+              <span className="ai-chat-status"><span aria-hidden="true" /> Ready</span>
+            </div>
             <p>Workspace assistant</p>
           </div>
         </div>
         <div className="ai-chat-actions">
-          {onMinimize && <button type="button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={19} /></button>}
-          <button type="button" onClick={onClose} aria-label="Close Zuri"><X size={22} /></button>
+          {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={18} /></button>}
+          <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={19} /></button>
         </div>
       </div>
-      <div className="ai-chat-messages" aria-live="polite">
-        {!turns.length && !error && <div className="ai-chat-empty"><span className="ai-chat-empty-icon" aria-hidden="true"><Sparkles size={20} /></span><strong>Start a conversation</strong><span>Ask about work in this workspace or attach a file.</span></div>}
+      <div ref={transcriptRef} className="ai-chat-messages" role="log" aria-live="polite" aria-label="Zuri conversation">
+        {!turns.length && !error && <div className="ai-chat-empty">
+          <span className="ai-chat-empty-icon" aria-hidden="true"><Sparkles size={20} /></span>
+          <strong>Start a conversation</strong>
+          <span>Ask about work in this workspace or attach a file.</span>
+          <div className="ai-chat-prompts" aria-label="Suggested questions">
+            {AI_STARTER_PROMPTS.map(([label, Icon]) => <button type="button" key={label} onClick={() => setMessage(label)}><Icon size={14} /> {label}</button>)}
+          </div>
+        </div>}
         {turns.map((turn, index) => (
           <div className={`ai-chat-row is-${turn.role}`} key={`${turn.role}-${index}`}>
             <span className="ai-chat-avatar" aria-hidden="true">{turn.role === 'user' ? 'Y' : <Sparkles size={13} />}</span>
@@ -1097,7 +1116,6 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
         {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-avatar" aria-hidden="true"><Sparkles size={13} /></span><div className="ai-chat-turn"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div></div>}
         {documentNote && <div className="ai-chat-doc-note" role="status">{documentNote}</div>}
         {error && <div role="alert" className="ai-chat-error">{error}</div>}
-        <div ref={feedEndRef} />
       </div>
       <form onSubmit={ask} className="ai-chat-composer is-stacked">
         {attachment && <div className="ai-chat-attachment">
