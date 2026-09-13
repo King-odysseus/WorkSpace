@@ -5,27 +5,85 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 // the detail drawer with comments, subtasks, attachments and dependencies.
 
 import { useEffect, useState } from 'react'
-import { Archive, Check, X } from 'lucide-react'
+import { Archive, Check, ChevronDown, X } from 'lucide-react'
 import { DateField } from './workspace-ui.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.jsx'
 import { getCsrfToken, isImageFileName, readJsonResponse, taskDueLabel, toDateKey } from '../lib/workspace-format.js'
 
 function memberLabel(member) {
   return [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email
 }
 
+function memberInitials(member) {
+  const label = memberLabel(member)
+  const parts = label.split(/[\s@._-]+/).filter(Boolean)
+  return parts.slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?'
+}
+
 // Order is meaningful rather than cosmetic: the first ticked member becomes the
 // task's primary assignee, which is what the single-owner readers still use.
 function AssigneePicker({ members = [], value = [], onChange, disabled = false }) {
+  const [open, setOpen] = useState(false)
   const ids = value.map(String)
-  const names = ids.map(id => members.find(member => String(member.id) === id)).filter(Boolean).map(memberLabel)
-  const summary = names.length ? `${names[0]}${names.length > 1 ? ` + ${names.length - 1}` : ''}` : 'Unassigned'
+  const selectedMembers = ids.map(id => members.find(member => String(member.id) === id)).filter(Boolean)
+  const names = selectedMembers.map(memberLabel)
   const toggle = memberId => {
     const key = String(memberId)
     onChange(ids.includes(key) ? ids.filter(id => id !== key) : [...ids, key])
   }
-  return <details className="assignee-picker"><summary>{summary}</summary><div className="assignee-picker-list">{members.map(member => <label className="assignee-picker-row" key={member.id}><input type="checkbox" checked={ids.includes(String(member.id))} onChange={() => toggle(member.id)} disabled={disabled} /><span>{memberLabel(member)}</span>{ids[0] === String(member.id) && <em>Primary</em>}</label>)}{!members.length && <p className="drawer-muted">No members to assign.</p>}</div></details>
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`assignee-picker-trigger${open ? ' is-open' : ''}`}
+          disabled={disabled}
+          aria-label={names.length ? `Choose assignees. Selected: ${names.join(', ')}` : 'Choose assignees'}
+          title={names.length ? names.join(', ') : 'Choose assignees'}
+        >
+          <span className="assignee-picker-value">
+            {selectedMembers.length ? selectedMembers.map((member, index) => (
+              <span className={`assignee-picker-badge${index === 0 ? ' is-primary' : ''}`} key={member.id}>
+                <span className="assignee-picker-avatar" aria-hidden="true">{memberInitials(member)}</span>
+                <span className="assignee-picker-badge-name">{memberLabel(member)}</span>
+              </span>
+            )) : <span className="assignee-picker-placeholder">Unassigned</span>}
+          </span>
+          <ChevronDown className="assignee-picker-chevron" size={16} aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="assignee-picker-popover" align="start" side="bottom" sideOffset={6} collisionPadding={12}>
+        <div className="assignee-picker-heading">
+          <div>
+            <strong>Assignees</strong>
+            <span>The first selected person is primary.</span>
+          </div>
+          <span className="assignee-picker-count" aria-label={`${ids.length} selected`}>{ids.length}</span>
+        </div>
+        <div className="assignee-picker-list" role="group" aria-label="Workspace members">
+          {members.map(member => {
+            const key = String(member.id)
+            const selected = ids.includes(key)
+            const label = memberLabel(member)
+            return (
+              <label className={`assignee-picker-row${selected ? ' is-selected' : ''}`} key={member.id}>
+                <input type="checkbox" checked={selected} onChange={() => toggle(member.id)} disabled={disabled} />
+                <span className="assignee-picker-avatar" aria-hidden="true">{memberInitials(member)}</span>
+                <span className="assignee-picker-option-copy">
+                  <strong>{label}</strong>
+                  {member.email && member.email !== label && <small>{member.email}</small>}
+                </span>
+                {selected && ids[0] === key && <em>Primary</em>}
+              </label>
+            )
+          })}
+          {!members.length && <p className="drawer-muted">No members to assign.</p>}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function TaskCard({ task, onComplete, onStatusChange, onDelete, onOpenTask, onBucketChange, bucketOptions = [], canDelete = true, canEdit = task.can_edit ?? true, draggable = false }) { const completed = task.status === 'done'; return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button type="button" role="checkbox" aria-checked={completed} className={`task-check ${completed ? 'checked' : ''}`} disabled={!canEdit} onClick={() => onComplete(task.id)} aria-label={`${completed ? 'Reopen' : 'Complete'} ${task.title}`} title={completed ? 'Reopen task' : 'Mark task complete'}><Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" /></button><div className="task-copy"><button type="button" className="task-title-button" onClick={() => onOpenTask(task)}>{task.title}</button><div><AppSelect disabled={!canEdit} className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></AppSelect>{bucketOptions.length > 1 && <AppSelect disabled={!canEdit} className="task-bucket-select" value={task.bucket || ''} onChange={event => onBucketChange?.(task.id, event.target.value)} aria-label={`Move ${task.title} to bucket`}>{bucketOptions.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</AppSelect>}<span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span>{canDelete && <button type="button" className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Archive ${task.title}`} title="Archive task"><Archive size={16} /></button>}</div> }
@@ -44,7 +102,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const [saving, setSaving] = useState(false)
   const memberLabel = member => [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email
   const selectedAssignees = taskFields.assignee_ids.map(String).map(id => members.find(member => String(member.id) === id)).filter(Boolean)
-  const assigneeLabel = selectedAssignees.length ? `${memberLabel(selectedAssignees[0])}${selectedAssignees.length > 1 ? ` + ${selectedAssignees.length - 1}` : ''}` : 'Unassigned'
+  const assigneeLabel = selectedAssignees.length ? selectedAssignees.map(memberLabel).join(', ') : 'Unassigned'
   const projectLabel = projects.find(project => String(project.id) === String(taskFields.project_id))?.name || 'General'
   const dueLabel = taskFields.due_date ? taskDueLabel(taskFields.due_date, toDateKey(new Date())) : 'No due date'
   const request = async (path, options = {}) => {

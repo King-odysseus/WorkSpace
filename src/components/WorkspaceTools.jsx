@@ -1059,18 +1059,27 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
   return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
     <DialogContent className="ai-chat-window" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
-        <DialogTitle className="ai-chat-title"><span className="ai-chat-title-icon"><Sparkles size={17} /></span> Zuri</DialogTitle>
+        <div className="ai-chat-heading-copy">
+          <span className="ai-chat-title-icon" aria-hidden="true"><Sparkles size={17} /></span>
+          <div>
+            <DialogTitle className="ai-chat-title">Zuri</DialogTitle>
+            <p>Workspace assistant</p>
+          </div>
+        </div>
         <div className="ai-chat-actions">
           {onMinimize && <button type="button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={19} /></button>}
           <button type="button" onClick={onClose} aria-label="Close Zuri"><X size={22} /></button>
         </div>
       </div>
       <div className="ai-chat-messages" aria-live="polite">
-        {!turns.length && !error && <p className="ai-chat-empty">Ask Zuri a question.</p>}
+        {!turns.length && !error && <div className="ai-chat-empty"><span className="ai-chat-empty-icon" aria-hidden="true"><Sparkles size={20} /></span><strong>Start a conversation</strong><span>Ask about work in this workspace or attach a file.</span></div>}
         {turns.map((turn, index) => (
           <div className={`ai-chat-row is-${turn.role}`} key={`${turn.role}-${index}`}>
-            <span className="ai-chat-sender">{turn.role === 'user' ? 'You' : 'Zuri'}</span>
-            <div className="ai-chat-bubble">{turn.content}</div>
+            <span className="ai-chat-avatar" aria-hidden="true">{turn.role === 'user' ? 'Y' : <Sparkles size={13} />}</span>
+            <div className="ai-chat-turn">
+              <span className="ai-chat-sender">{turn.role === 'user' ? 'You' : 'Zuri'}</span>
+              <div className="ai-chat-bubble">{turn.content}</div>
+            </div>
           </div>
         ))}
         {pendingAction && (
@@ -1085,7 +1094,7 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
             </div>
           </div>
         )}
-        {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div>}
+        {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-avatar" aria-hidden="true"><Sparkles size={13} /></span><div className="ai-chat-turn"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div></div>}
         {documentNote && <div className="ai-chat-doc-note" role="status">{documentNote}</div>}
         {error && <div role="alert" className="ai-chat-error">{error}</div>}
         <div ref={feedEndRef} />

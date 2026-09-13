@@ -2785,7 +2785,7 @@ function App() {
       {showModal && (
         <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}>
           <form
-            className="modal"
+            className="modal task-composer-modal"
             ref={taskModalRef}
             role="dialog"
             aria-modal="true"
@@ -2793,10 +2793,11 @@ function App() {
             onSubmit={addTask}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="modal-heading">
-              <div>
-                <p className="eyebrow">Quick capture</p>
+            <div className="modal-heading task-composer-heading">
+              <div className="task-composer-heading-copy">
+                <p className="eyebrow">New task</p>
                 <h2 id="add-task-title">Add a task</h2>
+                <p>Set ownership, timing, and placement.</p>
               </div>
               <button
                 type="button"
@@ -2807,145 +2808,156 @@ function App() {
                 <X size={18} />
               </button>
             </div>
-            <label>
-              Task name
-              <input
-                autoFocus
-                value={newTask}
-                onChange={(event) => {
-                  setNewTask(event.target.value);
-                  setTaskError("");
-                }}
-                placeholder="What needs to happen?"
-              />
-            </label>
-            <label>
-              Description
-              <textarea
-                value={newDescription}
-                onChange={(event) => setNewDescription(event.target.value)}
-                placeholder="Add more detail about this task"
-                maxLength="4000"
-              />
-            </label>
-            <label>
-              Apply template
-              <AppSelect value={newTaskTemplate} onChange={applyTaskTemplate}>
-                <option value="">No template</option>
-                {workspaceData.taskTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </AppSelect>
-            </label>
-            {taskError && (
-              <p className="auth-error" role="alert">
-                {taskError}
-              </p>
-            )}
-            <div className="modal-grid">
-              <label>
-                Assign to
-                <AssigneePicker
-                  members={workspaceData.members}
-                  value={newAssigneeIds}
-                  onChange={setNewAssigneeIds}
+            <div className="task-composer-body">
+              <label className="task-composer-field">
+                Task name
+                <input
+                  autoFocus
+                  value={newTask}
+                  onChange={(event) => {
+                    setNewTask(event.target.value);
+                    setTaskError("");
+                  }}
+                  placeholder="What needs to happen?"
                 />
               </label>
-              <DateField
-                label="Due date"
-                value={newDueDate}
-                onChange={(event) => setNewDueDate(event.target.value)}
-              />
+              <label className="task-composer-field">
+                Description
+                <textarea
+                  value={newDescription}
+                  onChange={(event) => setNewDescription(event.target.value)}
+                  placeholder="Add more detail about this task"
+                  maxLength="4000"
+                />
+              </label>
+              <div className="modal-grid task-composer-grid">
+                <label>
+                  Assign to
+                  <AssigneePicker
+                    members={workspaceData.members}
+                    value={newAssigneeIds}
+                    onChange={setNewAssigneeIds}
+                  />
+                </label>
+                <DateField
+                  label="Due date"
+                  value={newDueDate}
+                  onChange={(event) => setNewDueDate(event.target.value)}
+                />
+              </div>
+              <div className="modal-grid task-composer-grid">
+                <label>
+                  Apply template
+                  <AppSelect value={newTaskTemplate} onChange={applyTaskTemplate}>
+                    <option value="">No template</option>
+                    {workspaceData.taskTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </AppSelect>
+                </label>
+                <label>
+                  Planner bucket
+                  <AppSelect
+                    value={newBucket}
+                    onChange={(event) => {
+                      const bucket = workspaceData.buckets.find(
+                        (item) => String(item.name) === String(event.target.value),
+                      );
+                      setNewBucket(event.target.value);
+                      if (bucket?.project_id) {
+                        setNewProjectId(String(bucket.project_id));
+                        setNewWorkstreamId("");
+                      } else if (bucket?.workstream_id) {
+                        setNewWorkstreamId(String(bucket.workstream_id));
+                        setNewProjectId("");
+                      }
+                    }}
+                  >
+                    {(
+                      workspaceData.buckets.length
+                        ? workspaceData.buckets
+                        : [{ id: "backlog", name: "Backlog" }]
+                    )
+                      .filter((bucket) => {
+                        if (!bucket.project_id && !bucket.workstream_id) return true;
+                        if (newProjectId) return String(bucket.project_id || "") === String(newProjectId);
+                        if (newWorkstreamId) return String(bucket.workstream_id || "") === String(newWorkstreamId);
+                        return true;
+                      })
+                      .map((bucket) => (
+                        <option key={bucket.id} value={bucket.name}>
+                          {bucket.name}
+                        </option>
+                      ))}
+                  </AppSelect>
+                </label>
+              </div>
+              <div className="modal-grid task-composer-grid">
+                <label>
+                  Project
+                  <AppSelect
+                    value={newProjectId}
+                    disabled={Boolean(newWorkstreamId)}
+                    onChange={(event) => { setNewProjectId(event.target.value); if (event.target.value) { setNewWorkstreamId(""); setNewBucket("Backlog"); } }}
+                  >
+                    <option value="">General</option>
+                    {workspaceData.projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </AppSelect>
+                </label>
+                <label>
+                  Workstream
+                  <AppSelect value={newWorkstreamId} disabled={Boolean(newProjectId)} onChange={(event) => { setNewWorkstreamId(event.target.value); if (event.target.value) { setNewProjectId(""); setNewBucket("Backlog"); } }}>
+                    <option value="">No workstream</option>
+                    {(workspaceData.lookupValues || []).filter((value) => value.kind === "workstream" && value.is_active && !value.project_id).map((workstream) => <option key={workstream.id} value={workstream.id}>{workstream.name}</option>)}
+                  </AppSelect>
+                </label>
+              </div>
+              <div className="modal-grid task-composer-grid">
+                <label>
+                  Priority
+                  <AppSelect
+                    value={newPriority}
+                    onChange={(event) => setNewPriority(event.target.value)}
+                  >
+                    <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
+                    <option value="normal">Normal</option>
+                    <option value="low">Low</option>
+                  </AppSelect>
+                </label>
+                <label>
+                  Repeat
+                  <AppSelect
+                    value={newRecurrence}
+                    onChange={(event) => setNewRecurrence(event.target.value)}
+                  >
+                    <option value="none">Does not repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </AppSelect>
+                </label>
+              </div>
+              {taskError && (
+                <p className="auth-error task-composer-error" role="alert">
+                  {taskError}
+                </p>
+              )}
             </div>
-            <div className="modal-grid">
-              <label>
-                Project
-                <AppSelect
-                  value={newProjectId}
-                  disabled={Boolean(newWorkstreamId)}
-                  onChange={(event) => { setNewProjectId(event.target.value); if (event.target.value) { setNewWorkstreamId(""); setNewBucket("Backlog"); } }}
-                >
-                  <option value="">General</option>
-                  {workspaceData.projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </AppSelect>
-              </label>
-              <label>
-                Workstream
-                <AppSelect value={newWorkstreamId} disabled={Boolean(newProjectId)} onChange={(event) => { setNewWorkstreamId(event.target.value); if (event.target.value) { setNewProjectId(""); setNewBucket("Backlog"); } }}>
-                  <option value="">No workstream</option>
-                  {(workspaceData.lookupValues || []).filter((value) => value.kind === "workstream" && value.is_active && !value.project_id).map((workstream) => <option key={workstream.id} value={workstream.id}>{workstream.name}</option>)}
-                </AppSelect>
-              </label>
-              <label>
-                Priority
-                <AppSelect
-                  value={newPriority}
-                  onChange={(event) => setNewPriority(event.target.value)}
-                >
-                  <option value="urgent">Urgent</option>
-                  <option value="high">High</option>
-                  <option value="normal">Normal</option>
-                  <option value="low">Low</option>
-                </AppSelect>
-              </label>
+            <div className="task-composer-footer">
+              <button type="button" className="secondary-button" onClick={() => setShowModal(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="primary-button modal-submit" disabled={taskSubmitting}>
+                {taskSubmitting ? "Creating..." : "Create task"} <ArrowUpRight size={16} />
+              </button>
             </div>
-            <label>
-              Planner bucket
-              <AppSelect
-                value={newBucket}
-                onChange={(event) => {
-                  const bucket = workspaceData.buckets.find(
-                    (item) => String(item.name) === String(event.target.value),
-                  );
-                  setNewBucket(event.target.value);
-                  if (bucket?.project_id) {
-                    setNewProjectId(String(bucket.project_id));
-                    setNewWorkstreamId("");
-                  } else if (bucket?.workstream_id) {
-                    setNewWorkstreamId(String(bucket.workstream_id));
-                    setNewProjectId("");
-                  }
-                }}
-              >
-                {(
-                  workspaceData.buckets.length
-                    ? workspaceData.buckets
-                    : [{ id: "backlog", name: "Backlog" }]
-                )
-                  .filter((bucket) => {
-                    if (!bucket.project_id && !bucket.workstream_id) return true;
-                    if (newProjectId) return String(bucket.project_id || "") === String(newProjectId);
-                    if (newWorkstreamId) return String(bucket.workstream_id || "") === String(newWorkstreamId);
-                    return true;
-                  })
-                  .map((bucket) => (
-                    <option key={bucket.id} value={bucket.name}>
-                      {bucket.name}
-                    </option>
-                  ))}
-              </AppSelect>
-            </label>
-            <label>
-              Repeat
-              <AppSelect
-                value={newRecurrence}
-                onChange={(event) => setNewRecurrence(event.target.value)}
-              >
-                <option value="none">Does not repeat</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </AppSelect>
-            </label>
-            <button className="primary-button modal-submit">
-              Create task <ArrowUpRight size={16} />
-            </button>
           </form>
         </div>
       )}

@@ -67,37 +67,44 @@ function ControlledPicker({ initial = [] }) {
 }
 
 const rows = () => screen.getAllByRole('checkbox')
-// Every member name appears twice - once in the collapsed summary and once in
-// the list - so the summary needs its own query.
-const summaryText = () => screen.getByText(/./, { selector: 'summary' }).textContent
+const pickerTrigger = () => screen.getByRole('button', { name: /Choose assignees/ })
+const openPicker = () => fireEvent.click(pickerTrigger())
 const rowFor = index => rows()[index].closest('label').textContent
 
-it('keeps the first ticked member as the primary as more are added', () => {
+it('keeps the first ticked member as the primary as more are added', async () => {
   render(<ControlledPicker />)
-  expect(summaryText()).toBe('Unassigned')
+  expect(pickerTrigger()).toHaveTextContent('Unassigned')
+  openPicker()
 
   fireEvent.click(rows()[0])
-  expect(summaryText()).toBe('Ada Lovelace')
+  expect(pickerTrigger()).toHaveTextContent('Ada Lovelace')
   expect(rowFor(0)).toContain('Primary')
   expect(rowFor(1)).not.toContain('Primary')
 
   // The second tick appends rather than reordering, so the original primary holds.
   fireEvent.click(rows()[1])
-  expect(summaryText()).toBe('Ada Lovelace + 1')
+  expect(pickerTrigger()).toHaveTextContent('Ada Lovelace')
+  expect(pickerTrigger()).toHaveTextContent('Grace Hopper')
+  expect(pickerTrigger()).not.toHaveTextContent('+ 1')
   expect(rowFor(0)).toContain('Primary')
   expect(rowFor(1)).not.toContain('Primary')
 })
 
-it('promotes the next remaining member when the primary is unticked', () => {
+it('promotes the next remaining member when the primary is unticked', async () => {
   render(<ControlledPicker initial={['1', '2']} />)
-  expect(summaryText()).toBe('Ada Lovelace + 1')
+  expect(pickerTrigger()).toHaveTextContent('Ada Lovelace')
+  expect(pickerTrigger()).toHaveTextContent('Grace Hopper')
+  openPicker()
 
   fireEvent.click(rows()[0])
-  expect(summaryText()).toBe('Grace Hopper')
+  expect(pickerTrigger()).toHaveTextContent('Grace Hopper')
+  expect(pickerTrigger()).not.toHaveTextContent('Ada Lovelace')
   expect(rowFor(1)).toContain('Primary')
 })
 
-it('falls back to the email when a member has no name', () => {
+it('falls back to the email when a member has no name', async () => {
   render(<ControlledPicker initial={['3']} />)
-  expect(summaryText()).toBe('solo@example.com')
+  expect(pickerTrigger()).toHaveTextContent('solo@example.com')
+  openPicker()
+  expect(rows()[2].closest('label')).toHaveTextContent('Primary')
 })

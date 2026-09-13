@@ -3545,3 +3545,339 @@ button {
 ) {
   cursor: pointer;
 }
+
+/* Task composer: a roomy two-column capture surface that keeps its footer in
+   view while the fields scroll on shorter screens. */
+.task-composer-modal {
+  display: flex;
+  width: min(720px, calc(100vw - 28px));
+  max-height: min(820px, calc(100dvh - 28px));
+  padding: 0;
+  overflow: hidden;
+}
+
+.task-composer-heading {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 24px 26px 18px;
+  border-bottom: 1px solid var(--workspace-border);
+}
+
+.task-composer-heading-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.task-composer-heading-copy .eyebrow,
+.task-composer-heading-copy h2,
+.task-composer-heading-copy > p:last-child {
+  margin: 0;
+}
+
+.task-composer-heading-copy > p:last-child {
+  margin-top: 2px;
+  color: var(--workspace-text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.task-composer-body {
+  display: grid;
+  flex: 1;
+  gap: 16px;
+  min-height: 0;
+  padding: 20px 26px 14px;
+  overflow-y: auto;
+}
+
+.task-composer-body > .task-composer-field,
+.task-composer-body .task-composer-grid > label {
+  margin: 0;
+}
+
+.task-composer-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.task-composer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.task-composer-grid > label {
+  min-width: 0;
+}
+
+.task-composer-modal input:not([type='checkbox']):not([type='radio']),
+.task-composer-modal [data-slot='select-trigger'],
+.task-composer-modal textarea {
+  border-radius: 12px !important;
+}
+
+.task-composer-modal .date-field-trigger,
+.task-composer-modal .assignee-picker-trigger {
+  min-height: 44px;
+  border-radius: 12px !important;
+}
+
+.task-composer-error {
+  margin: 0;
+}
+
+.task-composer-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 26px 22px;
+  border-top: 1px solid var(--workspace-border);
+  background: color-mix(in srgb, var(--workspace-surface-soft) 34%, var(--workspace-surface));
+}
+
+.task-composer-footer .secondary-button,
+.task-composer-footer .modal-submit {
+  width: auto;
+  min-height: 42px;
+  margin: 0;
+}
+
+.task-composer-footer .secondary-button {
+  min-width: 96px;
+}
+
+.task-composer-footer .modal-submit {
+  min-width: 140px;
+}
+
+@media (max-width: 640px) {
+  .task-composer-modal {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    border-radius: 16px;
+  }
+
+  .task-composer-heading {
+    padding: 20px 18px 16px;
+  }
+
+  .task-composer-body {
+    gap: 14px;
+    padding: 18px 18px 12px;
+  }
+
+  .task-composer-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .task-composer-footer {
+    padding: 14px 18px 18px;
+  }
+
+  .task-composer-footer .secondary-button,
+  .task-composer-footer .modal-submit {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Zuri: keep the familiar floating workspace assistant, but give messages and
+   the composer a clearer visual rhythm than the generic dialog treatment. */
+.ai-chat-window[data-slot='dialog-content'] {
+  border: 1px solid var(--workspace-border) !important;
+  box-shadow: 0 24px 64px rgb(2 5 31 / 34%) !important;
+}
+
+.ai-chat-heading {
+  min-height: 66px;
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.ai-chat-heading-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-chat-heading-copy > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.ai-chat-title {
+  color: #FFFFFF;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.ai-chat-heading-copy p {
+  margin: 0;
+  color: rgb(255 255 255 / 62%);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ai-chat-title-icon {
+  width: 34px;
+  height: 34px;
+  border-color: rgb(125 211 199 / 30%);
+  background: rgb(125 211 199 / 12%);
+  color: #8DE0D3;
+}
+
+.ai-chat-messages {
+  gap: 14px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--workspace-surface-soft) 42%, var(--workspace-surface));
+}
+
+.ai-chat-empty {
+  display: grid;
+  width: min(290px, 100%);
+  justify-items: center;
+  gap: 7px;
+  margin: auto;
+  padding: 26px 18px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 16px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text-soft);
+  text-align: center;
+}
+
+.ai-chat-empty-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 2px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--teal) 26%, var(--workspace-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--teal) 10%, var(--workspace-surface-soft));
+  color: var(--teal);
+}
+
+.ai-chat-empty strong {
+  color: var(--workspace-text);
+  font-size: 13px;
+}
+
+.ai-chat-empty > span:last-child {
+  max-width: 230px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ai-chat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ai-chat-row.is-user {
+  flex-direction: row-reverse;
+}
+
+.ai-chat-turn {
+  display: flex;
+  max-width: calc(100% - 40px);
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-chat-row.is-user .ai-chat-turn {
+  align-items: flex-end;
+}
+
+.ai-chat-avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+  background: var(--workspace-surface);
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ai-chat-row.is-user .ai-chat-avatar {
+  border-color: color-mix(in srgb, var(--blue) 25%, var(--workspace-border));
+  background: color-mix(in srgb, var(--blue) 10%, var(--workspace-surface));
+  color: var(--blue);
+}
+
+.ai-chat-bubble {
+  max-width: 100%;
+  padding: 10px 12px;
+  border-radius: 13px;
+}
+
+.ai-chat-row.is-user .ai-chat-bubble {
+  border: 1px solid var(--blue);
+  background: var(--blue);
+}
+
+.ai-chat-row.is-assistant .ai-chat-bubble {
+  border-color: var(--workspace-border);
+  background: var(--workspace-surface);
+  box-shadow: 0 4px 12px rgb(2 5 31 / 5%);
+}
+
+.ai-chat-composer.ai-chat-composer {
+  border-top: 1px solid var(--workspace-border) !important;
+  background: var(--workspace-surface);
+  padding: 12px;
+}
+
+.ai-chat-composer .ai-chat-input {
+  min-height: 48px;
+  max-height: 160px;
+  border: 1px solid var(--workspace-border) !important;
+  border-radius: 14px !important;
+  background: var(--workspace-surface-soft) !important;
+  box-shadow: none !important;
+}
+
+.ai-chat-composer .ai-chat-input:focus {
+  border-color: var(--blue) !important;
+  background: var(--workspace-surface) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 13%, transparent) !important;
+}
+
+.ai-chat-composer .ai-chat-input::placeholder {
+  color: var(--workspace-text-soft);
+}
+
+.ai-chat-composer .ai-chat-attach {
+  border-radius: 14px;
+}
+
+.ai-chat-composer .ai-chat-send {
+  border-radius: 14px;
+  background: var(--blue);
+}
+
+.ai-action-card {
+  border-color: color-mix(in srgb, var(--teal) 24%, var(--workspace-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--teal) 6%, var(--workspace-surface));
+}
+
+@media (min-width: 1024px) {
+  .ai-chat-window[data-slot='dialog-content'] {
+    width: 420px;
+    height: min(650px, calc(100dvh - 48px));
+  }
+}
