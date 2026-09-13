@@ -1917,11 +1917,11 @@ function App() {
     },
   ];
 
-  // ── Mobile bottom pill nav - the four destinations that carry the daily
-  //    loop, with everything else behind "More" (the same drawer the header's
-  //    hamburger opens). Items are looked up in navGroups rather than
-  //    redeclared so labels, icons and unread badges stay in one place.
-  const mobilePillLabels = ["Today", "My tasks", "Planner", "Chats"];
+  // ── Mobile bottom pill nav - two destinations to either side of Zuri, with
+  //    the rest of the app, chats included, behind "More" (the drawer). Items
+  //    are looked up in navGroups rather than redeclared so labels, icons and
+  //    unread badges stay in one place.
+  const mobilePillLabels = ["Today", "My tasks", "Planner"];
   const navItemsByLabel = new Map(
     navGroups.flatMap((group) => group.items).map((item) => [item.label, item]),
   );
@@ -1929,8 +1929,9 @@ function App() {
     .map((label) => navItemsByLabel.get(label))
     .filter(Boolean);
   // Zuri holds the bar's exact centre, so the tiles are split into two halves
-  // that each take the same half of the bar; a single run of six tiles would
-  // always leave the middle tile half a tile off centre.
+  // that each take the same half of the bar; a single run of five tiles would
+  // always leave the middle tile half a tile off centre. "More" is rendered
+  // with the right-hand half, which is why three labels are enough here.
   const mobileNavLeft = mobilePillItems.slice(0, 2);
   const mobileNavRight = mobilePillItems.slice(2);
   const renderMobileNavItem = ({ label, icon: Icon, badge, badgeTone }) => (

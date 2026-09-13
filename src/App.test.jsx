@@ -70,7 +70,7 @@ it('renders the workspace shell and opens a task from the today bar', async () =
 
   // The mobile bar is a pill, and the only way its AI button can hold the bar's
   // true centre is for the tiles to sit in two halves that each take the same
-  // share of the bar. Six tiles in one run would leave the middle one off centre.
+  // share of the bar. Five tiles in one run would leave the middle one off centre.
   const nav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   const zuri = within(nav).getByRole('button', { name: 'Open Zuri' })
   const halves = [...nav.children].filter(child => child.tagName === 'DIV')
@@ -83,8 +83,9 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   expect(halves[0].textContent).toContain('My tasks')
   expect(halves[0].textContent).not.toContain('Planner')
   expect(halves[1].textContent).toContain('Planner')
-  expect(halves[1].textContent).toContain('Chats')
   expect(halves[1].textContent).toContain('More')
+  // Chat is a drawer destination, not a bar tile, so the two halves stay even.
+  expect(nav.textContent).not.toContain('Chats')
 
   const opener = await screen.findByText('Desingn UI', {}, { timeout: 20000 })
   fireEvent.click(opener)
