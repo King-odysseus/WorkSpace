@@ -1235,6 +1235,55 @@ class WorkspaceSetting(models.Model):
         }
 
 
+class AiAction(models.Model):
+    """A confirmed, idempotent workspace change proposed by Zuri.
+
+    Provider output is never authoritative. The server stores only validated
+    action arguments, and execution reuses the regular task/project endpoints so
+    their permission, validation, activity, and notification rules still apply.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('executed', 'Executed'),
+        ('cancelled', 'Cancelled'),
+        ('failed', 'Failed'),
+        ('expired', 'Expired'),
+    ]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='ai_actions')
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='requested_ai_actions')
+    kind = models.CharField(max_length=40)
+    payload = models.JSONField(default=dict)
+    summary = models.CharField(max_length=300)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['workspace', 'requested_by', 'status'], name='ai_action_ws_user_status_idx'),
+        ]
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'kind': self.kind,
+            'summary': self.summary,
+            'status': self.status,
+            'result': self.result or {},
+            'error': self.error,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat(),
+            'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
+        }
+
+
 class ScreenShareSession(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending consent'),

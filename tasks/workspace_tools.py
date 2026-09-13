@@ -19,10 +19,21 @@ from openpyxl import Workbook, load_workbook
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .models import Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
+from .models import AiAction, Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
 from .file_responses import stored_file_response
 from .sanitize import sanitize_document_content
 from .views import parse_int, require_workspace_member
+from .ai_actions import (
+    ActionExecutionError,
+    ActionValidationError,
+    PrivacyBoundaryError,
+    PrivacyRegistry,
+    action_instructions,
+    build_workspace_snapshot,
+    create_action_proposal,
+    execute_action,
+    parse_provider_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -304,20 +315,93 @@ def workspace_ai_chat(request, workspace_id):
         return JsonResponse({'error': 'The company AI API key has not been configured yet.'}, status=503)
     model = provider_values['model']
     endpoint = _provider_endpoint(provider, provider_values['base_url'])
+    try:
+        privacy = PrivacyRegistry(workspace_id, request.user)
+        message = privacy.protect(message)
+        history = [
+            {**turn, 'content': privacy.protect(turn['content'])}
+            for turn in history
+        ]
+        snapshot = build_workspace_snapshot(workspace_id, request.user, privacy)
+    except PrivacyBoundaryError as exc:
+        return JsonResponse({'error': str(exc), 'code': 'privacy_boundary'}, status=400)
+    system_prompt = f'{AI_SYSTEM_PROMPT}\n\n{action_instructions(snapshot)}'
     turns = history + [{'role': 'user', 'content': message}]
     if provider == 'claude':
-        body = json.dumps({'model': model, 'max_tokens': 1200, 'system': AI_SYSTEM_PROMPT, 'messages': turns}).encode()
+        body = json.dumps({'model': model, 'max_tokens': 1200, 'system': system_prompt, 'messages': turns}).encode()
         req = urlrequest.Request(endpoint, data=body, headers={'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json'}, method='POST')
     else:
-        body = json.dumps({'model': model, 'messages': [{'role': 'system', 'content': AI_SYSTEM_PROMPT}] + turns, 'temperature': 0.3}).encode()
+        body = json.dumps({'model': model, 'messages': [{'role': 'system', 'content': system_prompt}] + turns, 'temperature': 0.3}).encode()
         req = urlrequest.Request(endpoint, data=body, headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}, method='POST')
     try:
         with urlrequest.urlopen(req, timeout=45) as response:
             result = json.loads(response.read().decode())
         answer = (result.get('content', [{}])[0].get('text', '') if provider == 'claude' else result.get('choices', [{}])[0].get('message', {}).get('content', '')).strip()
-        return JsonResponse({'answer': answer or 'The assistant returned an empty response.'})
+        parsed = parse_provider_response(answer, privacy)
+        pending_action = None
+        if parsed['action'] is not None:
+            try:
+                pending_action = create_action_proposal(parsed['action'], privacy, workspace_id, request.user)
+            except (ActionValidationError, PrivacyBoundaryError) as exc:
+                return JsonResponse({'answer': parsed['answer'], 'pending_action': None, 'action_error': str(exc)})
+        return JsonResponse({
+            'answer': parsed['answer'] or 'The assistant returned an empty response.',
+            'pending_action': pending_action.as_dict() if pending_action else None,
+        })
     except (HTTPError, URLError, TimeoutError, ValueError) as exc:
         return JsonResponse({'error': f'AI service unavailable: {exc}'}, status=502)
+
+
+@require_http_methods(['POST'])
+def workspace_ai_action(request, workspace_id, action_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    setting = _setting(workspace_id)
+    if not setting.ai_enabled or (membership.role == 'member' and request.user.id not in (setting.ai_user_ids or [])):
+        return JsonResponse({'error': 'Zuri has not been enabled for your account.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    decision = str(payload.get('decision') or '').strip().lower()
+    if decision not in {'confirm', 'cancel'}:
+        return JsonResponse({'error': 'Decision must be confirm or cancel.'}, status=400)
+    with transaction.atomic():
+        action = (
+            AiAction.objects
+            .select_for_update()
+            .filter(id=action_id, workspace_id=workspace_id, requested_by=request.user)
+            .first()
+        )
+        if action is None:
+            return JsonResponse({'error': 'Pending Zuri action was not found.'}, status=404)
+        if action.status != 'pending':
+            return JsonResponse({'action': action.as_dict()})
+        if timezone.now() >= action.expires_at:
+            action.status = 'expired'
+            action.error = 'This action expired before it was confirmed.'
+            action.resolved_at = timezone.now()
+            action.save(update_fields=['status', 'error', 'resolved_at'])
+            return JsonResponse({'error': action.error, 'action': action.as_dict()}, status=409)
+        if decision == 'cancel':
+            action.status = 'cancelled'
+            action.resolved_at = timezone.now()
+            action.save(update_fields=['status', 'resolved_at'])
+            return JsonResponse({'action': action.as_dict()})
+        try:
+            action.result = execute_action(action, request.user)
+            action.status = 'executed'
+            action.error = ''
+            action.resolved_at = timezone.now()
+            action.save(update_fields=['result', 'status', 'error', 'resolved_at'])
+        except (ActionExecutionError, ActionValidationError, PrivacyBoundaryError, ValueError) as exc:
+            action.status = 'failed'
+            action.error = str(exc)
+            action.resolved_at = timezone.now()
+            action.save(update_fields=['status', 'error', 'resolved_at'])
+            return JsonResponse({'error': str(exc), 'action': action.as_dict()}, status=getattr(exc, 'status', 400))
+    return JsonResponse({'action': action.as_dict()})
 
 
 @require_http_methods(['GET', 'POST'])

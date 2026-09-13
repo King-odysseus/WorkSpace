@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
-import { AlignCenter, AlignLeft, AlignRight, Bold, CircleUserRound, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Check, CircleUserRound, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -886,6 +886,7 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
 // sent back as context, matching the server's own cap.
 const AI_HISTORY_TURNS = 20
 const aiHistoryKey = workspaceId => `workspace-ai-chat:${workspaceId}`
+const aiPendingActionKey = workspaceId => `workspace-ai-action:${workspaceId}`
 
 function readAiHistory(workspaceId) {
   try {
@@ -909,15 +910,35 @@ function writeAiHistory(workspaceId, turns) {
   }
 }
 
+function readAiPendingAction(workspaceId) {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(aiPendingActionKey(workspaceId)) || 'null')
+    return stored && typeof stored.id === 'number' && stored.status === 'pending' ? stored : null
+  } catch {
+    return null
+  }
+}
+
+function writeAiPendingAction(workspaceId, action) {
+  try {
+    if (action) window.localStorage.setItem(aiPendingActionKey(workspaceId), JSON.stringify(action))
+    else window.localStorage.removeItem(aiPendingActionKey(workspaceId))
+  } catch {
+    // Persistence is optional; the in-memory confirmation still works.
+  }
+}
+
 export function AssistantFlyout({ workspaceId, onClose, onHide, onMinimize }) {
   const launcherRef = useRef(document.activeElement)
   const feedEndRef = useRef(null)
   const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
+  const [pendingAction, setPendingAction] = useState(() => readAiPendingAction(workspaceId))
   useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
+  useEffect(() => { setPendingAction(readAiPendingAction(workspaceId)) }, [workspaceId])
   useEffect(() => { feedEndRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy])
   useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
-  const clearConversation = () => { setTurns([]); setError(''); writeAiHistory(workspaceId, []) }
+  const clearConversation = () => { setTurns([]); setPendingAction(null); setError(''); writeAiHistory(workspaceId, []); writeAiPendingAction(workspaceId, null) }
   const ask = async event => {
     event.preventDefault()
     const asked = message.trim()
@@ -938,8 +959,47 @@ export function AssistantFlyout({ workspaceId, onClose, onHide, onMinimize }) {
       const answered = [...withQuestion, { role: 'assistant', content: result.answer }]
       setTurns(answered)
       writeAiHistory(workspaceId, answered)
+      if (result.pending_action) {
+        setPendingAction(result.pending_action)
+        writeAiPendingAction(workspaceId, result.pending_action)
+      }
+      if (result.action_error) setError(result.action_error)
     } catch (requestError) {
       // The question stays in the transcript: retyping it to retry would be worse.
+      setError(requestError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const resolvePendingAction = async decision => {
+    if (!pendingAction || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/ai/actions/${pendingAction.id}/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ decision }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        if (result.action && result.action.status !== 'pending') {
+          setPendingAction(null)
+          writeAiPendingAction(workspaceId, null)
+        }
+        throw new Error(result.error || 'The workspace action could not be completed.')
+      }
+      const action = result.action
+      const content = decision === 'confirm'
+        ? `Done. ${action.summary}`
+        : `Cancelled. ${action.summary}`
+      const answered = [...turns, { role: 'assistant', content }]
+      setTurns(answered)
+      writeAiHistory(workspaceId, answered)
+      setPendingAction(null)
+      writeAiPendingAction(workspaceId, null)
+    } catch (requestError) {
       setError(requestError.message)
     } finally {
       setBusy(false)
@@ -965,6 +1025,18 @@ export function AssistantFlyout({ workspaceId, onClose, onHide, onMinimize }) {
             <div className="ai-chat-bubble">{turn.content}</div>
           </div>
         ))}
+        {pendingAction && (
+          <div className="ai-action-card" role="group" aria-label="Proposed workspace action">
+            <div className="ai-action-copy">
+              <span><Sparkles size={15} /> Proposed action</span>
+              <strong>{pendingAction.summary}</strong>
+            </div>
+            <div className="ai-action-buttons">
+              <button type="button" className="secondary-button" onClick={() => resolvePendingAction('cancel')} disabled={busy}>Cancel</button>
+              <button type="button" className="primary-button" onClick={() => resolvePendingAction('confirm')} disabled={busy}><Check size={15} /> Confirm</button>
+            </div>
+          </div>
+        )}
         {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div>}
         {error && <div role="alert" className="ai-chat-error">{error}</div>}
         <div ref={feedEndRef} />

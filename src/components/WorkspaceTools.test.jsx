@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AssistantFlyout, FilesWorkspaceView } from './WorkspaceTools.jsx'
-import { mockApi } from '../test/setup-tests.js'
+import { expectRequest, mockApi } from '../test/setup-tests.js'
 
 afterEach(() => {
   vi.useRealTimers()
+  window.localStorage.clear()
 })
 
 const document = {
@@ -98,4 +99,41 @@ it('minimizes the assistant without hiding its launcher', async () => {
   expect(onMinimize).toHaveBeenCalledTimes(1)
   expect(onHide).not.toHaveBeenCalled()
   expect(onClose).not.toHaveBeenCalled()
+})
+
+it('shows a workspace action for confirmation before reporting success', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'I prepared that action for your confirmation.',
+      pending_action: {
+        id: 7,
+        kind: 'task.create',
+        summary: 'Create task "Launch notes"',
+        status: 'pending',
+      },
+    },
+    '/api/workspaces/4/ai/actions/7/': {
+      action: {
+        id: 7,
+        kind: 'task.create',
+        summary: 'Create task "Launch notes"',
+        status: 'executed',
+      },
+    },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+  const input = await screen.findByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'Create a task called Launch notes.' } })
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByText('Create task "Launch notes"')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Confirm/ }))
+
+  expect(await screen.findByText('Done. Create task "Launch notes"')).toBeInTheDocument()
+  expectRequest(fetchMock, '/api/workspaces/4/ai/actions/7/', 'POST')
 })

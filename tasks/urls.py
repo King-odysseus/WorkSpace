@@ -7,7 +7,7 @@ from .notification_status import notification_stream, notification_summary
 from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .import_templates import import_template
-from .workspace_tools import workspace_ai_chat, workspace_ai_settings, workspace_check_in_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
+from .workspace_tools import workspace_ai_action, workspace_ai_chat, workspace_ai_settings, workspace_check_in_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
 
 urlpatterns = [
     path('notifications/summary/', notification_summary, name='notification-summary'),
@@ -33,6 +33,7 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/ai/settings/', workspace_ai_settings, name='workspace-ai-settings'),
     path('workspaces/<int:workspace_id>/check-in-settings/', workspace_check_in_settings, name='workspace-check-in-settings'),
     path('workspaces/<int:workspace_id>/ai/chat/', workspace_ai_chat, name='workspace-ai-chat'),
+    path('workspaces/<int:workspace_id>/ai/actions/<int:action_id>/', workspace_ai_action, name='workspace-ai-action'),
     path('workspaces/<int:workspace_id>/documents/', workspace_document_list, name='workspace-document-list'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/', workspace_document_detail, name='workspace-document-detail'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/export/', workspace_document_export, name='workspace-document-export'),

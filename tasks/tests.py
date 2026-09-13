@@ -20,7 +20,7 @@ from django.utils import timezone
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from .models import ActivityEvent, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChatChannel, CheckIn, ChatMessage, DirectConversation, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
 from .automation import run_workspace_automation
 from .views import create_notification, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
@@ -3244,11 +3244,11 @@ class WorkspaceAiSettingsApiTests(TestCase):
         setting.save()
         return setting
 
-    def _chat(self, payload, captured):
+    def _chat(self, payload, captured, answer='ok'):
         """POST to the assistant with the outbound provider request captured."""
         class _Response:
             def read(self):
-                return json.dumps({'choices': [{'message': {'content': 'ok'}}]}).encode()
+                return json.dumps({'choices': [{'message': {'content': answer}}]}).encode()
 
             def __enter__(self):
                 return self
@@ -3298,6 +3298,105 @@ class WorkspaceAiSettingsApiTests(TestCase):
         sent = captured['body']['messages']
         self.assertEqual([turn['role'] for turn in sent], ['system', 'user'])
         self.assertEqual(sent[1]['content'], 'Hello')
+
+    def test_chat_replaces_known_member_identity_before_provider_egress(self):
+        self.owner.first_name = 'Alex'
+        self.owner.last_name = 'Taylor'
+        self.owner.save(update_fields=['first_name', 'last_name'])
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Ask Alex Taylor to review the launch brief.'}, captured)
+        self.assertEqual(response.status_code, 200)
+        outbound = json.dumps(captured['body'])
+        self.assertNotIn('Alex', outbound)
+        self.assertNotIn('Taylor', outbound)
+        self.assertNotIn(self.owner.email, outbound)
+        self.assertIn('[MEMBER_', outbound)
+
+    def test_chat_blocks_unknown_personal_identifiers_before_provider_egress(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Send this to outside@example.com.'}, captured)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['code'], 'privacy_boundary')
+        self.assertEqual(captured, {})
+
+    def test_task_action_requires_confirmation_and_executes_once(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({
+            'message': 'Create a task called Prepare launch notes and assign it to me.',
+        }, captured, answer=json.dumps({
+            'answer': 'I prepared that task for your confirmation.',
+            'action': {
+                'kind': 'task.create',
+                'arguments': {'title': 'Prepare launch notes', 'assignee_ref': 'me', 'status': 'todo'},
+            },
+        }))
+        self.assertEqual(response.status_code, 200)
+        proposal = response.json()['pending_action']
+        self.assertEqual(proposal['status'], 'pending')
+        self.assertEqual(Task.objects.filter(workspace=self.workspace).count(), 0)
+
+        confirm_url = reverse('workspace-ai-action', args=[self.workspace.id, proposal['id']])
+        confirmed = self.client.post(confirm_url, data=json.dumps({'decision': 'confirm'}), content_type='application/json')
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertEqual(confirmed.json()['action']['status'], 'executed')
+        self.assertEqual(Task.objects.filter(workspace=self.workspace, title='Prepare launch notes').count(), 1)
+
+        repeated = self.client.post(confirm_url, data=json.dumps({'decision': 'confirm'}), content_type='application/json')
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(Task.objects.filter(workspace=self.workspace, title='Prepare launch notes').count(), 1)
+        self.assertEqual(AiAction.objects.get(id=proposal['id']).status, 'executed')
+
+    def test_project_action_is_confirmed_and_creates_the_project(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({
+            'message': 'Create a project called Website refresh.',
+        }, captured, answer=json.dumps({
+            'answer': 'I prepared that project for your confirmation.',
+            'action': {
+                'kind': 'project.create',
+                'arguments': {'name': 'Website refresh', 'status': 'planning'},
+            },
+        }))
+        self.assertEqual(response.status_code, 200)
+        proposal = response.json()['pending_action']
+        self.assertEqual(Project.objects.filter(workspace=self.workspace).count(), 0)
+
+        confirmed = self.client.post(
+            reverse('workspace-ai-action', args=[self.workspace.id, proposal['id']]),
+            data=json.dumps({'decision': 'confirm'}),
+            content_type='application/json',
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertEqual(confirmed.json()['action']['status'], 'executed')
+        self.assertTrue(Project.objects.filter(workspace=self.workspace, name='Website refresh').exists())
+
+    def test_action_proposal_is_rejected_when_the_member_lacks_permission(self):
+        manager = User.objects.create_user(username='limited-manager@example.com', email='limited-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager', permissions=[])
+        self.client.force_login(manager)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({
+            'message': 'Create a project called Not allowed.',
+        }, captured, answer=json.dumps({
+            'answer': 'I prepared that project for your confirmation.',
+            'action': {
+                'kind': 'project.create',
+                'arguments': {'name': 'Not allowed'},
+            },
+        }))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()['pending_action'])
+        self.assertIn('permission', response.json()['action_error'])
+        self.assertFalse(AiAction.objects.filter(workspace=self.workspace, requested_by=manager).exists())
 
     def test_members_can_read_settings_but_only_leaders_can_change_them(self):
         self.client.force_login(self.member)
