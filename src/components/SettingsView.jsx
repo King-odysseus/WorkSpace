@@ -1092,9 +1092,10 @@ function SettingsView({
                             {isCurrent ? "Open now" : "Switch"}
                           </Button>
                           {canManageTeam && !isArchivedWorkspace && (
-                            <button
+                            <Button
+                              size="sm"
+                              variant="secondary"
                               type="button"
-                              className="text-button"
                               onClick={() => {
                                 onSwitchWorkspace?.(workspace.id);
                                 setSection("workspace");
@@ -1103,33 +1104,35 @@ function SettingsView({
                               }}
                             >
                               Manage team
-                            </button>
+                            </Button>
                           )}
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-3">
                           {!isArchivedWorkspace && (
-                            <button
+                            <Button
+                              size="sm"
+                              variant="secondary"
                               type="button"
-                              className="text-button"
                               disabled={isDefault}
                               onClick={() =>
                                 onSetDefaultWorkspace?.(workspace.id)
                               }
                             >
                               {isDefault ? "Opens on sign in" : "Set as default"}
-                            </button>
+                            </Button>
                           )}
                           {workspace.role !== "owner" && (
-                            <button
+                            <Button
+                              size="sm"
+                              variant="secondary"
                               type="button"
-                              className="text-button"
                               disabled={lifecycleBusy}
                               onClick={() =>
                                 leaveWorkspace(workspace.id, workspace.name)
                               }
                             >
                               Leave workspace
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </div>
