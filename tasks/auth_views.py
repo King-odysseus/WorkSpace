@@ -181,6 +181,17 @@ def user_avatar(request):
 def user_avatar_download(request, user_id):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    # A user id is global, so without this check the route served any account's
+    # photo to anyone logged in, one integer at a time. Your own is always yours;
+    # anyone else has to share a workspace with you. 404 rather than 403 so the
+    # response does not confirm that the account exists.
+    if user_id != request.user.id:
+        shares_workspace = Membership.objects.filter(
+            user_id=user_id,
+            workspace_id__in=Membership.objects.filter(user=request.user).values('workspace_id'),
+        ).exists()
+        if not shares_workspace:
+            return JsonResponse({'error': 'This user is not in any of your workspaces.'}, status=404)
     profile = UserProfile.objects.filter(user_id=user_id).first()
     if profile is None or not profile.avatar:
         return JsonResponse({'error': 'This user has no profile photo.'}, status=404)

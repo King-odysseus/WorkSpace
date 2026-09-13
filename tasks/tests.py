@@ -768,6 +768,33 @@ class TaskApiTests(TestCase):
         self.assertEqual(delete_response.json()['avatar_url'], '')
         self.assertEqual(self.client.get(avatar_url).status_code, 404)
 
+    def test_avatar_download_cannot_reach_an_account_outside_your_workspaces(self):
+        tiny_png = bytes.fromhex(
+            '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753'
+            'de0000000c4944415478da6360606060000000050001a5f645400000000049454e44ae426082'
+        )
+
+        def with_avatar(user):
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.avatar = SimpleUploadedFile('face.png', tiny_png, content_type='image/png')
+            profile.save(update_fields=['avatar', 'updated_at'])
+            return user
+
+        # A user id is global, so the route only proves the caller is logged in.
+        # It must still refuse to serve the photo of someone they share no
+        # workspace with, while keeping teammates and your own photo reachable.
+        stranger = with_avatar(User.objects.create_user(username='stranger@example.com', email='stranger@example.com', password='secure-pass-123'))
+        stranger_workspace = Workspace.objects.create(name='Elsewhere', slug='elsewhere')
+        Membership.objects.create(workspace=stranger_workspace, user=stranger, role='owner')
+
+        teammate = with_avatar(User.objects.create_user(username='avatar-mate@example.com', email='avatar-mate@example.com', password='secure-pass-123'))
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        with_avatar(self.user)
+
+        self.assertEqual(self.client.get(reverse('user-avatar-download', args=[self.user.id])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('user-avatar-download', args=[teammate.id])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('user-avatar-download', args=[stranger.id])).status_code, 404)
+
     def test_presence_can_be_set_and_is_visible_to_teammates(self):
         teammate = User.objects.create_user(username='presence-teammate@example.com', email='presence-teammate@example.com', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
@@ -1821,6 +1848,32 @@ class TaskApiTests(TestCase):
         self.assertEqual(apply.json()['task']['title'], 'Run weekly ops')
         delete = self.client.delete(reverse('task-template-detail', args=[self.workspace.id, template_id]))
         self.assertEqual(delete.status_code, 200)
+
+    def test_task_template_assignee_must_belong_to_the_workspace(self):
+        outsider = User.objects.create_user(username='template-outsider@example.com', email='template-outsider@example.com', password='secure-pass-123')
+        outsider_workspace = Workspace.objects.create(name='Outsider', slug='outsider')
+        Membership.objects.create(workspace=outsider_workspace, user=outsider, role='owner')
+
+        member = User.objects.create_user(username='template-member@example.com', email='template-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+
+        # The template stores the assignee and stamps it onto every task it later
+        # creates, so an id outside the workspace has to be refused up front.
+        rejected = self.client.post(
+            reverse('task-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Weekly ops', 'title': 'Run weekly ops', 'assignee_id': outsider.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(rejected.status_code, 404)
+        self.assertEqual(TaskTemplate.objects.filter(workspace=self.workspace).count(), 0)
+
+        accepted = self.client.post(
+            reverse('task-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Weekly ops', 'title': 'Run weekly ops', 'assignee_id': member.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(accepted.status_code, 201)
+        self.assertEqual(accepted.json()['task_template']['assignee_id'], member.id)
 
     def test_project_template_create_list_apply_and_delete(self):
         create = self.client.post(

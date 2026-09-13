@@ -1369,7 +1369,14 @@ def task_template_list(request, workspace_id):
     project = Project.objects.filter(id=payload.get('project_id'), workspace_id=workspace_id).first() if payload.get('project_id') else None
     if payload.get('project_id') and project is None:
         return JsonResponse({'error': 'Project was not found.'}, status=404)
-    assignee = User.objects.filter(id=payload.get('assignee_id')).first() if payload.get('assignee_id') else None
+    # Scoped to the workspace like every other assignee lookup - the id alone is
+    # global, so an unfiltered lookup let a template name an outsider and then
+    # assign a real in-workspace task to them when the template was applied.
+    assignee = None
+    if payload.get('assignee_id'):
+        assignee = User.objects.filter(id=payload['assignee_id'], workspace_memberships__workspace_id=workspace_id).first()
+        if assignee is None:
+            return JsonResponse({'error': 'Assignee was not found in this workspace.'}, status=404)
     labels = payload.get('labels')
     if labels is not None and not isinstance(labels, list):
         return JsonResponse({'error': 'labels must be a list.'}, status=400)
