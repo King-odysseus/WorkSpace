@@ -1875,6 +1875,60 @@ class TaskApiTests(TestCase):
         self.assertEqual(accepted.status_code, 201)
         self.assertEqual(accepted.json()['task_template']['assignee_id'], member.id)
 
+    def test_member_cannot_apply_a_task_template_that_assigns_someone_else(self):
+        member = User.objects.create_user(username='template-apply-member@example.com', email='template-apply-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        create = self.client.post(
+            reverse('task-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Hand off', 'title': 'Prep the deck', 'assignee_id': self.user.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(create.status_code, 201)
+        template_id = create.json()['task_template']['id']
+
+        # Members hold create_tasks by default but never assign_tasks. Applying a
+        # template used to stamp the stored assignee onto a new task with only a
+        # membership check, so a member could assign work to anyone.
+        self.client.force_login(member)
+        denied = self.client.post(reverse('task-template-apply', args=[self.workspace.id, template_id]))
+        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(Task.objects.filter(workspace=self.workspace).count(), 0)
+
+    def test_revoked_manager_cannot_apply_a_task_template(self):
+        manager = User.objects.create_user(username='template-apply-manager@example.com', email='template-apply-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        create = self.client.post(
+            reverse('task-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Ops', 'title': 'Run the weekly ops'}),
+            content_type='application/json',
+        )
+        self.assertEqual(create.status_code, 201)
+        template_id = create.json()['task_template']['id']
+
+        self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, manager.id]),
+            data=json.dumps({'permissions': ['create_projects', 'manage_projects']}),
+            content_type='application/json',
+        )
+        self.client.force_login(manager)
+        denied = self.client.post(reverse('task-template-apply', args=[self.workspace.id, template_id]))
+        self.assertEqual(denied.status_code, 403)
+
+    def test_applied_task_template_issues_a_code_and_creation_history(self):
+        create = self.client.post(
+            reverse('task-template-list', args=[self.workspace.id]),
+            data=json.dumps({'name': 'Ops', 'title': 'Run the weekly ops'}),
+            content_type='application/json',
+        )
+        template_id = create.json()['task_template']['id']
+
+        apply = self.client.post(reverse('task-template-apply', args=[self.workspace.id, template_id]))
+        self.assertEqual(apply.status_code, 201)
+        task = Task.objects.get(id=apply.json()['task']['id'])
+        self.assertTrue(task.code)
+        self.assertTrue(TaskCodeRegistry.objects.filter(workspace=self.workspace, code=task.code, task_id=task.id).exists())
+        self.assertTrue(TaskChangeHistory.objects.filter(task=task, field='created').exists())
+
     def test_project_template_create_list_apply_and_delete(self):
         create = self.client.post(
             reverse('project-template-list', args=[self.workspace.id]),

@@ -1413,26 +1413,41 @@ def task_template_detail(request, workspace_id, template_id):
 
 @require_http_methods(['POST'])
 def task_template_apply(request, workspace_id, template_id):
-    _, error = require_workspace_member(request, workspace_id)
+    membership, error = require_permission(request, workspace_id, 'create_tasks')
     if error:
         return error
     template = TaskTemplate.objects.filter(id=template_id, workspace_id=workspace_id).first()
     if template is None:
         return JsonResponse({'error': 'Task template was not found.'}, status=404)
-    task = Task.objects.create(
-        workspace_id=workspace_id,
-        title=template.title,
-        description=template.description,
-        priority=template.priority,
-        bucket=template.bucket,
-        recurrence=template.recurrence,
-        project_ref=template.project,
-        assignee=template.assignee,
-        assignee_name=template.assignee.get_full_name() or template.assignee.email if template.assignee else '',
-        project=template.project.name if template.project else '',
-        workstream=template.workstream,
-        labels=template.labels or [],
-    )
+    if template.assignee_id and not membership.has_permission('assign_tasks'):
+        return JsonResponse({'error': 'You do not have permission to assign tasks.'}, status=403)
+    with transaction.atomic():
+        workspace = Workspace.objects.get(id=workspace_id)
+        code = reserve_task_code(workspace)
+        max_position = Task.objects.filter(workspace_id=workspace_id, bucket=template.bucket).aggregate(max_position=Max('position'))['max_position']
+        task = Task(
+            workspace_id=workspace_id,
+            code=code,
+            title=template.title,
+            description=template.description,
+            priority=template.priority,
+            bucket=template.bucket,
+            recurrence=template.recurrence,
+            project_ref=template.project,
+            assignee=template.assignee,
+            assignee_name=template.assignee.get_full_name() or template.assignee.email if template.assignee else '',
+            project=template.project.name if template.project else '',
+            workstream=template.workstream,
+            labels=template.labels or [],
+            position=(max_position + 1) if max_position is not None else 0,
+        )
+        try:
+            task.full_clean()
+        except ValidationError as validation_error:
+            return validation_error_response(validation_error)
+        task.save()
+        TaskCodeRegistry.objects.create(workspace_id=workspace_id, code=code, task_id=task.id)
+        TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=workspace_id, actor=request.user, field='created', previous_value=None, new_value={'title': task.title, 'status': task.status})
     record_activity(workspace_id, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title} from template {template.name}.')
     return JsonResponse({'task': task.as_dict()}, status=201)
 
