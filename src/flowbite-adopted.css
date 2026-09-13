@@ -171,6 +171,44 @@
   outline-offset: 2px;
 }
 
+/* Keep the Team scope, view switcher, and search in predictable rows. The tabs
+   previously kept a 100% flex basis while the parent was still a wrapping flex
+   row, so they began beside the scope control and overflowed off-screen. */
+.workspace-view .team-board-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+}
+.workspace-view .team-board-tabs :is(button, [role="tab"]) {
+  flex: 0 0 auto;
+}
+.workspace-view .team-board-toolbar :is(.work-scope-selector, .work-scope-control, .work-scope-trigger) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .workspace-view .team-board-toolbar-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    flex-wrap: nowrap;
+  }
+  .workspace-view .team-board-tabs {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .workspace-view .team-board-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-view .team-board-tabs {
+    flex: none;
+  }
+}
+
 .workspace-view :is(.activity-pagination button, .planner-pagination button) {
   border-radius: 999px;
 }

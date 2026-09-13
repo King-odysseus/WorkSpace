@@ -105,20 +105,23 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 8px;
-  height: 8px;
+  z-index: 1;
+  display: block;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--workspace-surface, #fff);
+  background: #98a2b3;
+  box-shadow: 0 0 0 2px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
 }
 .avatar.small .presence-dot {
-  width: 6px;
-  height: 6px;
-  box-shadow: 0 0 0 1.5px var(--workspace-surface, #fff);
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 0 2px var(--workspace-surface, #fff), 0 1px 2px rgb(7 26 46 / 18%);
 }
-.presence-dot.presence-available { background: #22c55e; }
-.presence-dot.presence-busy { background: #ef4444; }
-.presence-dot.presence-away { background: #f59e0b; }
-.presence-dot.presence-offline { background: #9aa4b2; }
+.presence-dot.presence-available { background: #16a34a; }
+.presence-dot.presence-busy { background: #dc2626; }
+.presence-dot.presence-away { background: #d97706; }
+.presence-dot.presence-offline { background: #98a2b3; }
 
 .avatar-upload {
   position: relative;
