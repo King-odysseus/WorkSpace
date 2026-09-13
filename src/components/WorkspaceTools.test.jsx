@@ -82,14 +82,12 @@ it('minimizes the assistant without hiding its launcher', async () => {
     },
   })
   const onClose = vi.fn()
-  const onHide = vi.fn()
   const onMinimize = vi.fn()
 
   render(
     <AssistantFlyout
       workspaceId={4}
       onClose={onClose}
-      onHide={onHide}
       onMinimize={onMinimize}
     />,
   )
@@ -97,8 +95,8 @@ it('minimizes the assistant without hiding its launcher', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Minimize Zuri' }))
 
   expect(onMinimize).toHaveBeenCalledTimes(1)
-  expect(onHide).not.toHaveBeenCalled()
   expect(onClose).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: 'Hide Zuri button' })).not.toBeInTheDocument()
 })
 
 it('shows a workspace action for confirmation before reporting success', async () => {

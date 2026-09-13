@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
-import { AlignCenter, AlignLeft, AlignRight, Bold, Check, CircleUserRound, EyeOff, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -928,7 +928,7 @@ function writeAiPendingAction(workspaceId, action) {
   }
 }
 
-export function AssistantFlyout({ workspaceId, onClose, onHide, onMinimize }) {
+export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
   const launcherRef = useRef(document.activeElement)
   const feedEndRef = useRef(null)
   const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
@@ -938,7 +938,6 @@ export function AssistantFlyout({ workspaceId, onClose, onHide, onMinimize }) {
   useEffect(() => { setPendingAction(readAiPendingAction(workspaceId)) }, [workspaceId])
   useEffect(() => { feedEndRef.current?.scrollIntoView({ block: 'end' }) }, [turns, busy])
   useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
-  const clearConversation = () => { setTurns([]); setPendingAction(null); setError(''); writeAiHistory(workspaceId, []); writeAiPendingAction(workspaceId, null) }
   const ask = async event => {
     event.preventDefault()
     const asked = message.trim()
@@ -1009,11 +1008,9 @@ export function AssistantFlyout({ workspaceId, onClose, onHide, onMinimize }) {
   return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
     <DialogContent className="ai-chat-window" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
-        <DialogTitle className="ai-chat-title"><CircleUserRound size={24} /> Zuri</DialogTitle>
+        <DialogTitle className="ai-chat-title"><span className="ai-chat-title-icon"><Sparkles size={17} /></span> Zuri</DialogTitle>
         <div className="ai-chat-actions">
-          {turns.length > 0 && <button type="button" onClick={clearConversation} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={19} /></button>}
           {onMinimize && <button type="button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={19} /></button>}
-          {onHide && <button type="button" onClick={onHide} aria-label="Hide Zuri button" title="Hide Zuri button (restore from your profile menu)"><EyeOff size={19} /></button>}
           <button type="button" onClick={onClose} aria-label="Close Zuri"><X size={22} /></button>
         </div>
       </div>

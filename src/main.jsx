@@ -33,7 +33,6 @@ import {
   ChevronDown,
   ClipboardList,
   CircleHelp,
-  CircleUserRound,
   Clock3,
   Copy,
   Filter,
@@ -1857,7 +1856,6 @@ function App() {
               setAiLauncherVisibility(false);
               setAiMinimized(true);
             }}
-            onHide={() => setAiLauncherVisibility(true)}
           />
         </Suspense>
       )}
@@ -2174,7 +2172,7 @@ function App() {
                 aria-label="Open Zuri"
                 aria-haspopup="dialog"
               >
-                <CircleUserRound size={20} />
+                <Sparkles size={20} />
                 <span>Ask Zuri</span>
               </button>
             )}
@@ -2359,7 +2357,7 @@ function App() {
                     className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary"
                   >
                     {aiLauncherHidden ? (
-                      <CircleUserRound size={16} />
+                      <Sparkles size={16} />
                     ) : (
                       <EyeOff size={16} />
                     )}
@@ -2577,7 +2575,7 @@ function App() {
           aria-haspopup="dialog"
           title="Open Zuri"
         >
-          <CircleUserRound size={26} />
+          <Sparkles size={26} />
         </button>
       )}
 
