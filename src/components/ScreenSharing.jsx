@@ -255,7 +255,7 @@ export default function ScreenSharingView({ workspaceId, members = [], currentUs
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const canManagePolicy = Boolean(policy?.can_manage) || ['owner', 'admin'].includes(role)
+  const canManagePolicy = Boolean(policy?.can_manage) || role === 'owner'
 
   const refresh = useCallback(async () => {
     if (!workspaceId) return

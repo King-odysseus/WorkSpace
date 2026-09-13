@@ -462,6 +462,7 @@ def require_follow_up_editor(request, follow_up, fields):
     return None
 
 
+@require_http_methods(['GET'])
 def health(request):
     return JsonResponse({'status': 'ok', 'service': 'workspace-api'})
 
@@ -3098,7 +3099,7 @@ def calendar_ics(request, workspace_id):
     token = request.GET.get('token', '')
     if token:
         workspace = Workspace.objects.filter(id=workspace_id, calendar_feed_token=token).first()
-        if workspace is None or not token:
+        if workspace is None:
             return JsonResponse({'error': 'Invalid calendar feed link.'}, status=403)
     else:
         _, error = require_workspace_member(request, workspace_id)
