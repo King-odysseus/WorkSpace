@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, GanttChartSquare, GripVertical, LayoutGrid, List, Archive, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
 const statusLabel = { todo: 'To do', 'in progress': 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
@@ -95,7 +96,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     // externalFilter (wiping the user's own filter picks) on every 15s data poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalFilter])
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toDateKey(new Date())
   const isOperations = scopeMode === 'operations' || (scopeMode === 'switch' && projectFilter === 'operations')
   const selectedWorkstream = lookupValues.find(value => value.kind === 'workstream' && !value.project_id && value.name === workstream)
   const bucketScope = isOperations ? (selectedWorkstream ? { workstream_id: selectedWorkstream.id } : null) : (projectFilter !== 'all' ? { project_id: projectFilter } : null)
