@@ -2067,6 +2067,46 @@ class ExecutionFoundationApiTests(TestCase):
         self.assertEqual([item['id'] for item in response.json()['tasks']], [operation['id']])
         self.assertEqual(response.json()['pagination']['total_items'], 1)
 
+    def test_team_task_page_includes_accurate_summary_counts(self):
+        overdue = self.create_task(
+            title='Unowned overdue',
+            due_date=(timezone.localdate() - timedelta(days=2)).isoformat(),
+            priority='high',
+        ).json()['task']
+        blocked = self.create_task(
+            title='Blocked delivery',
+            assignee_id=self.member.id,
+            status='blocked',
+            blocker_details='Waiting for sign-off',
+            due_date=(timezone.localdate() + timedelta(days=2)).isoformat(),
+        ).json()['task']
+        self.create_task(title='Finished', assignee_id=self.member.id, status='done')
+        self.create_task(title='Cancelled', assignee_id=self.member.id, status='cancelled')
+
+        response = self.client.get(
+            reverse('workspace-task-list', args=[self.workspace.id]),
+            {'scope': 'operations', 'summary': 'true', 'terminal': 'open', 'sort': 'attention', 'page_size': 2},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['pagination']['total_items'], 2)
+        self.assertEqual([task['id'] for task in payload['tasks']], [blocked['id'], overdue['id']])
+        self.assertEqual(payload['summary']['counts'], {
+            'open': 2,
+            'blocked': 1,
+            'overdue': 1,
+            'unassigned': 1,
+        })
+        owner_row = next(row for row in payload['summary']['by_owner'] if row['assignee_id'] == self.member.id)
+        unassigned_row = next(row for row in payload['summary']['by_owner'] if row['assignee_id'] is None)
+        self.assertEqual(owner_row['open'], 1)
+        self.assertEqual(owner_row['blocked'], 1)
+        self.assertEqual(owner_row['completed'], 1)
+        self.assertEqual(owner_row['tracked'], 2)
+        self.assertEqual(unassigned_row['open'], 1)
+        self.assertEqual(unassigned_row['overdue'], 1)
+
     def test_owner_changes_are_recorded_with_values_and_actor(self):
         task_id = self.create_task(assignee_id=self.member.id).json()['task']['id']
         response = self.client.patch(reverse('task-detail', args=[task_id]), data=json.dumps({'priority': 'high', 'progress_percent': 40}), content_type='application/json')

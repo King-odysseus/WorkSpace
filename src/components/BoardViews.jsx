@@ -58,6 +58,7 @@ import {
   formatShiftClock,
   formatShiftDuration,
   getCsrfToken,
+  mapTaskFromApi,
   readJsonResponse,
   sortMembersByRecentActivity,
   taskAssigneeLabel,
@@ -135,6 +136,8 @@ function MemberProfilePopup({
   onClose,
   onMessage,
   tasks,
+  stats,
+  tasksLoading = false,
   checkIn,
   shift,
   todayWorkedSeconds = 0,
@@ -151,6 +154,14 @@ function MemberProfilePopup({
   );
   const blocked = openTasks.filter((task) => task.status === "blocked");
   const completionRate = completionRateForTasks(memberTasks);
+  const openCount = stats ? stats.open : openTasks.length;
+  const overdueCount = stats ? stats.overdue : overdue.length;
+  const blockedCount = stats ? stats.blocked : blocked.length;
+  const resolvedCompletionRate = stats
+    ? stats.tracked
+      ? Math.round((stats.completed / stats.tracked) * 100)
+      : null
+    : completionRate;
   const shiftLabel = shift?.is_open
     ? shift.is_on_break
       ? "On break"
@@ -200,19 +211,19 @@ function MemberProfilePopup({
         {hasWorkDetails && (
         <div className="member-profile-stats">
           <div>
-            <strong>{openTasks.length}</strong>
+            <strong>{openCount}</strong>
             <span>Open</span>
           </div>
-          <div className={overdue.length ? "is-warning" : ""}>
-            <strong>{overdue.length}</strong>
+          <div className={overdueCount ? "is-warning" : ""}>
+            <strong>{overdueCount}</strong>
             <span>Overdue</span>
           </div>
-          <div className={blocked.length ? "is-danger" : ""}>
-            <strong>{blocked.length}</strong>
+          <div className={blockedCount ? "is-danger" : ""}>
+            <strong>{blockedCount}</strong>
             <span>Blocked</span>
           </div>
           <div>
-            <strong>{completionRate === null ? "n/a" : `${completionRate}%`}</strong>
+            <strong>{resolvedCompletionRate === null ? "n/a" : `${resolvedCompletionRate}%`}</strong>
             <span>Completion</span>
           </div>
         </div>
@@ -253,32 +264,36 @@ function MemberProfilePopup({
           </section>
         </div>
         )}
-        {hasWorkDetails && openTasks.length > 0 && (
+        {hasWorkDetails && (tasksLoading || openTasks.length > 0) && (
           <section className="member-profile-detail">
             <h3>Priority work</h3>
-            <div className="member-profile-task-list">
-              {openTasks
-                .sort(compareTasksForAttention(today))
-                .slice(0, 4)
-                .map((task) => (
-                  <button
-                    type="button"
-                    key={task.id}
-                    onClick={() => onOpenTask?.(task)}
-                  >
-                    <span>{task.title}</span>
-                    <em>
-                      {task.status === "blocked"
-                        ? "Blocked"
-                        : overdue.some((item) => item.id === task.id)
-                          ? "Overdue"
-                          : isDueSoon(task, today)
-                            ? "Due soon"
-                            : task.priority}
-                    </em>
-                  </button>
-                ))}
-            </div>
+            {tasksLoading ? (
+              <p className="today-muted">Loading priority work...</p>
+            ) : (
+              <div className="member-profile-task-list">
+                {openTasks
+                  .sort(compareTasksForAttention(today))
+                  .slice(0, 4)
+                  .map((task) => (
+                    <button
+                      type="button"
+                      key={task.id}
+                      onClick={() => onOpenTask?.(task)}
+                    >
+                      <span>{task.title}</span>
+                      <em>
+                        {task.status === "blocked"
+                          ? "Blocked"
+                          : overdue.some((item) => item.id === task.id)
+                            ? "Overdue"
+                            : isDueSoon(task, today)
+                              ? "Due soon"
+                              : task.priority}
+                      </em>
+                    </button>
+                  ))}
+              </div>
+            )}
           </section>
         )}
         <Button type="button" onClick={() => onMessage(member)}>
@@ -291,6 +306,10 @@ function MemberProfilePopup({
 
 function TeamBoardView({
   tasks,
+  workspaceId,
+  workspaceRole = "member",
+  currentUserId,
+  taskReloadKey = 0,
   members,
   projects = [],
   checkIns = [],
@@ -317,7 +336,26 @@ function TeamBoardView({
   const [showTerminal, setShowTerminal] = useState(false);
   const [query, setQuery] = useState("");
   const [profileMember, setProfileMember] = useState(null);
+  const [serverTasks, setServerTasks] = useState([]);
+  const [taskSummary, setTaskSummary] = useState(null);
+  const [taskPagination, setTaskPagination] = useState(null);
+  const [taskPage, setTaskPage] = useState(1);
+  const [taskLoading, setTaskLoading] = useState(false);
+  const [taskError, setTaskError] = useState("");
+  const [teamTaskReload, setTeamTaskReload] = useState(0);
+  const [profileTasks, setProfileTasks] = useState([]);
+  const [profileTasksLoading, setProfileTasksLoading] = useState(false);
+  const usesServerTasks = Boolean(workspaceId);
+  const sourceTasks = usesServerTasks ? serverTasks : tasks;
   const sendMemberMessage = (member) => { requestDirectMessage(member.id); onNavigate("Chats"); };
+  const completeTeamTask = (id) =>
+    Promise.resolve(onComplete(id)).finally(() =>
+      setTeamTaskReload((current) => current + 1),
+    );
+  const changeTeamTaskStatus = (id, status) =>
+    Promise.resolve(onStatusChange(id, status)).finally(() =>
+      setTeamTaskReload((current) => current + 1),
+    );
   const statuses = [
     ["todo", "To do"],
     ["in progress", "In progress"],
@@ -328,14 +366,155 @@ function TeamBoardView({
     ["done", "Done"],
   ];
   const priorities = ["urgent", "high", "normal", "low"];
-  const scopedTasks = tasks.filter((task) => taskMatchesScope(task, scope));
+  const taskSearch =
+    tab === "tasks" || tab === "overview" ? query.trim() : "";
+  const taskShowTerminal = tab === "tasks" && showTerminal;
+
+  useEffect(() => {
+    setTaskPage(1);
+  }, [workspaceId, scope, focus, query, showTerminal, tab]);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setServerTasks([]);
+      setTaskSummary(null);
+      setTaskPagination(null);
+      setTaskError("");
+      return undefined;
+    }
+    let current = true;
+    const timer = window.setTimeout(() => {
+      setTaskLoading(true);
+      setTaskError("");
+      const params = new URLSearchParams({
+        page: String(taskPage),
+        page_size: "25",
+        sort: "attention",
+        summary: "true",
+      });
+      if (scope && scope !== "all") params.set("scope", String(scope));
+      if (focus && focus !== "all") params.set("focus", focus);
+      if (taskSearch) params.set("search", taskSearch);
+      if (!taskShowTerminal) params.set("terminal", "open");
+      fetch(`/api/workspaces/${workspaceId}/tasks/?${params.toString()}`, {
+        credentials: "include",
+        headers: { "X-Workspace-Id": String(workspaceId) },
+      })
+        .then((response) =>
+          readJsonResponse(response, "Team tasks could not be loaded.").then(
+            (payload) => ({ ok: response.ok, payload }),
+          ),
+        )
+        .then(({ ok, payload }) => {
+          if (!current) return;
+          if (!ok) {
+            throw new Error(payload.error || "Team tasks could not be loaded.");
+          }
+          const serverPage = payload.pagination?.page;
+          if (serverPage && serverPage !== taskPage) setTaskPage(serverPage);
+          setServerTasks(
+            (payload.tasks || []).map((task) =>
+              mapTaskFromApi(task, {
+                today,
+                workspaceRole,
+                currentUserId,
+              }),
+            ),
+          );
+          setTaskSummary(payload.summary || null);
+          setTaskPagination(payload.pagination || null);
+        })
+        .catch((error) => {
+          if (current) setTaskError(error.message || "Team tasks could not be loaded.");
+        })
+        .finally(() => {
+          if (current) setTaskLoading(false);
+        });
+    }, taskSearch ? 250 : 0);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    workspaceId,
+    taskPage,
+    scope,
+    focus,
+    taskSearch,
+    taskShowTerminal,
+    today,
+    workspaceRole,
+    currentUserId,
+    teamTaskReload,
+    taskReloadKey,
+  ]);
+
+  useEffect(() => {
+    if (!workspaceId || !profileMember) {
+      setProfileTasks([]);
+      setProfileTasksLoading(false);
+      return undefined;
+    }
+    let current = true;
+    setProfileTasksLoading(true);
+    const params = new URLSearchParams({
+      owner: String(profileMember.id),
+      page_size: "4",
+      sort: "attention",
+      terminal: "open",
+      scope: scope === "all" ? "all" : String(scope),
+    });
+    fetch(`/api/workspaces/${workspaceId}/tasks/?${params.toString()}`, {
+      credentials: "include",
+      headers: { "X-Workspace-Id": String(workspaceId) },
+    })
+      .then((response) =>
+        readJsonResponse(response, "Member tasks could not be loaded.").then(
+          (payload) => ({ ok: response.ok, payload }),
+        ),
+      )
+      .then(({ ok, payload }) => {
+        if (!current) return;
+        if (!ok) {
+          throw new Error(payload.error || "Member tasks could not be loaded.");
+        }
+        setProfileTasks(
+          (payload.tasks || []).map((task) =>
+            mapTaskFromApi(task, {
+              today,
+              workspaceRole,
+              currentUserId,
+            }),
+          ),
+        );
+      })
+      .catch(() => {
+        if (current) setProfileTasks([]);
+      })
+      .finally(() => {
+        if (current) setProfileTasksLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [
+    workspaceId,
+    profileMember,
+    scope,
+    today,
+    workspaceRole,
+    currentUserId,
+    teamTaskReload,
+    taskReloadKey,
+  ]);
+
+  const scopedTasks = sourceTasks.filter((task) => taskMatchesScope(task, scope));
   const matching = (key) =>
     scopedTasks.filter((task) => BOARD_FOCUS[key](task, today));
   const openTasks = scopedTasks.filter(isOpenTask);
   const blocked = matching("blocked");
   const overdue = matching("overdue");
   const unassigned = matching("unassigned");
-  const focused = focus === "all" ? [] : matching(focus);
   const normalizedQuery = query.trim().toLowerCase();
   const matchesQuery = (task) =>
     !normalizedQuery ||
@@ -355,6 +534,8 @@ function TeamBoardView({
       .toLowerCase()
       .includes(normalizedQuery);
   const filtered = scopedTasks.filter(matchesQuery);
+  const focused =
+    focus === "all" ? [] : usesServerTasks ? filtered : matching(focus);
   const memberName = (member) =>
     [member.first_name, member.last_name].filter(Boolean).join(" ") ||
     member.email;
@@ -407,47 +588,100 @@ function TeamBoardView({
           shift.date === today && String(shift.user_id) === String(member.id),
       )
       .reduce((total, shift) => total + (shift.worked_seconds || 0), 0);
+  const ownerSummaryById = new Map(
+    (taskSummary?.by_owner || []).map((row) => [
+      String(row.assignee_id ?? "unassigned"),
+      row,
+    ]),
+  );
+  const emptyOwnerSummary = {
+    total: 0,
+    open: 0,
+    overdue: 0,
+    blocked: 0,
+    due_soon: 0,
+    urgent: 0,
+    high: 0,
+    completed: 0,
+    tracked: 0,
+  };
   const memberStats = members
     .map((member) => {
       const memberTasks = tasksForMember(member);
       const memberOpen = memberTasks.filter(isOpenTask);
-      const memberOverdue = memberOpen.filter(
-        (task) => task.due_date && task.due_date < today,
-      );
-      const memberBlocked = memberOpen.filter(
-        (task) => task.status === "blocked",
-      );
-      const memberDueSoon = memberOpen.filter((task) => isDueSoon(task, today));
+      const fallbackSummary = {
+        ...emptyOwnerSummary,
+        total: memberTasks.length,
+        open: memberOpen.length,
+        overdue: memberOpen.filter(
+          (task) => task.due_date && task.due_date < today,
+        ).length,
+        blocked: memberOpen.filter((task) => task.status === "blocked").length,
+        due_soon: memberOpen.filter((task) => isDueSoon(task, today)).length,
+        urgent: memberOpen.filter((task) => task.priority === "urgent").length,
+        high: memberOpen.filter((task) => task.priority === "high").length,
+        completed: memberTasks.filter((task) => task.status === "done").length,
+        tracked: memberTasks.filter((task) => task.status !== "cancelled").length,
+      };
+      const summary =
+        usesServerTasks && taskSummary
+          ? ownerSummaryById.get(String(member.id)) || emptyOwnerSummary
+          : fallbackSummary;
       const risk =
-        memberBlocked.length * 5 +
-        memberOverdue.length * 4 +
-        memberDueSoon.length * 2 +
-        memberOpen.filter((task) => task.priority === "urgent").length * 2 +
-        memberOpen.filter((task) => task.priority === "high").length;
+        summary.blocked * 5 +
+        summary.overdue * 4 +
+        summary.due_soon * 2 +
+        summary.urgent * 2 +
+        summary.high;
       return {
         member,
         tasks: memberTasks,
-        open: memberOpen,
-        overdue: memberOverdue,
-        blocked: memberBlocked,
-        dueSoon: memberDueSoon,
-        completionRate: completionRateForTasks(memberTasks),
+        open: summary.open,
+        overdue: summary.overdue,
+        blocked: summary.blocked,
+        dueSoon: summary.due_soon,
+        completed: summary.completed,
+        tracked: summary.tracked,
+        completionRate: summary.tracked
+          ? Math.round((summary.completed / summary.tracked) * 100)
+          : null,
         risk,
       };
     })
     .sort(
       (a, b) =>
         b.risk - a.risk ||
-        b.open.length - a.open.length ||
+        b.open - a.open ||
         memberName(a.member).localeCompare(memberName(b.member)),
     );
   const visibleMemberStats = memberStats.filter((item) =>
     memberMatchesQuery(item.member),
   );
-  const riskTasks = openTasks
+  const riskTasks = (usesServerTasks ? filtered : openTasks.filter(matchesQuery))
     .filter(matchesQuery)
     .sort(compareTasksForAttention(today))
     .slice(0, 6);
+  const summaryCounts = taskSummary?.counts || {
+    open: openTasks.length,
+    blocked: blocked.length,
+    overdue: overdue.length,
+    unassigned: unassigned.length,
+  };
+  const focusedCount = usesServerTasks
+    ? taskPagination?.total_items || 0
+    : focused.length;
+  const teamTaskTotal =
+    taskPagination?.total_items ?? (focus === "all" ? filtered.length : focusedCount);
+  const teamTaskPage = taskPagination?.page || taskPage;
+  const teamTaskPages = taskPagination?.total_pages || 1;
+  const teamTaskPageSize = taskPagination?.page_size || 25;
+  const teamTaskRangeStart = teamTaskTotal
+    ? (teamTaskPage - 1) * teamTaskPageSize + 1
+    : 0;
+  const teamTaskRangeEnd = Math.min(
+    teamTaskPage * teamTaskPageSize,
+    teamTaskTotal,
+  );
   const workloadWatch = memberStats.filter((item) => item.risk > 0).slice(0, 5);
   const presenceCounts = PRESENCE_OPTIONS.reduce((counts, presence) => {
     counts[presence] = members.filter(
@@ -538,7 +772,7 @@ function TeamBoardView({
               aria-disabled={isCancelled}
               disabled={isCancelled}
               className={`check ${isDone ? "checked" : ""}`}
-              onClick={() => !isCancelled && onComplete(task.id)}
+              onClick={() => !isCancelled && completeTeamTask(task.id)}
               aria-label={
                 isCancelled
                   ? `Cancelled ${task.title}`
@@ -578,7 +812,9 @@ function TeamBoardView({
             <AppSelect
               className={`task-status task-status-select ${task.status}`}
               value={task.status}
-              onChange={(event) => onStatusChange(task.id, event.target.value)}
+              onChange={(event) =>
+                changeTeamTaskStatus(task.id, event.target.value)
+              }
               aria-label={`Change status for ${task.title}`}
             >
               <option value="todo">To do</option>
@@ -608,11 +844,11 @@ function TeamBoardView({
           className={focus === "all" ? "active" : ""}
           onClick={() => onFocusChange("all")}
         >
-          <strong>{openTasks.length}</strong>
+          <strong>{summaryCounts.open}</strong>
           <span>Open tasks</span>
         </button>
         {["blocked", "overdue", "unassigned"].map((key) => {
-          const count = { blocked, overdue, unassigned }[key].length;
+          const count = summaryCounts[key];
           return (
             <button
               key={key}
@@ -699,7 +935,7 @@ function TeamBoardView({
           <section className="team-board-column">
             <div className="team-column-heading team-focus-heading">
               <h2>{BOARD_FOCUS_LABEL[focus]}</h2>
-              <span>{focused.filter(matchesQuery).length}</span>
+              <span>{focusedCount}</span>
               <button
                 type="button"
                 className="text-button team-focus-clear"
@@ -784,9 +1020,9 @@ function TeamBoardView({
                     >
                       <span>{memberName(item.member)}</span>
                       <em>
-                        {item.blocked.length} blocked | {item.overdue.length} overdue
+                        {item.blocked} blocked | {item.overdue} overdue
                       </em>
-                      <strong>{item.open.length} open</strong>
+                      <strong>{item.open} open</strong>
                     </button>
                   ))}
                 </div>
@@ -834,19 +1070,19 @@ function TeamBoardView({
               </div>
               <div className="team-workload-stats">
                 <div>
-                  <strong>{item.open.length}</strong>
+                  <strong>{item.open}</strong>
                   <span>Open</span>
                 </div>
-                <div className={item.overdue.length ? "is-warning" : ""}>
-                  <strong>{item.overdue.length}</strong>
+                <div className={item.overdue ? "is-warning" : ""}>
+                  <strong>{item.overdue}</strong>
                   <span>Overdue</span>
                 </div>
-                <div className={item.blocked.length ? "is-danger" : ""}>
-                  <strong>{item.blocked.length}</strong>
+                <div className={item.blocked ? "is-danger" : ""}>
+                  <strong>{item.blocked}</strong>
                   <span>Blocked</span>
                 </div>
-                <div className={item.dueSoon.length ? "is-info" : ""}>
-                  <strong>{item.dueSoon.length}</strong>
+                <div className={item.dueSoon ? "is-info" : ""}>
+                  <strong>{item.dueSoon}</strong>
                   <span>Due soon</span>
                 </div>
               </div>
@@ -890,6 +1126,48 @@ function TeamBoardView({
             <EmptyState text="No tasks match this view." />
           )}
         </>
+      )}
+      {usesServerTasks && (focus !== "all" || activeTab === "tasks") && (
+        <div
+          className="planner-pagination team-task-pagination"
+          aria-busy={taskLoading}
+        >
+          <span>
+            {taskLoading
+              ? "Loading tasks..."
+              : teamTaskTotal
+                ? `${teamTaskRangeStart}-${teamTaskRangeEnd} of ${teamTaskTotal}`
+                : "0 tasks"}
+          </span>
+          <div>
+            <button
+              type="button"
+              disabled={taskLoading || teamTaskPage <= 1}
+              onClick={() => setTaskPage((current) => Math.max(1, current - 1))}
+              aria-label="Previous team task page"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <span>
+              Page {teamTaskPage} of {teamTaskPages}
+            </span>
+            <button
+              type="button"
+              disabled={
+                taskLoading || teamTaskPage >= teamTaskPages || !taskPagination?.has_next
+              }
+              onClick={() => setTaskPage((current) => current + 1)}
+              aria-label="Next team task page"
+            >
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+      {taskError && (
+        <p className="today-muted team-task-error" role="alert">
+          {taskError}
+        </p>
       )}
       {focus === "all" && activeTab === "availability" && (
         <>
@@ -1082,8 +1360,20 @@ function TeamBoardView({
         onClose={() => setProfileMember(null)}
         onMessage={sendMemberMessage}
         tasks={
-          profileMember ? tasksForMember(profileMember) : []
+          profileMember
+            ? usesServerTasks
+              ? profileTasks
+              : tasksForMember(profileMember)
+            : []
         }
+        stats={
+          profileMember
+            ? memberStats.find(
+                (item) => String(item.member.id) === String(profileMember.id),
+              ) || null
+            : null
+        }
+        tasksLoading={profileTasksLoading}
         checkIn={profileMember ? checkInForMember(profileMember) : null}
         shift={profileMember ? openShiftForMember(profileMember) : null}
         todayWorkedSeconds={

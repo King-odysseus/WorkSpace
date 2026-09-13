@@ -32,6 +32,7 @@ it('closes the task drawer and confirms an update after updating task fields', a
     '/api/tasks/91/subtasks/': { subtasks: [] },
     '/api/tasks/91/attachments/': { attachments: [] },
     '/api/tasks/91/': { task: { ...task, title: 'Updated UI' } },
+    '/api/workspaces/1/tasks/': { tasks: [] },
   })
 
   try {

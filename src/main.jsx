@@ -327,6 +327,18 @@ function App() {
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceNotice, setWorkspaceNotice] = useState("");
   const [workspaceReload, setWorkspaceReload] = useState(0);
+  const activeRef = useRef(active);
+  const previousActiveRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+  useEffect(() => {
+    const previous = previousActiveRef.current;
+    previousActiveRef.current = active;
+    if (previous === "Team" && active !== "Team") {
+      setWorkspaceReload((current) => current + 1);
+    }
+  }, [active]);
   const [reportRange, setReportRange] = useState("all");
   const [shiftLogUserId, setShiftLogUserId] = useState("");
   const [shiftLogPage, setShiftLogPage] = useState(1);
@@ -770,8 +782,14 @@ function App() {
       const auditRequest = ["owner", "manager"].includes(workspaceRole)
         ? read(`/api/workspaces/${workspaceId}/audit-logs/`, { audit_logs: [] })
         : Promise.resolve({ audit_logs: [] });
+      // Team owns its own paginated task query. Skipping the full task table
+      // here keeps that page from re-downloading every task on every refresh.
+      const taskRequest =
+        activeRef.current === "Team"
+          ? Promise.resolve({ tasks: [] })
+          : readAllTasks();
       const refreshRequest = Promise.all([
-        readAllTasks(),
+        taskRequest,
         read(`/api/workspaces/${workspaceId}/members/?page_size=500`, {
           members: [],
         }),
@@ -953,9 +971,13 @@ function App() {
   ]);
 
   useEffect(() => {
-    if (selectedTask && !tasks.some((task) => task.id === selectedTask.id))
+    if (
+      active !== "Team" &&
+      selectedTask &&
+      !tasks.some((task) => task.id === selectedTask.id)
+    )
       setSelectedTask(null);
-  }, [tasks, selectedTask]);
+  }, [active, tasks, selectedTask]);
 
   useEffect(() => {
     const mine = session.user
@@ -6874,6 +6896,10 @@ function WorkspaceView({
       <>
         <TeamBoardView
           tasks={tasks}
+          workspaceId={workspaceId}
+          workspaceRole={currentWorkspace?.role}
+          currentUserId={currentUserId}
+          taskReloadKey={reportLastUpdated?.getTime() || 0}
           members={localData.members}
           projects={localData.projects}
           checkIns={localData.checkIns}

@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone as datetime_timezone
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Max, Q
+from django.db.models import Case, Count, IntegerField, Max, Q, Value, When
 from django.core.exceptions import ValidationError
 from django.core.paginator import EmptyPage, Paginator
 from django.contrib.auth.models import User
@@ -51,6 +51,41 @@ def paginate_response(request, queryset):
         'total_pages': paginator.num_pages,
         'has_next': page.has_next(),
         'has_previous': page.has_previous(),
+    }
+
+
+def task_scope_summary(queryset, today):
+    """Return Team summary counts without loading task rows into Python.
+
+    Team needs workspace-wide totals and per-owner workload even though its
+    task list is paginated. One grouped query keeps those numbers accurate
+    without downloading every task for the client to count.
+    """
+    open_filter = ~Q(status__in=('done', 'cancelled'))
+    rows = list(
+        queryset.order_by().values('assignee_id').annotate(
+            total=Count('id'),
+            open=Count('id', filter=open_filter),
+            overdue=Count('id', filter=open_filter & Q(due_date__lt=today)),
+            blocked=Count('id', filter=Q(status='blocked')),
+            due_soon=Count(
+                'id',
+                filter=open_filter & Q(due_date__gte=today, due_date__lte=today + timedelta(days=3)),
+            ),
+            urgent=Count('id', filter=open_filter & Q(priority='urgent')),
+            high=Count('id', filter=open_filter & Q(priority='high')),
+            completed=Count('id', filter=Q(status='done')),
+            tracked=Count('id', filter=~Q(status='cancelled')),
+        )
+    )
+    return {
+        'counts': {
+            'open': sum(row['open'] for row in rows),
+            'blocked': sum(row['blocked'] for row in rows),
+            'overdue': sum(row['overdue'] for row in rows),
+            'unassigned': next((row['open'] for row in rows if row['assignee_id'] is None), 0),
+        },
+        'by_owner': rows,
     }
 
 
@@ -713,6 +748,7 @@ def task_list(request, workspace_id=None):
 
     if request.method == 'GET':
         tasks = Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref').prefetch_related('supporters', 'assignee_links', 'blocked_by', 'blocks')
+        today = timezone.localdate()
         scope = request.GET.get('scope', 'all')
         project_filter = request.GET.get('project') or request.GET.get('project_id')
         if scope == 'operations':
@@ -746,7 +782,6 @@ def task_list(request, workspace_id=None):
             tasks = tasks.filter(due_date__gte=date_from)
         if date_to:
             tasks = tasks.filter(due_date__lte=date_to)
-        today = timezone.localdate()
         if request.GET.get('overdue', '').lower() in {'1', 'true', 'yes'}:
             tasks = tasks.filter(due_date__lt=today).exclude(status='done')
         if request.GET.get('due_soon', '').lower() in {'1', 'true', 'yes'}:
@@ -764,19 +799,53 @@ def task_list(request, workspace_id=None):
                 for project_id, project_days in Project.objects.filter(workspace_id=workspace_id).values_list('id', 'due_soon_days'):
                     due_scope |= Q(project_ref_id=project_id, due_date__lte=today + timedelta(days=project_days))
                 tasks = tasks.filter(due_date__gte=today).filter(due_scope).exclude(status='done')
+        if request.GET.get('unassigned', '').lower() in {'1', 'true', 'yes'}:
+            tasks = tasks.filter(assignee__isnull=True)
         archived = request.GET.get('archived', 'false').lower()
         if archived in {'true', '1', 'yes'}:
             tasks = tasks.filter(state='archived')
         elif archived != 'all':
             tasks = tasks.exclude(state='archived')
+        summary_requested = request.GET.get('summary', '').lower() in {'1', 'true', 'yes'}
+        summary = task_scope_summary(tasks, today) if summary_requested else None
+        focus = request.GET.get('focus', '').strip()
+        open_filter = ~Q(status__in=('done', 'cancelled'))
+        focus_filters = {
+            'overdue': open_filter & Q(due_date__lt=today),
+            'blocked': Q(status='blocked'),
+            'unassigned': open_filter & Q(assignee__isnull=True),
+            'due-today': open_filter & Q(due_date=today),
+        }
+        if focus in focus_filters:
+            tasks = tasks.filter(focus_filters[focus])
+        elif focus:
+            return JsonResponse({'error': 'Unsupported focus value.'}, status=400)
         search = request.GET.get('search', '').strip()
         if search:
             tasks = tasks.filter(Q(title__icontains=search) | Q(description__icontains=search) | Q(code__icontains=search) | Q(project_ref__name__icontains=search) | Q(workstream_ref__name__icontains=search) | Q(phase_ref__name__icontains=search))
+        terminal = request.GET.get('terminal', 'all').strip().lower()
+        if terminal in {'open', 'active'}:
+            tasks = tasks.filter(open_filter)
+        elif terminal not in {'', 'all'}:
+            return JsonResponse({'error': 'Unsupported terminal value.'}, status=400)
         sort = request.GET.get('sort', 'default')
         sort_fields = {'default': ('status', 'due_date', '-created_at'), 'due_date': ('due_date', 'id'), '-due_date': ('-due_date', 'id'), 'created_at': ('created_at', 'id'), '-created_at': ('-created_at', 'id'), 'updated_at': ('updated_at', 'id'), '-updated_at': ('-updated_at', 'id'), 'priority': ('priority', 'id'), '-priority': ('-priority', 'id'), 'title': ('title', 'id'), '-title': ('-title', 'id'), 'task_code': ('code', 'id'), '-task_code': ('-code', 'id')}
         if sort not in sort_fields:
-            return JsonResponse({'error': 'Unsupported sort value.'}, status=400)
-        tasks = tasks.distinct().order_by(*sort_fields[sort])
+            if sort != 'attention':
+                return JsonResponse({'error': 'Unsupported sort value.'}, status=400)
+        if sort == 'attention':
+            risk_score = (
+                Case(When(status='blocked', then=Value(50)), default=Value(0), output_field=IntegerField())
+                + Case(When(open_filter & Q(due_date__lt=today), then=Value(40)), default=Value(0), output_field=IntegerField())
+                + Case(When(open_filter & Q(due_date__gte=today, due_date__lte=today + timedelta(days=3)), then=Value(20)), default=Value(0), output_field=IntegerField())
+                + Case(When(open_filter & Q(assignee__isnull=True), then=Value(15)), default=Value(0), output_field=IntegerField())
+                + Case(When(open_filter & Q(priority='urgent'), then=Value(10)), default=Value(0), output_field=IntegerField())
+                + Case(When(open_filter & Q(priority='high'), then=Value(5)), default=Value(0), output_field=IntegerField())
+            )
+            tasks = tasks.annotate(_team_risk=risk_score).order_by('-_team_risk', 'due_date', 'title', 'id')
+        else:
+            tasks = tasks.order_by(*sort_fields[sort])
+        tasks = tasks.distinct()
         try:
             page_size = min(max(int(request.GET.get('page_size', 100)), 1), 200)
             page_number = max(int(request.GET.get('page', 1)), 1)
@@ -787,7 +856,10 @@ def task_list(request, workspace_id=None):
             page = paginator.page(page_number)
         except EmptyPage:
             page = paginator.page(paginator.num_pages)
-        return JsonResponse({'tasks': [task.as_dict() for task in page.object_list], 'pagination': {'page': page.number, 'page_size': page_size, 'total_items': paginator.count, 'total_pages': paginator.num_pages, 'has_next': page.has_next(), 'has_previous': page.has_previous()}})
+        payload = {'tasks': [task.as_dict() for task in page.object_list], 'pagination': {'page': page.number, 'page_size': page_size, 'total_items': paginator.count, 'total_pages': paginator.num_pages, 'has_next': page.has_next(), 'has_previous': page.has_previous()}}
+        if summary is not None:
+            payload['summary'] = summary
+        return JsonResponse(payload)
 
     _, permission_error = require_permission(request, workspace_id, 'create_tasks')
     if permission_error:

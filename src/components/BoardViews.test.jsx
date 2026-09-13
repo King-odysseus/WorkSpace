@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MyTasksView, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
 import { takePendingDirectMessage } from '../lib/chat-navigation.js'
+import { expectRequest, mockApi } from '../test/setup-tests.js'
 
 const noop = vi.fn()
 
@@ -48,10 +49,16 @@ const renderBoard = ({
   checkIns = [],
   workShifts = [],
   canManageMembers = false,
+  workspaceId,
+  currentUserId,
+  workspaceRole,
 }) =>
   render(
     <TeamBoardView
       tasks={tasks}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      workspaceRole={workspaceRole}
       members={[{ id: 9, first_name: 'Dana', last_name: 'Reed', role: 'member' }]}
       projects={[]}
       checkIns={checkIns}
@@ -73,6 +80,53 @@ const renderBoard = ({
       onNavigate={noop}
     />,
   )
+
+it('loads Team tasks one page at a time with server summary counts', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/5/tasks/': {
+      tasks: [
+        {
+          id: 1,
+          title: 'Blocked delivery',
+          status: 'blocked',
+          priority: 'high',
+          assignee_id: 9,
+          assignee_name: 'Dana Reed',
+          project: 'General',
+          state: 'active',
+        },
+      ],
+      pagination: {
+        page: 1,
+        page_size: 25,
+        total_items: 34,
+        total_pages: 2,
+        has_next: true,
+        has_previous: false,
+      },
+      summary: {
+        counts: { open: 34, blocked: 3, overdue: 2, unassigned: 1 },
+        by_owner: [],
+      },
+    },
+  })
+
+  const { container } = renderBoard({
+    tasks: [],
+    workspaceId: 5,
+    currentUserId: 7,
+    workspaceRole: 'owner',
+  })
+
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/5/tasks/'))
+  const [url] = expectRequest(fetchMock, '/api/workspaces/5/tasks/')
+  expect(url).toContain('page_size=25')
+  expect(url).toContain('summary=true')
+  expect(await screen.findByText('Blocked delivery')).toBeInTheDocument()
+  const metrics = container.querySelectorAll('.team-board-metrics button')
+  expect(metrics[0].textContent).toContain('34')
+  expect(metrics[1].textContent).toContain('3')
+})
 
 const myDayPanel = () =>
   screen.getByRole('heading', { name: 'My day' }).closest('.today-panel')

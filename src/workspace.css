@@ -9068,6 +9068,34 @@ button {
   border-radius: 999px;
 }
 
+.workspace-view .team-task-pagination {
+  margin-top: 14px;
+  padding: 11px 14px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 12px;
+  background: var(--workspace-surface-soft);
+  box-shadow: none;
+}
+
+.workspace-view .team-task-pagination > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workspace-view .team-task-pagination button:not(:disabled) {
+  cursor: pointer;
+}
+
+.workspace-view .team-task-pagination button:not(:disabled):hover {
+  border-color: var(--color-info, #2563eb);
+  color: var(--color-info, #2563eb);
+}
+
+.workspace-view .team-task-error {
+  margin-top: 10px;
+  color: var(--color-danger, #c43d4b);
+}
+
 .workspace-view :is(.project-progress-track, .team-member-progress, .table-progress i) {
   overflow: hidden;
   background: color-mix(in srgb, var(--workspace-border, #e2e2e6) 76%, transparent);
