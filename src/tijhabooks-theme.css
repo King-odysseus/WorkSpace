@@ -874,6 +874,14 @@ html[data-theme='dark'] .report-guidance, html[data-theme='dark'] .report-update
 html[data-theme='dark'] .chat-day h3 { border-color: var(--workspace-border); color: #B9CCDD; }
 .calendar-side-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .calendar-side-heading h3 { margin: 0; }
+.calendar-upcoming-title { margin: 0 !important; }
+.calendar-upcoming-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.calendar-upcoming-toggle:hover { color: var(--blue); }
+.calendar-upcoming-toggle:focus-visible { border-radius: 4px; outline: 2px solid var(--focus-ring); outline-offset: 4px; }
+.calendar-upcoming-chevron { flex: 0 0 auto; transition: transform .15s ease; }
+.calendar-upcoming-toggle[aria-expanded='true'] .calendar-upcoming-chevron { transform: rotate(180deg); }
+.calendar-upcoming-count { display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 10px; font-weight: 800; }
+.calendar-upcoming-content { display: grid; min-width: 0; }
 .calendar-export { color: #1D4ED8; font-size: 11px; font-weight: 700; text-decoration: none; }
 .calendar-export-links { display: flex; align-items: center; gap: 12px; }
 button.calendar-export { padding: 0; border: none; background: none; cursor: pointer; font-family: inherit; }
@@ -3795,6 +3803,9 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
   .calendar-filter-row { align-items:stretch; flex-direction:column; gap:9px; }
   .calendar-filter-row label { justify-content:space-between; }
   .calendar-filter-row [data-slot='select-trigger'] { flex:1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .calendar-upcoming-chevron { transition: none; }
 }
 
 /* Zuri is a floating button on desktop and a pill in the bottom nav below

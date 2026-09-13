@@ -3036,6 +3036,9 @@ function WorkspaceView({
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarFilter, setCalendarFilter] = useState("all");
   const [calendarTaskScope, setCalendarTaskScope] = useState("all");
+  const [calendarUpcomingOpen, setCalendarUpcomingOpen] = useState(
+    () => localStorage.getItem("workspace-calendar-upcoming-open") !== "false",
+  );
   const [checkInRange, setCheckInRange] = useState("today");
   const [pendingCheckInId, setPendingCheckInId] = useState(null);
   const [checkInLoading, setCheckInLoading] = useState(false);
@@ -4070,6 +4073,13 @@ function WorkspaceView({
     if (calendarView === "month") next.setMonth(next.getMonth() + amount);
     if (calendarView === "year") next.setFullYear(next.getFullYear() + amount);
     setCalendarDate(next);
+  };
+  const toggleCalendarUpcoming = () => {
+    setCalendarUpcomingOpen((current) => {
+      const next = !current;
+      localStorage.setItem("workspace-calendar-upcoming-open", String(next));
+      return next;
+    });
   };
   const updateProjectStatus = async (project, status) => {
     const responseData = await runAction(
@@ -5553,7 +5563,25 @@ function WorkspaceView({
           </Card>
           <Card className="workspace-side-card py-5 gap-4">
             <div className="calendar-side-heading">
-              <h3>Upcoming</h3>
+              <h3 className="calendar-upcoming-title">
+                <button
+                  type="button"
+                  className="calendar-upcoming-toggle"
+                  onClick={toggleCalendarUpcoming}
+                  aria-expanded={calendarUpcomingOpen}
+                  aria-controls="calendar-upcoming-content"
+                >
+                  <ChevronDown
+                    size={16}
+                    className="calendar-upcoming-chevron"
+                    aria-hidden="true"
+                  />
+                  <span>Upcoming</span>
+                  <span className="calendar-upcoming-count">
+                    {upcomingVisibleEvents.length + upcomingTaskDeadlines.length}
+                  </span>
+                </button>
+              </h3>
               <span className="calendar-export-links">
                 <a
                   className="calendar-export"
@@ -5572,83 +5600,91 @@ function WorkspaceView({
                 </button>
               </span>
             </div>
-            {upcomingVisibleEvents.length ? (
-              upcomingVisibleEvents.map((event) => (
-                <div
-                  className={`compact-row event-type-row-${event.event_type || "meeting"}`}
-                  key={event.id}
-                >
-                  <CalendarDays size={15} />
-                  <div>
-                    <strong>{event.title}</strong>
-                    <span>
-                      {formatCalendarDate(new Date(event.start_at), {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}{" "}
-                      · {event.event_type || "event"}
-                    </span>
-                    <a
-                      className="calendar-google-link"
-                      href={googleCalendarUrl(event)}
-                      target="_blank"
-                      rel="noreferrer"
+            {calendarUpcomingOpen && (
+              <div
+                className="calendar-upcoming-content"
+                id="calendar-upcoming-content"
+              >
+                {upcomingVisibleEvents.length ? (
+                  upcomingVisibleEvents.map((event) => (
+                    <div
+                      className={`compact-row event-type-row-${event.event_type || "meeting"}`}
+                      key={event.id}
                     >
-                      Add to Google Calendar
-                    </a>
+                      <CalendarDays size={15} />
+                      <div>
+                        <strong>{event.title}</strong>
+                        <span>
+                          {formatCalendarDate(new Date(event.start_at), {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}{" "}
+                          · {event.event_type || "event"}
+                        </span>
+                        <a
+                          className="calendar-google-link"
+                          href={googleCalendarUrl(event)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Add to Google Calendar
+                        </a>
+                      </div>
+                      <button
+                        type="button"
+                        className="inline-edit"
+                        onClick={() => setSelectedEvent(event)}
+                        aria-label={`View ${event.title}`}
+                      >
+                        View
+                      </button>
+                      {(canManageMembers ||
+                        event.created_by === currentUserId) && (
+                        <button
+                          type="button"
+                          className="inline-delete"
+                          onClick={() => deleteCalendarEvent(event.id)}
+                          aria-label={`Delete ${event.title}`}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState text="No upcoming events match this filter." />
+                )}
+                <div className="calendar-side-section">
+                  <div className="calendar-side-heading">
+                    <h3>Task deadlines</h3>
+                    <span>{upcomingTaskDeadlines.length}</span>
                   </div>
-                  <button
-                    type="button"
-                    className="inline-edit"
-                    onClick={() => setSelectedEvent(event)}
-                    aria-label={`View ${event.title}`}
-                  >
-                    View
-                  </button>
-                  {(canManageMembers || event.created_by === currentUserId) && (
-                    <button
-                      type="button"
-                      className="inline-delete"
-                      onClick={() => deleteCalendarEvent(event.id)}
-                      aria-label={`Delete ${event.title}`}
-                    >
-                      <X size={14} />
-                    </button>
+                  {upcomingTaskDeadlines.length ? (
+                    upcomingTaskDeadlines.map((task) => (
+                      <button
+                        type="button"
+                        className="calendar-task-deadline"
+                        key={`calendar-task-${task.id}`}
+                        onClick={() => onOpenTask(task)}
+                      >
+                        <CalendarDays size={15} />
+                        <span>
+                          <strong>{task.title}</strong>
+                          <small>
+                            {task.due_date}
+                            {task.tag && task.tag !== "General"
+                              ? ` · ${task.tag}`
+                              : ""}
+                          </small>
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <EmptyState text="No upcoming task deadlines." />
                   )}
                 </div>
-              ))
-            ) : (
-              <EmptyState text="No upcoming events match this filter." />
-            )}
-            <div className="calendar-side-section">
-              <div className="calendar-side-heading">
-                <h3>Task deadlines</h3>
-                <span>{upcomingTaskDeadlines.length}</span>
               </div>
-              {upcomingTaskDeadlines.length ? (
-                upcomingTaskDeadlines.map((task) => (
-                  <button
-                    type="button"
-                    className="calendar-task-deadline"
-                    key={`calendar-task-${task.id}`}
-                    onClick={() => onOpenTask(task)}
-                  >
-                    <CalendarDays size={15} />
-                    <span>
-                      <strong>{task.title}</strong>
-                      <small>
-                        {task.due_date}
-                        {task.tag && task.tag !== "General"
-                          ? ` · ${task.tag}`
-                          : ""}
-                      </small>
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <EmptyState text="No upcoming task deadlines." />
-              )}
-            </div>
+            )}
           </Card>
         </div>
         {composerOpen && (
