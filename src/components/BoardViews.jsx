@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
+import { AppSelect } from "./ui/select.jsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -206,7 +207,7 @@ function TeamBoardView({
           <span className={`my-task-priority ${task.priority}`}>
             {task.priority}
           </span>
-          <select
+          <AppSelect
             value={task.status}
             onChange={(event) => onStatusChange(task.id, event.target.value)}
             aria-label={`Change status for ${task.title}`}
@@ -218,7 +219,7 @@ function TeamBoardView({
             <option value="on_hold">On hold</option>
             <option value="cancelled">Cancelled</option>
             <option value="done">Done</option>
-          </select>
+          </AppSelect>
         </article>
       ))
     ) : (
@@ -764,12 +765,8 @@ function MyTasksView({
                   <span className={`my-task-priority ${task.priority}`}>
                     {task.priority}
                   </span>
-                  <select
-                    value={
-                      task.status === "in progress"
-                        ? "in progress"
-                        : task.status
-                    }
+                  <AppSelect
+                    value={task.status}
                     onChange={(event) =>
                       onStatusChange(task.id, event.target.value)
                     }
@@ -782,7 +779,7 @@ function MyTasksView({
                     <option value="on_hold">On hold</option>
                     <option value="cancelled">Cancelled</option>
                     <option value="done">Done</option>
-                  </select>
+                  </AppSelect>
                   {canManageTasks && (
                     <Button
                       type="button"
@@ -2811,25 +2808,21 @@ function TodayDashboard({
                       {task.tag && ` · ${task.tag}`}
                     </span>
                   </div>
-                  <select
-                    value={
-                      task.status === "in progress"
-                        ? "in_progress"
-                        : task.status
-                    }
+                  <AppSelect
+                    value={task.status}
                     onChange={(event) =>
                       onStatusChange(task.id, event.target.value)
                     }
                     aria-label={`Change status for ${task.title}`}
                   >
                     <option value="todo">To do</option>
-                    <option value="in_progress">In progress</option>
+                    <option value="in progress">In progress</option>
                     <option value="review">Review</option>
                     <option value="blocked">Blocked</option>
                     <option value="on_hold">On hold</option>
                     <option value="cancelled">Cancelled</option>
                     <option value="done">Done</option>
-                  </select>
+                  </AppSelect>
                 </article>
               ))}
             </div>

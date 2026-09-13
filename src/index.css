@@ -297,6 +297,52 @@ html[data-theme='dark'] select:not([class*='bg-transparent']) {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23C2C2DC' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
+/* The status controls on task rows are combo boxes rather than native <select>s,
+   for two reasons a native control cannot fix. It sizes itself to its widest
+   option instead of the status it is showing, so "Done" sat in a box cut for
+   "In progress"; and its popup is drawn by the OS, so it looked nothing like the
+   rest of the app. These keep the combo box down to the scale of the compact
+   rows it sits in - the row grids above reserve the space, so it only needs to
+   stop growing past its own label. */
+.team-task-row [data-slot='select-trigger'].app-select-trigger,
+.my-task-row [data-slot='select-trigger'].app-select-trigger,
+.today-task-row [data-slot='select-trigger'].app-select-trigger,
+.planner-card-meta [data-slot='select-trigger'].app-select-trigger {
+  width: auto;
+  min-width: 0;
+  min-height: 26px;
+  height: 26px;
+  padding: 0 7px;
+  gap: 4px;
+  border-radius: 7px;
+  font-size: 10px;
+  line-height: 1;
+}
+.team-task-row [data-slot='select-trigger'].app-select-trigger svg,
+.my-task-row [data-slot='select-trigger'].app-select-trigger svg,
+.today-task-row [data-slot='select-trigger'].app-select-trigger svg,
+.planner-card-meta [data-slot='select-trigger'].app-select-trigger svg {
+  width: 12px;
+  height: 12px;
+}
+.planner-task-table td [data-slot='select-trigger'].app-select-trigger {
+  width: auto;
+  min-width: 0;
+  min-height: 30px;
+  height: 30px;
+  padding: 0 9px;
+  gap: 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1;
+}
+.planner-task-table td [data-slot='select-trigger'].app-select-trigger svg { width: 12px; height: 12px; }
+
+@media (max-width: 520px) {
+  /* The row restacks here and the status spans the full width beneath the title. */
+  .my-task-row > [data-slot='select-trigger'].app-select-trigger { grid-area: status; width: 100%; }
+}
+
 .chat-shared-card { display:flex; align-items:center; gap:.65rem; width:100%; margin:.55rem 0; padding:.7rem .8rem; border:1px solid var(--border); border-radius:.75rem; background:var(--surface-secondary); text-align:left; color:inherit; }
 .chat-shared-card:hover { border-color:var(--accent); }
 .chat-shared-card span { min-width:0; flex:1; display:flex; flex-direction:column; }
@@ -758,15 +804,6 @@ html[data-theme='dark'] .today-panel-heading > svg {
   color: var(--dashboard-muted);
   font-size: 10.5px;
   line-height: 1.4;
-}
-
-.today-task-row select {
-  min-width: 108px;
-  max-width: 118px;
-  padding: 6px 26px 6px 9px;
-  border-color: transparent;
-  border-radius: 10px;
-  font-size: 10px;
 }
 
 .today-empty {
