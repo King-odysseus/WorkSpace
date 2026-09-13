@@ -2078,6 +2078,9 @@ def notification_preference_detail(request, workspace_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'notification_sound', 'manager_activity']
+    unknown_fields = sorted(set(payload) - set(fields))
+    if unknown_fields:
+        return JsonResponse({'error': f'Unsupported preference fields: {", ".join(unknown_fields)}.'}, status=400)
     updated_fields = []
     for field in fields:
         if field in payload:
@@ -2428,7 +2431,7 @@ def invitation_list(request, workspace_id):
                 existing.token = generate_invitation_token()
                 existing.last_sent_at = timezone.now()
                 existing.save(update_fields=['role', 'invited_by', 'status', 'token', 'last_sent_at'])
-                invitation, created = existing, True
+                invitation, created = existing, False
             else:
                 invitation = WorkspaceInvitation.objects.create(workspace_id=workspace_id, email=email, role=role, invited_by=request.user)
                 created = True
