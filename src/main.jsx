@@ -1781,6 +1781,7 @@ function App() {
         { label: "Today", icon: LayoutDashboard },
         { label: "My tasks", icon: CheckCircle2 },
         { label: "Daily operations", icon: ClipboardList },
+        { label: "Team", icon: Users },
       ],
     },
     {
@@ -1810,7 +1811,6 @@ function App() {
           ).length,
         },
         { label: "Check-ins", icon: Hash },
-        { label: "Team", icon: Users },
       ],
     },
     {
