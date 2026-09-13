@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, formatDate, formatDateTime, formatDay, formatDayMonth, formatLastSeen, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, formatDate, formatDateTime, formatDay, formatDayMonth, formatLastSeen, formatLongDate, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -65,6 +65,24 @@ describe('formatDayMonth', () => {
 
   it('renders nothing rather than a broken date', () => {
     expect(formatDayMonth('')).toBe('')
+  })
+})
+
+describe('formatLongDate', () => {
+  it('spells the day out in full for the dashboard headline', () => {
+    expect(formatLongDate('2026-09-13')).toBe('Sunday September 13 2026')
+    expect(formatLongDate('2026-09-09')).toBe('Wednesday September 9 2026')
+    expect(formatLongDate('2026-01-01')).toBe('Thursday January 1 2026')
+  })
+
+  it('uses the calendar day, not the machine locale', () => {
+    // Built from the parsed parts, so no timezone can shift the weekday.
+    expect(formatLongDate('2026-12-31')).toBe('Thursday December 31 2026')
+  })
+
+  it('renders nothing rather than a broken date', () => {
+    expect(formatLongDate('')).toBe('')
+    expect(formatLongDate('next tuesday')).toBe('')
   })
 })
 

@@ -107,6 +107,20 @@ function formatDayMonth(value) {
   return date ? `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}` : ''
 }
 
+// The one date in the app that is spelled out in full - the Today headline:
+// 'Sunday September 13 2026'. Fixed English names rather than Intl, so every
+// reader sees the same words instead of whatever their machine's locale emits.
+// Built from the parsed parts, so a date-only value cannot slip a day the way
+// new Date('2026-09-13') does west of UTC.
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+function formatLongDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  if (!match) return ''
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return `${WEEKDAY_NAMES[date.getDay()]} ${MONTH_NAMES[date.getMonth()]} ${date.getDate()} ${date.getFullYear()}`
+}
+
 function taskSearchText(task) {
   return [task.title, task.description, task.member, task.tag, task.bucket, ...(task.labels || [])].filter(Boolean).join(' ').toLowerCase()
 }
@@ -127,6 +141,7 @@ function mapTaskFromApi(apiTask, { today, workspaceRole, currentUserId } = {}) {
     due_date: apiTask.due_date || '',
     completed_at: apiTask.completed_at || '',
     created_at: apiTask.created_at || '',
+    updated_at: apiTask.updated_at || '',
     estimate: 'n/a',
     can_edit: ['owner', 'manager'].includes(workspaceRole) || (apiTask.assignee_ids || []).includes(currentUserId) || apiTask.assignee_id === currentUserId,
     recurrence: apiTask.recurrence || 'none',
@@ -344,6 +359,7 @@ export {
   formatDate,
   formatDateTime,
   formatDayMonth,
+  formatLongDate,
   taskSearchText,
   mapTaskFromApi,
   taskAssigneeLabel,

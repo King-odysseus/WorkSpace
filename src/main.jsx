@@ -192,6 +192,7 @@ import {
   formatDay,
   formatDayMonth,
   formatHoursLabel,
+  formatLongDate,
   formatRelativeActivityTime,
   formatShiftClock,
   formatShiftDuration,
@@ -212,7 +213,7 @@ import {
 
 function App() {
   const today = toDateKey(new Date());
-  const todayLabel = formatDay(today);
+  const todayLabel = formatLongDate(today);
   // Supports PWA shortcuts (manifest.webmanifest) and any other deep link that
   // wants to land on a specific view, e.g. /?view=My+tasks.
   const [active, setActive] = useState(() => {
