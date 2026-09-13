@@ -3336,7 +3336,7 @@ function WorkspaceView({
     };
   }, [active, workspaceId, pendingCheckInId]);
 
-  const openComposer = (type) => {
+  const openComposer = (type, prefill = {}) => {
     setComposerType(type);
     setComposerError("");
     setForm((current) => ({
@@ -3346,6 +3346,7 @@ function WorkspaceView({
       description: "",
       start_at: "",
       end_at: "",
+      event_type: "meeting",
       reminder_minutes: 15,
       completed: "",
       next_steps: "",
@@ -3359,6 +3360,7 @@ function WorkspaceView({
       date: today,
       email: "",
       role: "member",
+      ...prefill,
     }));
     if (type !== "chat") setReplyTo(null);
     setComposerOpen(true);
@@ -5205,8 +5207,15 @@ function WorkspaceView({
                 className="calendar-time-slot"
                 key={`${day.toISOString()}-${hour}`}
                 onDoubleClick={() => {
+                  const start = new Date(day);
+                  start.setHours(hour, 0, 0, 0);
+                  const end = new Date(start);
+                  end.setHours(hour + 1);
                   setCalendarDate(new Date(day));
-                  openComposer("calendar");
+                  openComposer("calendar", {
+                    start_at: toDateTimeLocal(start),
+                    end_at: toDateTimeLocal(end),
+                  });
                 }}
               >
                 {visibleCalendarEvents
@@ -5223,6 +5232,7 @@ function WorkspaceView({
                       className={`event-pill event-type-${event.event_type || "meeting"}`}
                       key={event.id}
                       onClick={() => setSelectedEvent(event)}
+                      aria-label={`View ${event.title}`}
                     >
                       <span>
                         {formatCalendarDate(new Date(event.start_at), {
