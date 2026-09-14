@@ -4,8 +4,9 @@
 
 import { useEffect, useState } from 'react'
 import {
-  BarChart3, Bell, CalendarDays, Camera, CheckCircle2, ChevronDown, ClipboardList, Filter,
-  Hash, LayoutGrid, Megaphone, MessageSquare, Plus, Settings, Target, Users,
+  BarChart3, Bell, CalendarDays, Camera, CheckCircle2, ChevronDown, ClipboardList, Download,
+  Filter, Hash, LayoutGrid, Megaphone, MessageSquare, MonitorDown, Plus, Settings, Share2,
+  Smartphone, Target, Users,
 } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
@@ -187,6 +188,121 @@ function HelpView({ onNavigate }) {
   ]
   return <section className="workspace-view help-view"><WorkspaceViewHeading title="Help center" subtitle="Step-by-step instructions for getting work done in WorkSpace." /><div className="help-grid"><Card className="help-welcome"><p className="eyebrow">Welcome to WorkSpace</p><h2>Learn by doing</h2><p>Expand any workflow below to see the exact actions to take. Start with Create and assign a task, then move to Daily operations or Planner when your work has a clear home.</p><div className="help-actions"><button type="button" className="primary-button" onClick={() => onNavigate('Today')}>Open Today</button><button type="button" className="secondary-button" onClick={() => onNavigate('Planner')}>Open Planner</button></div></Card>{topics.map((topic, index) => <Card className={`help-topic ${openTopic === index ? 'is-open' : ''}`} key={topic.title}><button type="button" className="help-topic-header" onClick={() => setOpenTopic(current => current === index ? null : index)} aria-expanded={openTopic === index}><topic.icon size={16} /><h3>{topic.title}</h3><ChevronDown size={16} className="help-chevron" /></button>{openTopic === index && <div className="help-topic-content"><p>{topic.intro}</p><ul>{topic.steps.map(step => <li key={step}>{step}</li>)}</ul></div>}</Card>)}</div><Card className="help-contact"><div><p className="eyebrow">Need more help?</p><h2>Contact your workspace administrator</h2><p>For access, billing, deletion, or security requests, contact the person who manages your workspace.</p></div><button type="button" className="secondary-button" onClick={() => onNavigate('Settings')}>Open Settings</button></Card></section>
 }
+
+const INSTALL_PLATFORMS = [
+  {
+    id: 'android',
+    title: 'Android',
+    icon: Smartphone,
+    eyebrow: 'Chrome or Edge',
+    description: 'Install WorkSpace from your Android browser and open it from the home screen.',
+    image: '/help/install-android.png',
+    imageAlt: 'Android Chrome menu with Add to Home screen highlighted',
+    steps: [
+      'Open WorkSpace in Chrome.',
+      'Tap the three-dot menu in the top-right corner.',
+      'Tap Add to Home screen or Install app.',
+      'Confirm by tapping Install or Add.',
+      'Open WorkSpace from your home screen.',
+    ],
+  },
+  {
+    id: 'iphone',
+    title: 'iPhone and iPad',
+    icon: Share2,
+    eyebrow: 'Safari',
+    description: 'Apple devices use Safari to add the app to the Home Screen.',
+    image: '/help/install-iphone.png',
+    imageAlt: 'iPhone Safari share sheet with Add to Home Screen highlighted',
+    steps: [
+      'Open WorkSpace in Safari.',
+      'Tap the Share button in the toolbar.',
+      'Scroll the share sheet and tap Add to Home Screen.',
+      'Tap Add in the top-right corner.',
+      'Open WorkSpace from your Home Screen.',
+    ],
+  },
+  {
+    id: 'desktop',
+    title: 'Desktop',
+    icon: MonitorDown,
+    eyebrow: 'Chrome or Edge',
+    description: 'Install WorkSpace as a desktop app with its own window and taskbar entry.',
+    image: '/help/install-desktop.png',
+    imageAlt: 'Desktop browser install menu with Install WorkSpace highlighted',
+    steps: [
+      'Open WorkSpace in Chrome or Edge.',
+      'Select the install icon in the address bar, or open the browser menu.',
+      'Choose Install app or Install this site as an app.',
+      'Select Install to confirm.',
+      'Open WorkSpace from your desktop or applications list.',
+    ],
+  },
+]
+
+function InstallAppView({ onNavigate }) {
+  return (
+    <section className="workspace-view install-app-view">
+      <WorkspaceViewHeading
+        title="Install WorkSpace"
+        subtitle="Add WorkSpace to your phone, tablet, or computer for quicker access."
+      />
+
+      <div className="install-app-intro">
+        <div>
+          <p className="eyebrow">Get the app</p>
+          <h2>Use WorkSpace like an app</h2>
+          <p>
+            Installation adds a WorkSpace icon to your device and opens it in its own
+            window. It uses the same account, workspace data, and notifications as the
+            browser version.
+          </p>
+        </div>
+        <div className="install-app-benefits" aria-label="Installation benefits">
+          <span><CheckCircle2 size={16} /> Faster access from your device</span>
+          <span><CheckCircle2 size={16} /> Opens in a focused app window</span>
+          <span><CheckCircle2 size={16} /> Keeps your existing account and data</span>
+        </div>
+      </div>
+
+      <div className="install-platform-grid">
+        {INSTALL_PLATFORMS.map(({ id, title, icon: Icon, eyebrow, description, image, imageAlt, steps }) => (
+          <Card className="install-platform" key={id}>
+            <header className="install-platform-header">
+              <span className="install-platform-icon"><Icon size={20} /></span>
+              <div>
+                <p className="eyebrow">{eyebrow}</p>
+                <h2>{title}</h2>
+              </div>
+            </header>
+            <p className="install-platform-description">{description}</p>
+            <figure className="install-screenshot">
+              <img src={image} alt={imageAlt} loading="lazy" decoding="async" />
+            </figure>
+            <ol className="install-steps">
+              {steps.map((step) => <li key={step}>{step}</li>)}
+            </ol>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="install-app-note">
+        <span className="install-app-note-icon"><Download size={19} /></span>
+        <div>
+          <h2>Cannot find the install option?</h2>
+          <p>
+            Use Chrome or Edge on Android and desktop, and Safari on iPhone or iPad.
+            If the option is missing, open Help center for browser and notification guidance.
+          </p>
+        </div>
+        <button type="button" className="secondary-button" onClick={() => onNavigate('Help')}>
+          Open Help center
+        </button>
+      </Card>
+    </section>
+  )
+}
+
 function LegalView() {
   const [document, setDocument] = useState('privacy')
   const [accepted, setAccepted] = useState(() => localStorage.getItem('workspace-legal-accepted-v1') === 'true')
@@ -232,4 +348,4 @@ function WhatsNew({ onOpen }) {
   </section>
 }
 
-export { HelpView, LegalView, WhatsNew, CookieConsent }
+export { HelpView, InstallAppView, LegalView, WhatsNew, CookieConsent }

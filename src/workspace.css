@@ -4311,6 +4311,108 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 .whats-new-body .whats-new-items { padding-top: 14px; }
 .whats-new-items li + li { margin-top: 4px; }
 
+/* Install app guide */
+.install-app-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 26px 28px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--workspace-surface), var(--workspace-surface-soft));
+}
+.install-app-intro h2 { margin: 3px 0 8px; font-size: clamp(1.35rem, 2.5vw, 1.9rem); }
+.install-app-intro p:not(.eyebrow) { max-width: 720px; margin: 0; color: var(--workspace-text-soft); line-height: 1.6; }
+.install-app-benefits { display: grid; gap: 9px; }
+.install-app-benefits span {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+  background: var(--workspace-surface);
+  color: var(--workspace-text);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.install-app-benefits svg { flex: 0 0 auto; margin-top: 1px; color: var(--teal); }
+.install-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.install-platform { min-width: 0; padding: 20px; }
+.install-platform-header { display: flex; align-items: center; gap: 12px; }
+.install-platform-header .eyebrow { margin: 0 0 2px; }
+.install-platform-header h2 { margin: 0; font-size: 1.08rem; }
+.install-platform-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-accent) 13%, var(--workspace-surface));
+  color: var(--brand-accent);
+}
+.install-platform-description { min-height: 48px; margin: 13px 0 15px; color: var(--workspace-text-soft); font-size: 13px; line-height: 1.55; }
+.install-screenshot {
+  margin: 0 0 17px;
+  overflow: hidden;
+  border: 1px solid var(--workspace-border);
+  border-radius: 12px;
+  background: #071a2e;
+}
+.install-screenshot img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
+.install-steps { margin: 0; padding-left: 20px; color: var(--workspace-text-soft); font-size: 13px; line-height: 1.5; }
+.install-steps li { padding-left: 2px; }
+.install-steps li + li { margin-top: 7px; }
+.install-steps li::marker { color: var(--teal); font-weight: 800; }
+.install-app-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 18px 20px;
+}
+.install-app-note-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--workspace-surface-soft);
+  color: var(--brand-accent);
+}
+.install-app-note h2 { margin: 0 0 4px; font-size: 1rem; }
+.install-app-note p { max-width: 760px; margin: 0; color: var(--workspace-text-soft); font-size: 13px; line-height: 1.5; }
+.install-app-note .secondary-button { width: auto; min-width: max-content; padding: 8px 14px; }
+
+@media (max-width: 1180px) {
+  .install-platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 800px) {
+  .install-app-intro { grid-template-columns: 1fr; padding: 22px; }
+  .install-platform-grid { grid-template-columns: 1fr; }
+  .install-platform-description { min-height: 0; }
+  .install-app-note { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .install-app-note .secondary-button { grid-column: 2; justify-self: start; }
+}
+
+@media (max-width: 520px) {
+  .install-app-intro { padding: 18px; }
+  .install-platform { padding: 16px; }
+  .install-app-note { grid-template-columns: 1fr; }
+  .install-app-note .secondary-button { grid-column: auto; }
+}
+
 /* Tailwind's dark: variant follows the app's existing data-theme toggle
    (document.documentElement.dataset.theme), not a .dark class. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));

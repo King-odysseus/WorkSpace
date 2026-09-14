@@ -35,6 +35,7 @@ import {
   ClipboardList,
   Clock3,
   Copy,
+  Download,
   Filter,
   Hash,
   LayoutDashboard,
@@ -166,6 +167,7 @@ import NotificationPermissionPrompt from "./components/NotificationPermissionPro
 import {
   CookieConsent,
   HelpView,
+  InstallAppView,
   LegalView,
   WhatsNew,
 } from "./components/StaticViews.jsx";
@@ -2034,6 +2036,7 @@ function App() {
           badge: whatsNewUnread ? 1 : 0,
           badgeTone: "info",
         },
+        { label: "Install app", icon: Download },
         { label: "Screen sharing", icon: MonitorUp },
       ],
     },
@@ -5717,6 +5720,7 @@ function WorkspaceView({
   if (active === "Import data") return null;
   if (active === "My planner") return <PersonalPlanner workspaceId={workspaceId} />;
   if (active === "What's new") return <WhatsNew onOpen={onWhatsNewSeen} />;
+  if (active === "Install app") return <InstallAppView onNavigate={onNavigate} />;
   if (active === "Help") return <HelpView onNavigate={onNavigate} />;
   if (active === "Legal") return <LegalView />;
 

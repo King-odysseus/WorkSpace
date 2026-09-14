@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import { WhatsNew } from './StaticViews.jsx'
+import { InstallAppView, WhatsNew } from './StaticViews.jsx'
 import { RELEASE_NOTES } from '../lib/release-notes.js'
 
 afterEach(() => {
@@ -37,4 +37,35 @@ it('clears the sidebar marker as soon as it is opened', () => {
 
   expect(onOpen).toHaveBeenCalled()
   expect(window.localStorage.getItem('workspace-whats-new-seen-v1')).toBeTruthy()
+})
+
+it('shows Android, iPhone, and desktop installation steps with screenshots', () => {
+  render(<InstallAppView onNavigate={vi.fn()} />)
+
+  expect(screen.getByRole('heading', { name: 'Android' })).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'iPhone and iPad' })).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Desktop' })).toBeVisible()
+
+  expect(screen.getByRole('img', { name: /Android Chrome menu/ })).toHaveAttribute(
+    'src',
+    '/help/install-android.png',
+  )
+  expect(screen.getByRole('img', { name: /iPhone Safari share sheet/ })).toHaveAttribute(
+    'src',
+    '/help/install-iphone.png',
+  )
+  expect(screen.getByRole('img', { name: /Desktop browser install menu/ })).toHaveAttribute(
+    'src',
+    '/help/install-desktop.png',
+  )
+})
+
+it('opens the Help center when the install option is unavailable', async () => {
+  const user = userEvent.setup()
+  const onNavigate = vi.fn()
+
+  render(<InstallAppView onNavigate={onNavigate} />)
+  await user.click(screen.getByRole('button', { name: 'Open Help center' }))
+
+  expect(onNavigate).toHaveBeenCalledWith('Help')
 })
