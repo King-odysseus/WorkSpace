@@ -4394,6 +4394,50 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 .install-app-note p { max-width: 760px; margin: 0; color: var(--workspace-text-soft); font-size: 13px; line-height: 1.5; }
 .install-app-note .secondary-button { width: auto; min-width: max-content; padding: 8px 14px; }
 
+/* Post-login reminder that the installable app is available on this device. */
+.install-app-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 24px 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 28%, var(--workspace-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-accent) 7%, var(--workspace-surface));
+  color: var(--workspace-text);
+}
+.install-app-banner-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--brand-accent) 15%, var(--workspace-surface));
+  color: var(--brand-accent);
+}
+.install-app-banner-copy { display: grid; flex: 1 1 320px; gap: 2px; min-width: 0; }
+.install-app-banner-copy strong { font-size: 13px; }
+.install-app-banner-copy span { color: var(--workspace-text-soft); font-size: 12px; line-height: 1.45; }
+.install-app-banner-actions { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.install-app-banner-actions .primary-button { width: auto; min-width: max-content; padding: 8px 14px; }
+.install-app-banner-dismiss {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--workspace-text-soft);
+  cursor: pointer;
+}
+.install-app-banner-dismiss:hover,
+.install-app-banner-dismiss:focus-visible { background: var(--workspace-surface-soft); color: var(--workspace-text); outline: none; }
+
 @media (max-width: 1180px) {
   .install-platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -4404,6 +4448,7 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   .install-platform-description { min-height: 0; }
   .install-app-note { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
   .install-app-note .secondary-button { grid-column: 2; justify-self: start; }
+  .install-app-banner { margin: 0 18px 12px; }
 }
 
 @media (max-width: 520px) {
@@ -4411,6 +4456,9 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   .install-platform { padding: 16px; }
   .install-app-note { grid-template-columns: 1fr; }
   .install-app-note .secondary-button { grid-column: auto; }
+  .install-app-banner { align-items: flex-start; margin: 0 12px 12px; padding: 12px; }
+  .install-app-banner-copy { flex-basis: calc(100% - 48px); }
+  .install-app-banner-actions { width: 100%; justify-content: flex-end; }
 }
 
 /* Tailwind's dark: variant follows the app's existing data-theme toggle

@@ -164,6 +164,8 @@ import { startNotificationAlerts } from "./lib/notification-alerts.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
 import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt.jsx";
+import InstallAppBanner from "./components/InstallAppBanner.jsx";
+import { startInstallPromptCapture } from "./lib/install-prompt.js";
 import {
   CookieConsent,
   HelpView,
@@ -2719,6 +2721,11 @@ function App() {
             </div>
           </div>
         </header>
+        <InstallAppBanner
+          key={session.user.id}
+          userId={session.user.id}
+          onOpenGuide={() => setActive("Install app")}
+        />
         <NotificationPermissionPrompt key={session.user.id} unreadCount={notificationUnreadCount} />
         <main
           id="main-content"
@@ -7259,6 +7266,7 @@ function BrandedStatusScreen({ loading = false, error = "" }) {
 // The banner sits outside the error boundary on purpose: if a bad build has
 // taken the app down to the error screen, offering the new one is exactly what
 // the user needs, and the boundary would otherwise replace the banner too.
+startInstallPromptCapture();
 createRoot(document.getElementById("root")).render(
   <>
     <AppUpdateBanner />
