@@ -2389,17 +2389,17 @@ function App() {
               </button>
               {notificationOpen && (
                 <div className="fixed left-4 right-4 top-16 z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80">
-                  <div className="flex items-center justify-between border-b border-border-light px-4 py-3">
-                    <p className="text-sm font-bold text-navy">Notifications</p>
+                  <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
+                    <p className="text-xs font-bold text-navy">Notifications</p>
                     <button
                       type="button"
                       onClick={markNotificationsRead}
-                      className="text-xs font-medium text-primary hover:underline"
+                      className="text-[11px] font-medium text-primary hover:underline"
                     >
                       Mark all read
                     </button>
                   </div>
-                  <div className="max-h-[320px] divide-y divide-border-light overflow-y-auto">
+                  <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
                     {workspaceData.notifications.length ? (
                       workspaceData.notifications
                         .slice(0, 5)
@@ -2409,16 +2409,20 @@ function App() {
                             key={notification.id}
                             onClick={() => openNotification(notification)}
                             aria-label={`Open ${notification.title}`}
-                            className="flex w-full flex-col items-start gap-1 px-4 py-3 text-left hover:bg-surface-secondary transition-colors"
+                            className={`group flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
                           >
-                            <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
-                              {notification.title}
-                              {!notification.read && (
-                                <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
-                              )}
-                            </span>
-                            <span className="truncate text-xs text-text-muted">
-                              {notification.body || "Workspace update"}
+                            <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`} aria-hidden="true" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
+                                {notification.title}
+                              </span>
+                              <span className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-text-muted">
+                                {notification.body || "Workspace update"}
+                              </span>
+                              <time className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
+                                <Clock3 size={10} aria-hidden="true" />
+                                {formatDateTime(notification.created_at)}
+                              </time>
                             </span>
                           </button>
                         ))
@@ -2426,14 +2430,14 @@ function App() {
                       <EmptyState text="No notifications yet. Updates from your teammates land here, and your own check-ins and actions are listed under Activity." />
                     )}
                   </div>
-                  <div className="border-t border-border-light px-4 py-2.5">
+                  <div className="border-t border-border-light px-3.5 py-2">
                     <button
                       type="button"
                       onClick={() => {
                         setNotificationOpen(false);
                         setActive("Notifications");
                       }}
-                      className="text-xs font-semibold text-primary hover:underline"
+                      className="text-[11px] font-semibold text-primary hover:underline"
                     >
                       View all notifications
                     </button>
@@ -5505,14 +5509,22 @@ function WorkspaceView({
                   type="button"
                   key={notification.id}
                   onClick={() => onOpenNotification(notification)}
-                  className="flex w-full flex-col items-start gap-1 px-4 py-3 text-left hover:bg-surface-secondary"
+                  className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
                 >
-                  <span className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                    {notification.title}
-                    <span className="text-xs font-normal text-text-muted">{notification.read ? "Read" : "Unread"}</span>
+                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-sm font-semibold text-text-primary">{notification.title}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${notification.read ? "bg-surface-secondary text-text-muted" : "bg-primary/10 text-primary"}`}>
+                        {notification.read ? "Read" : "Unread"}
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-text-muted">{notification.body || "Workspace update"}</span>
+                    <time className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
+                      <Clock3 size={11} aria-hidden="true" />
+                      {formatDateTime(notification.created_at)}
+                    </time>
                   </span>
-                  <span className="text-xs text-text-muted">{notification.body || "Workspace update"}</span>
-                  <span className="text-xs text-text-muted">{formatRelativeActivityTime(notification.created_at)}</span>
                 </button>
               ))}
             </div>
