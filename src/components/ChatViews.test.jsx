@@ -610,8 +610,79 @@ it('filters the channel list to unread channels', async () => {
   expect(await screen.findByRole('button', { name: 'general' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('tab', { name: /^Unread/ }))
 
-  expect(screen.getByRole('button', { name: 'product-launch 1' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'product-launch, 1 unread message' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'general' })).not.toBeInTheDocument()
+})
+
+it('shows the unread boundary before the first new channel message', async () => {
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/chat-messages/?channel=general': { messages: [] },
+    '/chat-messages/?channel=product-launch': {
+      messages: [
+        { id: 41, author_id: 9, author_name: 'Dana Reed', message: 'Earlier update.', created_at: '2026-09-12T09:00:00Z', channel: 'product-launch' },
+        { id: 42, author_id: 9, author_name: 'Dana Reed', message: 'Deployment is ready.', created_at: '2026-09-12T10:00:00Z', channel: 'product-launch' },
+        { id: 43, author_id: 8, author_name: 'Priya Shah', message: 'Thanks, checking now.', created_at: '2026-09-12T10:05:00Z', channel: 'product-launch' },
+      ],
+    },
+    '/notifications/': { status: 200, body: {} },
+  })
+  render(
+    <ChatWorkspaceView
+      viewType="channels"
+      data={{
+        members: [{ id: 9, first_name: 'Dana', last_name: 'Reed' }],
+        channels: [
+          { id: 20, name: 'general', created_by: 9, is_private: false, member_ids: [] },
+          { id: 21, name: 'product-launch', created_by: 9, is_private: false, member_ids: [] },
+        ],
+        messages: [],
+        directConversations: [],
+        notifications: [
+          { target_type: 'chat_channel', target_id: 'product-launch', group_key: 'message:42', read: false },
+          { target_type: 'chat_channel', target_id: 'product-launch', group_key: 'message:43', read: false },
+        ],
+      }}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      onRefresh={vi.fn()}
+      onError={vi.fn()}
+      onConfirm={vi.fn()}
+      onNavigate={vi.fn()}
+    />,
+  )
+
+  fireEvent.click(await screen.findByRole('button', { name: 'product-launch, 2 unread messages' }))
+
+  const divider = await screen.findByRole('separator', { name: 'New messages' })
+  expect(divider.nextElementSibling).toHaveAttribute('data-message-id', '42')
+  expect(divider.nextElementSibling).toHaveTextContent('Deployment is ready.')
+  expect(fetchMock.mock.calls.some(([url, init = {}]) => String(url).includes('/notifications/') && init.method === 'PATCH' && JSON.parse(init.body).target_id === 'product-launch')).toBe(true)
+})
+
+it('shows the unread boundary in a direct conversation', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': {
+      messages: [
+        { id: 1, author_name: 'Dana Reed', message: 'Earlier note.', created_at: '2026-09-12T09:00:00Z' },
+        { id: 2, author_name: 'Dana Reed', message: 'Latest note.', created_at: '2026-09-12T10:00:00Z' },
+      ],
+    },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat({
+    ...dataFor(),
+    notifications: [{ target_type: 'direct_conversation', target_id: '11', group_key: 'message:2', read: false }],
+  })
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Dana Reed, 1 unread message' }))
+
+  const divider = await screen.findByRole('separator', { name: 'New messages' })
+  expect(divider.nextElementSibling).toHaveAttribute('data-message-id', '2')
+  expect(divider.nextElementSibling).toHaveTextContent('Latest note.')
 })
 
 it('collects shared files and documents in the Files pane', async () => {

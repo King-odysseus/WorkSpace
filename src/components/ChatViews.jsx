@@ -4,7 +4,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 // Channels and direct messages, plus the shared composer modal used for every
 // "create a record" flow (events, projects, check-ins, chat, follow-ups, invites).
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Archive, ArchiveRestore, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
@@ -153,6 +153,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   // that fades, and is cleared on a timer.
   const [revealMessageId, setRevealMessageId] = useState(null)
   const [highlightMessageId, setHighlightMessageId] = useState(null)
+  const [unreadMarker, setUnreadMarker] = useState(null)
   const messageScrollRef = useRef(null)
   const messageInputRef = useRef(null)
   const draftKeyRef = useRef(null)
@@ -176,6 +177,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setMentionOpen(false)
     setMentionQuery('')
     setError('')
+    setUnreadMarker(null)
   }, [viewType])
 
   useEffect(() => {
@@ -259,9 +261,25 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     ;(groups[key] ||= []).push(message)
     return groups
   }, {})
-  const unreadCountFor = (targetType, targetId) => data.notifications.filter(
+  const unreadNotificationsFor = (targetType, targetId) => data.notifications.filter(
     notification => notification.target_type === targetType && notification.target_id === String(targetId) && !notification.read,
-  ).length
+  )
+  const unreadCountFor = (targetType, targetId) => unreadNotificationsFor(targetType, targetId).length
+  const notificationMessageId = notification => {
+    const match = String(notification.group_key || '').match(/^message:(\d+)$/)
+    return match ? Number(match[1]) : null
+  }
+  const unreadMarkerFor = (targetType, targetId) => {
+    const notifications = unreadNotificationsFor(targetType, targetId)
+    if (!notifications.length) return null
+    const messageIds = notifications.map(notificationMessageId).filter(Number.isFinite)
+    return {
+      targetType,
+      targetId: String(targetId),
+      firstMessageId: messageIds.length ? Math.min(...messageIds) : null,
+      count: notifications.length,
+    }
+  }
   const unreadTotal = mode === 'channels'
     ? channels.reduce((total, channel) => total + unreadCountFor('chat_channel', channel.name), 0)
     : conversations.reduce((total, conversation) => total + unreadCountFor('direct_conversation', conversation.id), 0)
@@ -303,6 +321,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   const lastChannelMessageId = visibleChannelMessages.length ? visibleChannelMessages[visibleChannelMessages.length - 1].id : null
   const lastDirectMessageId = visibleDirectMessages.length ? visibleDirectMessages[visibleDirectMessages.length - 1].id : null
+  const activeThreadType = mode === 'channels' ? 'chat_channel' : 'direct_conversation'
+  const activeThreadId = mode === 'channels' ? selectedChannel : selectedConversationId
+  const activeUnreadMarker = unreadMarker && unreadMarker.targetType === activeThreadType && String(unreadMarker.targetId) === String(activeThreadId)
+    ? unreadMarker
+    : null
+  const firstUnreadMessageId = activeUnreadMarker?.firstMessageId ?? null
 
   // Pin the feed to the newest message by scrolling the feed element itself.
   // scrollIntoView also scrolls every scrollable ancestor, which made the whole
@@ -488,6 +512,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setSelectedConversationId(null)
     setDirectMessages([])
     setDirectMessageConversationId(null)
+    setUnreadMarker(null)
   }
 
   const archiveConversation = async conversation => {
@@ -613,6 +638,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       }
     } catch (readError) { console.warn('Chat notifications could not be marked read.', readError) }
   }
+  const captureUnreadMarker = (targetType, targetId) => setUnreadMarker(unreadMarkerFor(targetType, targetId))
   const selectChannel = channelName => {
     setSelectedChannel(channelName)
     setSearch('')
@@ -621,6 +647,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     // Opening a thread by hand is a fresh start, so any message an earlier alert
     // was holding the reader on stops mattering.
     setRevealMessageId(null)
+    captureUnreadMarker('chat_channel', channelName)
     markConversationRead('chat_channel', channelName)
   }
   const selectConversation = conversationId => {
@@ -629,6 +656,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setReplyTo(null)
     setActivePane('posts')
     setRevealMessageId(null)
+    captureUnreadMarker('direct_conversation', conversationId)
     markConversationRead('direct_conversation', conversationId)
   }
   const toggleReaction = async (message, emoji) => {
@@ -687,7 +715,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     } catch (deleteError) { setError(deleteError.message) }
   }
   useEffect(() => {
-    if (mode === 'channels' && selectedChannel) markConversationRead('chat_channel', selectedChannel)
+    if (mode === 'channels' && selectedChannel) {
+      captureUnreadMarker('chat_channel', selectedChannel)
+      markConversationRead('chat_channel', selectedChannel)
+    }
   }, [mode, selectedChannel, workspaceId])
   const renderMessage = message => {
     const parent = message.parent_id ? (mode === 'channels' ? activeChannelMessages : directMessages).find(item => item.id === message.parent_id) : null
@@ -738,13 +769,18 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     </div>
   }
 
+  const renderMessageWithUnreadMarker = message => <Fragment key={message.id}>
+    {firstUnreadMessageId !== null && String(message.id) === String(firstUnreadMessageId) && <div className="chat-new-message-divider" role="separator" aria-label="New messages"><span>New messages</span></div>}
+    {renderMessage(message)}
+  </Fragment>
+
   const renderPostsPane = () => <div className="chat-message-scroll" ref={messageScrollRef}>
     {mode === 'channels' ? (visibleChannelMessages.length
-      ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : formatDay(date)}</h3>{messages.map(renderMessage)}</div>)
+      ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : formatDay(date)}</h3>{messages.map(renderMessageWithUnreadMarker)}</div>)
       : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>)
       : selectedConversation
         ? (directThreadReady
-          ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessage) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
+          ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessageWithUnreadMarker) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
       : directLoading ? <SkeletonGroup className="chat-feed-skeleton" label="Loading messages">
         {[0, 1, 2].map(item => <div className="chat-message-skeleton" key={item}>
           <Skeleton variant="circle" />
@@ -791,11 +827,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   const renderChannelRow = channel => {
     const unread = unreadCountFor('chat_channel', channel.name)
+    const unreadLabel = `${unread} unread message${unread === 1 ? '' : 's'}`
     return <div className="channel-row-wrap" key={channel.id}>
-      <button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''}`} onClick={() => selectChannel(channel.name)}>
+      <button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''} ${unread > 0 ? 'has-unread' : ''}`} onClick={() => selectChannel(channel.name)} aria-label={unread > 0 ? `${channel.name}, ${unreadLabel}` : undefined}>
         {channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}
         <span className="channel-name">{channel.name}</span>
-        {unread > 0 && <Badge>{unread}</Badge>}
+        {unread > 0 && <Badge aria-label={unreadLabel}>{unread > 99 ? '99+' : unread}</Badge>}
       </button>
       {channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}
     </div>
@@ -803,13 +840,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   const renderDirectConversationRow = (conversation, archived = false) => {
     const unread = unreadCountFor('direct_conversation', conversation.id)
+    const unreadLabel = `${unread} unread message${unread === 1 ? '' : 's'}`
     const other = directOtherMember(conversation)
     const otherPresence = other ? effectivePresence(other) : null
     return <div className="direct-row-wrap" key={conversation.id}>
-      <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''}`} onClick={() => selectConversation(conversation.id)}>
+      <button type="button" className={`direct-row ${selectedConversationId === conversation.id ? 'active' : ''} ${unread > 0 ? 'has-unread' : ''}`} onClick={() => selectConversation(conversation.id)} aria-label={unread > 0 ? `${conversation.title}, ${unreadLabel}` : undefined}>
         <span className={`avatar blue small ${conversation.is_group ? 'group-chat-avatar' : ''}`}>{conversation.is_group ? <Users size={14} /> : conversation.title.slice(0, 2).toUpperCase()}{otherPresence && <span className={`presence-dot presence-${otherPresence}`} title={PRESENCE_LABEL[otherPresence] || otherPresence} />}</span>
         <span><strong>{conversation.title}</strong><small>{conversation.is_group ? `Group - ${conversation.participants.length} people` : conversation.last_message_deleted ? 'This message was deleted' : conversation.last_message || 'Direct chat'}</small></span>
-        {unread > 0 && <Badge>{unread}</Badge>}
+        {unread > 0 && <Badge aria-label={unreadLabel}>{unread > 99 ? '99+' : unread}</Badge>}
       </button>
       <div className="direct-row-actions">
         {!archived && conversation.is_group && <button type="button" onClick={() => openParticipantEditor(conversation)} aria-label={`Edit participants for ${conversation.title}`} title="Edit participants"><Pencil size={13} /></button>}
