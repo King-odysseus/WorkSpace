@@ -2202,6 +2202,7 @@ html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, va
 .direct-row-actions button:hover, .direct-row-actions button:focus-visible { background:var(--workspace-surface-soft); color:#1D4ED8; opacity:1; }
 .direct-row-actions .direct-row-archive:hover, .direct-row-actions .direct-row-archive:focus-visible { color:#B45309; }
 .direct-row-actions .direct-row-restore:hover, .direct-row-actions .direct-row-restore:focus-visible { color:#047857; }
+.direct-row-actions .direct-row-delete:hover, .direct-row-actions .direct-row-delete:focus-visible { color:#B42318; }
 .direct-row { display: flex; width: 100%; align-items: center; gap: 9px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: var(--workspace-text); text-align: left; cursor: pointer; }
 .direct-row.active { background: #EAF0FF; color: #1D4ED8; }
 .direct-row > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import DirectConversation, DirectConversationRead, Membership, Workspace, WorkspaceNotification
+from .models import DirectConversation, DirectConversationRead, DirectMessage, Membership, Workspace, WorkspaceNotification
 from .pulse import workspace_fingerprint
 
 
@@ -167,6 +167,34 @@ class DirectConversationManagementTests(TestCase):
         self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.member))
         self.assertIn(conversation['id'], self.listed_conversation_ids(self.owner, archived=True))
         self.assertIn(conversation['id'], self.listed_conversation_ids(self.member, archived=True))
+
+    def test_conversation_and_its_history_can_be_permanently_deleted(self):
+        conversation = self.create_conversation([self.member.id])
+        sent = self.client.post(
+            reverse('direct-message-list', args=[conversation['id']]),
+            data=json.dumps({'message': 'Delete this history'}),
+            content_type='application/json',
+        )
+        self.assertEqual(sent.status_code, 201)
+        self.assertTrue(WorkspaceNotification.objects.filter(target_type='direct_conversation', target_id=str(conversation['id'])).exists())
+
+        deleted = self.client.delete(reverse('direct-conversation-delete', args=[conversation['id']]))
+
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(deleted.json(), {'deleted': conversation['id']})
+        self.assertFalse(DirectConversation.objects.filter(id=conversation['id']).exists())
+        self.assertFalse(DirectMessage.objects.filter(conversation_id=conversation['id']).exists())
+        self.assertFalse(WorkspaceNotification.objects.filter(target_type='direct_conversation', target_id=str(conversation['id'])).exists())
+        self.assertNotIn(conversation['id'], self.listed_conversation_ids(self.member))
+
+    def test_an_outsider_cannot_permanently_delete_a_conversation(self):
+        conversation = self.create_conversation([self.member.id])
+        self.client.force_login(self.outsider)
+
+        deleted = self.client.delete(reverse('direct-conversation-delete', args=[conversation['id']]))
+
+        self.assertEqual(deleted.status_code, 404)
+        self.assertTrue(DirectConversation.objects.filter(id=conversation['id']).exists())
 
     def test_an_archived_chat_stays_archived_when_a_message_arrives(self):
         conversation = self.create_conversation([self.member.id])

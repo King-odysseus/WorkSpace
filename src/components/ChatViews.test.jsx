@@ -502,6 +502,27 @@ it('archives a conversation through the confirm dialog', async () => {
   expect(onRefresh).toHaveBeenCalled()
 })
 
+it('permanently deletes a conversation and its history through the confirm dialog', async () => {
+  const onRefresh = vi.fn()
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/delete/': { deleted: 11 },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor(), onRefresh, onConfirm)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete conversation with Dana Reed' }))
+
+  await waitFor(() => expect(onConfirm).toHaveBeenCalled())
+  expect(onConfirm.mock.calls[0][0]).toMatch(/all of its messages for everyone/i)
+  expect(onConfirm.mock.calls[0][0]).toMatch(/cannot be undone/i)
+  const deleteCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/11/delete/') && init.method === 'DELETE')
+  expect(deleteCall).toBeTruthy()
+  expect(onRefresh).toHaveBeenCalled()
+})
+
 it('edits the participants of a group chat', async () => {
   const group = {
     id: 13,

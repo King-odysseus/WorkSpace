@@ -4150,6 +4150,35 @@ def direct_conversation_restore(request, conversation_id):
     return JsonResponse({'conversation': conversation.as_dict(request.user)})
 
 
+@require_http_methods(['DELETE'])
+def direct_conversation_delete(request, conversation_id):
+    """Permanently delete a conversation and every message in it.
+
+    The existing DELETE route archives a chat so it can be restored. This route
+    is deliberately separate and cascades through messages, reactions and read
+    state for every participant.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    conversation = DirectConversation.objects.filter(id=conversation_id, participants=request.user).first()
+    if conversation is None:
+        return JsonResponse({'error': 'Conversation was not found.'}, status=404)
+    _, error = require_workspace_member(request, conversation.workspace_id)
+    if error:
+        return error
+
+    workspace_id = conversation.workspace_id
+    target_id = str(conversation.id)
+    with transaction.atomic():
+        conversation.delete()
+        WorkspaceNotification.objects.filter(
+            workspace_id=workspace_id,
+            target_type='direct_conversation',
+            target_id=target_id,
+        ).delete()
+    return JsonResponse({'deleted': conversation_id})
+
+
 @require_http_methods(['GET', 'POST'])
 def direct_message_list(request, conversation_id):
     if not request.user.is_authenticated:

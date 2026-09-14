@@ -6,7 +6,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Archive, ArchiveRestore, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -548,6 +548,25 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     }
   }
 
+  const deleteConversation = async conversation => {
+    const confirmed = await onConfirm(
+      'Delete this conversation and all of its messages for everyone? This cannot be undone.',
+      { title: 'Delete chat', confirmLabel: 'Delete conversation' },
+    )
+    if (!confirmed) return
+    try {
+      const response = await fetch(`/api/direct-conversations/${conversation.id}/delete/`, {
+        method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() },
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Conversation could not be deleted.')
+      closeConversationIfOpen(conversation.id)
+      onRefresh()
+    } catch (deleteError) {
+      onError(deleteError.message)
+    }
+  }
+
   const restoreConversation = async conversation => {
     try {
       const response = await fetch(`/api/direct-conversations/${conversation.id}/restore/`, {
@@ -868,6 +887,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         {archived
           ? <button type="button" className="direct-row-restore" onClick={() => restoreConversation(conversation)} aria-label={`Restore ${conversation.title} chat`} title="Restore chat"><ArchiveRestore size={13} /></button>
           : <button type="button" className="direct-row-archive" onClick={() => archiveConversation(conversation)} aria-label={`Archive ${conversation.title} chat`} title="Archive chat"><Archive size={13} /></button>}
+        <button type="button" className="direct-row-delete" onClick={() => deleteConversation(conversation)} aria-label={`Delete conversation with ${conversation.title}`} title="Delete conversation"><Trash2 size={13} /></button>
       </div>
     </div>
   }
