@@ -76,7 +76,7 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
 .activity-list { padding: 0 22px; }
 .activity-item { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 14px; }
 .activity-item p { font-size: 10px; line-height: 1.45; color: #7d8999; margin: 1px 0; }
-.activity-item strong { font-weight: 700; color: #3b485b; }
+.activity-item strong { font-weight: 700; color: #3b485b; margin-right: 4px; }
 .activity-item p span { display: block; color: #abb3be; font-size: 9px; margin-top: 2px; }
 
 .modal-backdrop { position: fixed; inset: 0; background: #08182a9c; display: grid; place-items: center; z-index: 10; }
