@@ -12,7 +12,7 @@ import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { PRESENCE_LABEL, effectivePresence, formatDate, formatDay, formatRelativeActivityTime, getCsrfToken, isImageFileName, toDateKey } from '../lib/workspace-format.js'
-import { takePendingDirectMessage } from '../lib/chat-navigation.js'
+import { takePendingChatThread, takePendingDirectMessage } from '../lib/chat-navigation.js'
 
 const EMOJI_CATEGORIES = [
   ['Smileys', '😀', ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😋', '😛', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '🥺', '😢', '😭', '😤', '😠', '😡', '🤯', '😳', '🥵', '🥶', '😱', '😨', '🤗', '🤔', '🫡', '🤭', '🫢', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😴', '🤤', '😷', '🤒', '🤕']],
@@ -108,7 +108,7 @@ function writeChatDraft(workspaceId, targetKey, value) {
   }
 }
 
-function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefresh, onError, onConfirm, onNavigate }) {
+function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefresh, onError, onConfirm, onNavigate, threadRequest = 0 }) {
   const mode = viewType
   const [selectedChannel, setSelectedChannel] = useState('general')
   const [selectedConversationId, setSelectedConversationId] = useState(null)
@@ -385,6 +385,17 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const memberId = Number(takePendingDirectMessage())
     if (memberId && memberId !== Number(currentUserId)) openDirectConversation([memberId])
   }, [currentUserId, workspaceId, submitting])
+  // A notification names the thread it is about, so opening the alert has to
+  // land on that thread and not just on this view. `threadRequest` is a counter
+  // the shell bumps on every open, which also covers the case where the reader
+  // is already on this view: a prop change re-runs the effect, where a mount-only
+  // effect would have been skipped.
+  useEffect(() => {
+    const thread = takePendingChatThread()
+    if (!thread) return
+    if (thread.targetType === 'chat_channel') selectChannel(thread.targetId)
+    else selectConversation(Number(thread.targetId))
+  }, [threadRequest, workspaceId])
 
   const deleteChannel = async channel => {
     if (!(await onConfirm(`Delete #${channel.name} and all of its messages?`, { title: 'Delete channel', confirmLabel: 'Delete channel' }))) return
@@ -611,9 +622,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const editedAt = edit ? edit.edited_at : message.edited_at
     const deletedAt = messageDeletes[message.id]?.deleted_at || message.deleted_at
     const isEditing = editingMessageId === message.id
+    const hasMessageActions = !isEditing && !deletedAt
     const receiptScope = mode === 'direct' && !selectedConversation?.is_group ? '' : ' by everyone'
     const receiptLabel = message.read ? `Read${receiptScope}` : message.delivered ? 'Delivered' : 'Sent'
-    return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''}`} key={message.id}>
+    return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''} ${hasMessageActions ? 'chat-message-has-actions' : ''}`} key={message.id}>
       <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={effectivePresence(author)} small />
       <div className="chat-message-body">
         <div className="chat-message-meta">
@@ -631,11 +643,13 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
               <button type="button" className="chat-edit-cancel" onClick={cancelEditing}>Cancel</button>
             </div>
           </div> : deletedAt ? <p className="chat-deleted-text" title={`Deleted ${formatRelativeActivityTime(deletedAt)}`}>This message was deleted</p> : <p>{renderMessageText(bodyText)}</p>}
-          {!isEditing && !deletedAt && <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />}
-          {!isEditing && !deletedAt && !message.parent_id && <button type="button" className="chat-reply-button" onClick={() => setReplyTo(message)}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>}
-          {!isEditing && isMine && !deletedAt && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
-          {!isEditing && isMine && !deletedAt && <button type="button" className="chat-delete-button" onClick={() => deleteMessage(message)} aria-label="Delete message">Delete</button>}
         </div>
+        {hasMessageActions && <div className={`chat-message-actions ${reactions.length ? 'has-reactions' : ''}`}>
+          <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />
+          <button type="button" className="chat-reply-button" onClick={() => setReplyTo(message)}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>
+          {isMine && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
+          {isMine && <button type="button" className="chat-delete-button" onClick={() => deleteMessage(message)} aria-label="Delete message">Delete</button>}
+        </div>}
         {!deletedAt && (message.shared_documents || []).map(document => <div className="chat-shared-card chat-shared-card-disabled" key={`doc-${document.id}`}><FileText size={16} /><span><strong>{document.title}</strong><small>Document sharing is temporarily unavailable</small></span></div>)}
         {!deletedAt && (message.shared_files || []).map(file => isImageFileName(file.original_name) && file.url ? <a className="chat-shared-image" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer" aria-label={`Open image ${file.original_name}`}><img src={file.url} alt={file.original_name} loading="lazy" /></a> : <a className="chat-shared-card" key={`file-${file.id}`} href={file.url} target="_blank" rel="noreferrer"><FileText size={16} /><span><strong>{file.original_name}</strong><small>Open or download file</small></span><Download size={14} /></a>)}
       </div>

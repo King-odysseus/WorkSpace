@@ -3935,7 +3935,7 @@ def chat_message_list(request, workspace_id):
         parent_id, id_error = parse_int(payload['parent_id'], 'Parent message')
         if id_error:
             return JsonResponse({'error': id_error}, status=400)
-        parent = ChatMessage.objects.filter(id=parent_id, workspace_id=workspace_id, channel=channel, parent__isnull=True).first()
+        parent = ChatMessage.objects.filter(id=parent_id, workspace_id=workspace_id, channel=channel).first()
         if parent is None:
             return JsonResponse({'error': 'The parent message was not found in this channel.'}, status=404)
     shared_documents, shared_files = shared_chat_items(workspace_id, payload)
@@ -4102,7 +4102,7 @@ def direct_message_list(request, conversation_id):
         parent_id, id_error = parse_int(data['parent_id'], 'Parent message')
         if id_error:
             return JsonResponse({'error': id_error}, status=400)
-        parent = DirectMessage.objects.filter(id=parent_id, conversation=conversation, parent__isnull=True).first()
+        parent = DirectMessage.objects.filter(id=parent_id, conversation=conversation).first()
         if parent is None:
             return JsonResponse({'error': 'The parent message was not found in this conversation.'}, status=404)
     shared_documents, shared_files = shared_chat_items(conversation.workspace_id, data)

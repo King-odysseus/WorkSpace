@@ -177,6 +177,39 @@ it('opens the full emoji picker from the reaction plus and posts the choice', as
   expect(reactionCall[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ emoji: '🥳' }) })
 })
 
+it('offers Reply on a reply and sends the reply id as the parent', async () => {
+  const messages = [
+    { id: 1, author_id: 9, author_name: 'Dana Reed', message: 'Can you review this?', created_at: '2026-09-12T10:00:00Z', reply_count: 1 },
+    { id: 2, author_id: currentUserId, author_name: 'Ada Lane', message: 'Yes, I will.', created_at: '2026-09-12T10:01:00Z', parent_id: 1 },
+  ]
+  const sent = { id: 3, author_id: currentUserId, author_name: 'Ada Lane', message: 'Thanks again.', created_at: '2026-09-12T10:02:00Z', parent_id: 2 }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages, message: sent },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByText('Yes, I will.')
+
+  const replyButton = screen.getByRole('button', { name: 'Reply' })
+  expect(replyButton.closest('.chat-message-actions')).not.toBeNull()
+  expect(replyButton.closest('.chat-message-bubble')).toBeNull()
+  fireEvent.click(replyButton)
+  expect(screen.getByText(/Replying to/)).toBeInTheDocument()
+
+  const input = screen.getByRole('textbox', { name: 'Message' })
+  fireEvent.change(input, { target: { value: 'Thanks again.' } })
+  fireEvent.submit(input.closest('form'))
+
+  await waitFor(() => {
+    const sendCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/11/messages/') && init.method === 'POST')
+    expect(sendCall).toBeTruthy()
+    expect(JSON.parse(sendCall[1].body)).toMatchObject({ message: 'Thanks again.', parent_id: 2 })
+  })
+})
+
 it('opens the compact composer emoji popup and inserts the choice', async () => {
   mockApi({
     '/documents/': { documents: [] },

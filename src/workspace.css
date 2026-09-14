@@ -3834,10 +3834,11 @@ label > [data-slot='select-trigger'].app-select-trigger { width:100%; }
 .chat-workspace-view .chat-conversation-list { min-height:0; margin:0; border:0; border-right:1px solid var(--workspace-border); border-radius:0; box-shadow:none; overflow-y:auto; }
 .chat-workspace-view .chat-feed { height:100%; min-height:0; max-height:none; border:0; border-radius:0; box-shadow:none; }
 .chat-workspace-view .chat-message-scroll { flex:1 1 auto; min-height:0; padding:4px 16px 8px; }
-.chat-workspace-view .chat-message { min-height:0; gap:8px; align-items:flex-start; margin:0; padding:6px 0; }
+.chat-workspace-view .chat-message { position:relative; min-height:0; gap:8px; align-items:flex-start; margin:0; padding:6px 0; }
+.chat-workspace-view .chat-message.chat-message-has-actions { padding:13px 14px 42px; }
 .chat-workspace-view .chat-message + .chat-message { margin-top:0; }
 .chat-workspace-view .chat-message > .avatar { flex:0 0 auto; margin-top:2px; }
-.chat-workspace-view .chat-message-body { min-height:0; }
+.chat-workspace-view .chat-message-body { position:relative; min-height:0; }
 .chat-workspace-view .chat-member-name { padding:0; border:0; background:transparent; color:var(--workspace-text); cursor:pointer; font:inherit; font-weight:700; text-align:left; }
 .chat-workspace-view .chat-member-name:hover, .chat-workspace-view .chat-member-name:focus-visible { color:var(--workspace-primary); text-decoration:underline; }
 .chat-workspace-view .chat-message-bubble { position:relative; width:fit-content; max-width:min(700px, 100%); }
@@ -3854,8 +3855,10 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-1 p { background:
 html[data-theme='dark'] .chat-workspace-view .chat-member-tone-2 p { background:#123A2E; }
 html[data-theme='dark'] .chat-workspace-view .chat-member-tone-3 p { background:#3A2C12; }
 html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:#3A1F2E; }
-.chat-workspace-view .chat-reactions { position:absolute; right:-8px; bottom:-11px; z-index:1; display:flex; flex-wrap:nowrap; width:max-content; max-width:calc(100vw - 48px); gap:3px; margin:0; padding:2px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface); box-shadow:0 2px 6px rgb(7 26 46 / 12%); opacity:0; pointer-events:none; transform:translateY(-2px); transition:opacity .15s ease, transform .15s ease; white-space:nowrap; }
-.chat-workspace-view .chat-message:hover .chat-reactions, .chat-workspace-view .chat-message:focus-within .chat-reactions, .chat-workspace-view .chat-reactions.has-reactions { opacity:1; pointer-events:auto; transform:translateY(0); }
+.chat-workspace-view .chat-message-actions { position:absolute; top:calc(100% + 4px); left:0; z-index:3; display:flex; width:max-content; max-width:min(420px, calc(100vw - 56px)); flex-wrap:nowrap; align-items:center; gap:3px; margin:0; padding:3px; overflow-x:auto; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); box-shadow:0 3px 10px rgb(7 26 46 / 14%); opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-3px); transition:opacity .15s ease, transform .15s ease, visibility .15s ease; scrollbar-width:none; }
+.chat-workspace-view .chat-message:hover .chat-message-actions, .chat-workspace-view .chat-message:focus-within .chat-message-actions, .chat-workspace-view .chat-message-actions.has-reactions { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
+.chat-workspace-view .chat-message-mine .chat-message-actions { right:0; left:auto; justify-content:flex-end; }
+.chat-workspace-view .chat-message-actions .chat-reactions { position:static; display:flex; flex-wrap:nowrap; width:auto; max-width:none; gap:3px; margin:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; opacity:1; pointer-events:auto; transform:none; }
 .chat-workspace-view .chat-reactions button { border:0; padding:2px 5px; background:transparent; font-size:11px; }
 .chat-workspace-view .chat-reactions .chat-reaction-add { display:none; }
 .chat-workspace-view .chat-message:hover .chat-reaction-add, .chat-workspace-view .chat-message:focus-within .chat-reaction-add { display:inline-flex; }
@@ -3863,21 +3866,17 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .chat-workspace-view .chat-message:hover .chat-reaction-more, .chat-workspace-view .chat-message:focus-within .chat-reaction-more, .chat-workspace-view .chat-reactions.reaction-picker-open .chat-reaction-more { display:inline-flex; }
 .chat-workspace-view .chat-reaction-more:hover, .chat-workspace-view .chat-reaction-more:focus-visible { background:#EAF0FF; color:#1D4ED8; outline:none; }
 .chat-workspace-view .chat-reactions.reaction-picker-open { opacity:1; pointer-events:auto; transform:translateY(0); }
-.chat-workspace-view .chat-reply-button { position:absolute; left:calc(100% + 8px); top:50%; margin-top:0; white-space:nowrap; opacity:0; pointer-events:none; transform:translate(6px, -50%); transition:opacity .15s ease, transform .15s ease; }
-.chat-workspace-view .chat-message:hover .chat-reply-button, .chat-workspace-view .chat-message:focus-within .chat-reply-button { opacity:1; pointer-events:auto; transform:translate(0, -50%); }
+.chat-workspace-view .chat-message-actions :is(.chat-reply-button, .chat-edit-button, .chat-delete-button) { position:static; display:inline-flex; min-height:22px; align-items:center; margin:0; padding:0 7px; border:0; border-radius:999px; background:transparent; cursor:pointer; font-size:11px; font-weight:700; white-space:nowrap; opacity:1; pointer-events:auto; transform:none; }
+.chat-workspace-view .chat-message-actions .chat-reply-button { color:#1D4ED8; }
+.chat-workspace-view .chat-message-actions .chat-edit-button { color:#1D4ED8; }
+.chat-workspace-view .chat-message-actions .chat-delete-button { color:#B42318; }
+.chat-workspace-view .chat-message-actions :is(.chat-reply-button, .chat-edit-button, .chat-delete-button):hover, .chat-workspace-view .chat-message-actions :is(.chat-reply-button, .chat-edit-button, .chat-delete-button):focus-visible { background:#EAF0FF; outline:none; }
+.chat-workspace-view .chat-message-actions .chat-delete-button:hover, .chat-workspace-view .chat-message-actions .chat-delete-button:focus-visible { background:#FEE4E2; }
 .chat-workspace-view .chat-message-mine { flex-direction: row-reverse; }
 .chat-workspace-view .chat-message-mine .chat-message-body { display: flex; flex-direction: column; align-items: flex-end; }
-.chat-workspace-view .chat-message-mine .chat-reactions { right:10px; left:auto; }
-.chat-workspace-view .chat-message-mine .chat-reply-button { left: auto; right: calc(100% + 8px); transform: translate(-6px, -50%); }
 .chat-workspace-view .chat-edited-marker { color:var(--workspace-text-soft); font-size:10px; font-style:italic; }
 .chat-workspace-view .chat-receipt { display:inline-flex; align-items:center; color:var(--workspace-text-soft); }
 .chat-workspace-view .chat-receipt-read { color:#1D4ED8; }
-.chat-workspace-view .chat-edit-button { position:absolute; left:calc(100% + 8px); top:calc(50% - 26px); border:0; padding:0; background:transparent; color:#1D4ED8; cursor:pointer; font-size:11px; font-weight:700; white-space:nowrap; opacity:0; pointer-events:none; transform:translate(6px, -50%); transition:opacity .15s ease, transform .15s ease; }
-.chat-workspace-view .chat-message:hover .chat-edit-button, .chat-workspace-view .chat-message:focus-within .chat-edit-button { opacity:1; pointer-events:auto; transform:translate(0, -50%); }
-.chat-workspace-view .chat-message-mine .chat-edit-button { left:auto; right:calc(100% + 8px); transform:translate(-6px, -50%); }
-.chat-workspace-view .chat-delete-button { position:absolute; left:calc(100% + 8px); top:calc(50% + 26px); border:0; padding:0; background:transparent; color:#B42318; cursor:pointer; font-size:11px; font-weight:700; white-space:nowrap; opacity:0; pointer-events:none; transform:translate(6px, -50%); transition:opacity .15s ease, transform .15s ease; }
-.chat-workspace-view .chat-message:hover .chat-delete-button, .chat-workspace-view .chat-message:focus-within .chat-delete-button { opacity:1; pointer-events:auto; transform:translate(0, -50%); }
-.chat-workspace-view .chat-message-mine .chat-delete-button { left:auto; right:calc(100% + 8px); transform:translate(-6px, -50%); }
 .chat-workspace-view .chat-deleted-text { color:var(--workspace-text-soft); font-style:italic; }
 .chat-workspace-view .chat-edit-form { display:grid; gap:6px; width:min(560px, 100%); margin-top:3px; }
 .chat-workspace-view .chat-edit-form textarea { width:100%; min-height:64px; padding:9px 12px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); color:var(--workspace-text); font:inherit; font-size:13px; line-height:1.4; resize:vertical; }

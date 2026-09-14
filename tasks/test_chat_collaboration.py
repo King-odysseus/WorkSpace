@@ -51,6 +51,24 @@ class ChatCollaborationTests(TestCase):
         self.assertEqual(removed.status_code, 200)
         self.assertEqual(removed.json()['message']['reactions'], [])
 
+    def test_channel_message_can_reply_to_a_reply(self):
+        root = self.post_channel_message()
+        first_reply = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': 'First reply', 'parent_id': root['id']}),
+            content_type='application/json',
+        )
+        self.assertEqual(first_reply.status_code, 201)
+
+        nested_reply = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'general', 'message': 'Reply to the reply', 'parent_id': first_reply.json()['message']['id']}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(nested_reply.status_code, 201)
+        self.assertEqual(nested_reply.json()['message']['parent_id'], first_reply.json()['message']['id'])
+
     def test_direct_message_can_reply_to_a_conversation_message(self):
         conversation = self.client.post(
             reverse('direct-conversation-list', args=[self.workspace.id]),
@@ -64,6 +82,10 @@ class ChatCollaborationTests(TestCase):
         self.assertEqual(reply.json()['message']['parent_id'], parent.json()['message']['id'])
         messages = self.client.get(url).json()['messages']
         self.assertEqual(messages[0]['reply_count'], 1)
+
+        nested_reply = self.client.post(url, data=json.dumps({'message': 'Replying again', 'parent_id': reply.json()['message']['id']}), content_type='application/json')
+        self.assertEqual(nested_reply.status_code, 201)
+        self.assertEqual(nested_reply.json()['message']['parent_id'], reply.json()['message']['id'])
 
     def test_direct_message_reply_rejects_a_parent_from_another_conversation(self):
         first = self.client.post(reverse('direct-conversation-list', args=[self.workspace.id]), data=json.dumps({'recipient_id': self.member.id}), content_type='application/json').json()['conversation']
