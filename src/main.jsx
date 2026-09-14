@@ -213,6 +213,48 @@ import {
 const isConversationNotification = (notification) =>
   ["chat_channel", "direct_conversation"].includes(notification?.target_type);
 
+function SidebarUpgradeCard({ userId }) {
+  const storageKey = `workspace-sidebar-upgrade-card-dismissed-${userId}`;
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  if (dismissed) return null;
+
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(storageKey, "true");
+    } catch (error) {
+      console.warn("Sidebar upgrade card preference could not be saved.", error);
+    }
+  };
+
+  return (
+    <div className="sidebar-upgrade-card relative mx-3 mb-3 rounded-xl bg-gradient-to-br from-primary/30 to-accent/10 p-3.5 pr-10">
+      <button
+        type="button"
+        onClick={dismiss}
+        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
+        aria-label="Dismiss weekly priorities card"
+        title="Dismiss"
+      >
+        <X size={14} />
+      </button>
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
+        <Sparkles size={14} /> Make your week flow
+      </p>
+      <p className="mt-0.5 text-[11px] leading-snug text-white/55">
+        Set your priorities and stay ahead of what's due.
+      </p>
+    </div>
+  );
+}
+
 function App() {
   const today = toDateKey(new Date());
   const todayLabel = formatLongDate(today);
@@ -2262,14 +2304,7 @@ function App() {
 
         {/* Upgrade nudge - mirrors TijhaBooks' plan-upsell card */}
         {!railCollapsed && (
-          <div className="sidebar-upgrade-card mx-3 mb-3 rounded-xl bg-gradient-to-br from-primary/30 to-accent/10 p-3.5">
-            <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
-              <Sparkles size={14} /> Make your week flow
-            </p>
-            <p className="mt-0.5 text-[11px] leading-snug text-white/55">
-              Set your priorities and stay ahead of what's due.
-            </p>
-          </div>
+          <SidebarUpgradeCard key={session.user.id} userId={session.user.id} />
         )}
 
         <div className="border-t border-white/10 px-2.5 py-2.5">

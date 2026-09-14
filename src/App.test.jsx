@@ -51,6 +51,7 @@ const task = {
 }
 
 const mountApp = async () => {
+  window.localStorage.removeItem('workspace-sidebar-upgrade-card-dismissed-7')
   mockApi({
     '/api/auth/me/': session,
     '/api/tasks/': { tasks: [task], pagination: { has_next: false } },
@@ -103,4 +104,9 @@ it('renders the workspace shell and opens a task from the today bar', async () =
     { timeout: 20000 },
   )
   expect(document.body.innerText).not.toContain('could not render this view')
+
+  const upgradeCard = await screen.findByText('Make your week flow')
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss weekly priorities card' }))
+  expect(upgradeCard).not.toBeInTheDocument()
+  expect(window.localStorage.getItem('workspace-sidebar-upgrade-card-dismissed-7')).toBe('true')
 }, 60000)
