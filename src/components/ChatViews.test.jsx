@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { expect, it, vi } from 'vitest'
 import { ChatWorkspaceView } from './ChatViews.jsx'
 import { mockApi } from '../test/setup-tests.js'
+import { requestChatThread } from '../lib/chat-navigation.js'
 
 const workspaceId = 4
 const currentUserId = 1
@@ -622,4 +623,20 @@ it('restores a separate draft for each conversation', async () => {
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Dana draft'))
   fireEvent.click(screen.getByText('Priya Shah').closest('button'))
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Priya draft'))
+})
+
+it('opens the thread a chat notification names without a click', async () => {
+  // The bell used to switch to Chats and leave the reader on no thread at all,
+  // so a direct-message alert never reached the message it was about.
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  requestChatThread('direct_conversation', conversation.id)
+
+  renderChat(dataFor())
+
+  await screen.findByText('See you then.')
 })
