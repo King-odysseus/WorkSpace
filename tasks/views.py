@@ -2314,9 +2314,23 @@ def notification_list(request, workspace_id):
         return error
     from .models import WorkspaceNotification
     if request.method == 'GET':
-        notifications = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)
+        everything = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)
+        notifications = everything
         if request.GET.get('exclude_chat') in {'1', 'true', 'yes'}:
             notifications = notifications.exclude(target_type__in=['chat_channel', 'direct_conversation'])
+        # Unread totals are counted over every row, not over the page below.
+        # The page is capped at 20, so a badge derived from it silently stops
+        # counting once a workspace accumulates more unread alerts than that,
+        # and the alerts that fall off the page are the oldest, not the least
+        # important. Channels, chats and activity are counted separately so
+        # each icon shows its own real total.
+        unread_counts = everything.filter(read_at__isnull=True).aggregate(
+            total=Count('id'),
+            channel=Count('id', filter=Q(target_type='chat_channel')),
+            direct=Count('id', filter=Q(target_type='direct_conversation')),
+        )
+        unread_channel = unread_counts['channel'] or 0
+        unread_direct = unread_counts['direct'] or 0
         try:
             page_number = max(int(request.GET.get('page', 1)), 1)
         except ValueError:
@@ -2331,6 +2345,12 @@ def notification_list(request, workspace_id):
         return JsonResponse({
             'notifications': [notification.as_dict() for notification in page.object_list],
             'unread_count': notifications.filter(read_at__isnull=True).count(),
+            'unread_counts': {
+                'channel': unread_channel,
+                'direct': unread_direct,
+                'conversation': unread_channel + unread_direct,
+                'activity': (unread_counts['total'] or 0) - unread_channel - unread_direct,
+            },
             'pagination': {
                 'page': page.number,
                 'page_size': 20,

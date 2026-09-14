@@ -104,6 +104,45 @@ class NotificationSummaryTests(TestCase):
         self.assertIsNone(channel.read_at)
         self.assertIsNone(chat.read_at)
 
+    def test_unread_counts_cover_rows_beyond_the_paged_list(self):
+        user = User.objects.create_user(username='counts-user')
+        workspace = Workspace.objects.create(name='Counts', slug='counts')
+        Membership.objects.create(workspace=workspace, user=user)
+        for kind, target_type, count in (
+            ('channel_message', 'chat_channel', 22),
+            ('direct_message', 'direct_conversation', 3),
+            ('task_assigned', 'task', 5),
+        ):
+            for index in range(count):
+                WorkspaceNotification.objects.create(
+                    workspace=workspace, recipient=user, kind=kind, title=f'{kind} {index}',
+                    target_type=target_type, target_id=str(index),
+                )
+        self.client.force_login(user)
+
+        payload = self.client.get(reverse('notification-list', args=[workspace.id])).json()
+        # The list is one capped page, so most of these never reach the client.
+        self.assertEqual(len(payload['notifications']), 20)
+        self.assertEqual(payload['pagination']['total_items'], 30)
+        # The badge totals do reach every unread row, so channel alerts cannot
+        # disappear behind the newest 20.
+        self.assertEqual(payload['unread_counts'], {
+            'channel': 22, 'direct': 3, 'conversation': 25, 'activity': 5,
+        })
+
+        # The totals describe the workspace, not whichever slice was requested.
+        filtered = self.client.get(reverse('notification-list', args=[workspace.id]) + '?exclude_chat=1').json()
+        self.assertEqual(filtered['unread_counts'], payload['unread_counts'])
+        self.assertEqual(len(filtered['notifications']), 5)
+
+        self.client.patch(
+            reverse('notification-list', args=[workspace.id]),
+            data=json.dumps({'read_all': True, 'exclude_chat': True}),
+            content_type='application/json',
+        )
+        after = self.client.get(reverse('notification-list', args=[workspace.id])).json()['unread_counts']
+        self.assertEqual(after, {'channel': 22, 'direct': 3, 'conversation': 25, 'activity': 0})
+
     def test_stream_emits_new_notification_summary(self):
         user = User.objects.create_user(username='stream-user')
         workspace = Workspace.objects.create(name='Stream', slug='stream')

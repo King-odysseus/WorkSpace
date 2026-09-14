@@ -295,6 +295,11 @@ function App() {
   const taskModalRef = useRef(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
+  // Which control opened the messages panel. The header button and the mobile
+  // bottom-nav pill share this panel, but they sit at opposite ends of the
+  // screen: below 1024px the panel has to rise from the pill instead of hanging
+  // off the header it is rendered next to.
+  const [messagesOrigin, setMessagesOrigin] = useState("header");
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -305,6 +310,7 @@ function App() {
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const notifRef = useRef(null);
   const messagesRef = useRef(null);
+  const messagesNavPanelRef = useRef(null);
   const mobileNavRef = useRef(null);
   useEffect(() => {
     if (!showModal) return undefined;
@@ -391,7 +397,11 @@ function App() {
         .then((response) => (response.ok ? response.json() : null))
         .then((payload) => {
           if (!payload) return;
-          setWorkspaceData((current) => ({ ...current, notifications: payload.notifications || [] }));
+          setWorkspaceData((current) => ({
+            ...current,
+            notifications: payload.notifications || [],
+            notificationCounts: payload.unread_counts ?? current.notificationCounts,
+          }));
         })
         .catch((error) => console.warn("Notifications could not be refreshed.", error));
     };
@@ -431,6 +441,9 @@ function App() {
     followUps: [],
     invitations: [],
     notifications: [],
+    // Unread totals counted server-side over every row, so the badges do not
+    // shrink to whatever the 20-item notification page happens to hold.
+    notificationCounts: null,
     activity: [],
     auditLogs: [],
     buckets: [],
@@ -628,12 +641,15 @@ function App() {
     const handler = (event) => {
       if (notifRef.current && !notifRef.current.contains(event.target))
         setNotificationOpen(false);
-      // The mobile pill nav opens the same panel as the header icon, so a click
-      // there has to count as inside it or the pill reopens what it just closed.
+      // The mobile pill nav opens the same panel as the header icon, and when it
+      // does the panel renders beside the nav rather than inside the header, so
+      // a click on the pill, on the panel, or in the header control all have to
+      // count as inside it or the panel closes and reopens under the same click.
       if (
         messagesRef.current &&
         !messagesRef.current.contains(event.target) &&
-        !mobileNavRef.current?.contains(event.target)
+        !mobileNavRef.current?.contains(event.target) &&
+        !messagesNavPanelRef.current?.contains(event.target)
       )
         setMessagesOpen(false);
       if (
@@ -748,6 +764,7 @@ function App() {
       followUps: [],
       invitations: [],
       notifications: [],
+      notificationCounts: null,
       activity: [],
       auditLogs: [],
       buckets: [],
@@ -972,6 +989,7 @@ function App() {
               checkIns: checkInData.check_ins,
               workShifts: workShiftData.work_shifts,
               notifications: notificationData.notifications,
+              notificationCounts: notificationData.unread_counts ?? null,
               activity: activityData.activity,
               auditLogs: auditData.audit_logs,
               buckets: bucketData.buckets,
@@ -1584,6 +1602,11 @@ function App() {
           ...notification,
           read: isConversationNotification(notification) ? notification.read : true,
         })),
+        // The bell only ever clears activity, so its own total drops to zero
+        // while chat and channel alerts stay unread for their own views.
+        notificationCounts: current.notificationCounts
+          ? { ...current.notificationCounts, activity: 0 }
+          : current.notificationCounts,
       }));
     } catch (error) {
       toast.error(
@@ -1608,14 +1631,37 @@ function App() {
       if (!response.ok)
         return toast.error("Notification could not be marked as read.");
       window.dispatchEvent(new Event("workspace:notifications-changed"));
-      setWorkspaceData((current) => ({
-        ...current,
-        notifications: current.notifications.map((notification) =>
-          notification.id === notificationId
-            ? { ...notification, read: true }
-            : notification,
-        ),
-      }));
+      setWorkspaceData((current) => {
+        const cleared = current.notifications.find(
+          (notification) => notification.id === notificationId,
+        );
+        const counts = current.notificationCounts;
+        let notificationCounts = counts;
+        if (counts && cleared && !cleared.read) {
+          const bucket =
+            cleared.target_type === "chat_channel"
+              ? "channel"
+              : cleared.target_type === "direct_conversation"
+                ? "direct"
+                : "activity";
+          notificationCounts = {
+            ...counts,
+            [bucket]: Math.max(0, (counts[bucket] || 0) - 1),
+            ...(bucket === "activity"
+              ? {}
+              : { conversation: Math.max(0, (counts.conversation || 0) - 1) }),
+          };
+        }
+        return {
+          ...current,
+          notifications: current.notifications.map((notification) =>
+            notification.id === notificationId
+              ? { ...notification, read: true }
+              : notification,
+          ),
+          notificationCounts,
+        };
+      });
     } catch (error) {
       toast.error(error.message || "Notification could not be marked as read.");
     }
@@ -1954,19 +2000,26 @@ function App() {
   const activityNotifications = workspaceData.notifications.filter(
     (notification) => !isConversationNotification(notification),
   );
-  const unreadActivityNotificationCount = activityNotifications.filter(
-    (notification) => !notification.read,
-  ).length;
   const unreadConversationNotifications = workspaceData.notifications.filter(
     (notification) => isConversationNotification(notification) && !notification.read,
   );
+  // The badge reads the server's totals, which cover every unread row. The list
+  // these badges sit next to is one capped page, so its length is only a
+  // fallback for a payload that predates the totals.
+  const unreadConversationCount =
+    workspaceData.notificationCounts?.conversation ??
+    unreadConversationNotifications.length;
+  const unreadActivityNotificationCount =
+    workspaceData.notificationCounts?.activity ??
+    activityNotifications.filter((notification) => !notification.read).length;
   // Newest first. The panel is a list to pick from, so it keeps every unread
   // alert rather than the single newest one it used to jump straight into.
   const conversationAlerts = [...unreadConversationNotifications].sort(
     (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
   );
-  const toggleMessages = () => {
+  const toggleMessages = (origin = "header") => {
     setNotificationOpen(false);
+    setMessagesOrigin(origin);
     setMessagesOpen((current) => !current);
   };
 
@@ -1991,17 +2044,21 @@ function App() {
         {
           label: "Channels",
           icon: Hash,
-          badge: workspaceData.notifications.filter(
-            (item) => item.target_type === "chat_channel" && !item.read,
-          ).length,
+          badge:
+            workspaceData.notificationCounts?.channel ??
+            workspaceData.notifications.filter(
+              (item) => item.target_type === "chat_channel" && !item.read,
+            ).length,
           badgeTone: "info",
         },
         {
           label: "Chats",
           icon: MessageSquare,
-          badge: workspaceData.notifications.filter(
-            (item) => item.target_type === "direct_conversation" && !item.read,
-          ).length,
+          badge:
+            workspaceData.notificationCounts?.direct ??
+            workspaceData.notifications.filter(
+              (item) => item.target_type === "direct_conversation" && !item.read,
+            ).length,
           badgeTone: "info",
         },
         {
@@ -2056,10 +2113,10 @@ function App() {
     {
       label: "Chats",
       icon: MessageSquare,
-      badge: unreadConversationNotifications.length,
+      badge: unreadConversationCount,
       badgeTone: "info",
       active: ["Chats", "Channels"].includes(active),
-      onSelect: toggleMessages,
+      onSelect: () => toggleMessages("nav"),
     },
   ].filter(Boolean);
   // Zuri holds the bar's exact centre, so the tiles are split into two halves
@@ -2101,6 +2158,72 @@ function App() {
       </button>
     );
   };
+
+  // One panel, two places to stand it. The header owns a backdrop-filter, which
+  // makes it the containing block for its fixed descendants, so a panel rendered
+  // inside it is measured against the header rather than the viewport. That is
+  // fine while it hangs off the header, and wrong the moment the mobile pill
+  // opens it, because the panel has to sit just above the pill at the bottom of
+  // the screen. So the pill's panel is rendered outside the header, and only the
+  // bottom offset differs between the two.
+  const renderMessagesPanel = (position) => (
+    <div
+      className={cn(
+        "z-[60] animate-fade-in rounded-xl border border-border bg-surface shadow-elevated",
+        position,
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
+        <p className="text-xs font-bold text-navy">Messages</p>
+        <span className="text-[11px] font-medium text-text-muted">
+          {unreadConversationCount} unread
+        </span>
+      </div>
+      <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
+        {conversationAlerts.length ? (
+          conversationAlerts.slice(0, 6).map((notification) => (
+            <button
+              type="button"
+              key={notification.id}
+              onClick={() => openNotification(notification)}
+              aria-label={`Open ${notification.title}`}
+              className="flex w-full items-start gap-2.5 bg-primary/[0.035] px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary"
+            >
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
+                  {notification.title}
+                </span>
+                {notification.body && (
+                  <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-text-muted">
+                    {notification.body}
+                  </span>
+                )}
+                <time className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
+                  <Clock3 size={10} aria-hidden="true" />
+                  {formatDateTime(notification.created_at)}
+                </time>
+              </span>
+            </button>
+          ))
+        ) : (
+          <EmptyState text="No unread messages." />
+        )}
+      </div>
+      <div className="border-t border-border-light px-3.5 py-2">
+        <button
+          type="button"
+          onClick={() => {
+            setMessagesOpen(false);
+            setActive("Chats");
+          }}
+          className="text-[11px] font-semibold text-primary hover:underline"
+        >
+          Open Chats
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex h-dvh overflow-hidden bg-surface-secondary">
@@ -2460,71 +2583,23 @@ function App() {
             <div className="relative" ref={messagesRef}>
               <button
                 type="button"
-                onClick={toggleMessages}
+                onClick={() => toggleMessages("header")}
                 className="relative hidden h-11 w-11 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
                 aria-label="Open messages"
                 title="Open chats and channels"
               >
                 <MessageSquare size={20} />
-                {unreadConversationNotifications.length > 0 && (
-                  <span aria-label={`${unreadConversationNotifications.length} unread messages`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white ring-2 ring-surface">
-                    {unreadConversationNotifications.length > 99 ? "99+" : unreadConversationNotifications.length}
+                {unreadConversationCount > 0 && (
+                  <span aria-label={`${unreadConversationCount} unread messages`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white ring-2 ring-surface">
+                    {unreadConversationCount > 99 ? "99+" : unreadConversationCount}
                   </span>
                 )}
               </button>
-              {messagesOpen && (
-                <div className="fixed left-4 right-4 top-16 z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80">
-                  <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
-                    <p className="text-xs font-bold text-navy">Messages</p>
-                    <span className="text-[11px] font-medium text-text-muted">
-                      {conversationAlerts.length} unread
-                    </span>
-                  </div>
-                  <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
-                    {conversationAlerts.length ? (
-                      conversationAlerts.slice(0, 6).map((notification) => (
-                        <button
-                          type="button"
-                          key={notification.id}
-                          onClick={() => openNotification(notification)}
-                          aria-label={`Open ${notification.title}`}
-                          className="flex w-full items-start gap-2.5 bg-primary/[0.035] px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary"
-                        >
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
-                              {notification.title}
-                            </span>
-                            {notification.body && (
-                              <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-text-muted">
-                                {notification.body}
-                              </span>
-                            )}
-                            <time className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
-                              <Clock3 size={10} aria-hidden="true" />
-                              {formatDateTime(notification.created_at)}
-                            </time>
-                          </span>
-                        </button>
-                      ))
-                    ) : (
-                      <EmptyState text="No unread messages." />
-                    )}
-                  </div>
-                  <div className="border-t border-border-light px-3.5 py-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMessagesOpen(false);
-                        setActive("Chats");
-                      }}
-                      className="text-[11px] font-semibold text-primary hover:underline"
-                    >
-                      Open Chats
-                    </button>
-                  </div>
-                </div>
-              )}
+              {messagesOpen &&
+                messagesOrigin === "header" &&
+                renderMessagesPanel(
+                  "fixed left-4 right-4 top-16 mt-2 w-auto max-w-md sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80",
+                )}
             </div>
 
             <div className="relative" ref={notifRef}>
@@ -3005,6 +3080,15 @@ function App() {
           </button>
         </div>
       </nav>
+
+      {/* The pill sits at bottom-4 and stands about 58px tall, so 82px clears it
+        with a gap. Rendered here, beside the nav rather than inside it, because
+        the nav carries a backdrop-filter of its own. */}
+      {messagesOpen &&
+        messagesOrigin === "nav" &&
+        <div ref={messagesNavPanelRef}>
+          {renderMessagesPanel("fixed bottom-[82px] left-1/2 w-[min(calc(100vw-1rem),360px)] -translate-x-1/2")}
+        </div>}
 
       {showModal && (
         <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}>
