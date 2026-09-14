@@ -33,7 +33,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ClipboardList,
-  CircleHelp,
   Clock3,
   Copy,
   Filter,
@@ -210,6 +209,9 @@ import {
   calendarEventConflictCounts,
   calendarUpcomingGroup,
 } from "./lib/workspace-format.js";
+
+const isConversationNotification = (notification) =>
+  ["chat_channel", "direct_conversation"].includes(notification?.target_type);
 
 function App() {
   const today = toDateKey(new Date());
@@ -1510,7 +1512,7 @@ function App() {
             "Content-Type": "application/json",
             "X-CSRFToken": await getCsrfToken(),
           },
-          body: JSON.stringify({ read_all: true }),
+          body: JSON.stringify({ read_all: true, exclude_chat: true }),
         },
       );
       if (!response.ok)
@@ -1520,7 +1522,7 @@ function App() {
         ...current,
         notifications: current.notifications.map((notification) => ({
           ...notification,
-          read: true,
+          read: isConversationNotification(notification) ? notification.read : true,
         })),
       }));
     } catch (error) {
@@ -1888,6 +1890,24 @@ function App() {
   const myCompletedTaskCount = myTodayTasks.filter(
     (task) => task.status === "done",
   ).length;
+  const activityNotifications = workspaceData.notifications.filter(
+    (notification) => !isConversationNotification(notification),
+  );
+  const unreadActivityNotificationCount = activityNotifications.filter(
+    (notification) => !notification.read,
+  ).length;
+  const unreadConversationNotifications = workspaceData.notifications.filter(
+    (notification) => isConversationNotification(notification) && !notification.read,
+  );
+  const latestUnreadConversationNotification = [...unreadConversationNotifications]
+    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
+  const openConversationNotifications = () => {
+    if (latestUnreadConversationNotification) {
+      void openNotification(latestUnreadConversationNotification);
+      return;
+    }
+    setActive("Chats");
+  };
 
   // Grouped by what they're for rather than dumped in one flat list: the two
   // screens someone opens every day, the screens where work actually gets
@@ -1963,52 +1983,62 @@ function App() {
   ];
 
   // ── Mobile bottom pill nav - two destinations to either side of Zuri, with
-  //    the rest of the app, chats included, behind "More" (the drawer). Items
-  //    are looked up in navGroups rather than redeclared so labels, icons and
-  //    unread badges stay in one place.
-  const mobilePillLabels = ["Today", "My tasks", "Planner"];
+  //    the rest of the app behind "More" (the drawer). Most items are looked up
+  //    in navGroups so labels, icons and unread badges stay in one place.
+  const mobilePillLabels = ["Today", "My tasks"];
   const navItemsByLabel = new Map(
     navGroups.flatMap((group) => group.items).map((item) => [item.label, item]),
   );
-  const mobilePillItems = mobilePillLabels
-    .map((label) => navItemsByLabel.get(label))
-    .filter(Boolean);
+  const mobilePillItems = [
+    ...mobilePillLabels.map((label) => navItemsByLabel.get(label)),
+    {
+      label: "Chats",
+      icon: MessageSquare,
+      badge: unreadConversationNotifications.length,
+      badgeTone: "info",
+      active: ["Chats", "Channels"].includes(active),
+      onSelect: openConversationNotifications,
+    },
+  ].filter(Boolean);
   // Zuri holds the bar's exact centre, so the tiles are split into two halves
   // that each take the same half of the bar; a single run of five tiles would
   // always leave the middle tile half a tile off centre. "More" is rendered
   // with the right-hand half, which is why three labels are enough here.
   const mobileNavLeft = mobilePillItems.slice(0, 2);
   const mobileNavRight = mobilePillItems.slice(2);
-  const renderMobileNavItem = ({ label, icon: Icon, badge, badgeTone }) => (
-    <button
-      type="button"
-      key={label}
-      onClick={() => setActive(label)}
-      aria-current={active === label ? "page" : undefined}
-      className={cn(
-        "mobile-nav-item relative flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
-        active === label
-          ? "is-active"
-          : "text-white/60 hover:bg-white/5 hover:text-white",
-      )}
-    >
-      <Icon size={18} className="shrink-0" />
-      <span className="max-w-full truncate px-0.5 text-[10px] font-semibold leading-none">
-        {label}
-      </span>
-      {badge > 0 && (
-        <span
-          className={cn(
-            "absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
-            badgeTone === "info" ? "bg-info text-white" : "bg-danger text-white",
-            active === label && "bg-navy text-white",
-          )}
-        >
-          {badge > 9 ? "9+" : badge}
+  const renderMobileNavItem = ({ label, icon: Icon, badge, badgeTone, active: itemActive, onSelect }) => {
+    const isItemActive = itemActive ?? active === label;
+    return (
+      <button
+        type="button"
+        key={label}
+        onClick={onSelect || (() => setActive(label))}
+        aria-current={isItemActive ? "page" : undefined}
+        className={cn(
+          "mobile-nav-item relative flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+          isItemActive
+            ? "is-active"
+            : "text-white/60 hover:bg-white/5 hover:text-white",
+        )}
+      >
+        <Icon size={18} className="shrink-0" />
+        <span className="max-w-full truncate px-0.5 text-[10px] font-semibold leading-none">
+          {label}
         </span>
-      )}
-    </button>
-  );
+        {badge > 0 && (
+          <span
+            className={cn(
+              "absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
+              badgeTone === "info" ? "bg-info text-white" : "bg-danger text-white",
+              isItemActive && "bg-navy text-white",
+            )}
+          >
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <div className="flex h-dvh overflow-hidden bg-surface-secondary">
@@ -2372,22 +2402,38 @@ function App() {
               <RefreshCw size={18} />
             </button>
 
+            <button
+              type="button"
+              onClick={openConversationNotifications}
+              className="relative hidden items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
+              aria-label="Open messages"
+              title="Open chats and channels"
+            >
+              <MessageSquare size={17} />
+              Messages
+              {unreadConversationNotifications.length > 0 && (
+                <span aria-label={`${unreadConversationNotifications.length} unread messages`} className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white ring-2 ring-surface">
+                  {unreadConversationNotifications.length > 99 ? "99+" : unreadConversationNotifications.length}
+                </span>
+              )}
+            </button>
+
             <div className="relative" ref={notifRef}>
               <button
                 type="button"
                 onClick={() => setNotificationOpen((current) => !current)}
                 className="relative flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:bg-surface-secondary hover:text-text-primary transition-colors"
-                aria-label="Open notifications"
+                aria-label="Open workspace activity notifications"
               >
                 <Bell size={20} />
-                {notificationUnreadCount > 0 && (
-                  <span aria-label={`${notificationUnreadCount} unread notifications`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface">{notificationUnreadCount}</span>
+                {unreadActivityNotificationCount > 0 && (
+                  <span aria-label={`${unreadActivityNotificationCount} unread workspace notifications`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface">{unreadActivityNotificationCount}</span>
                 )}
               </button>
               {notificationOpen && (
                 <div className="fixed left-4 right-4 top-16 z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80">
                   <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
-                    <p className="text-xs font-bold text-navy">Notifications</p>
+                    <p className="text-xs font-bold text-navy">Workspace activity</p>
                     <button
                       type="button"
                       onClick={markNotificationsRead}
@@ -2397,8 +2443,8 @@ function App() {
                     </button>
                   </div>
                   <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
-                    {workspaceData.notifications.length ? (
-                      workspaceData.notifications
+                    {activityNotifications.length ? (
+                      activityNotifications
                         .slice(0, 5)
                         .map((notification) => (
                           <button
@@ -2424,7 +2470,7 @@ function App() {
                           </button>
                         ))
                     ) : (
-                      <EmptyState text="No notifications yet. Updates from your teammates land here, and your own check-ins and actions are listed under Activity." />
+                      <EmptyState text="No workspace activity yet." />
                     )}
                   </div>
                   <div className="border-t border-border-light px-3.5 py-2">
@@ -2436,7 +2482,7 @@ function App() {
                       }}
                       className="text-[11px] font-semibold text-primary hover:underline"
                     >
-                      View all notifications
+                      View all workspace activity
                     </button>
                   </div>
                 </div>
@@ -2454,14 +2500,6 @@ function App() {
               className="flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:bg-surface-secondary hover:text-text-primary transition-colors"
             >
               {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActive("Help")}
-              className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-text-muted hover:bg-surface-secondary hover:text-text-primary transition-colors sm:flex"
-            >
-              <CircleHelp size={16} /> Help
             </button>
 
             <div className="relative ml-1" ref={profileMenuRef}>
@@ -3353,7 +3391,7 @@ function WorkspaceView({
     let current = true;
     setNotificationLoading(true);
     setNotificationError("");
-    fetch(`/api/workspaces/${workspaceId}/notifications/?page=${notificationPage}`, {
+    fetch(`/api/workspaces/${workspaceId}/notifications/?page=${notificationPage}&exclude_chat=1`, {
       credentials: "include",
     })
       .then(async (response) => {
@@ -5477,16 +5515,22 @@ function WorkspaceView({
   }
   if (active === "Notifications") {
     const pagination = notificationPagination;
+    const activityNotificationHistory = notificationHistory.filter(
+      (notification) => !isConversationNotification(notification),
+    );
     return (
       <section className="workspace-view">
         <WorkspaceViewHeading
-          title="Notifications"
-          subtitle="Your workspace notification history."
+          title="Workspace activity"
+          subtitle="Notifications outside chats and channels."
           action="Mark all read"
           onAction={async () => {
             await onMarkNotificationsRead();
             setNotificationHistory((current) =>
-              current.map((notification) => ({ ...notification, read: true })),
+              current.map((notification) => ({
+                ...notification,
+                read: isConversationNotification(notification) ? notification.read : true,
+              })),
             );
           }}
         />
@@ -5500,9 +5544,9 @@ function WorkspaceView({
                 Retry
               </button>
             </div>
-          ) : notificationHistory.length ? (
+          ) : activityNotificationHistory.length ? (
             <div className="divide-y divide-border-light">
-              {notificationHistory.map((notification) => (
+              {activityNotificationHistory.map((notification) => (
                 <button
                   type="button"
                   key={notification.id}
@@ -5527,7 +5571,7 @@ function WorkspaceView({
               ))}
             </div>
           ) : (
-            <EmptyState text="No notifications yet. Updates from your teammates land here, and your own check-ins and actions are listed under Activity." />
+            <EmptyState text="No workspace activity yet." />
           )}
         </Card>
         {pagination && pagination.total_pages > 1 && (

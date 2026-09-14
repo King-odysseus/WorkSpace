@@ -2315,6 +2315,8 @@ def notification_list(request, workspace_id):
     from .models import WorkspaceNotification
     if request.method == 'GET':
         notifications = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)
+        if request.GET.get('exclude_chat') in {'1', 'true', 'yes'}:
+            notifications = notifications.exclude(target_type__in=['chat_channel', 'direct_conversation'])
         try:
             page_number = max(int(request.GET.get('page', 1)), 1)
         except ValueError:
@@ -2328,7 +2330,7 @@ def notification_list(request, workspace_id):
             page = paginator.page(paginator.num_pages)
         return JsonResponse({
             'notifications': [notification.as_dict() for notification in page.object_list],
-            'unread_count': WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True).count(),
+            'unread_count': notifications.filter(read_at__isnull=True).count(),
             'pagination': {
                 'page': page.number,
                 'page_size': 20,
@@ -2343,7 +2345,10 @@ def notification_list(request, workspace_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     if payload.get('read_all') is True:
-        WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True).update(read_at=timezone.now())
+        unread = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user, read_at__isnull=True)
+        if payload.get('exclude_chat') is True:
+            unread = unread.exclude(target_type__in=['chat_channel', 'direct_conversation'])
+        unread.update(read_at=timezone.now())
         return JsonResponse({'updated': 'all'})
     target_type = str(payload.get('target_type', '')).strip()
     target_id = str(payload.get('target_id', '')).strip()

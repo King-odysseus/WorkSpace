@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
@@ -36,6 +38,40 @@ class NotificationSummaryTests(TestCase):
 
     def test_stream_requires_login(self):
         self.assertEqual(self.client.get(reverse('notification-stream')).status_code, 401)
+
+    def test_activity_history_excludes_chat_and_only_marks_activity_read(self):
+        user = User.objects.create_user(username='activity-user')
+        workspace = Workspace.objects.create(name='Activity', slug='activity')
+        Membership.objects.create(workspace=workspace, user=user)
+        activity = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='task_assigned', title='Task', target_type='task', target_id='7',
+        )
+        channel = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='channel_message', title='Channel', target_type='chat_channel', target_id='general',
+        )
+        chat = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='direct_message', title='Chat', target_type='direct_conversation', target_id='9',
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('notification-list', args=[workspace.id]) + '?exclude_chat=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item['id'] for item in response.json()['notifications']], [activity.id])
+        self.assertEqual(response.json()['unread_count'], 1)
+        self.assertEqual(response.json()['pagination']['total_items'], 1)
+
+        read_response = self.client.patch(
+            reverse('notification-list', args=[workspace.id]),
+            data=json.dumps({'read_all': True, 'exclude_chat': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(read_response.status_code, 200)
+        activity.refresh_from_db()
+        channel.refresh_from_db()
+        chat.refresh_from_db()
+        self.assertIsNotNone(activity.read_at)
+        self.assertIsNone(channel.read_at)
+        self.assertIsNone(chat.read_at)
 
     def test_stream_emits_new_notification_summary(self):
         user = User.objects.create_user(username='stream-user')

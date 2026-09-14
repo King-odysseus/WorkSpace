@@ -82,10 +82,9 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   expect(halves[0].textContent).toContain('Today')
   expect(halves[0].textContent).toContain('My tasks')
   expect(halves[0].textContent).not.toContain('Planner')
-  expect(halves[1].textContent).toContain('Planner')
+  expect(halves[1].textContent).toContain('Chats')
   expect(halves[1].textContent).toContain('More')
-  // Chat is a drawer destination, not a bar tile, so the two halves stay even.
-  expect(nav.textContent).not.toContain('Chats')
+  expect(nav.textContent).not.toContain('Planner')
 
   fireEvent.click(screen.getByRole('button', { name: 'Channels' }))
   await waitFor(
