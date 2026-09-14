@@ -37,7 +37,6 @@ import {
   Clock3,
   Copy,
   Filter,
-  FileText,
   Hash,
   LayoutDashboard,
   LayoutGrid,
@@ -1959,8 +1958,6 @@ function App() {
           badgeTone: "info",
         },
         { label: "Screen sharing", icon: MonitorUp },
-        { label: "Help", icon: CircleHelp },
-        { label: "Legal", icon: FileText },
       ],
     },
   ];
@@ -5474,6 +5471,7 @@ function WorkspaceView({
         projects={localData.projects}
         onRefresh={onRefresh}
         onConfirm={onConfirm}
+        onNavigate={onNavigate}
       />
     );
   }

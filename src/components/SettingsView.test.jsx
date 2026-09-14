@@ -60,7 +60,34 @@ it('orders settings by everyday priority with Profile first', () => {
     'Integrations',
     'Templates',
     'Zuri',
+    'Help',
+    'Legal',
   ])
+})
+
+it('opens the Help and Legal views from Settings, including for members', () => {
+  const onNavigate = vi.fn()
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      onNavigate={onNavigate}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Help' }))
+  expect(onNavigate).toHaveBeenCalledWith('Help')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Legal' }))
+  expect(onNavigate).toHaveBeenCalledWith('Legal')
+
+  // Documentation is not a workspace administration panel, so a member keeps it
+  // while the owner/manager-only sections stay hidden.
+  expect(screen.queryByRole('button', { name: 'Workspace access' })).not.toBeInTheDocument()
 })
 
 async function setup(permission = 'default', saveStatus = 201) {

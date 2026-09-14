@@ -11,8 +11,10 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
   ClipboardList,
   Copy,
+  FileText,
   Layers,
   Link2,
   Plus,
@@ -81,6 +83,7 @@ function SettingsView({
   projects = [],
   onRefresh,
   onConfirm,
+  onNavigate,
 }) {
   const [section, setSection] = useState("appearance");
   const [mobileSectionOpen, setMobileSectionOpen] = useState(false);
@@ -951,6 +954,38 @@ function SettingsView({
               </div>
             );
           })}
+          {/* Help and Legal are documentation rather than places you work, so
+              they are entry points here that open the full views instead of a
+              re-implementation embedded in Settings. */}
+          <div className="settings-nav-group">
+            <span className="settings-nav-label">Support</span>
+            <button
+              type="button"
+              className="settings-nav-link"
+              aria-label="Help"
+              onClick={() => onNavigate?.("Help")}
+            >
+              <span className="settings-nav-icon"><CircleHelp size={17} /></span>
+              <span className="settings-nav-copy">
+                <strong>Help</strong>
+                <small>Guides for the work you do every day.</small>
+              </span>
+              <ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="settings-nav-link"
+              aria-label="Legal"
+              onClick={() => onNavigate?.("Legal")}
+            >
+              <span className="settings-nav-icon"><FileText size={17} /></span>
+              <span className="settings-nav-copy">
+                <strong>Legal</strong>
+                <small>Privacy, cookies, terms, and acceptable use.</small>
+              </span>
+              <ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true" />
+            </button>
+          </div>
         </nav>
         <div className="settings-content">
           <button
