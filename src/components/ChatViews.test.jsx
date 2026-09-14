@@ -253,6 +253,42 @@ it('offers Reply on a channel reply and sends the reply id as the parent', async
   })
 })
 
+it('shows both edit actions and saves an inline message edit', async () => {
+  const original = { id: 1, author_id: currentUserId, author_name: 'Ada Lane', message: 'Before the edit.', created_at: '2026-09-12T10:00:00Z' }
+  const updated = { ...original, message: 'After the edit.', edited_at: '2026-09-12T10:05:00Z' }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [original] },
+    '/direct-messages/1/': { message: updated },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat({
+    ...dataFor(),
+    members: [
+      { id: currentUserId, first_name: 'Ada', last_name: 'Lane' },
+      { id: 9, first_name: 'Dana', last_name: 'Reed' },
+    ],
+  })
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByText('Before the edit.')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  const save = screen.getByRole('button', { name: 'Save changes' })
+  expect(save).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible()
+
+  fireEvent.change(screen.getByRole('textbox', { name: 'Edit message' }), { target: { value: 'After the edit.' } })
+  fireEvent.click(save)
+
+  await waitFor(() => {
+    const editCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-messages/1/') && init.method === 'PATCH')
+    expect(editCall).toBeTruthy()
+    expect(JSON.parse(editCall[1].body)).toMatchObject({ message: 'After the edit.' })
+  })
+  expect(await screen.findByText('After the edit.')).toBeInTheDocument()
+})
+
 it('loads and highlights the channel message a notification names', async () => {
   mockApi({
     '/documents/': { documents: [] },
