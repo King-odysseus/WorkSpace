@@ -25,10 +25,15 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     && (typeof document.hasFocus !== 'function' || document.hasFocus())
   const applySummary = data => {
     const nextUnreadId = Number(data.latest_unread_id || 0)
-    if (hasBaseline && nextUnreadId > lastPlayedId && data.sound !== false && canPlayCustomSound()) {
+    const arrived = hasBaseline && nextUnreadId > lastPlayedId
+    if (arrived && data.sound !== false && canPlayCustomSound()) {
       playSound(data.sound_name || 'chime', data.volume ?? 70)
     }
     lastPlayedId = Math.max(lastPlayedId, nextUnreadId)
+    // This poll reads an account-wide count, but the bell reads one workspace's
+    // history and is fetched separately, so a new arrival has to say so or the
+    // open popout keeps showing the list it loaded with.
+    if (arrived) window.dispatchEvent(new Event('workspace:notifications-changed'))
     latestUnreadId = nextUnreadId
     hasBaseline = true
     onSummary(data)

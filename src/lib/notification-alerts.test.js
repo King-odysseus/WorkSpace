@@ -52,6 +52,23 @@ it.each([
   expect(playSound).not.toHaveBeenCalled()
 })
 
+it('asks listeners to re-read the notification list when a new one arrives', async () => {
+  const onChanged = vi.fn()
+  window.addEventListener('workspace:notifications-changed', onChanged)
+  stop = startNotificationAlerts(() => {}, playSound)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(onChanged).not.toHaveBeenCalled()
+  summary = { unread_count: 26, latest_unread_id: 26 }
+  await vi.advanceTimersByTimeAsync(15000)
+  expect(onChanged).toHaveBeenCalledOnce()
+  await vi.advanceTimersByTimeAsync(15000)
+  expect(onChanged).toHaveBeenCalledOnce()
+  summary = { unread_count: 0, latest_unread_id: 0 }
+  await vi.advanceTimersByTimeAsync(15000)
+  expect(onChanged).toHaveBeenCalledOnce()
+  window.removeEventListener('workspace:notifications-changed', onChanged)
+})
+
 it('ignores an outstanding response after logout and cleans up sound and badge', async () => {
   let resolve
   fetch.mockReturnValue(new Promise(done => { resolve = done }))

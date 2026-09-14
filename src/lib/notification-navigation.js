@@ -60,5 +60,10 @@ export function resolveNotificationTarget(notification, { tasks = [], events = [
   if (targetType === 'screen_share_session') {
     return { action: 'pending', targetType, targetId }
   }
+  // A chat alert names the thread itself - a conversation id or a channel name -
+  // so the Chats view has to open that thread rather than just open the view.
+  if (targetType === 'chat_channel' || targetType === 'direct_conversation') {
+    return { action: 'chat', targetType, targetId, destination: notificationDestinations[targetType] }
+  }
   return { action: 'destination', targetType, destination: notificationDestinations[targetType] }
 }

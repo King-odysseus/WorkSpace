@@ -163,6 +163,7 @@ import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
+import { requestChatThread } from "./lib/chat-navigation.js";
 import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt.jsx";
 import {
   CookieConsent,
@@ -319,10 +320,32 @@ function App() {
   });
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(null);
+  // Bumped on every "open this thread" request so an already-mounted Chats view
+  // re-reads the hand-off instead of only a newly-mounted one.
+  const [chatThreadRequest, setChatThreadRequest] = useState(0);
   useEffect(() => {
     setNotificationUnreadCount(null);
     if (session.user?.id) return startNotificationAlerts(data => setNotificationUnreadCount(data.unread_count));
   }, [session.user?.id]);
+  // The bell list and the unread badge are two different reads: the badge comes
+  // from the account-wide summary poll, the list from this workspace's paginated
+  // history, which the workspace load fetches once. Without this the badge counts
+  // items the open popout cannot show, and a read state changed in a chat never
+  // clears its dot.
+  useEffect(() => {
+    if (!activeWorkspaceId || session.loading || !session.user?.id) return undefined;
+    const reloadNotifications = () => {
+      fetch(`/api/workspaces/${activeWorkspaceId}/notifications/`, { credentials: "include" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload) => {
+          if (!payload) return;
+          setWorkspaceData((current) => ({ ...current, notifications: payload.notifications || [] }));
+        })
+        .catch((error) => console.warn("Notifications could not be refreshed.", error));
+    };
+    window.addEventListener("workspace:notifications-changed", reloadNotifications);
+    return () => window.removeEventListener("workspace:notifications-changed", reloadNotifications);
+  }, [activeWorkspaceId, session.loading, session.user?.id]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceNotice, setWorkspaceNotice] = useState("");
@@ -1609,6 +1632,12 @@ function App() {
       } catch {
         toast.error("Task could not be opened.");
       }
+      return;
+    }
+    if (resolved.action === "chat") {
+      requestChatThread(notification.target_type, notification.target_id);
+      setChatThreadRequest((current) => current + 1);
+      setActive(resolved.destination);
       return;
     }
     const destination = notificationDestinations[notification.target_type];
@@ -6757,6 +6786,7 @@ function WorkspaceView({
           onError={onActionError}
           onConfirm={onConfirm}
           onNavigate={onNavigate}
+          threadRequest={chatThreadRequest}
         />
       </Suspense>
     );

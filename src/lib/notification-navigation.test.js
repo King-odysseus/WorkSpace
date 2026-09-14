@@ -27,6 +27,11 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget(notification('screen_share_session', 'abc'))).toEqual({ action: 'pending', targetType: 'screen_share_session', targetId: 'abc' })
     expect(resolveNotificationTarget(notification('workspace', 1))).toEqual({ action: 'destination', targetType: 'workspace', destination: 'Today' })
   })
+
+  it('opens the named chat thread rather than only its view', () => {
+    expect(resolveNotificationTarget(notification('direct_conversation', 12))).toEqual({ action: 'chat', targetType: 'direct_conversation', targetId: '12', destination: 'Chats' })
+    expect(resolveNotificationTarget(notification('chat_channel', 'general'))).toEqual({ action: 'chat', targetType: 'chat_channel', targetId: 'general', destination: 'Channels' })
+  })
 })
 
 describe('parseNotificationDeepLink', () => {
