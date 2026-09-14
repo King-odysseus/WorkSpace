@@ -2625,6 +2625,7 @@ function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 onNavigate={setActive}
+                chatThreadRequest={chatThreadRequest}
                 onWhatsNewSeen={markWhatsNewSeen}
                 teamBoardFocus={teamBoardFocus}
                 onTeamBoardFocusChange={setTeamBoardFocus}
@@ -3086,6 +3087,7 @@ function WorkspaceView({
   searchQuery,
   onSearchChange,
   onNavigate,
+  chatThreadRequest,
   onWhatsNewSeen,
   teamBoardFocus,
   onTeamBoardFocusChange,

@@ -87,6 +87,14 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   // Chat is a drawer destination, not a bar tile, so the two halves stay even.
   expect(nav.textContent).not.toContain('Chats')
 
+  fireEvent.click(screen.getByRole('button', { name: 'Channels' }))
+  await waitFor(
+    () => expect(document.querySelector('.chat-workspace-view')).not.toBeNull(),
+    { timeout: 20000 },
+  )
+  expect(document.body.innerText).not.toContain('could not render this view')
+  fireEvent.click(screen.getAllByRole('button', { name: 'Today' })[0])
+
   const myDay = screen.getByRole('heading', { name: 'My day' }).closest('.today-panel')
   const opener = await within(myDay).findByText('Desingn UI', {}, { timeout: 20000 })
   fireEvent.click(opener)
