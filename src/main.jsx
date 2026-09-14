@@ -290,6 +290,7 @@ function App() {
   const [pendingComposer, setPendingComposer] = useState(null);
   const taskModalRef = useRef(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -299,6 +300,8 @@ function App() {
   const markWhatsNewSeen = useCallback(() => setWhatsNewUnread(false), []);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const notifRef = useRef(null);
+  const messagesRef = useRef(null);
+  const mobileNavRef = useRef(null);
   useEffect(() => {
     if (!showModal) return undefined;
     const previouslyFocused = document.activeElement;
@@ -621,6 +624,14 @@ function App() {
     const handler = (event) => {
       if (notifRef.current && !notifRef.current.contains(event.target))
         setNotificationOpen(false);
+      // The mobile pill nav opens the same panel as the header icon, so a click
+      // there has to count as inside it or the pill reopens what it just closed.
+      if (
+        messagesRef.current &&
+        !messagesRef.current.contains(event.target) &&
+        !mobileNavRef.current?.contains(event.target)
+      )
+        setMessagesOpen(false);
       if (
         profileMenuRef.current &&
         !profileMenuRef.current.contains(event.target)
@@ -645,6 +656,7 @@ function App() {
     const closeOverlays = (event) => {
       if (event.key !== "Escape") return;
       setNotificationOpen(false);
+      setMessagesOpen(false);
       setProfileMenuOpen(false);
       setWorkspaceMenuOpen(false);
       setShowModal(false);
@@ -1606,6 +1618,7 @@ function App() {
   };
   const openNotification = async (notification) => {
     setNotificationOpen(false);
+    setMessagesOpen(false);
     markNotificationRead(notification.id);
     const resolved = resolveNotificationTarget(notification, {
       tasks,
@@ -1943,14 +1956,14 @@ function App() {
   const unreadConversationNotifications = workspaceData.notifications.filter(
     (notification) => isConversationNotification(notification) && !notification.read,
   );
-  const latestUnreadConversationNotification = [...unreadConversationNotifications]
-    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
-  const openConversationNotifications = () => {
-    if (latestUnreadConversationNotification) {
-      void openNotification(latestUnreadConversationNotification);
-      return;
-    }
-    setActive("Chats");
+  // Newest first. The panel is a list to pick from, so it keeps every unread
+  // alert rather than the single newest one it used to jump straight into.
+  const conversationAlerts = [...unreadConversationNotifications].sort(
+    (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  );
+  const toggleMessages = () => {
+    setNotificationOpen(false);
+    setMessagesOpen((current) => !current);
   };
 
   // Grouped by what they're for rather than dumped in one flat list: the two
@@ -2041,7 +2054,7 @@ function App() {
       badge: unreadConversationNotifications.length,
       badgeTone: "info",
       active: ["Chats", "Channels"].includes(active),
-      onSelect: openConversationNotifications,
+      onSelect: toggleMessages,
     },
   ].filter(Boolean);
   // Zuri holds the bar's exact centre, so the tiles are split into two halves
@@ -2439,21 +2452,75 @@ function App() {
               <RefreshCw size={18} />
             </button>
 
-            <button
-              type="button"
-              onClick={openConversationNotifications}
-              className="relative hidden items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
-              aria-label="Open messages"
-              title="Open chats and channels"
-            >
-              <MessageSquare size={17} />
-              Messages
-              {unreadConversationNotifications.length > 0 && (
-                <span aria-label={`${unreadConversationNotifications.length} unread messages`} className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white ring-2 ring-surface">
-                  {unreadConversationNotifications.length > 99 ? "99+" : unreadConversationNotifications.length}
-                </span>
+            <div className="relative" ref={messagesRef}>
+              <button
+                type="button"
+                onClick={toggleMessages}
+                className="relative hidden h-11 w-11 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
+                aria-label="Open messages"
+                title="Open chats and channels"
+              >
+                <MessageSquare size={20} />
+                {unreadConversationNotifications.length > 0 && (
+                  <span aria-label={`${unreadConversationNotifications.length} unread messages`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white ring-2 ring-surface">
+                    {unreadConversationNotifications.length > 99 ? "99+" : unreadConversationNotifications.length}
+                  </span>
+                )}
+              </button>
+              {messagesOpen && (
+                <div className="fixed left-4 right-4 top-16 z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80">
+                  <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
+                    <p className="text-xs font-bold text-navy">Messages</p>
+                    <span className="text-[11px] font-medium text-text-muted">
+                      {conversationAlerts.length} unread
+                    </span>
+                  </div>
+                  <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
+                    {conversationAlerts.length ? (
+                      conversationAlerts.slice(0, 6).map((notification) => (
+                        <button
+                          type="button"
+                          key={notification.id}
+                          onClick={() => openNotification(notification)}
+                          aria-label={`Open ${notification.title}`}
+                          className="flex w-full items-start gap-2.5 bg-primary/[0.035] px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary"
+                        >
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
+                              {notification.title}
+                            </span>
+                            {notification.body && (
+                              <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-text-muted">
+                                {notification.body}
+                              </span>
+                            )}
+                            <time className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
+                              <Clock3 size={10} aria-hidden="true" />
+                              {formatDateTime(notification.created_at)}
+                            </time>
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <EmptyState text="No unread messages." />
+                    )}
+                  </div>
+                  <div className="border-t border-border-light px-3.5 py-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMessagesOpen(false);
+                        setActive("Chats");
+                      }}
+                      className="text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      Open Chats
+                    </button>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
 
             <div className="relative" ref={notifRef}>
               <button
@@ -2890,6 +2957,7 @@ function App() {
         bar's centre line between them. Hidden while that drawer is open so the
         pill doesn't sit dimmed under the overlay. ── */}
       <nav
+        ref={mobileNavRef}
         className={cn(
           "fixed bottom-4 left-1/2 z-30 flex w-[min(calc(100vw-1rem),360px)] -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-navy/95 p-1 shadow-lg backdrop-blur transition-opacity duration-200 lg:hidden",
           mobileOpen && "pointer-events-none opacity-0",

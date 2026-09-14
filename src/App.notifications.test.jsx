@@ -72,6 +72,31 @@ it('separates message alerts from workspace activity across the header and mobil
   const messageButton = await screen.findByRole('button', { name: 'Open messages' }, { timeout: 20000 })
   expect(within(messageButton).getByLabelText('2 unread messages')).toBeInTheDocument()
 
+  // The panel lists channel and direct alerts together, newest first, and leaves
+  // workspace activity to the bell.
+  fireEvent.click(messageButton)
+  const alertRows = await screen.findAllByRole(
+    'button',
+    { name: /^Open New (channel|direct) message$/ },
+    { timeout: 20000 },
+  )
+  expect(alertRows).toHaveLength(2)
+  expect(within(alertRows[0]).getByText('New channel message')).toBeInTheDocument()
+  expect(within(alertRows[0]).getByText('Launch updates are ready.')).toBeInTheDocument()
+  expect(within(alertRows[1]).getByText('New direct message')).toBeInTheDocument()
+  expect(within(alertRows[1]).getByText('Can you review this?')).toBeInTheDocument()
+  expect(screen.getByText('2 unread')).toBeInTheDocument()
+  expect(screen.queryByText('Deployment finished')).not.toBeInTheDocument()
+  fireEvent.click(messageButton)
+
+  // The mobile pill opens that same panel, so tapping it lists the alerts
+  // instead of dropping straight into the newest unread thread.
+  const chatsPill = within(mobileNav).getByRole('button', { name: /Chats/ })
+  fireEvent.click(chatsPill)
+  expect(await screen.findByRole('button', { name: 'Open New direct message' })).toBeInTheDocument()
+  fireEvent.click(chatsPill)
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Open New direct message' })).not.toBeInTheDocument())
+
   const bellButton = screen.getByRole('button', { name: 'Open workspace activity notifications' })
   expect(within(bellButton).getByLabelText('1 unread workspace notifications')).toBeInTheDocument()
   fireEvent.click(bellButton)
