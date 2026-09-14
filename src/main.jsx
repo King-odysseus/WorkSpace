@@ -1046,7 +1046,7 @@ function App() {
         // Drop only the deep link params, so a refresh does not reopen the same
         // notification while an ?invite= or ?view= link in the same url survives.
         const remaining = new URLSearchParams(window.location.search);
-        ["notification", "target_type", "target_id"].forEach((key) => remaining.delete(key));
+        ["notification", "target_type", "target_id", "message_id"].forEach((key) => remaining.delete(key));
         const query = remaining.toString();
         window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
       }
@@ -1635,7 +1635,7 @@ function App() {
       return;
     }
     if (resolved.action === "chat") {
-      requestChatThread(notification.target_type, notification.target_id);
+      requestChatThread(notification.target_type, notification.target_id, resolved.messageId);
       setChatThreadRequest((current) => current + 1);
       setActive(resolved.destination);
       return;

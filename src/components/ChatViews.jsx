@@ -118,6 +118,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [directMessages, setDirectMessages] = useState([])
   const [directMessageConversationId, setDirectMessageConversationId] = useState(null)
   const [directLoading, setDirectLoading] = useState(false)
+  const [channelMessages, setChannelMessages] = useState([])
+  const [channelMessageName, setChannelMessageName] = useState(null)
+  const [channelLoading, setChannelLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState(null)
@@ -144,6 +147,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [uploadingFile, setUploadingFile] = useState(false)
   const [channelForm, setChannelForm] = useState({ name: '', description: '', is_private: false, member_ids: [] })
   const [directMemberIds, setDirectMemberIds] = useState([])
+  // Set when a notification names a specific message. `revealMessageId` holds the
+  // reader on that message by standing the newest-message pin down, and persists
+  // until they pick another thread or send; `highlightMessageId` is only the ring
+  // that fades, and is cleared on a timer.
+  const [revealMessageId, setRevealMessageId] = useState(null)
+  const [highlightMessageId, setHighlightMessageId] = useState(null)
   const messageScrollRef = useRef(null)
   const messageInputRef = useRef(null)
   const draftKeyRef = useRef(null)
@@ -206,6 +215,31 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     return () => { current = false }
   }, [selectedConversationId, data.directConversations, data.archivedConversations])
 
+  // The workspace snapshot is shared across every channel and is capped at the
+  // newest 100 messages workspace-wide. That is enough for badges, but it can
+  // omit a channel's own post and leave a notification pointing at a message
+  // the reader cannot see. A named channel is fetched independently.
+  useEffect(() => {
+    if (mode !== 'channels' || !selectedChannel) return undefined
+    let current = true
+    setChannelLoading(true)
+    fetch(`/api/workspaces/${workspaceId}/chat-messages/?channel=${encodeURIComponent(selectedChannel)}`, {
+      credentials: 'include',
+      headers: { 'X-Workspace-Id': String(workspaceId) },
+    })
+      .then(response => response.json().then(payload => ({ response, payload })))
+      .then(({ response, payload }) => {
+        if (!response.ok) throw new Error(payload.error || 'Channel messages could not be loaded.')
+        if (current) {
+          setChannelMessages(payload.messages || [])
+          setChannelMessageName(selectedChannel)
+        }
+      })
+      .catch(loadError => { if (current) setError(loadError.message) })
+      .finally(() => { if (current) setChannelLoading(false) })
+    return () => { current = false }
+  }, [mode, selectedChannel, workspaceId, threadRequest])
+
   // Which conversation the fetched messages belong to. The workspace refresh
   // hands back directConversations as a fresh array whenever anything in the
   // workspace changes, including changes with nothing to do with chat, so this
@@ -214,7 +248,11 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   // am already reading", and every re-run swapped the thread for the loading
   // placeholder.
   const directThreadReady = directMessageConversationId === selectedConversationId
-  const visibleChannelMessages = data.messages.filter(message => message.channel === selectedChannel && (!search.trim() || `${message.author_name} ${message.message}`.toLowerCase().includes(search.trim().toLowerCase())))
+  const channelThreadReady = channelMessageName === selectedChannel
+  const activeChannelMessages = channelThreadReady
+    ? channelMessages
+    : data.messages.filter(message => message.channel === selectedChannel)
+  const visibleChannelMessages = activeChannelMessages.filter(message => !search.trim() || `${message.author_name} ${message.message}`.toLowerCase().includes(search.trim().toLowerCase()))
   const visibleDirectMessages = directThreadReady ? directMessages.filter(message => !search.trim() || `${message.author_name} ${message.message}`.toLowerCase().includes(search.trim().toLowerCase())) : []
   const groupedMessages = visibleChannelMessages.reduce((groups, message) => {
     const key = toDateKey(message.created_at)
@@ -232,7 +270,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const groupConversations = filteredConversations.filter(conversation => conversation.is_group)
   const directConversations = filteredConversations.filter(conversation => !conversation.is_group)
   const activeMessages = mode === 'channels'
-    ? data.messages.filter(message => message.channel === selectedChannel)
+    ? activeChannelMessages
     : directThreadReady ? directMessages : []
   const sharedItems = activeMessages.flatMap(message => {
     if (message.deleted_at) return []
@@ -268,12 +306,37 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   // Pin the feed to the newest message by scrolling the feed element itself.
   // scrollIntoView also scrolls every scrollable ancestor, which made the whole
-  // page jump instead of simply revealing the message that was just sent.
+  // page jump instead of simply revealing the message that was just sent. The
+  // pin stands down while an alert is holding the reader on an older message,
+  // and again while that message fades, or the pin would yank them away from it.
   useLayoutEffect(() => {
     const scroller = messageScrollRef.current
-    if (!scroller) return
+    if (!scroller || revealMessageId) return
     scroller.scrollTop = scroller.scrollHeight
-  }, [mode, selectedChannel, selectedConversationId, activePane, directLoading, lastChannelMessageId, lastDirectMessageId, visibleChannelMessages.length, visibleDirectMessages.length])
+  }, [mode, selectedChannel, selectedConversationId, activePane, directLoading, lastChannelMessageId, lastDirectMessageId, visibleChannelMessages.length, visibleDirectMessages.length, revealMessageId])
+
+  // Bring the alerted message into view in the middle of the feed, the same way
+  // the pin scrolls the feed element rather than calling scrollIntoView. Re-runs
+  // without effect when the target is not in the feed yet, which is the normal
+  // case for a direct conversation: the thread is still being fetched, and the
+  // message count changing is what brings it back here.
+  useLayoutEffect(() => {
+    const scroller = messageScrollRef.current
+    if (!scroller || !revealMessageId) return
+    const target = scroller.querySelector(`[data-message-id="${revealMessageId}"]`)
+    if (!target) return
+    const scrollerBox = scroller.getBoundingClientRect()
+    const targetBox = target.getBoundingClientRect()
+    scroller.scrollTop += targetBox.top - scrollerBox.top - (scrollerBox.height - targetBox.height) / 2
+  }, [revealMessageId, highlightMessageId, activeMessages.length, directLoading, channelLoading, activePane, mode, selectedChannel, selectedConversationId])
+
+  // The ring is a "this is the one" cue, not a state to stay in, so it clears on
+  // its own and leaves the reader where they were.
+  useEffect(() => {
+    if (!highlightMessageId) return undefined
+    const timer = setTimeout(() => setHighlightMessageId(null), 2500)
+    return () => clearTimeout(timer)
+  }, [highlightMessageId])
 
   const submitChannelMessage = async event => {
     event.preventDefault()
@@ -290,10 +353,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Message could not be sent.')
+      setChannelMessages(current => channelMessageName === selectedChannel ? [...current, payload.message] : [payload.message])
+      setChannelMessageName(selectedChannel)
       setDraft('')
       setReplyTo(null)
       setSharedDocumentIds([]); setSharedFileIds([]); setShareOpen(false)
       setEmojiOpen(false)
+      // Sending is the clearest sign the reader is done with the alerted message,
+      // so the pin takes the feed back to the newest one.
+      setRevealMessageId(null)
       onRefresh()
     } catch (submitError) {
       setError(submitError.message)
@@ -322,6 +390,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       setReplyTo(null)
       setSharedDocumentIds([]); setSharedFileIds([]); setShareOpen(false)
       setEmojiOpen(false)
+      setRevealMessageId(null)
       onRefresh()
     } catch (submitError) {
       setError(submitError.message)
@@ -389,12 +458,16 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   // land on that thread and not just on this view. `threadRequest` is a counter
   // the shell bumps on every open, which also covers the case where the reader
   // is already on this view: a prop change re-runs the effect, where a mount-only
-  // effect would have been skipped.
+  // effect would have been skipped. When the alert also names the message, this
+  // is what points the feed at it; the scrolling happens further down, once that
+  // message is actually in the feed.
   useEffect(() => {
     const thread = takePendingChatThread()
     if (!thread) return
     if (thread.targetType === 'chat_channel') selectChannel(thread.targetId)
     else selectConversation(Number(thread.targetId))
+    setRevealMessageId(thread.messageId || null)
+    setHighlightMessageId(thread.messageId || null)
   }, [threadRequest, workspaceId])
 
   const deleteChannel = async channel => {
@@ -545,6 +618,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setSearch('')
     setReplyTo(null)
     setActivePane('posts')
+    // Opening a thread by hand is a fresh start, so any message an earlier alert
+    // was holding the reader on stops mattering.
+    setRevealMessageId(null)
     markConversationRead('chat_channel', channelName)
   }
   const selectConversation = conversationId => {
@@ -552,6 +628,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setSearch('')
     setReplyTo(null)
     setActivePane('posts')
+    setRevealMessageId(null)
     markConversationRead('direct_conversation', conversationId)
   }
   const toggleReaction = async (message, emoji) => {
@@ -613,7 +690,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     if (mode === 'channels' && selectedChannel) markConversationRead('chat_channel', selectedChannel)
   }, [mode, selectedChannel, workspaceId])
   const renderMessage = message => {
-    const parent = message.parent_id ? (mode === 'channels' ? data.messages : directMessages).find(item => item.id === message.parent_id) : null
+    const parent = message.parent_id ? (mode === 'channels' ? activeChannelMessages : directMessages).find(item => item.id === message.parent_id) : null
     const reactions = reactionUpdates[message.id] || message.reactions || []
     const author = memberForMessage(message)
     const isMine = String(author.id) === String(currentUserId)
@@ -625,7 +702,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const hasMessageActions = !isEditing && !deletedAt
     const receiptScope = mode === 'direct' && !selectedConversation?.is_group ? '' : ' by everyone'
     const receiptLabel = message.read ? `Read${receiptScope}` : message.delivered ? 'Delivered' : 'Sent'
-    return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''} ${hasMessageActions ? 'chat-message-has-actions' : ''}`} key={message.id}>
+    // data-message-id is how the feed finds this row to scroll to when a
+    // notification points at it. The highlight is the same reference, only for as
+    // long as the ring lasts.
+    const highlighted = highlightMessageId !== null && String(message.id) === String(highlightMessageId)
+    const archivedThread = mode === 'direct' && selectedConversation?.is_archived
+    return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''} ${hasMessageActions ? 'chat-message-has-actions' : ''} ${archivedThread ? 'chat-message-archived' : ''} ${highlighted ? 'chat-message-highlight' : ''}`} data-message-id={message.id} key={message.id}>
       <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={effectivePresence(author)} small />
       <div className="chat-message-body">
         <div className="chat-message-meta">
@@ -776,6 +858,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           <button type="button" role="tab" aria-selected={activePane === 'files'} className={activePane === 'files' ? 'active' : ''} onClick={() => setActivePane('files')}><FolderOpen size={15} /> Files{sharedItems.length > 0 && <span>{sharedItems.length}</span>}</button>
           <button type="button" role="tab" aria-selected={activePane === 'about'} className={activePane === 'about' ? 'active' : ''} onClick={() => setActivePane('about')}><Info size={15} /> About</button>
         </nav>
+        {mode === 'direct' && selectedConversation?.is_archived && <div className="chat-archive-banner"><Archive size={15} /><span>Archived chat</span><button type="button" onClick={() => restoreConversation(selectedConversation)}><ArchiveRestore size={14} /> Restore</button></div>}
         <div className={`chat-feed-body ${detailsOpen ? 'details-open' : ''}`}>
           <div className="chat-main-pane">
             {activePane === 'posts' ? renderPostsPane() : activePane === 'files' ? renderFilesPane() : renderAboutPane()}

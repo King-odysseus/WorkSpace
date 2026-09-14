@@ -22,12 +22,18 @@ export function takePendingDirectMessage() {
 // Hand-off for "open this existing thread" requests, which is what a chat
 // notification carries. Distinct from the member hand-off above because the
 // notification already names the conversation (its id) or the channel (its
-// name), so no conversation has to be created and no member looked up.
+// name), so no conversation has to be created and no member looked up. A
+// message id rides along when the alert is about one message, so the thread can
+// open on it rather than wherever the reader last was.
 let pendingChatThread = null;
 
-export function requestChatThread(targetType, targetId) {
+export function requestChatThread(targetType, targetId, messageId) {
   if (targetId === undefined || targetId === null || targetId === '') return;
-  pendingChatThread = { targetType, targetId: String(targetId) };
+  pendingChatThread = {
+    targetType,
+    targetId: String(targetId),
+    messageId: messageId === undefined || messageId === null || messageId === '' ? '' : String(messageId),
+  };
 }
 
 export function takePendingChatThread() {

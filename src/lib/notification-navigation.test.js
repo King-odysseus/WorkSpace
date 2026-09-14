@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseNotificationDeepLink, resolveNotificationTarget } from './notification-navigation.js'
+import { messageIdFromGroupKey, parseNotificationDeepLink, resolveNotificationTarget } from './notification-navigation.js'
 
 const notification = (target_type, target_id) => ({ target_type, target_id })
 
@@ -29,18 +29,39 @@ describe('resolveNotificationTarget', () => {
   })
 
   it('opens the named chat thread rather than only its view', () => {
-    expect(resolveNotificationTarget(notification('direct_conversation', 12))).toEqual({ action: 'chat', targetType: 'direct_conversation', targetId: '12', destination: 'Chats' })
-    expect(resolveNotificationTarget(notification('chat_channel', 'general'))).toEqual({ action: 'chat', targetType: 'chat_channel', targetId: 'general', destination: 'Channels' })
+    expect(resolveNotificationTarget(notification('direct_conversation', 12))).toEqual({ action: 'chat', targetType: 'direct_conversation', targetId: '12', destination: 'Chats', messageId: '' })
+    expect(resolveNotificationTarget(notification('chat_channel', 'general'))).toEqual({ action: 'chat', targetType: 'chat_channel', targetId: 'general', destination: 'Channels', messageId: '' })
+  })
+
+  it('carries the message a chat alert is about, from either the row or a push link', () => {
+    // A bell row was loaded first, so the reference comes back as the group key
+    // create_notification wrote; a push tap only has the url param.
+    expect(resolveNotificationTarget({ target_type: 'direct_conversation', target_id: 12, group_key: 'message:88' })).toMatchObject({ action: 'chat', messageId: '88' })
+    expect(resolveNotificationTarget({ target_type: 'chat_channel', target_id: 'general', message_id: '91' })).toMatchObject({ action: 'chat', messageId: '91' })
+    expect(resolveNotificationTarget({ target_type: 'chat_channel', target_id: 'general', group_key: 'chat_channel:general' })).toMatchObject({ action: 'chat', messageId: '' })
+  })
+})
+
+describe('messageIdFromGroupKey', () => {
+  it('reads the message out of the key create_notification writes and ignores every other key', () => {
+    expect(messageIdFromGroupKey('message:42')).toBe('42')
+    expect(messageIdFromGroupKey('task:42')).toBe('')
+    expect(messageIdFromGroupKey('')).toBe('')
+    expect(messageIdFromGroupKey(undefined)).toBe('')
   })
 })
 
 describe('parseNotificationDeepLink', () => {
   it('reads the notification and its target from a full url', () => {
-    expect(parseNotificationDeepLink('/?notification=7&target_type=task&target_id=42')).toEqual({ id: '7', target_type: 'task', target_id: '42' })
+    expect(parseNotificationDeepLink('/?notification=7&target_type=task&target_id=42')).toEqual({ id: '7', target_type: 'task', target_id: '42', message_id: '' })
   })
 
   it('reads a bare query string the same way', () => {
-    expect(parseNotificationDeepLink('?notification=7&target_type=check_in&target_id=3')).toEqual({ id: '7', target_type: 'check_in', target_id: '3' })
+    expect(parseNotificationDeepLink('?notification=7&target_type=check_in&target_id=3')).toEqual({ id: '7', target_type: 'check_in', target_id: '3', message_id: '' })
+  })
+
+  it('reads the message a chat push link was sent for', () => {
+    expect(parseNotificationDeepLink('/?notification=7&target_type=chat_channel&target_id=general&message_id=91')).toEqual({ id: '7', target_type: 'chat_channel', target_id: 'general', message_id: '91' })
   })
 
   it('returns null when there is no notification to open', () => {
@@ -50,6 +71,6 @@ describe('parseNotificationDeepLink', () => {
   })
 
   it('keeps the notification when the target params are missing', () => {
-    expect(parseNotificationDeepLink('/?notification=7')).toEqual({ id: '7', target_type: '', target_id: '' })
+    expect(parseNotificationDeepLink('/?notification=7')).toEqual({ id: '7', target_type: '', target_id: '', message_id: '' })
   })
 })

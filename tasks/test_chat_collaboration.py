@@ -69,6 +69,23 @@ class ChatCollaborationTests(TestCase):
         self.assertEqual(nested_reply.status_code, 201)
         self.assertEqual(nested_reply.json()['message']['parent_id'], first_reply.json()['message']['id'])
 
+    def test_channel_message_feed_can_be_loaded_for_one_channel(self):
+        self.post_channel_message('General note')
+        launch = self.client.post(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            data=json.dumps({'channel': 'product-launch', 'message': 'Launch note'}),
+            content_type='application/json',
+        )
+        self.assertEqual(launch.status_code, 201)
+
+        response = self.client.get(
+            reverse('chat-message-list', args=[self.workspace.id]),
+            {'channel': 'general'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([message['message'] for message in response.json()['messages']], ['General note'])
+
     def test_direct_message_can_reply_to_a_conversation_message(self):
         conversation = self.client.post(
             reverse('direct-conversation-list', args=[self.workspace.id]),

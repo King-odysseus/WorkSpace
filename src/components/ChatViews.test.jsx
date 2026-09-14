@@ -211,6 +211,102 @@ it('offers Reply on a reply and sends the reply id as the parent', async () => {
   })
 })
 
+it('offers Reply on a channel reply and sends the reply id as the parent', async () => {
+  const messages = [
+    { id: 1, author_id: 9, author_name: 'Dana Reed', message: 'Can you review this?', created_at: '2026-09-12T10:00:00Z', channel: 'general', reply_count: 1 },
+    { id: 2, author_id: currentUserId, author_name: 'Ada Lane', message: 'Yes, I will.', created_at: '2026-09-12T10:01:00Z', channel: 'general', parent_id: 1 },
+  ]
+  const sent = { id: 3, author_id: currentUserId, author_name: 'Ada Lane', message: 'Thanks again.', created_at: '2026-09-12T10:02:00Z', channel: 'general', parent_id: 2 }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/chat-messages/?channel=general': { messages },
+    '/chat-messages/': { message: sent },
+    '/notifications/': { status: 200, body: {} },
+  })
+  render(
+    <ChatWorkspaceView
+      viewType="channels"
+      data={{ ...dataFor(), channels: [{ id: 20, name: 'general', created_by: 9, is_private: false, member_ids: [] }] }}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      onRefresh={vi.fn()}
+      onError={vi.fn()}
+      onConfirm={vi.fn()}
+      onNavigate={vi.fn()}
+    />,
+  )
+  const reply = await screen.findByText('Yes, I will.')
+  const replyRow = reply.closest('.chat-message')
+
+  fireEvent.click(within(replyRow).getByRole('button', { name: 'Reply' }))
+  expect(screen.getByText(/Replying to/)).toBeInTheDocument()
+
+  const input = screen.getByRole('textbox', { name: 'Message' })
+  fireEvent.change(input, { target: { value: 'Thanks again.' } })
+  fireEvent.submit(input.closest('form'))
+
+  await waitFor(() => {
+    const sendCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/chat-messages/') && init.method === 'POST')
+    expect(sendCall).toBeTruthy()
+    expect(JSON.parse(sendCall[1].body)).toMatchObject({ channel: 'general', message: 'Thanks again.', parent_id: 2 })
+  })
+})
+
+it('loads and highlights the channel message a notification names', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/chat-messages/?channel=general': { messages: [{ id: 44, author_id: 9, author_name: 'Dana Reed', message: 'Deployment is ready.', created_at: '2026-09-12T10:00:00Z', channel: 'general' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  requestChatThread('chat_channel', 'general', 44)
+
+  render(
+    <ChatWorkspaceView
+      viewType="channels"
+      data={{ ...dataFor(), channels: [{ id: 20, name: 'general', created_by: 9, is_private: false, member_ids: [] }] }}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      onRefresh={vi.fn()}
+      onError={vi.fn()}
+      onConfirm={vi.fn()}
+      onNavigate={vi.fn()}
+    />,
+  )
+
+  const targeted = await screen.findByText('Deployment is ready.')
+  const row = targeted.closest('.chat-message')
+  expect(row).toHaveAttribute('data-message-id', '44')
+  expect(row).toHaveClass('chat-message-highlight')
+})
+
+it('keeps Delete available on an archived chat message', async () => {
+  const archived = { ...conversation, is_archived: true }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 7, author_id: currentUserId, author_name: 'Ada Lane', message: 'Remove this.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/direct-messages/7/': { message: { id: 7, deleted_at: '2026-09-12T11:00:00Z' } },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  renderChat({ ...dataFor(), directConversations: [], archivedConversations: [archived] }, vi.fn(), onConfirm)
+
+  fireEvent.click(await screen.findByRole('tab', { name: /^Archived/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  const message = await screen.findByText('Remove this.')
+  const row = message.closest('.chat-message')
+  expect(row).toHaveClass('chat-message-archived')
+
+  fireEvent.click(within(row).getByRole('button', { name: 'Delete message' }))
+
+  await waitFor(() => {
+    const deleteCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-messages/7/') && init.method === 'DELETE')
+    expect(deleteCall).toBeTruthy()
+  })
+})
+
 it('opens the compact composer emoji popup and inserts the choice', async () => {
   mockApi({
     '/documents/': { documents: [] },
@@ -639,4 +735,28 @@ it('opens the thread a chat notification names without a click', async () => {
   renderChat(dataFor())
 
   await screen.findByText('See you then.')
+})
+
+it('points the feed at the message a chat notification names', async () => {
+  // The alert names the thread, but the message inside it is what the reader was
+  // sent to see, so it has to be marked - in the fetched thread, which arrives
+  // after the view has already decided which thread to show.
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [
+      { id: 4, author_name: 'Dana Reed', message: 'Earlier note.', created_at: '2026-09-12T09:00:00Z' },
+      { id: 9, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' },
+    ] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  requestChatThread('direct_conversation', conversation.id, 9)
+
+  renderChat(dataFor())
+
+  const targeted = await screen.findByText('See you then.')
+  const row = targeted.closest('.chat-message')
+  expect(row).toHaveAttribute('data-message-id', '9')
+  expect(row).toHaveClass('chat-message-highlight')
+  expect(screen.getByText('Earlier note.').closest('.chat-message')).not.toHaveClass('chat-message-highlight')
 })

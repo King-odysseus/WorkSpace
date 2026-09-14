@@ -13,6 +13,23 @@ export const notificationDestinations = {
 
 const sameId = (left, right) => String(left) === String(right)
 
+const MESSAGE_GROUP_PREFIX = 'message:'
+
+// A chat alert records the message it is about in group_key (see
+// create_notification in tasks/views.py), which is the slot the backend already
+// had for a grouping key. Reading it back here is what turns "open the thread"
+// into "open the thread on this message". Returns '' for every other kind of
+// alert, whose group_key is shaped "<target_type>:<target_id>" or empty.
+export function messageIdFromGroupKey(groupKey) {
+  const text = String(groupKey || '')
+  return text.startsWith(MESSAGE_GROUP_PREFIX) ? text.slice(MESSAGE_GROUP_PREFIX.length) : ''
+}
+
+// The same reference travels two ways: a bell row carries group_key, because the
+// notification was loaded first, while a push tap carries it as its own url
+// param, because tapping resolves the link without loading the row.
+const messageIdOf = notification => String(notification.message_id || '') || messageIdFromGroupKey(notification.group_key)
+
 // A push carries a deep link so tapping it lands on the record the notification
 // is about. Both entry points use this: a cold start reads it off
 // window.location, an already-running window receives the same url in an
@@ -28,6 +45,7 @@ export function parseNotificationDeepLink(value) {
     id,
     target_type: params.get('target_type') || '',
     target_id: params.get('target_id') || '',
+    message_id: params.get('message_id') || '',
   }
 }
 
@@ -61,9 +79,10 @@ export function resolveNotificationTarget(notification, { tasks = [], events = [
     return { action: 'pending', targetType, targetId }
   }
   // A chat alert names the thread itself - a conversation id or a channel name -
-  // so the Chats view has to open that thread rather than just open the view.
+  // so the Chats view has to open that thread rather than just open the view,
+  // and lands on the message the alert is about when it carries one.
   if (targetType === 'chat_channel' || targetType === 'direct_conversation') {
-    return { action: 'chat', targetType, targetId, destination: notificationDestinations[targetType] }
+    return { action: 'chat', targetType, targetId, messageId: messageIdOf(notification), destination: notificationDestinations[targetType] }
   }
   return { action: 'destination', targetType, destination: notificationDestinations[targetType] }
 }

@@ -641,6 +641,20 @@ html[data-theme='light'] .theme-toggle {
 .chat-day + .chat-day { margin-top: 20px; }
 .chat-day h3 { margin: 0 0 3px; padding-bottom: 7px; border-bottom: 1px solid #EEF0F3; color: #8A93A3; font-size: 10px; text-transform: uppercase; letter-spacing: .45px; }
 .chat-message { display: flex; gap: 10px; padding: 14px 0; }
+/* The message a notification pointed at is tinted briefly so the reader can see
+   which one it was. The tint is an inset shadow rather than a background so it
+   layers over the row instead of replacing it - the dark theme paints every
+   message row its own background, and an animation that faded a background out
+   would have left a see-through hole in that theme. The bleed widens the tint
+   past the row's padding without changing its width, and nothing shifts. */
+.chat-message-highlight { margin: 0 -8px; padding: 14px 8px; animation: chat-message-highlight-fade 2.5s ease-out forwards; }
+@keyframes chat-message-highlight-fade {
+  0%, 55% { box-shadow: inset 0 0 0 100px rgba(29, 78, 216, .12); }
+  100% { box-shadow: inset 0 0 0 100px rgba(29, 78, 216, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-message-highlight { animation: none; box-shadow: inset 0 0 0 100px rgba(29, 78, 216, .12); }
+}
 .chat-message-meta { display: flex; gap: 9px; align-items: center; }
 .chat-message-meta strong { color: #071A2E; font-size: 11px; }
 .chat-message-meta span { color: #1D4ED8; font-size: 10px; }
@@ -3857,6 +3871,7 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-3 p { background:
 html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:#3A1F2E; }
 .chat-workspace-view .chat-message-actions { position:absolute; top:calc(100% + 4px); left:0; z-index:3; display:flex; width:max-content; max-width:min(420px, calc(100vw - 56px)); flex-wrap:nowrap; align-items:center; gap:3px; margin:0; padding:3px; overflow-x:auto; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); box-shadow:0 3px 10px rgb(7 26 46 / 14%); opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-3px); transition:opacity .15s ease, transform .15s ease, visibility .15s ease; scrollbar-width:none; }
 .chat-workspace-view .chat-message:hover .chat-message-actions, .chat-workspace-view .chat-message:focus-within .chat-message-actions, .chat-workspace-view .chat-message-actions.has-reactions { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
+.chat-workspace-view .chat-message-archived .chat-message-actions { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
 .chat-workspace-view .chat-message-mine .chat-message-actions { right:0; left:auto; justify-content:flex-end; }
 .chat-workspace-view .chat-message-actions .chat-reactions { position:static; display:flex; flex-wrap:nowrap; width:auto; max-width:none; gap:3px; margin:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; opacity:1; pointer-events:auto; transform:none; }
 .chat-workspace-view .chat-reactions button { border:0; padding:2px 5px; background:transparent; font-size:11px; }
@@ -3872,6 +3887,9 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .chat-workspace-view .chat-message-actions .chat-delete-button { color:#B42318; }
 .chat-workspace-view .chat-message-actions :is(.chat-reply-button, .chat-edit-button, .chat-delete-button):hover, .chat-workspace-view .chat-message-actions :is(.chat-reply-button, .chat-edit-button, .chat-delete-button):focus-visible { background:#EAF0FF; outline:none; }
 .chat-workspace-view .chat-message-actions .chat-delete-button:hover, .chat-workspace-view .chat-message-actions .chat-delete-button:focus-visible { background:#FEE4E2; }
+.chat-workspace-view .chat-archive-banner { display:flex; align-items:center; gap:8px; padding:8px 14px; border-top:1px solid var(--workspace-border); background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font-size:12px; font-weight:700; }
+.chat-workspace-view .chat-archive-banner button { display:inline-flex; align-items:center; gap:5px; margin-left:auto; padding:5px 9px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface); color:var(--workspace-text); cursor:pointer; font-size:11px; font-weight:700; }
+.chat-workspace-view .chat-archive-banner button:hover, .chat-workspace-view .chat-archive-banner button:focus-visible { border-color:var(--focus-ring); color:var(--workspace-primary); outline:none; }
 .chat-workspace-view .chat-message-mine { flex-direction: row-reverse; }
 .chat-workspace-view .chat-message-mine .chat-message-body { display: flex; flex-direction: column; align-items: flex-end; }
 .chat-workspace-view .chat-edited-marker { color:var(--workspace-text-soft); font-size:10px; font-style:italic; }

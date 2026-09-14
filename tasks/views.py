@@ -149,21 +149,32 @@ NOTIFICATION_KIND_PREFERENCE = {
 }
 
 
-def notification_deep_link(notification_id, target_type='', target_id=''):
+def notification_deep_link(notification_id, target_type='', target_id='', message_id=''):
     """The app deep links by query string (see the ?view= handling in
     src/main.jsx). A push carries the notification and its target so tapping it
     lands on the record the notification is about rather than the default view.
-    The service worker reads only ``url``; the app parses the rest."""
+    The service worker reads only ``url``; the app parses the rest. A chat alert
+    also carries the message, so the thread opens on that message."""
     params = {'notification': str(notification_id)}
     if target_type:
         params['target_type'] = str(target_type)
     if target_id:
         params['target_id'] = str(target_id)
+    if message_id:
+        params['message_id'] = str(message_id)
     return f'/?{urlencode(params)}'
 
 
-def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id='', group_key='', immediate=True):
+def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id='', group_key='', immediate=True, message_id=None):
+    """``message_id`` marks an alert that is about one chat message, so opening it
+    can land on that message inside the thread. It is stored in ``group_key`` as
+    ``message:<id>``, the same slot-and-prefix convention notify_managers already
+    uses for grouping, because WorkspaceNotification has no dedicated column for
+    it. It is also carried in the push deep link, which a tap resolves without
+    loading the notification row first."""
     from .models import WorkspaceNotification
+    if message_id is not None and not group_key:
+        group_key = f'message:{message_id}'
     preference_field = NOTIFICATION_KIND_PREFERENCE.get(kind)
     preference = NotificationPreference.objects.filter(workspace_id=workspace_id, user=recipient).first() if recipient is not None else None
     if preference_field:
@@ -176,7 +187,7 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
     if immediate:
         send_push_to_user(
             recipient, title, body,
-            url=notification_deep_link(notification.id, target_type, target_id),
+            url=notification_deep_link(notification.id, target_type, target_id, message_id or ''),
             sound=preference.notification_sound if preference else True,
             sound_name=preference.notification_sound_name if preference else 'chime',
             volume=preference.notification_volume if preference else 70,
@@ -3685,7 +3696,7 @@ def shared_chat_items(workspace_id, payload):
     return documents, files
 
 
-def notify_mentions(workspace_id, actor, text, target_type, target_id, recipients=None, exclude_user_ids=None):
+def notify_mentions(workspace_id, actor, text, target_type, target_id, recipients=None, exclude_user_ids=None, message_id=None):
     tokens = {re.sub(r'[^a-z0-9]', '', token.lower()) for token in re.findall(r'@([A-Za-z0-9_.-]+)', text)}
     if not tokens:
         return
@@ -3695,7 +3706,7 @@ def notify_mentions(workspace_id, actor, text, target_type, target_id, recipient
         email_name = member.user.email.split('@')[0].lower()
         aliases = {re.sub(r'[^a-z0-9]', '', alias) for alias in (email_name, member.user.first_name, member.user.last_name)}
         if ('channel' in tokens or tokens.intersection(aliases)) and member.user != actor and member.user.id not in excluded:
-            create_notification(workspace_id, member.user, 'mention', f'{actor.get_full_name() or actor.email} mentioned you', text[:120], target_type=target_type, target_id=target_id)
+            create_notification(workspace_id, member.user, 'mention', f'{actor.get_full_name() or actor.email} mentioned you', text[:120], target_type=target_type, target_id=target_id, message_id=message_id)
 
 
 def reaction_summary(reaction_model, message_ids, user):
@@ -3908,7 +3919,16 @@ def chat_message_list(request, workspace_id):
     ensure_workspace_channels(workspace_id, request.user)
     allowed_channels = set(accessible_chat_channels(workspace_id, request.user).values_list('name', flat=True))
     if request.method == 'GET':
-        recent_messages = list(ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=allowed_channels).select_related('author').order_by('-created_at')[:100])
+        channel_filter = request.GET.get('channel', '').strip()
+        if channel_filter and channel_filter not in allowed_channels:
+            return JsonResponse({'error': 'Channel was not found.'}, status=404)
+        messages_query = ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=allowed_channels)
+        if channel_filter:
+            messages_query = messages_query.filter(channel=channel_filter)
+        # A named channel is the reader's current thread, so return a deeper
+        # window than the workspace snapshot. The general 100-message cap can
+        # otherwise be filled by other channels and hide the post an alert names.
+        recent_messages = list(messages_query.select_related('author').order_by('-created_at')[:500])
         messages = reversed(recent_messages)
         return JsonResponse({'messages': serialize_chat_messages(messages, request.user)})
     try:
@@ -3945,8 +3965,8 @@ def chat_message_list(request, workspace_id):
     recipients = channel_record.members.all() if channel_record and channel_record.is_private else User.objects.filter(workspace_memberships__workspace_id=workspace_id)
     sender = request.user.get_full_name() or request.user.email
     for recipient in recipients.exclude(id=request.user.id).distinct():
-        create_notification(workspace_id, recipient, 'channel_message', f'New message in #{channel}', f'{sender}: {message_text[:100]}', target_type='chat_channel', target_id=channel)
-    notify_mentions(workspace_id, request.user, message_text, 'chat_channel', channel)
+        create_notification(workspace_id, recipient, 'channel_message', f'New message in #{channel}', f'{sender}: {message_text[:100]}', target_type='chat_channel', target_id=channel, message_id=message.id)
+    notify_mentions(workspace_id, request.user, message_text, 'chat_channel', channel, message_id=message.id)
     return JsonResponse({'message': serialize_chat_messages([message], request.user)[0]}, status=201)
 
 
@@ -4109,8 +4129,8 @@ def direct_message_list(request, conversation_id):
     message = DirectMessage.objects.create(conversation=conversation, author=request.user, parent=parent, message=message_text, shared_documents=shared_documents, shared_files=shared_files)
     sender = request.user.get_full_name() or request.user.email
     for participant in conversation.participants.exclude(id=request.user.id):
-        create_notification(conversation.workspace_id, participant, 'direct_message', f'New message from {sender}', message_text[:120], target_type='direct_conversation', target_id=conversation.id)
-    notify_mentions(conversation.workspace_id, request.user, message_text, 'direct_conversation', conversation.id, Membership.objects.filter(workspace_id=conversation.workspace_id, user__in=conversation.participants.all()).select_related('user'))
+        create_notification(conversation.workspace_id, participant, 'direct_message', f'New message from {sender}', message_text[:120], target_type='direct_conversation', target_id=conversation.id, message_id=message.id)
+    notify_mentions(conversation.workspace_id, request.user, message_text, 'direct_conversation', conversation.id, Membership.objects.filter(workspace_id=conversation.workspace_id, user__in=conversation.participants.all()).select_related('user'), message_id=message.id)
     return JsonResponse({'message': serialize_direct_messages([message], request.user)[0]}, status=201)
 
 
