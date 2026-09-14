@@ -82,7 +82,7 @@ it('reports real unread totals and opens the messages panel from either end of t
   // fixed offset is measured against.
   const header = document.querySelector('header')
   fireEvent.click(messageButton)
-  const panelUnderHeader = (await screen.findByRole('button', { name: 'Open Chats' })).parentElement.parentElement
+  const panelUnderHeader = (await screen.findByRole('button', { name: /^Open Chats/ })).parentElement.parentElement
   expect(panelUnderHeader.className).toContain('sm:top-full')
   expect(panelUnderHeader.className).not.toContain('bottom-[82px]')
   expect(header.contains(panelUnderHeader)).toBe(true)
@@ -90,6 +90,10 @@ it('reports real unread totals and opens the messages panel from either end of t
   // off the page it would say 3, because only 3 conversation rows fit in the
   // 20-row list the client is given.
   expect(within(panelUnderHeader).getByText('25 unread')).toBeTruthy()
+  // A channel alert is listed in this panel, so the panel has to offer a way
+  // into Channels. It used to offer Chats alone, a different screen entirely.
+  expect(within(panelUnderHeader).getByRole('button', { name: 'Open Channels (22)' })).toBeTruthy()
+  expect(within(panelUnderHeader).getByRole('button', { name: 'Open Chats (3)' })).toBeTruthy()
   fireEvent.click(messageButton)
 
   // The pill sits at the bottom, so the panel has to rise from the nav. That
@@ -97,7 +101,7 @@ it('reports real unread totals and opens the messages panel from either end of t
   // either one's backdrop-filter would make it the offset's containing block
   // and drag the panel up to the top of the screen.
   fireEvent.click(chatsPill)
-  const panelAboveNav = (await screen.findByRole('button', { name: 'Open Chats' })).parentElement.parentElement
+  const panelAboveNav = (await screen.findByRole('button', { name: /^Open Chats/ })).parentElement.parentElement
   expect(panelAboveNav.className).toContain('bottom-[82px]')
   expect(panelAboveNav.className).not.toContain('top-16')
   expect(panelAboveNav.className).not.toContain('sm:top-full')

@@ -2012,6 +2012,18 @@ function App() {
   const unreadActivityNotificationCount =
     workspaceData.notificationCounts?.activity ??
     activityNotifications.filter((notification) => !notification.read).length;
+  // The two halves of the conversation total, kept apart so Channels and Chats
+  // can each say how much is waiting on them.
+  const unreadChannelCount =
+    workspaceData.notificationCounts?.channel ??
+    workspaceData.notifications.filter(
+      (notification) => notification.target_type === "chat_channel" && !notification.read,
+    ).length;
+  const unreadDirectCount =
+    workspaceData.notificationCounts?.direct ??
+    workspaceData.notifications.filter(
+      (notification) => notification.target_type === "direct_conversation" && !notification.read,
+    ).length;
   // Newest first. The panel is a list to pick from, so it keeps every unread
   // alert rather than the single newest one it used to jump straight into.
   const conversationAlerts = [...unreadConversationNotifications].sort(
@@ -2044,21 +2056,13 @@ function App() {
         {
           label: "Channels",
           icon: Hash,
-          badge:
-            workspaceData.notificationCounts?.channel ??
-            workspaceData.notifications.filter(
-              (item) => item.target_type === "chat_channel" && !item.read,
-            ).length,
+          badge: unreadChannelCount,
           badgeTone: "info",
         },
         {
           label: "Chats",
           icon: MessageSquare,
-          badge:
-            workspaceData.notificationCounts?.direct ??
-            workspaceData.notifications.filter(
-              (item) => item.target_type === "direct_conversation" && !item.read,
-            ).length,
+          badge: unreadDirectCount,
           badgeTone: "info",
         },
         {
@@ -2210,7 +2214,21 @@ function App() {
           <EmptyState text="No unread messages." />
         )}
       </div>
-      <div className="border-t border-border-light px-3.5 py-2">
+      {/* Both halves of the conversation total get a way out of this panel. A
+          channel alert used to be listed with nowhere to go but Chats, which is
+          a different screen from the one the alert came from. Each link carries
+          what is waiting for it so the two totals stay legible. */}
+      <div className="flex items-center gap-4 border-t border-border-light px-3.5 py-2">
+        <button
+          type="button"
+          onClick={() => {
+            setMessagesOpen(false);
+            setActive("Channels");
+          }}
+          className="text-[11px] font-semibold text-primary hover:underline"
+        >
+          Open Channels{unreadChannelCount > 0 ? ` (${unreadChannelCount})` : ""}
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -2219,7 +2237,7 @@ function App() {
           }}
           className="text-[11px] font-semibold text-primary hover:underline"
         >
-          Open Chats
+          Open Chats{unreadDirectCount > 0 ? ` (${unreadDirectCount})` : ""}
         </button>
       </div>
     </div>
