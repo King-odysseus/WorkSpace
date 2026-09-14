@@ -22,13 +22,16 @@ export default function NotificationPermissionPrompt({ unreadCount }) {
         if (!data.configured) return setStatus('unconfigured')
         if (Notification.permission !== 'granted') return setStatus('off')
         const registration = await navigator.serviceWorker.getRegistration('/')
-        const subscription = await registration?.pushManager.getSubscription()
+        let subscription = await registration?.pushManager.getSubscription()
         if (subscription) {
           const key = new Uint8Array(subscription.options?.applicationServerKey || [])
           const expected = urlBase64ToUint8Array(data.public_key)
           if (key.length !== expected.length || !key.every((value, i) => value === expected[i])) {
-            if (current) setStatus('off')
-            return
+            // A VAPID rotation leaves the browser holding a subscription that
+            // the backend can no longer use. Replace it immediately when the
+            // user already granted permission, then persist the new endpoint.
+            await subscription.unsubscribe()
+            subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: expected })
           }
           await savePushSubscription(subscription)
         }

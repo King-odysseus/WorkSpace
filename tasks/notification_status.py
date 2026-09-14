@@ -1,5 +1,5 @@
-"""Account-wide unread state for notification sounds and installed-app badges."""
-from django.db.models import Count, Max
+"""Account-wide notification arrivals, unread state, and installed-app badges."""
+from django.db.models import Count, Max, Q
 import json
 import time
 
@@ -11,14 +11,22 @@ from .models import NotificationPreference, WorkspaceNotification
 
 
 def _notification_summary(user):
-    unread = WorkspaceNotification.objects.filter(
+    notifications = WorkspaceNotification.objects.filter(
         recipient=user,
         workspace__members=user,
-        read_at__isnull=True,
     )
-    summary = unread.aggregate(unread_count=Count('id'), latest_unread_id=Max('id'))
+    summary = notifications.aggregate(
+        unread_count=Count('id', filter=Q(read_at__isnull=True)),
+        latest_unread_id=Max('id', filter=Q(read_at__isnull=True)),
+        latest_notification_id=Max('id'),
+    )
+    summary['unread_count'] = summary['unread_count'] or 0
     summary['latest_unread_id'] = summary['latest_unread_id'] or 0
-    latest = unread.order_by('-id').only('workspace_id').first() if summary['latest_unread_id'] else None
+    summary['latest_notification_id'] = summary['latest_notification_id'] or 0
+    # Arrival checks must use the newest row even when it was read before the
+    # next poll. A chat view can mark its notifications read immediately, so an
+    # unread-only high-water mark misses real arrivals and silences them.
+    latest = notifications.order_by('-id').only('workspace_id').first() if summary['latest_notification_id'] else None
     preference = NotificationPreference.objects.filter(workspace_id=latest.workspace_id, user=user).first() if latest else None
     summary['sound'] = preference.notification_sound if preference else True
     summary['sound_name'] = preference.notification_sound_name if preference else 'chime'
@@ -48,8 +56,8 @@ def notification_stream(request):
         deadline = time.monotonic() + 25
         while time.monotonic() < deadline:
             summary = _notification_summary(request.user)
-            if summary['latest_unread_id'] > since:
-                yield f"id: {summary['latest_unread_id']}\ndata: {json.dumps(summary)}\n\n"
+            if summary['latest_notification_id'] > since:
+                yield f"id: {summary['latest_notification_id']}\ndata: {json.dumps(summary)}\n\n"
                 return
             yield ': keep-alive\n\n'
             time.sleep(5)

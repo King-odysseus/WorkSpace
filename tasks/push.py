@@ -15,6 +15,24 @@ from pywebpush import WebPushException, webpush
 logger = logging.getLogger(__name__)
 
 
+def normalize_vapid_private_key(value):
+    """Return the base64url DER body pywebpush expects.
+
+    Railway and similar dashboards commonly preserve a private key as a PEM
+    block. pywebpush's string input still needs the body without the PEM
+    markers or line breaks, otherwise it tries to decode the whole block as
+    DER and every push fails before reaching the browser.
+    """
+    value = str(value or '').strip()
+    if '-----BEGIN' not in value:
+        return value
+    return ''.join(
+        line.strip()
+        for line in value.splitlines()
+        if line.strip() and not line.strip().startswith('-----')
+    )
+
+
 def send_push_to_user(user, title, body='', url='/', sound=True, sound_name='chime', volume=70):
     if user is None or not settings.WEB_PUSH_CONFIGURED:
         return 0
@@ -30,7 +48,7 @@ def send_push_to_user(user, title, body='', url='/', sound=True, sound_name='chi
                     'keys': {'p256dh': subscription.p256dh, 'auth': subscription.auth},
                 },
                 data=payload,
-                vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                vapid_private_key=normalize_vapid_private_key(settings.VAPID_PRIVATE_KEY),
                 vapid_claims={'sub': f'mailto:{settings.VAPID_CLAIM_EMAIL}'},
             )
             sent += 1

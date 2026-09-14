@@ -11,8 +11,29 @@ function getAudioContext() {
   if (typeof window === 'undefined') return null
   const AudioContext = window.AudioContext || window.webkitAudioContext
   if (!AudioContext) return null
-  if (!audioContext || audioContext.state === 'closed') audioContext = new AudioContext()
+  if (!audioContext || audioContext.state === 'closed') audioContext = new AudioContext({ latencyHint: 'interactive' })
   return audioContext
+}
+
+async function resumeAudioContext(context) {
+  if (!context) return false
+  if (context.state === 'running') return true
+  try {
+    // Safari reports 'interrupted' as well as 'suspended', so checking for one
+    // specific state leaves the context permanently silent after a phone call
+    // or another interruption.
+    await context.resume()
+  } catch {
+    return false
+  }
+  return context.state === 'running'
+}
+
+// Browsers only allow an AudioContext to start from a user gesture. Call this
+// from the first pointer/key event so later notification polling can actually
+// make a sound instead of hitting a suspended context.
+export async function primeNotificationAudio() {
+  return resumeAudioContext(getAudioContext())
 }
 
 function scheduleTone(context, { frequency, duration, type = 'sine', at = 0, level = 0.12, endFrequency }) {
@@ -35,11 +56,7 @@ export async function playNotificationSound(name = 'chime', volume = 70) {
   const context = getAudioContext()
   const normalizedVolume = Math.max(0, Math.min(100, Number(volume) || 0)) / 100
   if (!context || normalizedVolume === 0) return false
-  try {
-    if (context.state === 'suspended') await context.resume()
-  } catch {
-    return false
-  }
+  if (!(await resumeAudioContext(context))) return false
 
   if (name === 'bell') {
     scheduleTone(context, { frequency: 880, duration: 0.42, type: 'triangle', level: 0.10 * normalizedVolume })

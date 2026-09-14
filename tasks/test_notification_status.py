@@ -1,10 +1,24 @@
 import json
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import NotificationPreference, Workspace, Membership, WorkspaceNotification
+from .push import normalize_vapid_private_key
+
+
+class VapidPrivateKeyTests(SimpleTestCase):
+    def test_normalizes_a_pem_private_key_for_pywebpush(self):
+        pem = '\n'.join((
+            '-----BEGIN PRIVATE KEY-----',
+            'AQIDBAUGBwg=',
+            '-----END PRIVATE KEY-----',
+        ))
+        self.assertEqual(normalize_vapid_private_key(pem), 'AQIDBAUGBwg=')
+
+    def test_leaves_an_already_normalized_key_untouched(self):
+        self.assertEqual(normalize_vapid_private_key(' AQIDBAUGBwg= '), 'AQIDBAUGBwg=')
 
 
 class NotificationSummaryTests(TestCase):
@@ -21,7 +35,7 @@ class NotificationSummaryTests(TestCase):
             Membership.objects.create(workspace=space, user=user)
         for _ in range(25):
             WorkspaceNotification.objects.create(workspace=workspace, recipient=user, kind='mention', title='Unread')
-        newest = WorkspaceNotification.objects.create(workspace=second, recipient=user, kind='mention', title='Other workspace')
+        newest_unread = WorkspaceNotification.objects.create(workspace=second, recipient=user, kind='mention', title='Other workspace')
         NotificationPreference.objects.create(
             workspace=second, user=user,
             notification_sound=False, notification_sound_name='bell', notification_volume=35,
@@ -29,12 +43,29 @@ class NotificationSummaryTests(TestCase):
         WorkspaceNotification.objects.create(workspace=workspace, recipient=user, kind='mention', title='Read', read_at=timezone.now())
         WorkspaceNotification.objects.create(workspace=workspace, recipient=other, kind='mention', title='Private')
         WorkspaceNotification.objects.create(workspace=removed, recipient=user, kind='mention', title='No longer a member')
+        newest_read = WorkspaceNotification.objects.create(
+            workspace=second, recipient=user, kind='mention', title='Already read arrival', read_at=timezone.now(),
+        )
         self.client.force_login(user)
         response = self.client.get(reverse('notification-summary'))
-        self.assertEqual(response.json(), {'unread_count': 26, 'latest_unread_id': newest.id, 'sound': False, 'sound_name': 'bell', 'volume': 35})
+        self.assertEqual(response.json(), {
+            'unread_count': 26,
+            'latest_unread_id': newest_unread.id,
+            'latest_notification_id': newest_read.id,
+            'sound': False,
+            'sound_name': 'bell',
+            'volume': 35,
+        })
         self.assertIn('no-store', response['Cache-Control'])
         WorkspaceNotification.objects.filter(recipient=user).update(read_at=timezone.now())
-        self.assertEqual(self.client.get(reverse('notification-summary')).json(), {'unread_count': 0, 'latest_unread_id': 0, 'sound': True, 'sound_name': 'chime', 'volume': 70})
+        self.assertEqual(self.client.get(reverse('notification-summary')).json(), {
+            'unread_count': 0,
+            'latest_unread_id': 0,
+            'latest_notification_id': newest_read.id,
+            'sound': False,
+            'sound_name': 'bell',
+            'volume': 35,
+        })
 
     def test_stream_requires_login(self):
         self.assertEqual(self.client.get(reverse('notification-stream')).status_code, 401)
@@ -88,3 +119,23 @@ class NotificationSummaryTests(TestCase):
         self.assertIn('"unread_count": 1', body)
         self.assertIn('"sound_name": "pop"', body)
         self.assertIn('"volume": 45', body)
+
+    def test_stream_emits_a_notification_read_before_the_next_poll(self):
+        user = User.objects.create_user(username='read-stream-user')
+        workspace = Workspace.objects.create(name='Read Stream', slug='read-stream')
+        Membership.objects.create(workspace=workspace, user=user)
+        notification = WorkspaceNotification.objects.create(
+            workspace=workspace,
+            recipient=user,
+            kind='direct_message',
+            title='New direct message',
+            read_at=timezone.now(),
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(f"{reverse('notification-stream')}?since=0")
+        body = b''.join(response.streaming_content).decode()
+
+        self.assertIn(f'id: {notification.id}', body)
+        self.assertIn('"unread_count": 0', body)
+        self.assertIn(f'"latest_notification_id": {notification.id}', body)

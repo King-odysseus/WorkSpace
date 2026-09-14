@@ -7,7 +7,7 @@ beforeEach(() => {
   document.title = 'WorkSpace'
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-  summary = { unread_count: 25, latest_unread_id: 25 }
+  summary = { unread_count: 25, latest_unread_id: 25, latest_notification_id: 25 }
   playSound = vi.fn()
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => summary })))
   worker = new EventTarget()
@@ -20,18 +20,18 @@ it('baselines history and plays the selected sound for a new focused alert', asy
   await vi.advanceTimersByTimeAsync(0)
   expect(navigator.setAppBadge).toHaveBeenCalledWith(25)
   expect(playSound).not.toHaveBeenCalled()
-  summary = { unread_count: 26, latest_unread_id: 26, sound: true, sound_name: 'bell', volume: 35 }
+  summary = { unread_count: 26, latest_unread_id: 26, latest_notification_id: 26, sound: true, sound_name: 'bell', volume: 35 }
   await vi.advanceTimersByTimeAsync(15000)
   expect(document.title).toBe('(26) WorkSpace')
   expect(playSound).toHaveBeenCalledOnce()
   expect(playSound).toHaveBeenCalledWith('bell', 35)
-  summary = { unread_count: 26, latest_unread_id: 26, sound: true, sound_name: 'bell', volume: 35 }
+  summary = { unread_count: 26, latest_unread_id: 26, latest_notification_id: 26, sound: true, sound_name: 'bell', volume: 35 }
   await vi.advanceTimersByTimeAsync(15000)
   expect(playSound).toHaveBeenCalledOnce()
-  summary = { unread_count: 27, latest_unread_id: 27, sound: false, sound_name: 'pulse', volume: 80 }
+  summary = { unread_count: 27, latest_unread_id: 27, latest_notification_id: 27, sound: false, sound_name: 'pulse', volume: 80 }
   await vi.advanceTimersByTimeAsync(15000)
   expect(playSound).toHaveBeenCalledOnce()
-  summary = { unread_count: 0, latest_unread_id: 0 }
+  summary = { unread_count: 0, latest_unread_id: 0, latest_notification_id: 27 }
   await vi.advanceTimersByTimeAsync(15000)
   expect(navigator.clearAppBadge).toHaveBeenCalled()
   expect(document.title).toBe('WorkSpace')
@@ -45,7 +45,7 @@ it.each([
   await vi.advanceTimersByTimeAsync(0)
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: visibilityState })
   document.hasFocus.mockReturnValue(focused)
-  summary = { unread_count: 26, latest_unread_id: 26, sound: true, sound_name: 'pulse', volume: 80 }
+  summary = { unread_count: 26, latest_unread_id: 26, latest_notification_id: 26, sound: true, sound_name: 'pulse', volume: 80 }
   worker.dispatchEvent(new MessageEvent('message', { data: { type: 'NOTIFICATIONS_CHANGED' } }))
   await vi.advanceTimersByTimeAsync(0)
   expect(navigator.setAppBadge).toHaveBeenLastCalledWith(26)
@@ -58,12 +58,12 @@ it('asks listeners to re-read the notification list when a new one arrives', asy
   stop = startNotificationAlerts(() => {}, playSound)
   await vi.advanceTimersByTimeAsync(0)
   expect(onChanged).not.toHaveBeenCalled()
-  summary = { unread_count: 26, latest_unread_id: 26 }
+  summary = { unread_count: 26, latest_unread_id: 26, latest_notification_id: 26 }
   await vi.advanceTimersByTimeAsync(15000)
   expect(onChanged).toHaveBeenCalledOnce()
   await vi.advanceTimersByTimeAsync(15000)
   expect(onChanged).toHaveBeenCalledOnce()
-  summary = { unread_count: 0, latest_unread_id: 0 }
+  summary = { unread_count: 0, latest_unread_id: 0, latest_notification_id: 26 }
   await vi.advanceTimersByTimeAsync(15000)
   expect(onChanged).toHaveBeenCalledOnce()
   window.removeEventListener('workspace:notifications-changed', onChanged)
@@ -80,7 +80,29 @@ it('ignores an outstanding response after logout and cleans up sound and badge',
   expect(document.title).toBe('WorkSpace')
 })
 
-it('opens a notification stream and reconnects from the newest unread ID', async () => {
+it('plays an arrival even when it was read before the next poll', async () => {
+  summary = { unread_count: 0, latest_unread_id: 0, latest_notification_id: 25 }
+  stop = startNotificationAlerts(() => {}, playSound)
+  await vi.advanceTimersByTimeAsync(0)
+  summary = { unread_count: 0, latest_unread_id: 0, latest_notification_id: 26, sound: true, sound_name: 'pop', volume: 60 }
+  await vi.advanceTimersByTimeAsync(15000)
+  expect(playSound).toHaveBeenCalledOnce()
+  expect(playSound).toHaveBeenCalledWith('pop', 60)
+})
+
+it('primes the audio context once on a user gesture', async () => {
+  const primeAudio = vi.fn().mockResolvedValue(true)
+  stop = startNotificationAlerts(() => {}, playSound, primeAudio)
+  await vi.advanceTimersByTimeAsync(0)
+  document.dispatchEvent(new Event('pointerdown'))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(primeAudio).toHaveBeenCalledOnce()
+  document.dispatchEvent(new Event('keydown'))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(primeAudio).toHaveBeenCalledOnce()
+})
+
+it('opens a notification stream and reconnects from the newest notification ID', async () => {
   class FakeEventSource {
     static instances = []
     constructor(url) { this.url = url; this.close = vi.fn(); FakeEventSource.instances.push(this) }
@@ -90,7 +112,7 @@ it('opens a notification stream and reconnects from the newest unread ID', async
   stop = startNotificationAlerts(onSummary, playSound)
   await vi.advanceTimersByTimeAsync(0)
   expect(FakeEventSource.instances[0].url).toContain('since=0')
-  FakeEventSource.instances[0].onmessage({ data: JSON.stringify({ unread_count: 26, latest_unread_id: 26 }) })
-  expect(onSummary).toHaveBeenLastCalledWith({ unread_count: 26, latest_unread_id: 26 })
+  FakeEventSource.instances[0].onmessage({ data: JSON.stringify({ unread_count: 26, latest_unread_id: 26, latest_notification_id: 26 }) })
+  expect(onSummary).toHaveBeenLastCalledWith({ unread_count: 26, latest_unread_id: 26, latest_notification_id: 26 })
   expect(FakeEventSource.instances.at(-1).url).toContain('since=26')
 })

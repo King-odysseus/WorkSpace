@@ -3,12 +3,12 @@ import { expect, it, vi } from 'vitest'
 import NotificationPermissionPrompt from './NotificationPermissionPrompt.jsx'
 import { mockApi, expectRequest } from '../test/setup-tests.js'
 
-function setup(permission = 'default', saveStatus = 201) {
+function setup(permission = 'default', saveStatus = 201, options = {}) {
   const requestPermission = vi.fn(async () => { Notification.permission = 'granted'; return 'granted' })
   vi.stubGlobal('Notification', { permission, requestPermission })
   vi.stubGlobal('PushManager', function () {})
-  const subscription = { options: { applicationServerKey: new Uint8Array([1, 2, 3]).buffer }, toJSON: () => ({ endpoint: 'https://push.example.test/x', keys: { auth: 'auth', p256dh: 'key' } }), unsubscribe: vi.fn().mockResolvedValue(true) }
-  const getSubscription = vi.fn().mockResolvedValue(null)
+  const subscription = { options: { applicationServerKey: new Uint8Array(options.applicationServerKey || [1, 2, 3]).buffer }, toJSON: () => ({ endpoint: 'https://push.example.test/x', keys: { auth: 'auth', p256dh: 'key' } }), unsubscribe: vi.fn().mockResolvedValue(true) }
+  const getSubscription = vi.fn().mockResolvedValue(options.existing ? subscription : null)
   const subscribe = vi.fn(async () => { getSubscription.mockResolvedValue(subscription); return subscription })
   const registration = { pushManager: { getSubscription, subscribe } }
   vi.stubGlobal('navigator', { serviceWorker: { register: vi.fn().mockResolvedValue(registration), getRegistration: vi.fn().mockResolvedValue(registration), ready: Promise.resolve(registration) } })
@@ -42,6 +42,13 @@ it('shows a save failure and rolls back the newly created subscription', async (
   fireEvent.click(await screen.findByRole('button', { name: 'Allow notifications' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Save failed.')
   expect(subscription.unsubscribe).toHaveBeenCalled()
+})
+
+it('replaces a stale browser subscription after the server VAPID key changes', async () => {
+  const { subscribe, subscription } = setup('granted', 201, { existing: true, applicationServerKey: [9, 9, 9] })
+  await waitFor(() => expect(subscription.unsubscribe).toHaveBeenCalledOnce())
+  expect(subscribe).toHaveBeenCalledOnce()
+  await waitFor(() => expect(screen.queryByLabelText('Notification status')).not.toBeInTheDocument())
 })
 
 it('explains Home Screen setup when push is unsupported', () => {

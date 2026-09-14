@@ -9,8 +9,10 @@ afterEach(() => {
 it('schedules the selected tone at the requested volume', async () => {
   const oscillators = []
   const gains = []
+  let context
   class FakeAudioContext {
     constructor() {
+      context = this
       this.state = 'running'
       this.currentTime = 0
       this.destination = {}
@@ -50,5 +52,11 @@ it('schedules the selected tone at the requested volume', async () => {
   expect(gains).toHaveLength(8)
   expect(gains[0].gain.setValueAtTime).toHaveBeenCalledWith(0.06, 0)
   expect(oscillators[2].frequency.setValueAtTime).toHaveBeenCalledWith(880, 0)
+
+  context.state = 'interrupted'
+  context.resume.mockClear()
+  await expect(playNotificationSound('pop', 50)).resolves.toBe(true)
+  expect(context.resume).toHaveBeenCalledOnce()
+
   await expect(playNotificationSound('bell', 0)).resolves.toBe(false)
 })
