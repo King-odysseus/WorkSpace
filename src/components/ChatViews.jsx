@@ -6,7 +6,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Archive, ArchiveRestore, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -36,9 +36,17 @@ const MESSAGE_REACTIONS = [
 ]
 
 const CHAT_COMPOSER_MAX_HEIGHT = 140
+const CHAT_HISTORY_PAGE_SIZE = 10
+const CHAT_JUMP_THRESHOLD = 320
 
 function renderMessageText(text) {
   return <LinkedText text={text} />
+}
+
+function mergeMessagePages(latestMessages, currentMessages) {
+  const latestIds = new Set(latestMessages.map(message => message.id))
+  return [...latestMessages, ...currentMessages.filter(message => !latestIds.has(message.id))]
+    .sort((left, right) => Number(left.id) - Number(right.id))
 }
 
 function EmojiPicker({ onSelect, actionLabel = 'Insert' }) {
@@ -120,9 +128,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [directMessages, setDirectMessages] = useState([])
   const [directMessageConversationId, setDirectMessageConversationId] = useState(null)
   const [directLoading, setDirectLoading] = useState(false)
+  const [directLoadingOlder, setDirectLoadingOlder] = useState(false)
+  const [directHistory, setDirectHistory] = useState({ hasMore: false, nextBefore: null })
   const [channelMessages, setChannelMessages] = useState([])
   const [channelMessageName, setChannelMessageName] = useState(null)
   const [channelLoading, setChannelLoading] = useState(false)
+  const [channelLoadingOlder, setChannelLoadingOlder] = useState(false)
+  const [channelHistory, setChannelHistory] = useState({ hasMore: false, nextBefore: null })
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false)
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState(null)
@@ -159,6 +172,11 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const messageScrollRef = useRef(null)
   const messageInputRef = useRef(null)
   const draftKeyRef = useRef(null)
+  const skipNextBottomPinRef = useRef(false)
+  const pendingScrollRestoreRef = useRef(null)
+  const activeThreadKeyRef = useRef('')
+  const historyLoadingRef = useRef({ channel: false, direct: false })
+  const replaceWithLatestRef = useRef(false)
   const channels = data.channels || []
   const conversations = data.directConversations || []
   const archivedConversations = data.archivedConversations || []
@@ -180,6 +198,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setMentionQuery('')
     setError('')
     setUnreadMarker(null)
+    setShowJumpToLatest(false)
   }, [viewType])
 
   useEffect(() => {
@@ -205,19 +224,27 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     let current = true
     setDirectLoading(true)
     setError('')
-    fetch(`/api/direct-conversations/${selectedConversationId}/messages/`, { credentials: 'include' })
+    const historyParams = new URLSearchParams({ limit: String(CHAT_HISTORY_PAGE_SIZE) })
+    if (revealMessageId) historyParams.set('around', String(revealMessageId))
+    fetch(`/api/direct-conversations/${selectedConversationId}/messages/?${historyParams.toString()}`, { credentials: 'include' })
       .then(response => response.json().then(payload => ({ response, payload })))
       .then(({ response, payload }) => {
         if (!response.ok) throw new Error(payload.error || 'Direct messages could not be loaded.')
         if (current) {
-          setDirectMessages(payload.messages)
+          const newestPage = payload.messages || []
+          const sameThread = directMessageConversationId === selectedConversationId
+          const replaceWithLatest = replaceWithLatestRef.current
+          replaceWithLatestRef.current = false
+          const keepLoadedHistory = sameThread && !revealMessageId && !replaceWithLatest
+          setDirectMessages(currentMessages => keepLoadedHistory ? mergeMessagePages(newestPage, currentMessages) : newestPage)
+          if (!keepLoadedHistory) setDirectHistory({ hasMore: Boolean(payload.has_more), nextBefore: payload.next_before || null })
           setDirectMessageConversationId(selectedConversationId)
         }
       })
-      .catch(loadError => { if (current) setError(loadError.message) })
+      .catch(loadError => { replaceWithLatestRef.current = false; if (current) setError(loadError.message) })
       .finally(() => { if (current) setDirectLoading(false) })
     return () => { current = false }
-  }, [selectedConversationId, data.directConversations, data.archivedConversations])
+  }, [selectedConversationId, data.directConversations, data.archivedConversations, revealMessageId])
 
   // The workspace snapshot is shared across every channel and is capped at the
   // newest 100 messages workspace-wide. That is enough for badges, but it can
@@ -227,7 +254,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     if (mode !== 'channels' || !selectedChannel) return undefined
     let current = true
     setChannelLoading(true)
-    fetch(`/api/workspaces/${workspaceId}/chat-messages/?channel=${encodeURIComponent(selectedChannel)}`, {
+    const historyParams = new URLSearchParams({
+      channel: selectedChannel,
+      limit: String(CHAT_HISTORY_PAGE_SIZE),
+    })
+    if (revealMessageId) historyParams.set('around', String(revealMessageId))
+    fetch(`/api/workspaces/${workspaceId}/chat-messages/?${historyParams.toString()}`, {
       credentials: 'include',
       headers: { 'X-Workspace-Id': String(workspaceId) },
     })
@@ -235,14 +267,20 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       .then(({ response, payload }) => {
         if (!response.ok) throw new Error(payload.error || 'Channel messages could not be loaded.')
         if (current) {
-          setChannelMessages(payload.messages || [])
+          const newestPage = payload.messages || []
+          const sameThread = channelMessageName === selectedChannel
+          const replaceWithLatest = replaceWithLatestRef.current
+          replaceWithLatestRef.current = false
+          const keepLoadedHistory = sameThread && !revealMessageId && !replaceWithLatest
+          setChannelMessages(currentMessages => keepLoadedHistory ? mergeMessagePages(newestPage, currentMessages) : newestPage)
+          if (!keepLoadedHistory) setChannelHistory({ hasMore: Boolean(payload.has_more), nextBefore: payload.next_before || null })
           setChannelMessageName(selectedChannel)
         }
       })
-      .catch(loadError => { if (current) setError(loadError.message) })
+      .catch(loadError => { replaceWithLatestRef.current = false; if (current) setError(loadError.message) })
       .finally(() => { if (current) setChannelLoading(false) })
     return () => { current = false }
-  }, [mode, selectedChannel, workspaceId, threadRequest])
+  }, [mode, selectedChannel, workspaceId, threadRequest, revealMessageId])
 
   // Which conversation the fetched messages belong to. The workspace refresh
   // hands back directConversations as a fresh array whenever anything in the
@@ -325,6 +363,8 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const lastDirectMessageId = visibleDirectMessages.length ? visibleDirectMessages[visibleDirectMessages.length - 1].id : null
   const activeThreadType = mode === 'channels' ? 'chat_channel' : 'direct_conversation'
   const activeThreadId = mode === 'channels' ? selectedChannel : selectedConversationId
+  const activeThreadKey = `${mode}:${activeThreadId ?? ''}`
+  activeThreadKeyRef.current = activeThreadKey
   const activeUnreadMarker = unreadMarker && unreadMarker.targetType === activeThreadType && String(unreadMarker.targetId) === String(activeThreadId)
     ? unreadMarker
     : null
@@ -338,8 +378,29 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   useLayoutEffect(() => {
     const scroller = messageScrollRef.current
     if (!scroller || revealMessageId) return
+    if (skipNextBottomPinRef.current) {
+      skipNextBottomPinRef.current = false
+      return
+    }
     scroller.scrollTop = scroller.scrollHeight
+    setShowJumpToLatest(false)
   }, [mode, selectedChannel, selectedConversationId, activePane, directLoading, lastChannelMessageId, lastDirectMessageId, visibleChannelMessages.length, visibleDirectMessages.length, revealMessageId])
+
+  // Prepending changes the scroller's height. Adding the height delta to the old
+  // scrollTop keeps the message the reader was looking at under the same pixel,
+  // instead of letting the browser reveal the newly inserted history above it.
+  useLayoutEffect(() => {
+    const restore = pendingScrollRestoreRef.current
+    if (!restore) return
+    const scroller = messageScrollRef.current
+    if (!scroller) {
+      pendingScrollRestoreRef.current = null
+      return
+    }
+    scroller.scrollTop = restore.scrollTop + (scroller.scrollHeight - restore.scrollHeight)
+    pendingScrollRestoreRef.current = null
+    setShowJumpToLatest(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > CHAT_JUMP_THRESHOLD)
+  }, [activeMessages.length, mode, selectedChannel, selectedConversationId])
 
   // Keep the composer compact for a single line, then grow it only as the draft
   // wraps. The element height is reset first so deleting lines can shrink it too.
@@ -366,6 +427,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const scrollerBox = scroller.getBoundingClientRect()
     const targetBox = target.getBoundingClientRect()
     scroller.scrollTop += targetBox.top - scrollerBox.top - (scrollerBox.height - targetBox.height) / 2
+    setShowJumpToLatest(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > CHAT_JUMP_THRESHOLD)
   }, [revealMessageId, highlightMessageId, activeMessages.length, directLoading, channelLoading, activePane, mode, selectedChannel, selectedConversationId])
 
   // The ring is a "this is the one" cue, not a state to stay in, so it clears on
@@ -672,11 +734,90 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     } catch (readError) { console.warn('Chat notifications could not be marked read.', readError) }
   }
   const captureUnreadMarker = (targetType, targetId) => setUnreadMarker(unreadMarkerFor(targetType, targetId))
+  const loadOlderMessages = async () => {
+    const isChannel = mode === 'channels'
+    const historyKey = isChannel ? 'channel' : 'direct'
+    const history = isChannel ? channelHistory : directHistory
+    const loadingOlder = isChannel ? channelLoadingOlder : directLoadingOlder
+    if (!history.hasMore || !history.nextBefore || loadingOlder || historyLoadingRef.current[historyKey]) return
+    historyLoadingRef.current[historyKey] = true
+    const threadKey = activeThreadKeyRef.current
+    const scroller = messageScrollRef.current
+    if (scroller) {
+      pendingScrollRestoreRef.current = {
+        scrollHeight: scroller.scrollHeight,
+        scrollTop: scroller.scrollTop,
+      }
+    }
+    if (isChannel) setChannelLoadingOlder(true)
+    else setDirectLoadingOlder(true)
+    setError('')
+    try {
+      const historyParams = new URLSearchParams({
+        before: String(history.nextBefore),
+        limit: String(CHAT_HISTORY_PAGE_SIZE),
+      })
+      let response
+      if (isChannel) {
+        historyParams.set('channel', selectedChannel)
+        response = await fetch(`/api/workspaces/${workspaceId}/chat-messages/?${historyParams.toString()}`, {
+          credentials: 'include',
+          headers: { 'X-Workspace-Id': String(workspaceId) },
+        })
+      } else {
+        response = await fetch(`/api/direct-conversations/${selectedConversationId}/messages/?${historyParams.toString()}`, { credentials: 'include' })
+      }
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Older messages could not be loaded.')
+      if (threadKey !== activeThreadKeyRef.current) return
+      const olderMessages = payload.messages || []
+      const prependUnique = current => {
+        const existingIds = new Set(current.map(message => message.id))
+        return [...olderMessages.filter(message => !existingIds.has(message.id)), ...current]
+      }
+      if (isChannel) {
+        if (olderMessages.length) skipNextBottomPinRef.current = true
+        else pendingScrollRestoreRef.current = null
+        setChannelMessages(prependUnique)
+        setChannelHistory({ hasMore: Boolean(payload.has_more), nextBefore: payload.next_before || null })
+      } else {
+        if (olderMessages.length) skipNextBottomPinRef.current = true
+        else pendingScrollRestoreRef.current = null
+        setDirectMessages(prependUnique)
+        setDirectHistory({ hasMore: Boolean(payload.has_more), nextBefore: payload.next_before || null })
+      }
+    } catch (historyError) {
+      pendingScrollRestoreRef.current = null
+      if (threadKey === activeThreadKeyRef.current) setError(historyError.message)
+    } finally {
+      historyLoadingRef.current[historyKey] = false
+      if (isChannel) setChannelLoadingOlder(false)
+      else setDirectLoadingOlder(false)
+    }
+  }
+  const handleMessageScroll = event => {
+    const scroller = event.currentTarget
+    const distanceFromBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
+    setShowJumpToLatest(distanceFromBottom > CHAT_JUMP_THRESHOLD)
+    if (scroller.scrollTop <= 80) loadOlderMessages()
+  }
+  const jumpToLatest = () => {
+    const scroller = messageScrollRef.current
+    if (revealMessageId) {
+      replaceWithLatestRef.current = true
+      setRevealMessageId(null)
+      return
+    }
+    if (!scroller) return
+    scroller.scrollTop = scroller.scrollHeight
+    setShowJumpToLatest(false)
+  }
   const selectChannel = channelName => {
     setSelectedChannel(channelName)
     setSearch('')
     setReplyTo(null)
     setActivePane('posts')
+    setShowJumpToLatest(false)
     // Opening a thread by hand is a fresh start, so any message an earlier alert
     // was holding the reader on stops mattering.
     setRevealMessageId(null)
@@ -688,6 +829,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setSearch('')
     setReplyTo(null)
     setActivePane('posts')
+    setShowJumpToLatest(false)
     setRevealMessageId(null)
     captureUnreadMarker('direct_conversation', conversationId)
     markConversationRead('direct_conversation', conversationId)
@@ -807,24 +949,27 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     {renderMessage(message)}
   </Fragment>
 
-  const renderPostsPane = () => <div className="chat-message-scroll" ref={messageScrollRef}>
-    {mode === 'channels' ? (visibleChannelMessages.length
-      ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : formatDay(date)}</h3>{messages.map(renderMessageWithUnreadMarker)}</div>)
-      : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>)
-      : selectedConversation
-        ? (directThreadReady
-          ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessageWithUnreadMarker) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
-      : directLoading ? <SkeletonGroup className="chat-feed-skeleton" label="Loading messages">
-        {[0, 1, 2].map(item => <div className="chat-message-skeleton" key={item}>
-          <Skeleton variant="circle" />
-          <div className="chat-message-skeleton-lines">
-            <Skeleton variant="heading" />
-            <Skeleton variant="line" />
-            <Skeleton variant="text" style={{ width: item === 1 ? '64%' : '88%' }} />
-          </div>
-        </div>)}
-      </SkeletonGroup> : <div className="chat-placeholder"><h2>Messages could not be loaded</h2><p>{error || 'Open the conversation again to retry.'}</p></div>)
-        : <div className="chat-placeholder"><div className="chat-placeholder-icon"><Users size={22} /></div><h2>Start a private conversation</h2><p>Choose an existing conversation or create a new one.</p></div>}
+  const renderPostsPane = () => <div className="chat-message-pane">
+    <div className="chat-message-scroll" ref={messageScrollRef} onScroll={handleMessageScroll}>
+      {mode === 'channels' ? (visibleChannelMessages.length
+        ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : formatDay(date)}</h3>{messages.map(renderMessageWithUnreadMarker)}</div>)
+        : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>)
+        : selectedConversation
+          ? (directThreadReady
+            ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessageWithUnreadMarker) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
+        : directLoading ? <SkeletonGroup className="chat-feed-skeleton" label="Loading messages">
+          {[0, 1, 2].map(item => <div className="chat-message-skeleton" key={item}>
+            <Skeleton variant="circle" />
+            <div className="chat-message-skeleton-lines">
+              <Skeleton variant="heading" />
+              <Skeleton variant="line" />
+              <Skeleton variant="text" style={{ width: item === 1 ? '64%' : '88%' }} />
+            </div>
+          </div>)}
+        </SkeletonGroup> : <div className="chat-placeholder"><h2>Messages could not be loaded</h2><p>{error || 'Open the conversation again to retry.'}</p></div>)
+          : <div className="chat-placeholder"><div className="chat-placeholder-icon"><Users size={22} /></div><h2>Start a private conversation</h2><p>Choose an existing conversation or create a new one.</p></div>}
+    </div>
+    {showJumpToLatest && <button type="button" className="chat-jump-latest" onClick={jumpToLatest} aria-label="Jump to latest messages" title="Jump to latest messages"><ArrowDown size={18} /></button>}
   </div>
 
   const renderFilesPane = () => <div className="chat-pane-scroll" aria-label="Shared files and documents">

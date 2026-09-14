@@ -3908,6 +3908,81 @@ def serialize_direct_messages(messages, user):
     return payload
 
 
+CHAT_HISTORY_PAGE_SIZE = 10
+CHAT_HISTORY_MAX_PAGE_SIZE = 50
+
+
+def message_history_page(queryset, params):
+    """Return one stable id-cursor page for a channel or direct conversation.
+
+    Id is the cursor rather than ``created_at`` because ids are unique and keep
+    their order even when messages share a timestamp. Responses stay oldest to
+    newest for rendering, while ``next_before`` always points at the oldest
+    message currently returned so the client can request the page above it.
+    """
+    raw_limit = params.get('limit')
+    if raw_limit in (None, ''):
+        limit = CHAT_HISTORY_PAGE_SIZE
+    else:
+        limit, limit_error = parse_int(raw_limit, 'Limit', allow_null=False)
+        if limit_error:
+            return None, JsonResponse({'error': limit_error}, status=400)
+        if limit < 1 or limit > CHAT_HISTORY_MAX_PAGE_SIZE:
+            return None, JsonResponse({'error': f'Limit must be between 1 and {CHAT_HISTORY_MAX_PAGE_SIZE}.'}, status=400)
+
+    raw_before = params.get('before')
+    raw_around = params.get('around')
+    if 'before' in params and not raw_before:
+        return None, JsonResponse({'error': 'Before must be a message id.'}, status=400)
+    if 'around' in params and not raw_around:
+        return None, JsonResponse({'error': 'Around must be a message id.'}, status=400)
+    before, before_error = parse_int(raw_before, 'Before', allow_null=False) if raw_before else (None, None)
+    around, around_error = parse_int(raw_around, 'Around', allow_null=False) if raw_around else (None, None)
+    if before_error:
+        return None, JsonResponse({'error': before_error}, status=400)
+    if around_error:
+        return None, JsonResponse({'error': around_error}, status=400)
+    if before is not None and around is not None:
+        return None, JsonResponse({'error': 'Use either before or around, not both.'}, status=400)
+    if before is not None and before < 1:
+        return None, JsonResponse({'error': 'Before must be a positive message id.'}, status=400)
+    if around is not None and around < 1:
+        return None, JsonResponse({'error': 'Around must be a positive message id.'}, status=400)
+
+    if around is not None:
+        target = queryset.filter(id=around).first()
+        if target is None:
+            return None, JsonResponse({'error': 'Message was not found.'}, status=404)
+        older_target = (limit - 1) // 2
+        newer_target = limit - 1 - older_target
+        older_messages = list(queryset.filter(id__lt=around).order_by('-id')[:older_target])
+        newer_messages = list(queryset.filter(id__gt=around).order_by('id')[:newer_target])
+        if len(older_messages) < older_target:
+            fill = older_target - len(older_messages)
+            newer_messages = list(queryset.filter(id__gt=around).order_by('id')[:newer_target + fill])
+        if len(newer_messages) < newer_target:
+            fill = newer_target - len(newer_messages)
+            older_messages = list(queryset.filter(id__lt=around).order_by('-id')[:older_target + fill])
+        messages = sorted([target, *older_messages, *newer_messages], key=lambda message: message.id)
+        oldest_id = messages[0].id if messages else None
+        has_more = bool(oldest_id and queryset.filter(id__lt=oldest_id).exists())
+        next_before = oldest_id if has_more else None
+    else:
+        messages_query = queryset
+        if before is not None:
+            messages_query = messages_query.filter(id__lt=before)
+        recent_messages = list(messages_query.order_by('-id')[:limit + 1])
+        has_more = len(recent_messages) > limit
+        messages = sorted(recent_messages[:limit], key=lambda message: message.id)
+        next_before = messages[0].id if has_more and messages else None
+
+    return {
+        'messages': messages,
+        'has_more': has_more,
+        'next_before': next_before,
+    }, None
+
+
 @require_http_methods(['GET', 'POST'])
 def chat_channel_list(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
@@ -3999,12 +4074,14 @@ def chat_message_list(request, workspace_id):
         messages_query = ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=allowed_channels)
         if channel_filter:
             messages_query = messages_query.filter(channel=channel_filter)
-        # A named channel is the reader's current thread, so return a deeper
-        # window than the workspace snapshot. The general 100-message cap can
-        # otherwise be filled by other channels and hide the post an alert names.
-        recent_messages = list(messages_query.select_related('author').order_by('-created_at')[:500])
-        messages = reversed(recent_messages)
-        return JsonResponse({'messages': serialize_chat_messages(messages, request.user)})
+        history, history_error = message_history_page(messages_query.select_related('author'), request.GET)
+        if history_error:
+            return history_error
+        return JsonResponse({
+            'messages': serialize_chat_messages(history['messages'], request.user),
+            'has_more': history['has_more'],
+            'next_before': history['next_before'],
+        })
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -4207,11 +4284,17 @@ def direct_message_list(request, conversation_id):
     if conversation is None:
         return JsonResponse({'error': 'Conversation was not found.'}, status=404)
     if request.method == 'GET':
-        messages = conversation.messages.select_related('author')
+        history, history_error = message_history_page(conversation.messages.select_related('author'), request.GET)
+        if history_error:
+            return history_error
         read_at = timezone.now()
         WorkspaceNotification.objects.filter(workspace_id=conversation.workspace_id, recipient=request.user, target_type='direct_conversation', target_id=str(conversation.id), read_at__isnull=True).update(read_at=read_at)
         DirectConversationRead.objects.update_or_create(conversation=conversation, user=request.user, defaults={'last_read_at': read_at})
-        return JsonResponse({'messages': serialize_direct_messages(messages, request.user)})
+        return JsonResponse({
+            'messages': serialize_direct_messages(history['messages'], request.user),
+            'has_more': history['has_more'],
+            'next_before': history['next_before'],
+        })
     try:
         data = json.loads(request.body or '{}')
     except json.JSONDecodeError:

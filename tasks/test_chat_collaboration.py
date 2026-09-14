@@ -86,6 +86,33 @@ class ChatCollaborationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([message['message'] for message in response.json()['messages']], ['General note'])
 
+    def test_channel_message_history_uses_id_cursor_pages_and_anchor(self):
+        messages = [self.post_channel_message(f'Message {position}') for position in range(1, 13)]
+        url = reverse('chat-message-list', args=[self.workspace.id])
+
+        newest = self.client.get(url, {'channel': 'general', 'limit': 10})
+
+        self.assertEqual(newest.status_code, 200)
+        self.assertEqual([message['message'] for message in newest.json()['messages']], [f'Message {position}' for position in range(3, 13)])
+        self.assertTrue(newest.json()['has_more'])
+        self.assertEqual(newest.json()['next_before'], messages[2]['id'])
+
+        older = self.client.get(url, {'channel': 'general', 'before': newest.json()['next_before'], 'limit': 10})
+
+        self.assertEqual(older.status_code, 200)
+        self.assertEqual([message['message'] for message in older.json()['messages']], ['Message 1', 'Message 2'])
+        self.assertFalse(older.json()['has_more'])
+        self.assertIsNone(older.json()['next_before'])
+
+        anchored = self.client.get(url, {'channel': 'general', 'around': messages[5]['id'], 'limit': 5})
+
+        self.assertEqual(anchored.status_code, 200)
+        self.assertEqual([message['message'] for message in anchored.json()['messages']], ['Message 4', 'Message 5', 'Message 6', 'Message 7', 'Message 8'])
+        self.assertIn(messages[5]['id'], [message['id'] for message in anchored.json()['messages']])
+        self.assertTrue(anchored.json()['has_more'])
+        self.assertEqual(self.client.get(url, {'channel': 'general', 'around': 999999}).status_code, 404)
+        self.assertEqual(self.client.get(url, {'channel': 'general', 'limit': 'many'}).status_code, 400)
+
     def test_direct_message_can_reply_to_a_conversation_message(self):
         conversation = self.client.post(
             reverse('direct-conversation-list', args=[self.workspace.id]),
@@ -103,6 +130,34 @@ class ChatCollaborationTests(TestCase):
         nested_reply = self.client.post(url, data=json.dumps({'message': 'Replying again', 'parent_id': reply.json()['message']['id']}), content_type='application/json')
         self.assertEqual(nested_reply.status_code, 201)
         self.assertEqual(nested_reply.json()['message']['parent_id'], reply.json()['message']['id'])
+
+    def test_direct_message_history_uses_id_cursor_pages_and_anchor(self):
+        conversation = self.client.post(
+            reverse('direct-conversation-list', args=[self.workspace.id]),
+            data=json.dumps({'recipient_id': self.member.id}), content_type='application/json',
+        ).json()['conversation']
+        url = reverse('direct-message-list', args=[conversation['id']])
+        messages = []
+        for position in range(1, 13):
+            response = self.client.post(url, data=json.dumps({'message': f'Message {position}'}), content_type='application/json')
+            self.assertEqual(response.status_code, 201)
+            messages.append(response.json()['message'])
+
+        newest = self.client.get(url, {'limit': 10})
+
+        self.assertEqual([message['message'] for message in newest.json()['messages']], [f'Message {position}' for position in range(3, 13)])
+        self.assertTrue(newest.json()['has_more'])
+        self.assertEqual(newest.json()['next_before'], messages[2]['id'])
+
+        older = self.client.get(url, {'before': newest.json()['next_before'], 'limit': 10})
+
+        self.assertEqual([message['message'] for message in older.json()['messages']], ['Message 1', 'Message 2'])
+        self.assertFalse(older.json()['has_more'])
+
+        anchored = self.client.get(url, {'around': messages[5]['id'], 'limit': 5})
+
+        self.assertEqual([message['message'] for message in anchored.json()['messages']], ['Message 4', 'Message 5', 'Message 6', 'Message 7', 'Message 8'])
+        self.assertIn(messages[5]['id'], [message['id'] for message in anchored.json()['messages']])
 
     def test_direct_message_reply_rejects_a_parent_from_another_conversation(self):
         first = self.client.post(reverse('direct-conversation-list', args=[self.workspace.id]), data=json.dumps({'recipient_id': self.member.id}), content_type='application/json').json()['conversation']

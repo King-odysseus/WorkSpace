@@ -81,6 +81,52 @@ it('keeps an open chat thread on screen while the workspace reloads it', async (
   expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/messages/')).length).toBeGreaterThan(1)
 })
 
+it('loads older chat history without losing the newest page or scroll position', async () => {
+  const latestMessages = Array.from({ length: 10 }, (_, index) => ({
+    id: index + 5,
+    author_name: 'Dana Reed',
+    message: `Message ${index + 5}`,
+    created_at: `2026-09-12T10:${String(index).padStart(2, '0')}:00Z`,
+  }))
+  const olderMessages = Array.from({ length: 4 }, (_, index) => ({
+    id: index + 1,
+    author_name: 'Dana Reed',
+    message: `Message ${index + 1}`,
+    created_at: `2026-09-12T09:${String(index).padStart(2, '0')}:00Z`,
+  }))
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/?before=5&limit=10': { messages: olderMessages, has_more: false, next_before: null },
+    '/direct-conversations/11/messages/': { messages: latestMessages, has_more: true, next_before: 5 },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByText('Message 14')
+
+  const initialCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/11/messages/') && (init.method || 'GET') === 'GET')
+  expect(initialCall[0]).toContain('limit=10')
+
+  const scroller = document.querySelector('.chat-message-scroll')
+  let currentScrollHeight = 500
+  Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => currentScrollHeight })
+  Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 100 })
+  Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 0 })
+
+  fireEvent.scroll(scroller)
+  currentScrollHeight = 650
+
+  expect(await screen.findByText('Message 1')).toBeInTheDocument()
+  expect(screen.getByText('Message 14')).toBeInTheDocument()
+  const olderCall = fetchMock.mock.calls.find(([url]) => String(url).includes('before=5') && String(url).includes('limit=10'))
+  expect(olderCall).toBeTruthy()
+  await waitFor(() => expect(scroller.scrollTop).toBe(150))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Jump to latest messages' }))
+  expect(scroller.scrollTop).toBe(650)
+})
+
 it('reads the chat list dot from recent activity rather than self-reported presence', async () => {
   // Presence is sticky: someone who picked "Available" days ago still reports it,
   // so a dot driven by that field alone shows a teammate as green while they are
@@ -290,7 +336,7 @@ it('shows both edit actions and saves an inline message edit', async () => {
 })
 
 it('loads and highlights the channel message a notification names', async () => {
-  mockApi({
+  const fetchMock = mockApi({
     '/documents/': { documents: [] },
     '/files/': { files: [] },
     '/chat-messages/?channel=general': { messages: [{ id: 44, author_id: 9, author_name: 'Dana Reed', message: 'Deployment is ready.', created_at: '2026-09-12T10:00:00Z', channel: 'general' }] },
@@ -315,6 +361,7 @@ it('loads and highlights the channel message a notification names', async () => 
   const row = targeted.closest('.chat-message')
   expect(row).toHaveAttribute('data-message-id', '44')
   expect(row).toHaveClass('chat-message-highlight')
+  expect(fetchMock.mock.calls.some(([url]) => String(url).includes('around=44') && String(url).includes('limit=10'))).toBe(true)
 })
 
 it('keeps Delete available on an archived chat message', async () => {
@@ -890,7 +937,7 @@ it('points the feed at the message a chat notification names', async () => {
   // The alert names the thread, but the message inside it is what the reader was
   // sent to see, so it has to be marked - in the fetched thread, which arrives
   // after the view has already decided which thread to show.
-  mockApi({
+  const fetchMock = mockApi({
     '/documents/': { documents: [] },
     '/files/': { files: [] },
     '/direct-conversations/11/messages/': { messages: [
@@ -908,4 +955,5 @@ it('points the feed at the message a chat notification names', async () => {
   expect(row).toHaveAttribute('data-message-id', '9')
   expect(row).toHaveClass('chat-message-highlight')
   expect(screen.getByText('Earlier note.').closest('.chat-message')).not.toHaveClass('chat-message-highlight')
+  expect(fetchMock.mock.calls.some(([url]) => String(url).includes('around=9') && String(url).includes('limit=10'))).toBe(true)
 })
