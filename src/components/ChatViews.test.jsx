@@ -325,6 +325,27 @@ it('opens the compact composer emoji popup and inserts the choice', async () => 
   expect(screen.queryByRole('dialog', { name: 'Choose an emoji' })).not.toBeInTheDocument()
 })
 
+it('keeps the composer controls inside one compact message row', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  await openConversation()
+
+  const input = screen.getByRole('textbox', { name: 'Message' })
+  const composeRow = input.closest('.chat-compose-input')
+  expect(input).toHaveAttribute('rows', '1')
+  expect(composeRow).not.toBeNull()
+  expect(within(composeRow).getByRole('button', { name: 'Mention a teammate' })).toBeInTheDocument()
+  expect(within(composeRow).getByRole('button', { name: 'Add emoji' })).toBeInTheDocument()
+  expect(within(composeRow).getByTitle('Attach file')).toBeInTheDocument()
+  expect(within(composeRow).getByRole('button', { name: 'Send' })).toBeInTheDocument()
+  expect(composeRow.querySelector('.chat-compose-toolbar')).toBeNull()
+})
+
 it('opens the full mention picker immediately and filters as the user types', async () => {
   const data = {
     ...dataFor(),

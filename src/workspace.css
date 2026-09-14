@@ -3831,16 +3831,17 @@ label > [data-slot='select-trigger'].app-select-trigger { width:100%; }
 [data-slot='select-content'] { z-index:120; min-width:var(--radix-select-trigger-width); }
 [data-slot='select-item'] { min-height:38px; font-size:13px; }
 [data-slot='select-item'][data-highlighted] { background:var(--sc-secondary); color:var(--sc-secondary-foreground); }
-.chat-inline-composer > .chat-compose-surface:last-of-type { display:flex; flex-direction:column; align-items:stretch; gap:0; border:1px solid var(--workspace-border); border-radius:14px; background:var(--workspace-surface); overflow:hidden; }
+.chat-inline-composer > .chat-compose-surface:last-of-type { display:flex; align-items:stretch; gap:0; border:1px solid var(--workspace-border); border-radius:14px; background:var(--workspace-surface); overflow:hidden; }
 .chat-inline-composer .chat-compose-surface:focus-within { border-color:var(--focus-ring); box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 16%, transparent); }
-.chat-compose-input { position:relative; }
-.chat-inline-composer .chat-compose-surface textarea { display:block; width:100%; min-height:100px; max-height:260px; border:0; border-radius:0; padding:16px 16px 16px 58px; box-shadow:none; outline:none; }
-.chat-compose-input .chat-upload-button { position:absolute; bottom:12px; left:12px; z-index:1; display:grid; place-items:center; width:38px; height:38px; padding:0; border:0; border-radius:11px; background:transparent; color:var(--workspace-text-soft); }
+.chat-compose-input { display:flex; min-width:0; align-items:flex-end; gap:6px; padding:6px; }
+.chat-inline-composer .chat-compose-surface textarea { display:block; width:auto; min-width:0; min-height:38px; max-height:140px; flex:1 1 auto; resize:none; overflow-y:hidden; border:0; border-radius:0; padding:8px; background:transparent; box-shadow:none; outline:none; }
+.chat-compose-actions { display:flex; flex:0 0 auto; align-items:flex-end; gap:2px; }
+.chat-compose-input .chat-upload-button { display:grid; flex:0 0 34px; place-items:center; width:34px; height:34px; padding:0; border:0; border-radius:10px; background:transparent; color:var(--workspace-text-soft); cursor:pointer; }
 .chat-compose-input .chat-upload-button:hover { background:var(--workspace-surface-soft); color:var(--workspace-text); }
 .chat-compose-input .chat-upload-button:focus-within { outline:2px solid var(--focus-ring) !important; outline-offset:2px; }
 .chat-compose-input .chat-upload-button:has(input:disabled) { cursor:wait; opacity:.55; }
-.chat-compose-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 12px; border-top:1px solid var(--workspace-border); background:var(--workspace-surface-soft); }
-.chat-compose-toolbar > .primary-button { margin-left:auto; }
+.chat-compose-actions .chat-emoji-trigger { width:34px; height:34px; flex-basis:34px; }
+.chat-compose-actions > .primary-button { min-height:34px; padding:0 13px; box-shadow:none; font-size:11px; }
 .chat-compose-hint { display:block; margin-top:8px; color:var(--workspace-text-soft); font-size:11px; }
 
 /* The chat shell owns the available page height so its composer is never
@@ -3926,10 +3927,20 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .team-member-heading { width:100%; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
 .team-member-heading:hover h2, .team-member-heading:focus-visible h2 { color:var(--workspace-primary); text-decoration:underline; }
 .chat-workspace-view .chat-inline-composer { flex:0 0 auto; padding:8px 14px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--workspace-border); background:var(--workspace-surface); }
-.chat-workspace-view .chat-inline-composer .chat-compose-surface textarea { min-height:44px; max-height:140px; padding:10px 12px 10px 48px; font-size:13px; line-height:1.4; }
-.chat-workspace-view .chat-compose-input .chat-upload-button { bottom:6px; left:8px; width:32px; height:32px; border-radius:9px; }
-.chat-workspace-view .chat-compose-toolbar { gap:6px; padding:7px 10px; }
+.chat-workspace-view .chat-compose-input { gap:5px; padding:5px 6px; }
+.chat-workspace-view .chat-inline-composer .chat-compose-surface textarea { min-height:38px; max-height:140px; padding:8px; font-size:13px; line-height:1.4; }
+.chat-workspace-view .chat-compose-actions { gap:1px; }
+.chat-workspace-view .chat-compose-input .chat-upload-button { width:32px; height:32px; flex-basis:32px; border-radius:9px; }
+.chat-workspace-view .chat-compose-actions .chat-emoji-trigger { width:32px; height:32px; flex-basis:32px; }
+.chat-workspace-view .chat-compose-actions > .primary-button { min-height:32px; padding:0 11px; font-size:10px; }
 .chat-workspace-view .chat-compose-hint { display:none; }
+@media (max-width:520px) {
+  .chat-workspace-view .chat-compose-input { gap:3px; padding:5px; }
+  .chat-workspace-view .chat-compose-actions { gap:0; }
+  .chat-workspace-view .chat-compose-input .chat-upload-button,
+  .chat-workspace-view .chat-compose-actions .chat-emoji-trigger { width:30px; height:30px; flex-basis:30px; }
+  .chat-workspace-view .chat-compose-actions > .primary-button { min-height:30px; padding:0 9px; }
+}
 @media (max-width:850px) { .chat-workspace-view .chat-layout { height:auto; min-height:0; overflow:visible; border:0; background:transparent; } .chat-workspace-view .chat-feed { min-height:520px; border:1px solid var(--workspace-border); border-radius:14px; } .chat-workspace-view .chat-conversation-list { border:1px solid var(--workspace-border); border-radius:14px; } }
 
 .calendar-side-section { display:grid; gap:8px; margin-top:8px; padding-top:14px; border-top:1px solid var(--workspace-border); }

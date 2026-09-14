@@ -35,6 +35,8 @@ const MESSAGE_REACTIONS = [
   ['👏', 'Applause'],
 ]
 
+const CHAT_COMPOSER_MAX_HEIGHT = 140
+
 function renderMessageText(text) {
   return <LinkedText text={text} />
 }
@@ -338,6 +340,18 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     if (!scroller || revealMessageId) return
     scroller.scrollTop = scroller.scrollHeight
   }, [mode, selectedChannel, selectedConversationId, activePane, directLoading, lastChannelMessageId, lastDirectMessageId, visibleChannelMessages.length, visibleDirectMessages.length, revealMessageId])
+
+  // Keep the composer compact for a single line, then grow it only as the draft
+  // wraps. The element height is reset first so deleting lines can shrink it too.
+  useLayoutEffect(() => {
+    const input = messageInputRef.current
+    if (!input) return
+    input.style.height = 'auto'
+    const nextHeight = Math.min(input.scrollHeight, CHAT_COMPOSER_MAX_HEIGHT)
+    if (!nextHeight) return
+    input.style.height = `${nextHeight}px`
+    input.style.overflowY = input.scrollHeight > CHAT_COMPOSER_MAX_HEIGHT ? 'auto' : 'hidden'
+  }, [draft, mode, selectedChannel, selectedConversationId, activePane])
 
   // Bring the alerted message into view in the middle of the feed, the same way
   // the pin scrolls the feed element rather than calling scrollIntoView. Re-runs
@@ -905,14 +919,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
           <div className="chat-compose-surface">
             <div className="chat-compose-input">
-            <textarea ref={messageInputRef} value={draft} onChange={event => { const nextDraft = event.target.value; setDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
-              <label className="chat-upload-button" aria-label={uploadingFile ? 'Uploading file' : 'Upload and attach a file'} title={uploadingFile ? 'Uploading file' : 'Attach file'}><Paperclip size={17} /><input type="file" onChange={uploadChatFile} disabled={uploadingFile} /></label>
+              <textarea ref={messageInputRef} rows={1} value={draft} onChange={event => { const nextDraft = event.target.value; setDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
+              <div className="chat-compose-actions">
+                <Popover.Root open={mentionOpen} onOpenChange={nextOpen => { setMentionOpen(nextOpen); setMentionQuery(''); if (nextOpen) { setEmojiOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-mention-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Mention a workspace member"><MentionPicker members={mentionMembers} getMemberName={memberName} onSelect={insertMention} /><Popover.Arrow className="chat-mention-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
+                <Popover.Root open={emojiOpen} onOpenChange={nextOpen => { setEmojiOpen(nextOpen); if (nextOpen) { setMentionOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-emoji-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Choose an emoji"><EmojiPicker onSelect={insertEmoji} /><Popover.Arrow className="chat-emoji-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
+                <label className="chat-upload-button" aria-label={uploadingFile ? 'Uploading file' : 'Upload and attach a file'} title={uploadingFile ? 'Uploading file' : 'Attach file'}><Paperclip size={17} /><input type="file" onChange={uploadChatFile} disabled={uploadingFile} /></label>
+                <button type="submit" className="primary-button" disabled={submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
+              </div>
             </div>
-            <div className="chat-compose-toolbar">
-            <Popover.Root open={mentionOpen} onOpenChange={nextOpen => { setMentionOpen(nextOpen); setMentionQuery(''); if (nextOpen) { setEmojiOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-mention-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Mention a workspace member"><MentionPicker members={mentionMembers} getMemberName={memberName} onSelect={insertMention} /><Popover.Arrow className="chat-mention-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
-            <Popover.Root open={emojiOpen} onOpenChange={nextOpen => { setEmojiOpen(nextOpen); if (nextOpen) { setMentionOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-emoji-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Choose an emoji"><EmojiPicker onSelect={insertEmoji} /><Popover.Arrow className="chat-emoji-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
-            <button type="submit" className="primary-button" disabled={submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
-          </div>
           </div>
           <small className="chat-compose-hint">Enter to send. Shift + Enter for a new line.</small>
           {error && <Alert tone="danger" compact>{error}</Alert>}
