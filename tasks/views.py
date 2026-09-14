@@ -126,8 +126,11 @@ NOTIFICATION_KIND_PREFERENCE = {
     'task_status': 'task_updates',
     'task_comment': 'task_updates',
     'follow_up_assigned': 'task_updates',
+    'follow_up_unassigned': 'task_updates',
     'follow_up_completed': 'task_updates',
     'follow_up_comment': 'task_updates',
+    'task_attachment_deleted': 'task_updates',
+    'document_comment_resolved': 'task_updates',
     'check_in_blocker': 'task_updates',
     'check_in_comment': 'task_updates',
     'check_in_submitted': 'task_updates',
@@ -145,6 +148,8 @@ NOTIFICATION_KIND_PREFERENCE = {
     # the existing operational preference rather than a dedicated category.
     'screen_share_request': 'task_updates',
     'screen_share_response': 'task_updates',
+    'screen_share_cancelled': 'task_updates',
+    'screen_capture_viewed': 'task_updates',
     'manager_activity': 'manager_activity',
 }
 
@@ -234,6 +239,17 @@ def notify_managers(workspace_id, actor, verb, object_label, target_type='', tar
             target_type=target_type, target_id=target_id,
             group_key=group_key, immediate=immediate,
         )
+
+
+def notify_project_change(workspace_id, actor, project, verb, object_label):
+    """Tell the other workspace leaders that a project's plan or budget moved.
+    These endpoints are leader-only, so the audience is the rest of the leaders,
+    and nothing happens at all in a workspace with a single leader - which is why
+    this is reserved for the events that change a plan rather than every edit."""
+    notify_managers(
+        workspace_id, actor, verb, f'{object_label} in {project.name}',
+        target_type='project', target_id=project.id,
+    )
 
 
 def task_activity_user_ids(task, include_commenters=False):
@@ -1397,6 +1413,7 @@ def project_resource_detail(request, workspace_id, project_id, resource_id):
     if request.method == 'DELETE':
         resource.is_active = False
         resource.save(update_fields=['is_active'])
+        notify_project_change(workspace_id, request.user, resource.project, 'archived a project resource', resource.name)
         return JsonResponse({'archived': resource_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -1481,6 +1498,7 @@ def project_stakeholder_detail(request, workspace_id, project_id, stakeholder_id
     if request.method == 'DELETE':
         stakeholder.is_active = False
         stakeholder.save(update_fields=['is_active'])
+        notify_project_change(workspace_id, request.user, stakeholder.project, 'archived a stakeholder', stakeholder.name)
         return JsonResponse({'archived': stakeholder_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -1539,6 +1557,9 @@ def project_expense_list(request, workspace_id, project_id):
     if not isinstance(payload.get('is_committed', False), bool):
         return JsonResponse({'error': 'is_committed must be a boolean.'}, status=400)
     expense = ProjectExpense.objects.create(project_id=project_id, name=name, category=category, amount=amount, is_committed=payload.get('is_committed', False), incurred_on=incurred_on, notes=str(payload.get('notes', '')).strip(), receipt_url=str(payload.get('receipt_url', '')).strip())
+    # Money is the one project field the other leaders cannot reconstruct from
+    # their own view of the plan, so it is reported on entry and on change.
+    notify_project_change(workspace_id, request.user, project, 'recorded a project expense', f'{name} ({amount})')
     return JsonResponse({'expense': expense.as_dict()}, status=201)
 
 
@@ -1553,6 +1574,7 @@ def project_expense_detail(request, workspace_id, project_id, expense_id):
     if request.method == 'DELETE':
         expense.is_active = False
         expense.save(update_fields=['is_active'])
+        notify_project_change(workspace_id, request.user, expense.project, 'archived a project expense', expense.name)
         return JsonResponse({'archived': expense_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -1588,6 +1610,7 @@ def project_expense_detail(request, workspace_id, project_id, expense_id):
             return JsonResponse({'error': 'is_committed must be a boolean.'}, status=400)
         expense.is_committed = payload['is_committed']
     expense.save()
+    notify_project_change(workspace_id, request.user, expense.project, 'changed a project expense', f'{expense.name} ({expense.amount})')
     return JsonResponse({'expense': expense.as_dict()})
 
 
@@ -1707,6 +1730,10 @@ def task_template_apply(request, workspace_id, template_id):
         TaskCodeRegistry.objects.create(workspace_id=workspace_id, code=code, task_id=task.id)
         TaskChangeHistory.objects.create(task=task, task_code=task.code, workspace_id=workspace_id, actor=request.user, field='created', previous_value=None, new_value={'title': task.title, 'status': task.status})
     record_task_activity(task, request.user, 'task_created', f'{request.user.get_full_name() or request.user.email} created task {task.title} from template {template.name}.')
+    # A blueprint can carry an assignee, so applying it hands someone work the
+    # same way the task form does - and that assignment used to arrive silently.
+    if task.assignee_id and task.assignee_id != request.user.id:
+        create_notification(workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
     return JsonResponse({'task': task.as_dict()}, status=201)
 
 
@@ -1778,6 +1805,9 @@ def project_template_apply(request, workspace_id, template_id):
         due_date=date.today() + timedelta(days=template.due_days),
     )
     record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name} from template {template.name}.')
+    # A new project changes the workspace's shape for everyone, not just for the
+    # leader who applied the blueprint.
+    notify_managers(workspace_id, request.user, 'created a project from a blueprint', project.name, target_type='project', target_id=project.id)
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
@@ -2228,6 +2258,14 @@ def task_attachment_detail(request, attachment_id):
     if permission_error:
         return permission_error
     record_task_activity(attachment.task, request.user, 'task_attachment_deleted', f'{request.user.get_full_name() or request.user.email} deleted {attachment.original_name} from {attachment.task.title}.')
+    # The file is gone for good, and everyone on the task may have been relying
+    # on it, so the alert names what was removed rather than just the task.
+    for recipient in task_activity_recipients(attachment.task, request.user):
+        create_notification(
+            attachment.task.workspace_id, recipient, 'task_attachment_deleted', 'Task attachment removed',
+            f'{request.user.get_full_name() or request.user.email} deleted {attachment.original_name} from {attachment.task.title}.',
+            target_type='task', target_id=attachment.task_id,
+        )
     attachment.file.delete(save=False)
     attachment.delete()
     return JsonResponse({'deleted': attachment_id})
@@ -2695,6 +2733,10 @@ def workspace_leave(request, workspace_id):
         _remove_workspace_member_from_direct_conversations(workspace_id, request.user.id)
     _reassign_default_workspace(request.user, workspace_id)
     record_activity(workspace_id, request.user, 'member_left', f'{request.user.get_full_name() or request.user.email} left the workspace.')
+    # The activity feed already recorded this, but a feed is only read by someone
+    # already looking at it. Losing a teammate changes who can be assigned work,
+    # so it reaches the leaders who have to re-plan around it.
+    notify_managers(workspace_id, request.user, 'left the workspace', workspace_name, target_type='workspace', target_id=workspace_id)
     return JsonResponse({'left': workspace_id, 'workspace_name': workspace_name})
 
 
@@ -2712,6 +2754,10 @@ def workspace_archive(request, workspace_id):
     workspace.archived_at = timezone.now()
     workspace.archived_by = request.user
     workspace.save(update_fields=['status', 'archived_at', 'archived_by'])
+    # Recorded while the members are still here, so the entry is waiting in the
+    # workspace if the archive is ever reversed. It is not pushed, because the
+    # recipients are about to be moved off this workspace by the loop below.
+    notify_managers(workspace_id, request.user, 'archived the workspace', workspace.name, target_type='workspace', target_id=workspace_id)
     for member_user_id in Membership.objects.filter(workspace_id=workspace_id).values_list('user_id', flat=True):
         member_user = User.objects.filter(id=member_user_id).select_related('profile').first()
         if member_user:
@@ -2735,6 +2781,9 @@ def workspace_restore(request, workspace_id):
     workspace.archived_by = None
     workspace.save(update_fields=['status', 'archived_at', 'archived_by'])
     record_activity(workspace_id, request.user, 'workspace_restored', f'{request.user.get_full_name() or request.user.email} restored this workspace.')
+    # Unlike the archive entry above, this one is readable the moment it lands:
+    # the workspace is active again, so the bell for it loads.
+    notify_managers(workspace_id, request.user, 'restored the workspace', workspace.name, target_type='workspace', target_id=workspace_id)
     return JsonResponse({'workspace': {'id': workspace.id, 'status': workspace.status}})
 
 
@@ -4402,6 +4451,11 @@ def follow_up_detail(request, follow_up_id):
         else:
             extra_user_ids = {previous_assignee.id} if previous_assignee else set()
             record_follow_up_activity(follow_up, request.user, 'follow_up_assigned', f'{actor_name} unassigned a follow-up.', extra_user_ids=extra_user_ids)
+            # The activity entry only reaches the previous assignee's feed. Losing
+            # an assignment is the one follow-up change that needs to interrupt
+            # them, because it means the work is no longer theirs to do.
+            if previous_assignee and previous_assignee != request.user:
+                create_notification(follow_up.workspace_id, previous_assignee, 'follow_up_unassigned', 'A follow-up was unassigned from you.', follow_up.note, target_type='follow_up', target_id=follow_up.id)
         if follow_up.assigned_to and follow_up.assigned_to != request.user:
             create_notification(follow_up.workspace_id, follow_up.assigned_to, 'follow_up_assigned', 'You were assigned a follow-up.', follow_up.note, target_type='follow_up', target_id=follow_up.id)
     if previous_due_date != follow_up.due_date:

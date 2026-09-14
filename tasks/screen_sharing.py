@@ -17,7 +17,7 @@ from django.http import FileResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .models import AuditLog, Membership, ScreenCapture, ScreenShareSession, WorkspaceSetting
+from .models import AuditLog, Membership, NotificationDelivery, ScreenCapture, ScreenShareSession, WorkspaceSetting
 from .views import create_notification, parse_int
 
 
@@ -54,6 +54,32 @@ def _notify_requester(session, summary):
     create_notification(
         session.workspace_id, session.requested_by, 'screen_share_response',
         'Screen-sharing update', f'{session.employee_name or session.employee_email} {summary}.',
+        'screen_share_session', session.id,
+    )
+
+
+def _notify_capture_viewed(workspace_id, actor, session):
+    """Tell the employee that a leader opened a screen captured from their
+    session. This is the event the consent prompt promises they get to know
+    about, and it was only ever written to the audit log.
+
+    Recorded in NotificationDelivery under one key per session, so a leader
+    paging through a session's images - or two leaders opening the same one -
+    raises a single alert rather than one per screenshot."""
+    employee = session.employee
+    if employee is None or employee.id == actor.id:
+        return
+    _, created = NotificationDelivery.objects.get_or_create(
+        workspace_id=workspace_id,
+        kind='screen_capture_viewed',
+        dedup_key=f'session:{session.id}:{employee.id}',
+        defaults={'recipient_id': employee.id, 'target_type': 'screen_share_session', 'target_id': str(session.id)},
+    )
+    if not created:
+        return
+    create_notification(
+        workspace_id, employee, 'screen_capture_viewed', 'Your captured screen was opened',
+        f'{actor.get_full_name() or actor.email} viewed a screenshot from your screen-sharing session.',
         'screen_share_session', session.id,
     )
 
@@ -238,6 +264,13 @@ def screen_share_session_detail(request, workspace_id, session_id):
         session.status, session.ended_at, session.stop_reason = 'cancelled', now, 'manager_cancelled'
         session.save(update_fields=['status', 'ended_at', 'stop_reason', 'updated_at'])
         _audit(workspace_id, request.user, 'screen_share_cancelled', 'screen_share_session', session.id)
+        # The requester here is the leader who cancelled, so the person who needs
+        # telling is the employee, whose prompt is about to disappear on its own.
+        create_notification(
+            workspace_id, session.employee, 'screen_share_cancelled', 'Screen-sharing request cancelled',
+            f'{request.user.get_full_name() or request.user.email} cancelled the screen-sharing request.',
+            'screen_share_session', session.id,
+        )
         return JsonResponse({'session': session.as_dict(include_capture_count=True)})
     return JsonResponse({'error': 'action must be accept, decline, stop, or cancel.'}, status=400)
 
@@ -274,6 +307,8 @@ def screen_capture_list(request, workspace_id, session_id):
             return JsonResponse({'error': 'Only authorised workspace leaders can view screenshots.'}, status=403)
         captures = session.captures.all()[:200]
         _audit(workspace_id, request.user, 'screen_captures_viewed', 'screen_share_session', session.id, {'capture_count': len(captures)})
+        if captures:
+            _notify_capture_viewed(workspace_id, request.user, session)
         return JsonResponse({'captures': [capture.as_dict() for capture in captures]})
     if session.employee_id != request.user.id:
         return JsonResponse({'error': 'Only the sharing employee can upload captures.'}, status=403)
@@ -338,6 +373,7 @@ def screen_capture_detail(request, capture_id):
         return JsonResponse({'deleted': str(capture_id_value)})
     download = request.GET.get('download', '').lower() in {'1', 'true', 'yes'}
     _audit(capture.workspace_id, request.user, 'screen_capture_downloaded' if download else 'screen_capture_viewed', 'screen_capture', capture.id, {'session_id': str(capture.session_id)})
+    _notify_capture_viewed(capture.workspace_id, request.user, capture.session)
     response = FileResponse(capture.image.open('rb'), content_type=capture.mime_type)
     extension = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}.get(capture.mime_type, 'img')
     response['Content-Disposition'] = f'{"attachment" if download else "inline"}; filename="screen-capture-{capture.captured_at:%Y%m%d-%H%M%S}.{extension}"'

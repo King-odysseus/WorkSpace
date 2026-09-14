@@ -756,6 +756,26 @@ def workspace_document_comment_detail(request, workspace_id, document_id, commen
         comment.resolved_at = None
         comment.resolved_by = None
     comment.save(update_fields=['resolved_at', 'resolved_by'])
+    # Whoever wrote the comment, or started the thread it answers, is the person
+    # waiting to hear that it is settled. Resolution used to only change the row,
+    # so a comment could be closed without its author ever finding out.
+    if payload['resolved']:
+        from .views import create_notification
+        actor_name = request.user.get_full_name() or request.user.email
+        recipient_ids = {comment.author_id, comment.parent.author_id if comment.parent_id else None}
+        members = (
+            Membership.objects
+            .filter(workspace_id=workspace_id, user_id__in=recipient_ids)
+            .exclude(user_id=request.user.id)
+            .select_related('user')
+        )
+        for member in members:
+            create_notification(
+                workspace_id, member.user, 'document_comment_resolved',
+                f'{actor_name} resolved a comment on "{comment.document.title}"',
+                comment.body[:120],
+                target_type='document', target_id=document_id,
+            )
     return JsonResponse({'comment': comment.as_dict()})
 
 
