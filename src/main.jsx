@@ -366,6 +366,8 @@ function App() {
   // Bumped on every "open this thread" request so an already-mounted Chats view
   // re-reads the hand-off instead of only a newly-mounted one.
   const [chatThreadRequest, setChatThreadRequest] = useState(0);
+  const [pendingActivity, setPendingActivity] = useState(null);
+  const clearPendingActivity = useCallback(() => setPendingActivity(null), []);
   useEffect(() => {
     setNotificationUnreadCount(null);
     if (session.user?.id) return startNotificationAlerts(data => setNotificationUnreadCount(data.unread_count));
@@ -2763,6 +2765,8 @@ function App() {
                 onRefresh={() => setWorkspaceReload((current) => current + 1)}
                 onConfirm={confirmAction}
                 screenShareNotificationId={screenShareNotificationId}
+                pendingActivity={pendingActivity}
+                onPendingActivityHandled={clearPendingActivity}
               />
             )}
             {active === "Today" && (
@@ -2804,13 +2808,11 @@ function App() {
                 }}
                 onNavigate={setActive}
                 onOpenActivity={(event) => {
-                  const eventDate = toDateKey(event.created_at);
-                  setActivitySearch(event.message || "");
-                  setActivityActor(event.actor_id == null ? "system" : String(event.actor_id));
-                  setActivityKind(event.kind || "all");
-                  setActivityDateFrom(eventDate);
-                  setActivityDateTo(eventDate);
-                  setActivityPage(1);
+                  setPendingActivity({
+                    search: event.message || "",
+                    actorId: event.actor_id == null ? "system" : String(event.actor_id),
+                    kind: event.kind || "all",
+                  });
                   setActive("Activity");
                 }}
                 onOpenBoard={(focus) => {
@@ -3213,6 +3215,8 @@ function WorkspaceView({
   onRefresh,
   onConfirm,
   screenShareNotificationId,
+  pendingActivity,
+  onPendingActivityHandled,
 }) {
   const today = toDateKey(new Date());
   const [localData, setLocalData] = useState(data);
@@ -3252,9 +3256,9 @@ function WorkspaceView({
   const [reportDetailLoading, setReportDetailLoading] = useState(false);
   const [reportDetailError, setReportDetailError] = useState("");
   const [teamBoardScope, setTeamBoardScope] = useState("all");
-  const [activitySearch, setActivitySearch] = useState("");
-  const [activityActor, setActivityActor] = useState("all");
-  const [activityKind, setActivityKind] = useState("all");
+  const [activitySearch, setActivitySearch] = useState(() => pendingActivity?.search || "");
+  const [activityActor, setActivityActor] = useState(() => pendingActivity?.actorId || "all");
+  const [activityKind, setActivityKind] = useState(() => pendingActivity?.kind || "all");
   const [activityDateFrom, setActivityDateFrom] = useState("");
   const [activityDateTo, setActivityDateTo] = useState("");
   const [activityPage, setActivityPage] = useState(1);
@@ -3267,6 +3271,9 @@ function WorkspaceView({
   });
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState("");
+  useEffect(() => {
+    if (pendingActivity) onPendingActivityHandled?.();
+  }, [pendingActivity, onPendingActivityHandled]);
   const [notificationPage, setNotificationPage] = useState(1);
   const [notificationHistory, setNotificationHistory] = useState([]);
   const [notificationPagination, setNotificationPagination] = useState(null);

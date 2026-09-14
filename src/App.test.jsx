@@ -52,19 +52,33 @@ const task = {
 
 const mountApp = async () => {
   window.localStorage.removeItem('workspace-sidebar-upgrade-card-dismissed-7')
-  mockApi({
+  const fetchMock = mockApi({
     '/api/auth/me/': session,
     '/api/tasks/': { tasks: [task], pagination: { has_next: false } },
     '/api/tasks/91/comments/': { comments: [] },
     '/api/tasks/91/subtasks/': { subtasks: [] },
     '/api/tasks/91/attachments/': { attachments: [] },
+    '/api/workspaces/1/activity/': {
+      activity: [{
+        id: 41,
+        actor_id: 7,
+        actor_name: 'Nate Foster',
+        kind: 'task_created',
+        message: 'Nate Foster created task Check-In Reminder.',
+        created_at: new Date().toISOString(),
+      }],
+      pagination: { page: 1, page_size: 40, total_items: 1, total_pages: 1, has_next: false, has_previous: false },
+      filters: { actors: [{ id: 7, name: 'Nate Foster' }], kinds: ['task_created'] },
+      summary: { total_events: 1, today_events: 1, week_events: 1, active_actors: 1 },
+    },
   })
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main.jsx')
+  return fetchMock
 }
 
 it('renders the workspace shell and opens a task from the today bar', async () => {
-  await mountApp()
+  const fetchMock = await mountApp()
 
   // The shell is up once it has rendered its own navigation.
   await waitFor(() => expect(document.querySelectorAll('button').length).toBeGreaterThan(5), { timeout: 20000 })
@@ -86,6 +100,18 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   expect(halves[1].textContent).toContain('Chats')
   expect(halves[1].textContent).toContain('More')
   expect(nav.textContent).not.toContain('Planner')
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Nate Foster created task Check-In Reminder.' }))
+  expect(await screen.findAllByRole('heading', { name: 'Activity' })).toHaveLength(2)
+  await waitFor(() => {
+    const activityCall = fetchMock.mock.calls.find(([url]) => {
+      const text = String(url)
+      return text.includes('/api/workspaces/1/activity/?') && text.includes('search=')
+    })
+    expect(activityCall).toBeTruthy()
+    expect(String(activityCall[0])).toContain('actor_id=7')
+    expect(String(activityCall[0])).toContain('kind=task_created')
+  })
 
   fireEvent.click(screen.getByRole('button', { name: 'Channels' }))
   await waitFor(

@@ -168,7 +168,9 @@ it('renders today changes as an accessible ticker that opens the selected event'
   expect(copies).toHaveLength(2)
   expect(copies[1]).toHaveAttribute('aria-hidden', 'true')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Nate Foster created task Check-In Reminder.' }))
+  const activityButton = screen.getByRole('button', { name: 'Nate Foster created task Check-In Reminder.' })
+  expect(activityButton.textContent.match(/Nate Foster/g)).toHaveLength(1)
+  fireEvent.click(activityButton)
   expect(onOpenActivity).toHaveBeenCalledWith(expect.objectContaining({ id: 31 }))
 })
 

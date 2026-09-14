@@ -3472,6 +3472,27 @@ function TodayPanel({
   );
 }
 
+const todayChangeParts = (event) => {
+  const actor = String(event.actor_name || "System");
+  const message = String(event.message || "");
+  const actorPrefix = `${actor} `;
+  const detail = message.toLowerCase().startsWith(actorPrefix.toLowerCase())
+    ? message.slice(actorPrefix.length)
+    : message;
+  return { actor, detail, label: [actor, detail].filter(Boolean).join(" ") };
+};
+
+function TodayChangeContent({ event }) {
+  const { actor, detail } = todayChangeParts(event);
+
+  return (
+    <>
+      <b>{actor}</b>
+      {detail && <span>{detail}</span>}
+    </>
+  );
+}
+
 function TodayDashboard({
   today,
   todayLabel,
@@ -3800,7 +3821,7 @@ function TodayDashboard({
                   {todaysChanges.map((event) =>
                     isDuplicate ? (
                       <span className="today-change-item" key={`duplicate-${event.id}`}>
-                        <b>{event.actor_name}</b> {event.message}
+                        <TodayChangeContent event={event} />
                       </span>
                     ) : (
                       <button
@@ -3809,8 +3830,9 @@ function TodayDashboard({
                         key={event.id}
                         onClick={() => onOpenActivity?.(event)}
                         title="View this activity"
+                        aria-label={todayChangeParts(event).label}
                       >
-                        <b>{event.actor_name}</b> {event.message}
+                        <TodayChangeContent event={event} />
                       </button>
                     ),
                   )}

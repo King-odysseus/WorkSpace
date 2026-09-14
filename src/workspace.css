@@ -5228,6 +5228,7 @@ html[data-theme='dark'] .today-panel-heading > svg {
   min-width: 0;
   flex: 0 0 auto;
   align-items: center;
+  gap: 6px;
   overflow: hidden;
   padding: 7px 10px;
   border: 1px solid transparent;
@@ -5259,6 +5260,12 @@ button.today-change-item:focus-visible {
 .today-change-item b {
   flex: 0 0 auto;
   color: var(--dashboard-text);
+}
+
+.today-change-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @keyframes today-change-ticker {
