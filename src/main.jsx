@@ -5804,7 +5804,7 @@ function WorkspaceView({
                   type="button"
                   key={notification.id}
                   onClick={() => onOpenNotification(notification)}
-                  className={`flex w-full items-start gap-3 rounded-none px-4 py-3.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
+                  className={`notification-history-row flex w-full items-start gap-3 rounded-none px-4 py-3.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
                 >
                   <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`} aria-hidden="true" />
                   <span className="min-w-0 flex-1">

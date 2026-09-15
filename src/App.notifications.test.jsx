@@ -127,6 +127,7 @@ it('separates message alerts from workspace activity across the header and mobil
   await waitFor(() => expect(screen.getAllByText('14-09-26 10:44')).toHaveLength(1))
   const historyRow = screen.getByText('Deployment finished').closest('button')
   expect(historyRow).toHaveClass('rounded-none')
+  expect(historyRow).toHaveClass('notification-history-row')
   expect(historyRow.closest('[data-slot="card"]')).toHaveClass('notification-history')
   expect(within(historyRow).getByText('Unread')).toHaveClass('rounded-none')
   expect(historyRow.querySelector('span[aria-hidden="true"]')).toHaveClass('rounded-full')
