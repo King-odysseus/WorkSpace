@@ -2218,7 +2218,7 @@ function App() {
       )}
     >
       <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
-        <p className="text-xs font-bold text-navy">Messages</p>
+        <p className="text-xs font-bold text-text-primary">Messages</p>
         <span className="text-[11px] font-medium text-text-muted">
           {unreadConversationCount} unread
         </span>
@@ -2565,10 +2565,10 @@ function App() {
               alt="TijhaBooks"
               className="h-6 w-6 shrink-0 rounded-md object-contain lg:hidden"
             />
-            <span className="hidden truncate text-sm font-bold tracking-tight text-navy sm:inline lg:hidden">
+            <span className="hidden truncate text-sm font-bold tracking-tight text-text-primary sm:inline lg:hidden">
               WorkSpace
             </span>
-            <h1 className="hidden truncate text-base font-bold tracking-tight text-navy lg:block">
+            <h1 className="hidden truncate text-base font-bold tracking-tight text-text-primary lg:block">
               {active}
             </h1>
           </div>
@@ -2675,7 +2675,7 @@ function App() {
               {notificationOpen && (
                 <div className="fixed left-4 right-4 top-16 z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80">
                   <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
-                    <p className="text-xs font-bold text-navy">Workspace activity</p>
+                    <p className="text-xs font-bold text-text-primary">Workspace activity</p>
                     <button
                       type="button"
                       onClick={markNotificationsRead}

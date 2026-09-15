@@ -46,7 +46,7 @@ function DialogContent({ className, overlayClassName, children, showCloseButton 
       >
         {children}
         {showCloseButton && (
-          <DialogPrimitive.Close className="absolute top-4 right-4 grid size-8 place-items-center rounded-full bg-muted text-muted-foreground opacity-80 transition-opacity hover:opacity-100 focus:outline-none">
+          <DialogPrimitive.Close className="absolute top-4 right-4 grid size-8 place-items-center rounded-full bg-secondary text-secondary-foreground opacity-90 transition-opacity hover:bg-muted hover:opacity-100 focus:outline-none">
             <X className="size-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>

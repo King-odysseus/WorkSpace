@@ -1571,7 +1571,7 @@ html[data-theme='light'] .mobile-pill-nav {
 .close-button {
   border: 1px solid var(--workspace-border);
   background: var(--workspace-surface-soft);
-  color: var(--workspace-text-soft);
+  color: var(--workspace-text);
 }
 
 .close-button:hover {
@@ -3968,7 +3968,7 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .calendar-filter-row [data-slot='select-trigger'] { min-width:140px; min-height:36px; padding:0 10px; font-size:12px; }
 .calendar-summary-badges { grid-area:summary; display:flex; flex-wrap:wrap; gap:8px; }
 .calendar-summary-badge { display:inline-flex; align-items:center; min-height:28px; padding:0 10px; border:1px solid var(--workspace-border); border-radius:999px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font-size:11px; font-weight:700; }
-.close-button:hover, .sidebar-toggle:hover { color:var(--workspace-on-accent) !important; }
+.close-button:hover, .sidebar-toggle:hover { color:var(--color-primary-foreground) !important; }
 .rich-toolbar-button.is-active, .spreadsheet-tabs button.active, .spreadsheet-scroll th.active { color:var(--workspace-on-accent) !important; }
 /* Shared Button hover colours come from its paired secondary theme tokens.
    An accent foreground override would put dark text on the dark secondary. */
