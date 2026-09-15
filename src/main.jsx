@@ -385,22 +385,27 @@ function App() {
     setNotificationUnreadCount(null);
     if (session.user?.id) return startNotificationAlerts(data => setNotificationUnreadCount(data.unread_count));
   }, [session.user?.id]);
-  // The bell list and the unread badge are two different reads: the badge comes
-  // from the account-wide summary poll, the list from this workspace's paginated
-  // history, which the workspace load fetches once. Without this the badge counts
-  // items the open popout cannot show, and a read state changed in a chat never
-  // clears its dot.
+  // The two popups read independent workspace feeds: activity for the bell and
+  // conversations for Messages. Loading them separately keeps either category
+  // from filling the other's 20-row page with unrelated alerts.
   useEffect(() => {
     if (!activeWorkspaceId || session.loading || !session.user?.id) return undefined;
     const reloadNotifications = () => {
-      fetch(`/api/workspaces/${activeWorkspaceId}/notifications/`, { credentials: "include" })
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload) => {
-          if (!payload) return;
+      const loadFeed = (query) =>
+        fetch(`/api/workspaces/${activeWorkspaceId}/notifications/?${query}`, { credentials: "include" })
+          .then((response) => (response.ok ? response.json() : null));
+      Promise.all([loadFeed("exclude_chat=1"), loadFeed("only_conversation=1")])
+        .then(([activityPayload, conversationPayload]) => {
+          if (!activityPayload && !conversationPayload) return;
           setWorkspaceData((current) => ({
             ...current,
-            notifications: payload.notifications || [],
-            notificationCounts: payload.unread_counts ?? current.notificationCounts,
+            notifications: [
+              ...(conversationPayload?.notifications || []),
+              ...(activityPayload?.notifications || []),
+            ],
+            activityNotifications: activityPayload?.notifications || [],
+            conversationNotifications: conversationPayload?.notifications || [],
+            notificationCounts: activityPayload?.unread_counts ?? conversationPayload?.unread_counts ?? current.notificationCounts,
           }));
         })
         .catch((error) => console.warn("Notifications could not be refreshed.", error));
@@ -441,6 +446,8 @@ function App() {
     followUps: [],
     invitations: [],
     notifications: [],
+    activityNotifications: [],
+    conversationNotifications: [],
     // Unread totals counted server-side over every row, so the badges do not
     // shrink to whatever the 20-item notification page happens to hold.
     notificationCounts: null,
@@ -764,6 +771,8 @@ function App() {
       followUps: [],
       invitations: [],
       notifications: [],
+      activityNotifications: [],
+      conversationNotifications: [],
       notificationCounts: null,
       activity: [],
       auditLogs: [],
@@ -923,7 +932,10 @@ function App() {
         read(`/api/workspaces/${workspaceId}/work-shifts/`, {
           work_shifts: [],
         }),
-        read(`/api/workspaces/${workspaceId}/notifications/`, {
+        read(`/api/workspaces/${workspaceId}/notifications/?exclude_chat=1`, {
+          notifications: [],
+        }),
+        read(`/api/workspaces/${workspaceId}/notifications/?only_conversation=1`, {
           notifications: [],
         }),
         read(`/api/workspaces/${workspaceId}/activity/?page_size=50&date_from=${today}&include_filters=0&include_summary=0`, {
@@ -958,7 +970,8 @@ function App() {
             eventData,
             checkInData,
             workShiftData,
-            notificationData,
+            activityNotificationData,
+            conversationNotificationData,
             activityData,
             bucketData,
             invitationData,
@@ -988,8 +1001,13 @@ function App() {
               events: eventData.events,
               checkIns: checkInData.check_ins,
               workShifts: workShiftData.work_shifts,
-              notifications: notificationData.notifications,
-              notificationCounts: notificationData.unread_counts ?? null,
+              notifications: [
+                ...(conversationNotificationData.notifications || []),
+                ...(activityNotificationData.notifications || []),
+              ],
+              activityNotifications: activityNotificationData.notifications || [],
+              conversationNotifications: conversationNotificationData.notifications || [],
+              notificationCounts: activityNotificationData.unread_counts ?? conversationNotificationData.unread_counts ?? null,
               activity: activityData.activity,
               auditLogs: auditData.audit_logs,
               buckets: bucketData.buckets,
@@ -1602,6 +1620,10 @@ function App() {
           ...notification,
           read: isConversationNotification(notification) ? notification.read : true,
         })),
+        activityNotifications: (current.activityNotifications || []).map((notification) => ({
+          ...notification,
+          read: true,
+        })),
         // The bell only ever clears activity, so its own total drops to zero
         // while chat and channel alerts stay unread for their own views.
         notificationCounts: current.notificationCounts
@@ -1658,6 +1680,12 @@ function App() {
             notification.id === notificationId
               ? { ...notification, read: true }
               : notification,
+          ),
+          activityNotifications: (current.activityNotifications || []).map((notification) =>
+            notification.id === notificationId ? { ...notification, read: true } : notification,
+          ),
+          conversationNotifications: (current.conversationNotifications || []).map((notification) =>
+            notification.id === notificationId ? { ...notification, read: true } : notification,
           ),
           notificationCounts,
         };
@@ -1997,10 +2025,8 @@ function App() {
   const myCompletedTaskCount = myTodayTasks.filter(
     (task) => task.status === "done",
   ).length;
-  const activityNotifications = workspaceData.notifications.filter(
-    (notification) => !isConversationNotification(notification),
-  );
-  const unreadConversationNotifications = workspaceData.notifications.filter(
+  const activityNotifications = workspaceData.activityNotifications || [];
+  const unreadConversationNotifications = (workspaceData.conversationNotifications || []).filter(
     (notification) => isConversationNotification(notification) && !notification.read,
   );
   // The badge reads the server's totals, which cover every unread row. The list
@@ -2016,12 +2042,12 @@ function App() {
   // can each say how much is waiting on them.
   const unreadChannelCount =
     workspaceData.notificationCounts?.channel ??
-    workspaceData.notifications.filter(
+    (workspaceData.conversationNotifications || []).filter(
       (notification) => notification.target_type === "chat_channel" && !notification.read,
     ).length;
   const unreadDirectCount =
     workspaceData.notificationCounts?.direct ??
-    workspaceData.notifications.filter(
+    (workspaceData.conversationNotifications || []).filter(
       (notification) => notification.target_type === "direct_conversation" && !notification.read,
     ).length;
   // Newest first. The panel is a list to pick from, so it keeps every unread
@@ -3460,6 +3486,11 @@ function WorkspaceView({
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
   const [notificationReload, setNotificationReload] = useState(0);
+  useEffect(() => {
+    const reloadPage = () => setNotificationReload((current) => current + 1);
+    window.addEventListener("workspace:notifications-changed", reloadPage);
+    return () => window.removeEventListener("workspace:notifications-changed", reloadPage);
+  }, []);
   const [projectQuery, setProjectQuery] = useState("");
   const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [projectHealthFilter, setProjectHealthFilter] = useState("all");

@@ -2445,8 +2445,12 @@ def notification_list(request, workspace_id):
     if request.method == 'GET':
         everything = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)
         notifications = everything
-        if request.GET.get('exclude_chat') in {'1', 'true', 'yes'}:
+        exclude_chat = request.GET.get('exclude_chat') in {'1', 'true', 'yes'}
+        only_conversation = request.GET.get('only_conversation') in {'1', 'true', 'yes'}
+        if exclude_chat:
             notifications = notifications.exclude(target_type__in=['chat_channel', 'direct_conversation'])
+        elif only_conversation:
+            notifications = notifications.filter(target_type__in=['chat_channel', 'direct_conversation'])
         # Unread totals are counted over every row, not over the page below.
         # The page is capped at 20, so a badge derived from it silently stops
         # counting once a workspace accumulates more unread alerts than that,

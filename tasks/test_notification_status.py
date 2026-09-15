@@ -143,6 +143,39 @@ class NotificationSummaryTests(TestCase):
         after = self.client.get(reverse('notification-list', args=[workspace.id])).json()['unread_counts']
         self.assertEqual(after, {'channel': 22, 'direct': 3, 'conversation': 25, 'activity': 0})
 
+    def test_each_notification_panel_gets_its_own_unread_rows(self):
+        user = User.objects.create_user(username='feed-user')
+        workspace = Workspace.objects.create(name='Feeds', slug='feeds')
+        Membership.objects.create(workspace=workspace, user=user)
+        for index in range(25):
+            WorkspaceNotification.objects.create(
+                workspace=workspace, recipient=user, kind='task_status', title=f'Read activity {index}',
+                target_type='task', target_id=str(index), read_at=timezone.now(),
+            )
+        activity = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='task_assigned', title='Unread activity',
+            target_type='task', target_id='latest',
+        )
+        channel = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='channel_message', title='Unread channel',
+            target_type='chat_channel', target_id='general',
+        )
+        self.client.force_login(user)
+
+        activity_payload = self.client.get(reverse('notification-list', args=[workspace.id]) + '?exclude_chat=1').json()
+        conversation_payload = self.client.get(reverse('notification-list', args=[workspace.id]) + '?only_conversation=1').json()
+
+        # Unread rows are the page's first rows even when there are more read
+        # notifications than fit on it. This is the PostgreSQL case that used
+        # to put NULL read_at values last, hiding every unread alert behind old
+        # history in both the bell and the Messages panel.
+        self.assertEqual(activity_payload['notifications'][0]['id'], activity.id)
+        self.assertEqual(conversation_payload['notifications'][0]['id'], channel.id)
+        self.assertEqual(activity_payload['unread_counts']['activity'], 1)
+        self.assertEqual(conversation_payload['unread_counts']['conversation'], 1)
+        self.assertEqual(activity_payload['unread_count'], 1)
+        self.assertEqual(conversation_payload['unread_count'], 1)
+
     def test_stream_emits_new_notification_summary(self):
         user = User.objects.create_user(username='stream-user')
         workspace = Workspace.objects.create(name='Stream', slug='stream')

@@ -54,7 +54,18 @@ const mountApp = async () => {
   mockApi({
     '/api/auth/me/': session,
     '/api/tasks/': { tasks: [], pagination: { has_next: false } },
-    '/api/workspaces/1/notifications/': { notifications: [channelNotification, chatNotification, activityNotification] },
+    '/api/workspaces/1/notifications/?exclude_chat=1': {
+      notifications: [activityNotification],
+      unread_counts: { channel: 1, direct: 1, conversation: 2, activity: 1 },
+    },
+    '/api/workspaces/1/notifications/?only_conversation=1': {
+      notifications: [channelNotification, chatNotification],
+      unread_counts: { channel: 1, direct: 1, conversation: 2, activity: 1 },
+    },
+    '/api/workspaces/1/notifications/?page=': {
+      notifications: [activityNotification],
+      unread_counts: { channel: 1, direct: 1, conversation: 2, activity: 1 },
+    },
     '/api/notifications/summary/': { unread_count: 3, latest_unread_id: channelNotification.id },
     '/api/push/public-key/': { configured: false, public_key: '' },
   })

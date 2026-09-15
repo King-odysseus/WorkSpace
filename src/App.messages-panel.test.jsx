@@ -51,12 +51,27 @@ const pagedAlerts = [
   },
 ]
 
+const conversationAlerts = pagedAlerts.filter(
+  notification => notification.target_type === 'chat_channel' || notification.target_type === 'direct_conversation',
+)
+const activityAlerts = pagedAlerts.filter(
+  notification => notification.target_type !== 'chat_channel' && notification.target_type !== 'direct_conversation',
+)
+
 it('reports real unread totals and opens the messages panel from either end of the screen', async () => {
   mockApi({
     '/api/auth/me/': session,
     '/api/tasks/': { tasks: [], pagination: { has_next: false } },
-    '/api/workspaces/1/notifications/': {
-      notifications: pagedAlerts,
+    '/api/workspaces/1/notifications/?exclude_chat=1': {
+      notifications: activityAlerts,
+      unread_counts: { channel: 22, direct: 3, conversation: 25, activity: 5 },
+    },
+    '/api/workspaces/1/notifications/?only_conversation=1': {
+      notifications: conversationAlerts,
+      unread_counts: { channel: 22, direct: 3, conversation: 25, activity: 5 },
+    },
+    '/api/workspaces/1/notifications/?page=': {
+      notifications: activityAlerts,
       unread_counts: { channel: 22, direct: 3, conversation: 25, activity: 5 },
     },
     '/api/notifications/summary/': { unread_count: 30, latest_unread_id: 41 },

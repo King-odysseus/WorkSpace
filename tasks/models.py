@@ -1165,7 +1165,11 @@ class WorkspaceNotification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['read_at', '-created_at']
+        # Unread first, then newest. The NULLS FIRST is not decorative: unread
+        # means read_at IS NULL, and plain ascending order sorts nulls LAST on
+        # PostgreSQL, so without it production listed read notifications above
+        # unread ones while SQLite did the opposite.
+        ordering = [models.F('read_at').asc(nulls_first=True), '-created_at']
 
     def as_dict(self):
         return {
