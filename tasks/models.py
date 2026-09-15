@@ -668,12 +668,14 @@ class DirectConversation(models.Model):
         )
         others = [user for user in participants if viewer is None or user.id != viewer.id]
         title_users = others or participants
+        is_self = bool(viewer and len(participants) == 1 and participants[0].id == viewer.id)
         last_message = self.messages.select_related('author').order_by('-created_at').first()
         return {
             'id': self.id,
             'workspace_id': self.workspace_id,
             'title': ', '.join(user.get_full_name() or user.email for user in title_users),
             'is_group': len(participants) > 2,
+            'is_self': is_self,
             'participants': [
                 {'id': user.id, 'name': user.get_full_name() or user.email, 'email': user.email}
                 for user in participants

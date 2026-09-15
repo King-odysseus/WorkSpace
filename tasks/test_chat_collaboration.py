@@ -168,6 +168,35 @@ class ChatCollaborationTests(TestCase):
         response = self.client.post(reverse('direct-message-list', args=[second['id']]), data=json.dumps({'message': 'Wrong thread', 'parent_id': parent['id']}), content_type='application/json')
         self.assertEqual(response.status_code, 404)
 
+    def test_member_can_message_themselves_without_a_self_notification(self):
+        response = self.client.post(
+            reverse('direct-conversation-list', args=[self.workspace.id]),
+            data=json.dumps({'participant_ids': [self.owner.id]}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        conversation = response.json()['conversation']
+        self.assertTrue(conversation['is_self'])
+        self.assertEqual(conversation['title'], 'owner@example.com')
+        self.assertEqual([participant['id'] for participant in conversation['participants']], [self.owner.id])
+
+        sent = self.client.post(
+            reverse('direct-message-list', args=[conversation['id']]),
+            data=json.dumps({'message': 'Remember the launch checklist.'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(sent.status_code, 201)
+        self.assertFalse(
+            WorkspaceNotification.objects.filter(
+                workspace=self.workspace,
+                recipient=self.owner,
+                kind='direct_message',
+                target_id=str(conversation['id']),
+            ).exists()
+        )
+
     def test_user_can_save_an_accessible_default_workspace(self):
         response = self.client.patch(
             reverse('auth-me-profile'),

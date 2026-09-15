@@ -152,6 +152,36 @@ it('reads the chat list dot from recent activity rather than self-reported prese
   expect(await screen.findByTitle('Offline')).toHaveClass('presence-offline')
 })
 
+it('creates a private conversation with yourself', async () => {
+  const selfConversation = {
+    id: 31,
+    title: 'Ada Lane',
+    is_group: false,
+    is_self: true,
+    participants: [{ id: currentUserId, name: 'Ada Lane', email: 'ada@example.com' }],
+    last_message: '',
+  }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/31/messages/': { messages: [] },
+    '/direct-conversations/': { conversation: selfConversation },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat({ ...dataFor(), members: launchMembers, directConversations: [] })
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'New chat' })[0])
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Message yourself' }))
+  expect(screen.getByText('Private notes')).toBeInTheDocument()
+  fireEvent.submit(screen.getByRole('dialog'))
+
+  await waitFor(() => {
+    const createCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/') && init.method === 'POST')
+    expect(createCall).toBeTruthy()
+    expect(JSON.parse(createCall[1].body)).toEqual({ participant_ids: [currentUserId] })
+  })
+})
+
 it('shows no messages yet rather than the previous conversation', async () => {
   mockApi({
     '/documents/': { documents: [] },

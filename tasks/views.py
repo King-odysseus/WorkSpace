@@ -4367,13 +4367,19 @@ def direct_conversation_list(request, workspace_id):
         data = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    participant_ids = data.get('participant_ids') or [data.get('recipient_id')]
+    participant_ids = data.get('participant_ids')
+    if participant_ids is None:
+        participant_ids = [data.get('recipient_id')] if data.get('recipient_id') is not None else []
+    if not isinstance(participant_ids, list):
+        return JsonResponse({'error': 'participant_ids must be a list of workspace member ids.'}, status=400)
     participant_ids = {int(value) for value in participant_ids if value is not None and str(value).isdigit()}
-    participant_ids.discard(request.user.id)
-    valid_ids = set(Membership.objects.filter(workspace_id=workspace_id, user_id__in=participant_ids).values_list('user_id', flat=True))
-    if not valid_ids or valid_ids != participant_ids:
+    if not participant_ids:
         return JsonResponse({'error': 'Choose one or more members from this workspace.'}, status=400)
-    all_ids = sorted(valid_ids | {request.user.id})
+    other_ids = participant_ids - {request.user.id}
+    valid_ids = set(Membership.objects.filter(workspace_id=workspace_id, user_id__in=other_ids).values_list('user_id', flat=True))
+    if valid_ids != other_ids:
+        return JsonResponse({'error': 'Choose one or more members from this workspace.'}, status=400)
+    all_ids = sorted(other_ids | {request.user.id})
     key = ':'.join(str(value) for value in all_ids)
     conversation, created = DirectConversation.objects.get_or_create(workspace_id=workspace_id, conversation_key=key)
     if created:
