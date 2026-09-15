@@ -5787,7 +5787,7 @@ function WorkspaceView({
             );
           }}
         />
-        <Card className="activity-history">
+        <Card className="activity-history notification-history">
           {notificationLoading ? (
             <p className="p-4 text-sm text-text-muted">Loading notifications...</p>
           ) : notificationError ? (
@@ -5804,13 +5804,13 @@ function WorkspaceView({
                   type="button"
                   key={notification.id}
                   onClick={() => onOpenNotification(notification)}
-                  className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
+                  className={`flex w-full items-start gap-3 rounded-none px-4 py-3.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
                 >
-                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`} aria-hidden="true" />
+                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-none ${notification.read ? "bg-border" : "bg-primary"}`} aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-sm font-semibold text-text-primary">{notification.title}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${notification.read ? "bg-surface-secondary text-text-muted" : "bg-primary/10 text-primary"}`}>
+                      <span className={`rounded-none px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${notification.read ? "bg-surface-secondary text-text-muted" : "bg-primary/10 text-primary"}`}>
                         {notification.read ? "Read" : "Unread"}
                       </span>
                     </span>
