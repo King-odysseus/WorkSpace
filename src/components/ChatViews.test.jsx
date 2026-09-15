@@ -182,6 +182,59 @@ it('creates a private conversation with yourself', async () => {
   })
 })
 
+it('replies to your own message in a private conversation', async () => {
+  const selfConversation = {
+    id: 31,
+    title: 'Ada Lane',
+    is_group: false,
+    is_self: true,
+    participants: [{ id: currentUserId, name: 'Ada Lane', email: 'ada@example.com' }],
+    last_message: 'Remember the launch checklist.',
+  }
+  const original = {
+    id: 1,
+    author_id: currentUserId,
+    author_name: 'Ada Lane',
+    message: 'Remember the launch checklist.',
+    created_at: '2026-09-15T10:00:00Z',
+  }
+  const sent = {
+    id: 2,
+    author_id: currentUserId,
+    author_name: 'Ada Lane',
+    message: 'Checked the launch checklist.',
+    created_at: '2026-09-15T10:01:00Z',
+    parent_id: 1,
+  }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/31/messages/': { messages: [original], message: sent },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat({
+    ...dataFor(),
+    members: [{ id: currentUserId, first_name: 'Ada', last_name: 'Lane' }],
+    directConversations: [selfConversation],
+  })
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Message yourself/ }))
+  const originalRow = (await screen.findByText('Remember the launch checklist.', { selector: '.chat-message-bubble p' })).closest('.chat-message')
+  fireEvent.click(within(originalRow).getByRole('button', { name: 'Reply' }))
+  expect(screen.getByText(/Replying to/)).toBeInTheDocument()
+  expect(screen.getByText('Ada Lane', { selector: '.reply-context strong' })).toBeInTheDocument()
+
+  const input = screen.getByRole('textbox', { name: 'Message' })
+  fireEvent.change(input, { target: { value: 'Checked the launch checklist.' } })
+  fireEvent.submit(input.closest('form'))
+
+  await waitFor(() => {
+    const sendCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/direct-conversations/31/messages/') && init.method === 'POST')
+    expect(sendCall).toBeTruthy()
+    expect(JSON.parse(sendCall[1].body)).toMatchObject({ message: 'Checked the launch checklist.', parent_id: 1 })
+  })
+})
+
 it('shows no messages yet rather than the previous conversation', async () => {
   mockApi({
     '/documents/': { documents: [] },

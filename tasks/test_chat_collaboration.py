@@ -188,6 +188,19 @@ class ChatCollaborationTests(TestCase):
         )
 
         self.assertEqual(sent.status_code, 201)
+        reply = self.client.post(
+            reverse('direct-message-list', args=[conversation['id']]),
+            data=json.dumps({
+                'message': 'Checked the launch checklist.',
+                'parent_id': sent.json()['message']['id'],
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(reply.status_code, 201)
+        self.assertEqual(reply.json()['message']['parent_id'], sent.json()['message']['id'])
+        messages = self.client.get(reverse('direct-message-list', args=[conversation['id']])).json()['messages']
+        self.assertEqual(messages[0]['reply_count'], 1)
         self.assertFalse(
             WorkspaceNotification.objects.filter(
                 workspace=self.workspace,
