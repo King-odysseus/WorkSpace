@@ -1,5 +1,12 @@
 # Cross-OS updates
 
+## 2026-09-15 - Windows
+
+- Fixed message notification deep links so the referenced chat or channel message is brought into view when opened on desktop or mobile. The reveal now handles both the inner chat scroller and the outer workspace scroller used by the responsive layout.
+- Key files: `src/components/ChatViews.jsx`, `src/components/ChatViews.test.jsx`.
+- Other OS action: run `npm run build` and verify a message notification opens on the referenced message at desktop and mobile widths.
+- Done on: Windows.
+
 ## 2026-09-09 - Windows
 
 - Added a Notification sound setting. Enabled sound now uses the native browser notification path whether WorkSpace is open, backgrounded, or minimized. The header bell shows a red unread count only; the installed-app badge shows the unread count and clears when there are none.

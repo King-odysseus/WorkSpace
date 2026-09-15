@@ -1020,6 +1020,11 @@ it('points the feed at the message a chat notification names', async () => {
   // The alert names the thread, but the message inside it is what the reader was
   // sent to see, so it has to be marked - in the fetched thread, which arrives
   // after the view has already decided which thread to show.
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    if (this.classList?.contains('chat-message-scroll')) return { top: 100, bottom: 300, left: 0, right: 300, width: 300, height: 200 }
+    if (this.dataset?.messageId === '9') return { top: 600, bottom: 650, left: 0, right: 220, width: 220, height: 50 }
+    return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }
+  })
   const fetchMock = mockApi({
     '/documents/': { documents: [] },
     '/files/': { files: [] },
@@ -1032,6 +1037,10 @@ it('points the feed at the message a chat notification names', async () => {
   requestChatThread('direct_conversation', conversation.id, 9)
 
   renderChat(dataFor())
+  const scroller = document.querySelector('.chat-message-scroll')
+  Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 800 })
+  Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 200 })
+  Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 0 })
 
   const targeted = await screen.findByText('See you then.')
   const row = targeted.closest('.chat-message')
@@ -1039,6 +1048,53 @@ it('points the feed at the message a chat notification names', async () => {
   expect(row).toHaveClass('chat-message-highlight')
   expect(screen.getByText('Earlier note.').closest('.chat-message')).not.toHaveClass('chat-message-highlight')
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('around=9') && String(url).includes('limit=10'))).toBe(true)
+  await waitFor(() => expect(scroller.scrollTop).toBe(425))
+})
+
+it('scrolls the workspace viewport to a notified message when the feed cannot scroll', async () => {
+  // Below 850px the chat layout expands instead of scrolling internally. The
+  // reveal therefore has to move the outer workspace scroller as well.
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    if (this.classList?.contains('main-content')) return { top: 0, bottom: 400, left: 0, right: 900, width: 900, height: 400 }
+    if (this.classList?.contains('chat-message-scroll')) return { top: 80, bottom: 680, left: 0, right: 600, width: 600, height: 600 }
+    if (this.dataset?.messageId === '9') return { top: 500, bottom: 550, left: 0, right: 220, width: 220, height: 50 }
+    return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }
+  })
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [
+      { id: 4, author_name: 'Dana Reed', message: 'Earlier note.', created_at: '2026-09-12T09:00:00Z' },
+      { id: 9, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' },
+    ] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  requestChatThread('direct_conversation', conversation.id, 9)
+
+  render(
+    <div className="main-content">
+      <ChatWorkspaceView
+        viewType="direct"
+        data={dataFor()}
+        workspaceId={workspaceId}
+        currentUserId={currentUserId}
+        onRefresh={vi.fn()}
+        onError={vi.fn()}
+        onConfirm={vi.fn()}
+        onNavigate={vi.fn()}
+      />
+    </div>,
+  )
+  const scroller = document.querySelector('.chat-message-scroll')
+  Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 600 })
+  Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 600 })
+  Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 0 })
+  const pageScroller = document.querySelector('.main-content')
+  Object.defineProperty(pageScroller, 'scrollTop', { configurable: true, writable: true, value: 0 })
+
+  await screen.findByText('See you then.')
+
+  await waitFor(() => expect(pageScroller.scrollTop).toBe(325))
 })
 
 

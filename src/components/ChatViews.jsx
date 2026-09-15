@@ -118,6 +118,34 @@ function writeChatDraft(workspaceId, targetKey, value) {
   }
 }
 
+function scrollContainerToTarget(container, target, { onlyWhenClipped = false } = {}) {
+  const containerBox = container.getBoundingClientRect()
+  const targetBox = target.getBoundingClientRect()
+  if (!containerBox.height) return
+  const inset = 16
+  const clipped = targetBox.top < containerBox.top + inset || targetBox.bottom > containerBox.bottom - inset
+  if (onlyWhenClipped && !clipped) return
+  const targetTop = container.scrollTop + targetBox.top - containerBox.top - (containerBox.height - targetBox.height) / 2
+  container.scrollTop = Math.max(0, targetTop)
+}
+
+function revealMessageInView(scroller, messageId) {
+  if (!scroller || messageId === undefined || messageId === null || messageId === '') return false
+  const target = scroller.querySelector(`[data-message-id="${messageId}"]`)
+  if (!target) return false
+
+  // Desktop scrolls the feed itself. Below 850px the chat layout expands and the
+  // outer workspace becomes the scroll container, so reveal there as well.
+  if (scroller.scrollHeight > scroller.clientHeight) {
+    scrollContainerToTarget(scroller, target)
+  }
+  const pageScroller = scroller.closest('.main-content')
+  if (pageScroller && pageScroller !== scroller) {
+    scrollContainerToTarget(pageScroller, target, { onlyWhenClipped: true })
+  }
+  return true
+}
+
 function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefresh, onError, onConfirm, onNavigate, threadRequest = 0 }) {
   const mode = viewType
   const [selectedChannel, setSelectedChannel] = useState('general')
@@ -435,11 +463,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   useLayoutEffect(() => {
     const scroller = messageScrollRef.current
     if (!scroller || !revealMessageId) return
-    const target = scroller.querySelector(`[data-message-id="${revealMessageId}"]`)
-    if (!target) return
-    const scrollerBox = scroller.getBoundingClientRect()
-    const targetBox = target.getBoundingClientRect()
-    scroller.scrollTop += targetBox.top - scrollerBox.top - (scrollerBox.height - targetBox.height) / 2
+    if (!revealMessageInView(scroller, revealMessageId)) return
     setShowJumpToLatest(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > CHAT_JUMP_THRESHOLD)
   }, [revealMessageId, highlightMessageId, activeMessages.length, directLoading, channelLoading, activePane, mode, selectedChannel, selectedConversationId])
 
