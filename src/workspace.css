@@ -698,7 +698,7 @@ html[data-theme='light'] .theme-toggle {
 .composer-modal textarea:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 18%, transparent); }
 .empty-workspace { grid-column: 1 / -1; min-height: 160px; display: grid; place-items: center; align-content: center; gap: 10px; color: #8B97A7; text-align: center; }
 .activity-history { padding: 22px; }
-.activity-history.notification-history { padding: 0; overflow: hidden; border-radius: 0 !important; }
+.activity-history.notification-history { padding: 0; overflow: hidden; }
 .activity-toolbar { display: flex; align-items: end; gap: 10px; margin-bottom: 16px; }
 .activity-toolbar label { display: grid; gap: 5px; color: #6B7280; font-size: 11px; font-weight: 700; }
 .activity-toolbar [data-slot='select-trigger'] { min-width: 135px; padding: 8px 10px; border: 1px solid var(--workspace-border); background: var(--workspace-surface-soft); color: var(--workspace-text); font: 600 11px 'Roboto'; }
