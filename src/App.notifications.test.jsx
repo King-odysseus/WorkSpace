@@ -129,7 +129,7 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(historyRow).toHaveClass('rounded-none')
   expect(historyRow.closest('[data-slot="card"]')).toHaveClass('notification-history')
   expect(within(historyRow).getByText('Unread')).toHaveClass('rounded-none')
-  expect(historyRow.querySelector('span[aria-hidden="true"]')).toHaveClass('rounded-none')
+  expect(historyRow.querySelector('span[aria-hidden="true"]')).toHaveClass('rounded-full')
   expect(within(historyRow).getByText('14-09-26 10:44')).toHaveAttribute('dateTime', activityCreatedAt)
   expect(screen.queryByText('New direct message')).not.toBeInTheDocument()
   expect(screen.queryByText('New channel message')).not.toBeInTheDocument()
