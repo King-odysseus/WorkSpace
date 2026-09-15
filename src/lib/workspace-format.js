@@ -67,7 +67,7 @@ function taskDueLabel(dueDate, today) {
   return dueDate < today ? 'Overdue' : formatDay(dueDate)
 }
 
-// Dates, written one way: DD-MM-YYYY, whatever the browser is set to. Nothing in
+// Dates, written one way: DD-MM-YY, whatever the browser is set to. Nothing in
 // the UI should render a raw ISO string or lean on toLocaleDateString, because
 // both follow the machine's locale rather than the app's.
 const pad2 = value => String(value).padStart(2, '0')
@@ -80,7 +80,7 @@ const pad2 = value => String(value).padStart(2, '0')
 // belongs to formatDate/formatDateTime below, which format it in local time.
 function formatDay(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
-  return match ? `${match[3]}-${match[2]}-${match[1]}` : ''
+  return match ? `${match[3]}-${match[2]}-${match[1].slice(-2)}` : ''
 }
 
 function localDate(value) {
@@ -92,7 +92,7 @@ function localDate(value) {
 // calendar day it happened on, because that is the day the reader lived it.
 function formatDate(value) {
   const date = localDate(value)
-  return date ? `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}-${date.getFullYear()}` : ''
+  return date ? `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}-${String(date.getFullYear()).slice(-2)}` : ''
 }
 
 function formatDateTime(value) {
@@ -101,7 +101,7 @@ function formatDateTime(value) {
 }
 
 // Day and month without the year, for the narrow slots - a gantt column, an
-// event pill in the year view - where DD-MM-YYYY does not fit.
+// event pill in the year view - where DD-MM-YY does not fit.
 function formatDayMonth(value) {
   const date = localDate(value)
   return date ? `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}` : ''

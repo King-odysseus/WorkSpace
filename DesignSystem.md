@@ -61,8 +61,8 @@ old compiled mockup bundle. Nothing loads any of them. Never edit CSS outside
 
 ### Date Formatting
 
-Use one numeric format for dates everywhere: `DD-MM-YYYY` (`13-09-2026`). Date
-and time values keep a 24-hour clock after the date (`13-09-2026 14:05`).
+Use one numeric format for dates everywhere: `DD-MM-YY` (`13-09-26`). Date
+and time values keep a 24-hour clock after the date (`13-09-26 14:05`).
 
 Keep ISO values such as `YYYY-MM-DD` inside API payloads, date keys, comparisons,
 and `datetime` attributes. Format only the value shown to the reader, using the

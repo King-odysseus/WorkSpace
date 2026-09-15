@@ -86,18 +86,18 @@ class ProjectChangeNotificationTests(NotificationCoverageTests):
         self.client.force_login(self.manager)
         self.project = Project.objects.create(workspace=self.workspace, name='Website rebuild')
 
-    def leaders_notified(self):
-        return {alert.recipient_id for alert in self.notifications('manager_activity')}
+    def team_notified(self):
+        return {alert.recipient_id for alert in self.notifications('workspace_activity')}
 
-    def test_recording_an_expense_reports_the_amount_to_the_other_leaders(self):
+    def test_recording_an_expense_reports_the_amount_to_the_team(self):
         self.post_json(
             reverse('project-expense-list', args=[self.workspace.id, self.project.id]),
             {'name': 'Design retainer', 'category': 'other', 'amount': '2500.00'},
             expect=201,
         )
 
-        alert = self.notifications('manager_activity')[0]
-        self.assertEqual(self.leaders_notified(), {self.owner.id})
+        alert = self.notifications('workspace_activity')[0]
+        self.assertEqual(self.team_notified(), {self.owner.id, self.member.id})
         self.assertIn('2500', alert.title)
 
     def test_changing_and_archiving_an_expense_are_both_reported(self):
@@ -106,7 +106,7 @@ class ProjectChangeNotificationTests(NotificationCoverageTests):
         self.patch_json(reverse('project-expense-detail', args=[self.workspace.id, self.project.id, expense.id]), {'amount': '900.00'})
         self.client.delete(reverse('project-expense-detail', args=[self.workspace.id, self.project.id, expense.id]))
 
-        titles = [alert.title for alert in self.notifications('manager_activity')]
+        titles = {alert.title for alert in self.notifications('workspace_activity')}
         self.assertEqual(len(titles), 2)
         self.assertTrue(any('changed a project expense' in title for title in titles))
         self.assertTrue(any('archived a project expense' in title for title in titles))
@@ -118,12 +118,12 @@ class ProjectChangeNotificationTests(NotificationCoverageTests):
         self.client.delete(reverse('project-resource-detail', args=[self.workspace.id, self.project.id, resource.id]))
         self.client.delete(reverse('project-stakeholder-detail', args=[self.workspace.id, self.project.id, stakeholder.id]))
 
-        titles = [alert.title for alert in self.notifications('manager_activity')]
+        titles = [alert.title for alert in self.notifications('workspace_activity')]
         self.assertTrue(any('Ava Chen' in title for title in titles))
         self.assertTrue(any('Legal' in title for title in titles))
-        self.assertEqual(self.leaders_notified(), {self.owner.id})
+        self.assertEqual(self.team_notified(), {self.owner.id, self.member.id})
 
-    def test_a_single_leader_workspace_has_nobody_to_tell(self):
+    def test_a_project_change_is_never_sent_back_to_the_actor(self):
         Membership.objects.filter(workspace=self.workspace, user=self.owner).delete()
 
         self.post_json(
@@ -132,9 +132,9 @@ class ProjectChangeNotificationTests(NotificationCoverageTests):
             expect=201,
         )
 
-        self.assertEqual(self.notifications('manager_activity'), [])
+        self.assertEqual(self.team_notified(), {self.member.id})
 
-    def test_creating_a_project_from_a_blueprint_tells_the_other_leaders(self):
+    def test_creating_a_project_from_a_blueprint_tells_the_team(self):
         template = ProjectTemplate.objects.create(
             workspace=self.workspace, name='Campaign kickoff', project_name='Spring campaign',
             created_by=self.manager,
@@ -142,9 +142,39 @@ class ProjectChangeNotificationTests(NotificationCoverageTests):
 
         self.post_json(reverse('project-template-apply', args=[self.workspace.id, template.id]), {}, expect=201)
 
-        alert = self.notifications('manager_activity')[0]
-        self.assertEqual(self.leaders_notified(), {self.owner.id})
+        alert = self.notifications('workspace_activity')[0]
+        self.assertEqual(self.team_notified(), {self.owner.id, self.member.id})
         self.assertIn('Spring campaign', alert.title)
+
+
+class GeneralActivityNotificationTests(NotificationCoverageTests):
+    def test_a_previously_silent_activity_page_notifies_the_whole_team(self):
+        self.client.force_login(self.manager)
+        project = Project.objects.create(workspace=self.workspace, name='Website rebuild')
+
+        self.post_json(
+            reverse('plan-bucket-list', args=[self.workspace.id]),
+            {'name': 'Next sprint', 'project_id': project.id},
+            expect=201,
+        )
+
+        alerts = self.notifications('workspace_activity')
+        self.assertEqual({alert.recipient_id for alert in alerts}, {self.owner.id, self.member.id})
+        self.assertTrue(all('created the Next sprint bucket' in alert.title for alert in alerts))
+        self.assertEqual({alert.target_type for alert in alerts}, {'workspace'})
+
+    def test_invitation_activity_reaches_the_team_instead_of_only_the_actor(self):
+        self.client.force_login(self.manager)
+
+        self.post_json(
+            reverse('invitation-list', args=[self.workspace.id]),
+            {'email': 'new-teammate@example.com', 'role': 'member'},
+            expect=201,
+        )
+
+        alerts = self.notifications('workspace_activity')
+        self.assertEqual({alert.recipient_id for alert in alerts}, {self.owner.id, self.member.id})
+        self.assertTrue(all('invited new-teammate@example.com' in alert.title for alert in alerts))
 
 
 class AssignmentNotificationTests(NotificationCoverageTests):
@@ -265,7 +295,7 @@ class ChatAlertMessageReferenceTests(NotificationCoverageTests):
             expect=201,
         )
 
-        alert = self.notifications('manager_activity')[0]
+        alert = self.notifications('workspace_activity')[0]
         self.assertEqual(alert.group_key, f'project:{alert.target_id}')
 
 

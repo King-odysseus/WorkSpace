@@ -190,7 +190,7 @@ it('formats dashboard follow-up dates in the app date format', () => {
     { id: 1, note: 'Confirm launch approval', status: 'open', due_date: '2026-09-05' },
   ])
 
-  expect(screen.getByText('05-09-2026')).toBeInTheDocument()
+  expect(screen.getByText('05-09-26')).toBeInTheDocument()
   expect(screen.queryByText('2026-09-05')).not.toBeInTheDocument()
 })
 
@@ -233,7 +233,7 @@ it('lists an event that started earlier but runs into today', () => {
   expect(screen.queryByText('Future thing')).not.toBeInTheDocument()
   // A carried-over event shows the day it began, not a bare time that reads as
   // if it started today.
-  expect(screen.getByText('11-09-2026')).toBeInTheDocument()
+  expect(screen.getByText('11-09-26')).toBeInTheDocument()
 })
 
 it('opens an agenda event through the supplied action', () => {

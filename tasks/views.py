@@ -108,13 +108,39 @@ def next_recurrence_date(due_date, recurrence):
     return None
 
 
-def record_activity(workspace_id, actor, kind, message, related_user_ids=None):
+ACTIVITY_NOTIFICATION_HANDLED_KINDS = frozenset({
+    # These events already have a deliberate recipient list below. Any other
+    # activity kind is workspace activity and reaches every other member.
+    'task_created', 'task_permanently_deleted', 'task_archived', 'task_status',
+    'task_title', 'task_priority', 'task_due_date', 'task_recurrence',
+    'task_bucket', 'task_labels', 'task_project', 'task_assigned',
+    'task_comment', 'task_attachment', 'task_attachment_deleted',
+    'follow_up_created', 'follow_up_comment', 'follow_up_deleted',
+    'follow_up_assigned', 'follow_up_status', 'follow_up_completed',
+    'follow_up_due_date', 'follow_up_task',
+    'calendar_created', 'calendar_updated', 'calendar_deleted',
+    'check_in_submitted', 'check_in_comment', 'chat_message',
+    'invitation_sent', 'invitation_resent', 'invitation_accepted',
+    'invitation_declined', 'invitation_cancelled',
+    'project_created', 'project_updated', 'project_deleted',
+    'risk_created', 'risk_archived', 'risk_updated',
+    'issue_created', 'issue_archived', 'issue_updated',
+    'member_left', 'workspace_archived', 'workspace_restored',
+})
+
+
+def record_activity(workspace_id, actor, kind, message, related_user_ids=None, target_type='', target_id=''):
     from .models import ActivityEvent
     AuditLog.objects.create(workspace_id=workspace_id, actor=actor, action=kind, target_type='workspace', details={'message': message})
     event = ActivityEvent.objects.create(workspace_id=workspace_id, actor=actor, kind=kind, message=message)
     related_ids = {int(user_id) for user_id in (related_user_ids or []) if user_id}
     if related_ids:
         event.related_users.set(related_ids)
+    if kind not in ACTIVITY_NOTIFICATION_HANDLED_KINDS:
+        notify_workspace_members(
+            workspace_id, actor, message,
+            target_type=target_type, target_id=target_id,
+        )
     return event
 
 
@@ -151,6 +177,7 @@ NOTIFICATION_KIND_PREFERENCE = {
     'screen_share_cancelled': 'task_updates',
     'screen_capture_viewed': 'task_updates',
     'manager_activity': 'manager_activity',
+    'workspace_activity': 'task_updates',
 }
 
 
@@ -170,7 +197,7 @@ def notification_deep_link(notification_id, target_type='', target_id='', messag
     return f'/?{urlencode(params)}'
 
 
-def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id='', group_key='', immediate=True, message_id=None):
+def create_notification(workspace_id, recipient, kind, title, body='', target_type='', target_id='', group_key='', immediate=True, message_id=None, notify_webhooks=True):
     """``message_id`` marks an alert that is about one chat message, so opening it
     can land on that message inside the thread. It is stored in ``group_key`` as
     ``message:<id>``, the same slot-and-prefix convention notify_managers already
@@ -186,7 +213,8 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
         if preference is not None and not getattr(preference, preference_field):
             return None
     notification = WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '', group_key=group_key)
-    notify_workspace_webhooks(workspace_id, kind, title, body, target_type=target_type, target_id=target_id)
+    if notify_webhooks:
+        notify_workspace_webhooks(workspace_id, kind, title, body, target_type=target_type, target_id=target_id)
     if kind in REMINDER_EMAIL_KINDS:
         send_reminder_email(recipient, title, body)
     if immediate:
@@ -241,13 +269,38 @@ def notify_managers(workspace_id, actor, verb, object_label, target_type='', tar
         )
 
 
+def notify_workspace_members(workspace_id, actor, title, body='', target_type='', target_id='', kind='workspace_activity', immediate=False, exclude_user_ids=None):
+    """Send one workspace notification to every member except the actor.
+
+    Activity entries are visible to the team, but a row in the Activity feed is
+    passive. This helper keeps shared workspace actions from being silent while
+    still preserving targeted notification flows for task and follow-up events.
+    """
+    excluded_ids = {actor.id}
+    excluded_ids.update(int(user_id) for user_id in (exclude_user_ids or []) if user_id)
+    recipients = list(Membership.objects.filter(workspace_id=workspace_id).exclude(user_id__in=excluded_ids).select_related('user'))
+    if not recipients:
+        return
+    workspace = Workspace.objects.filter(id=workspace_id).first()
+    notification_body = body or (workspace.name if workspace else '')
+    group_key = f'{target_type}:{target_id}' if target_type and str(target_id) else ''
+    # One webhook delivery represents the workspace event; the per-member rows
+    # are copies for the bell and must not enqueue duplicate webhook posts.
+    notify_workspace_webhooks(workspace_id, kind, title, notification_body, target_type=target_type, target_id=target_id)
+    for membership in recipients:
+        create_notification(
+            workspace_id, membership.user, kind, title, notification_body,
+            target_type=target_type, target_id=target_id, group_key=group_key,
+            immediate=immediate,
+            notify_webhooks=False,
+        )
+
+
 def notify_project_change(workspace_id, actor, project, verb, object_label):
-    """Tell the other workspace leaders that a project's plan or budget moved.
-    These endpoints are leader-only, so the audience is the rest of the leaders,
-    and nothing happens at all in a workspace with a single leader - which is why
-    this is reserved for the events that change a plan rather than every edit."""
-    notify_managers(
-        workspace_id, actor, verb, f'{object_label} in {project.name}',
+    """Tell the team when a project's plan or budget moves."""
+    actor_name = actor.get_full_name() or actor.email or actor.username
+    notify_workspace_members(
+        workspace_id, actor, f'{actor_name} {verb}: {object_label} in {project.name}',
         target_type='project', target_id=project.id,
     )
 
@@ -277,6 +330,8 @@ def record_task_activity(task, actor, kind, message, include_commenters=False):
         kind,
         message,
         related_user_ids=task_activity_user_ids(task, include_commenters=include_commenters),
+        target_type='task',
+        target_id=task.id,
     )
 
 
@@ -300,6 +355,8 @@ def record_follow_up_activity(follow_up, actor, kind, message, include_commenter
         kind,
         message,
         related_user_ids=related_user_ids,
+        target_type='follow_up',
+        target_id=follow_up.id,
     )
 
 
@@ -394,7 +451,7 @@ def json_value(value):
 
 
 def display_date(value, with_time=False):
-    """A date the way the app writes it for people: DD-MM-YYYY, and the time
+    """A date the way the app writes it for people: DD-MM-YY, and the time
     after it when asked.
 
     For the text that reaches a person - activity lines, notification bodies,
@@ -405,7 +462,7 @@ def display_date(value, with_time=False):
         return ''
     if isinstance(value, datetime) and timezone.is_aware(value):
         value = timezone.localtime(value)
-    formatted = value.strftime('%d-%m-%Y')
+    formatted = value.strftime('%d-%m-%y')
     return f'{formatted} {value.strftime("%H:%M")}' if with_time else formatted
 
 
@@ -1151,6 +1208,13 @@ def task_reorder(request, workspace_id):
     with transaction.atomic():
         Task.objects.bulk_update(updates, ['bucket', 'position'])
         TaskChangeHistory.objects.bulk_create(reorder_history)
+    if reorder_history:
+        changed_task_ids = {history.task_id for history in reorder_history}
+        record_activity(
+            workspace_id, request.user, 'task_reordered',
+            f'{request.user.get_full_name() or request.user.email} reordered {len(changed_task_ids)} task(s).',
+            target_type='workspace', target_id=workspace_id,
+        )
     return JsonResponse({'tasks': [task.as_dict() for task in updates]})
 
 
@@ -1206,7 +1270,11 @@ def plan_bucket_list(request, workspace_id):
         bucket = PlanBucket.objects.create(workspace_id=workspace_id, name=name, position=PlanBucket.objects.filter(workspace_id=workspace_id, **scope).count(), **scope)
     except IntegrityError:
         return JsonResponse({'error': 'A bucket with this name already exists.'}, status=409)
-    record_activity(workspace_id, request.user, 'bucket_created', f'{request.user.get_full_name() or request.user.email} created the {name} bucket.')
+    record_activity(
+        workspace_id, request.user, 'bucket_created',
+        f'{request.user.get_full_name() or request.user.email} created the {name} bucket.',
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'bucket': bucket.as_dict()}, status=201)
 
 
@@ -1314,11 +1382,19 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
             affected = tasks_in_bucket_scope(workspace_id, bucket.name, bucket.project_id, bucket.workstream_id)
             bucket.delete()
             affected.update(bucket=destination.name if destination else ensure_backlog_bucket(workspace_id).name)
-            record_activity(workspace_id, request.user, 'bucket_deleted', f'{request.user.get_full_name() or request.user.email} deleted the {bucket.name} bucket.')
+            record_activity(
+                workspace_id, request.user, 'bucket_deleted',
+                f'{request.user.get_full_name() or request.user.email} deleted the {bucket.name} bucket.',
+                target_type='workspace', target_id=workspace_id,
+            )
             return JsonResponse({'deleted': bucket_id})
         bucket.is_active = False
         bucket.save(update_fields=['is_active'])
-        record_activity(workspace_id, request.user, 'bucket_archived', f'{request.user.get_full_name() or request.user.email} archived the {bucket.name} bucket.')
+        record_activity(
+            workspace_id, request.user, 'bucket_archived',
+            f'{request.user.get_full_name() or request.user.email} archived the {bucket.name} bucket.',
+            target_type='workspace', target_id=workspace_id,
+        )
         return JsonResponse({'archived': bucket_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -1358,6 +1434,11 @@ def plan_bucket_detail(request, workspace_id, bucket_id):
         # them pointing at a bucket that no longer exists - and a task whose
         # bucket names nothing renders in no planner column.
         tasks_in_bucket_scope(workspace_id, previous_name, bucket.project_id, bucket.workstream_id).update(bucket=bucket.name)
+    record_activity(
+        workspace_id, request.user, 'bucket_updated',
+        f'{request.user.get_full_name() or request.user.email} updated the {bucket.name} bucket.',
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'bucket': bucket.as_dict()})
 
 
@@ -1399,6 +1480,11 @@ def project_resource_list(request, workspace_id, project_id):
             if value < 0 or value > 100:
                 return JsonResponse({'error': f'{field} must be between 0 and 100.'}, status=400)
     resource = ProjectResource.objects.create(project_id=project_id, task=task, name=name, resource_type=resource_type, role=str(payload.get('role', '')).strip(), availability=str(payload.get('availability', '')).strip(), capacity_percent=payload.get('capacity_percent') or None, allocation_percent=payload.get('allocation_percent') or None, file_url=str(payload.get('file_url', '')).strip(), notes=str(payload.get('notes', '')).strip())
+    record_activity(
+        workspace_id, request.user, 'project_resource_created',
+        f'{request.user.get_full_name() or request.user.email} added project resource {resource.name}.',
+        target_type='project', target_id=project.id,
+    )
     return JsonResponse({'resource': resource.as_dict()}, status=201)
 
 
@@ -1458,6 +1544,11 @@ def project_resource_detail(request, workspace_id, project_id, resource_id):
     if 'notes' in payload:
         resource.notes = str(payload['notes']).strip()
     resource.save()
+    record_activity(
+        workspace_id, request.user, 'project_resource_updated',
+        f'{request.user.get_full_name() or request.user.email} updated project resource {resource.name}.',
+        target_type='project', target_id=project_id,
+    )
     return JsonResponse({'resource': resource.as_dict()})
 
 
@@ -1484,6 +1575,11 @@ def project_stakeholder_list(request, workspace_id, project_id):
     if influence not in dict(ProjectStakeholder.INFLUENCE_CHOICES) or interest not in dict(ProjectStakeholder.INTEREST_CHOICES):
         return JsonResponse({'error': 'Invalid influence or interest.'}, status=400)
     stakeholder = ProjectStakeholder.objects.create(project_id=project_id, name=name, role=str(payload.get('role', '')).strip(), email=str(payload.get('email', '')).strip(), influence=influence, interest=interest, notes=str(payload.get('notes', '')).strip())
+    record_activity(
+        workspace_id, request.user, 'project_stakeholder_created',
+        f'{request.user.get_full_name() or request.user.email} added stakeholder {stakeholder.name}.',
+        target_type='project', target_id=project.id,
+    )
     return JsonResponse({'stakeholder': stakeholder.as_dict()}, status=201)
 
 
@@ -1523,6 +1619,11 @@ def project_stakeholder_detail(request, workspace_id, project_id, stakeholder_id
         if field in payload:
             setattr(stakeholder, field, payload[field])
     stakeholder.save()
+    record_activity(
+        workspace_id, request.user, 'project_stakeholder_updated',
+        f'{request.user.get_full_name() or request.user.email} updated stakeholder {stakeholder.name}.',
+        target_type='project', target_id=project_id,
+    )
     return JsonResponse({'stakeholder': stakeholder.as_dict()})
 
 
@@ -1675,7 +1776,11 @@ def task_template_list(request, workspace_id):
         labels=labels or [],
         created_by=request.user,
     )
-    record_activity(workspace_id, request.user, 'task_template_created', f'{request.user.get_full_name() or request.user.email} created task template {template.name}.')
+    record_activity(
+        workspace_id, request.user, 'task_template_created',
+        f'{request.user.get_full_name() or request.user.email} created task template {template.name}.',
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'task_template': template.as_dict()}, status=201)
 
 
@@ -1688,7 +1793,11 @@ def task_template_detail(request, workspace_id, template_id):
     if template is None:
         return JsonResponse({'error': 'Task template was not found.'}, status=404)
     template.delete()
-    record_activity(workspace_id, request.user, 'task_template_deleted', f'{request.user.get_full_name() or request.user.email} deleted task template {template.name}.')
+    record_activity(
+        workspace_id, request.user, 'task_template_deleted',
+        f'{request.user.get_full_name() or request.user.email} deleted task template {template.name}.',
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'deleted': template_id})
 
 
@@ -1734,6 +1843,13 @@ def task_template_apply(request, workspace_id, template_id):
     # same way the task form does - and that assignment used to arrive silently.
     if task.assignee_id and task.assignee_id != request.user.id:
         create_notification(workspace_id, task.assignee, 'task_assigned', 'You were assigned a task.', task.title, target_type='task', target_id=task.id)
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user,
+        f'{actor_name} created task {task.title} from template {template.name}.',
+        target_type='task', target_id=task.id,
+        exclude_user_ids={task.assignee_id} if task.assignee_id else None,
+    )
     return JsonResponse({'task': task.as_dict()}, status=201)
 
 
@@ -1772,7 +1888,11 @@ def project_template_list(request, workspace_id):
         due_days=due_days,
         created_by=request.user,
     )
-    record_activity(workspace_id, request.user, 'project_template_created', f'{request.user.get_full_name() or request.user.email} created project template {template.name}.')
+    record_activity(
+        workspace_id, request.user, 'project_template_created',
+        f'{request.user.get_full_name() or request.user.email} created project template {template.name}.',
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'project_template': template.as_dict()}, status=201)
 
 
@@ -1785,7 +1905,11 @@ def project_template_detail(request, workspace_id, template_id):
     if template is None:
         return JsonResponse({'error': 'Project template was not found.'}, status=404)
     template.delete()
-    record_activity(workspace_id, request.user, 'project_template_deleted', f'{request.user.get_full_name() or request.user.email} deleted project template {template.name}.')
+    record_activity(
+        workspace_id, request.user, 'project_template_deleted',
+        f'{request.user.get_full_name() or request.user.email} deleted project template {template.name}.',
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'deleted': template_id})
 
 
@@ -1807,7 +1931,12 @@ def project_template_apply(request, workspace_id, template_id):
     record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name} from template {template.name}.')
     # A new project changes the workspace's shape for everyone, not just for the
     # leader who applied the blueprint.
-    notify_managers(workspace_id, request.user, 'created a project from a blueprint', project.name, target_type='project', target_id=project.id)
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user,
+        f'{actor_name} created a project from a blueprint: {project.name}',
+        target_type='project', target_id=project.id,
+    )
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
@@ -2466,7 +2595,9 @@ def workspace_webhook_detail(request, workspace_id, webhook_id):
     if hook is None:
         return JsonResponse({'error': 'Webhook was not found.'}, status=404)
     if request.method == 'DELETE':
+        hook_kind = hook.get_kind_display()
         hook.delete()
+        record_activity(workspace_id, request.user, 'webhook_deleted', f'{request.user.get_full_name() or request.user.email} removed a {hook_kind} webhook.')
         return JsonResponse({'deleted': webhook_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -2484,6 +2615,7 @@ def workspace_webhook_detail(request, workspace_id, webhook_id):
             return JsonResponse({'error': 'label must be 120 characters or fewer.'}, status=400)
         hook.label = label
     hook.save()
+    record_activity(workspace_id, request.user, 'webhook_updated', f'{request.user.get_full_name() or request.user.email} updated a {hook.get_kind_display()} webhook.')
     return JsonResponse({'webhook': hook.as_dict()})
 
 
@@ -2907,7 +3039,12 @@ def invitation_list(request, workspace_id):
     except IntegrityError:
         return JsonResponse({'error': 'An invitation is already pending for this address.'}, status=409)
     send_invitation_email(invitation, request=request)
-    record_activity(workspace_id, request.user, 'invitation_sent', f'{request.user.get_full_name() or request.user.email} invited {invitation.email} as a {invitation.role}.')
+    invitation_message = f'{request.user.get_full_name() or request.user.email} invited {invitation.email} as a {invitation.role}.'
+    record_activity(workspace_id, request.user, 'invitation_sent', invitation_message)
+    notify_workspace_members(
+        workspace_id, request.user, invitation_message,
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'invitation': invitation.as_dict(include_token=True), 'message': f'Invitation sent to {invitation.email}. They will gain access after accepting.'}, status=201 if created else 200)
 
 
@@ -2927,7 +3064,12 @@ def invitation_resend(request, workspace_id, invitation_id):
     invitation.last_sent_at = timezone.now()
     invitation.save(update_fields=['token', 'last_sent_at'])
     send_invitation_email(invitation, request=request)
-    record_activity(workspace_id, request.user, 'invitation_resent', f'{request.user.get_full_name() or request.user.email} resent an invitation to {invitation.email}.')
+    invitation_message = f'{request.user.get_full_name() or request.user.email} resent an invitation to {invitation.email}.'
+    record_activity(workspace_id, request.user, 'invitation_resent', invitation_message)
+    notify_workspace_members(
+        workspace_id, request.user, invitation_message,
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'invitation': invitation.as_dict(include_token=True)})
 
 
@@ -3017,7 +3159,12 @@ def invitation_detail(request, workspace_id, invitation_id):
         return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
     invitation.status = 'cancelled'
     invitation.save(update_fields=['status'])
-    record_activity(workspace_id, request.user, 'invitation_cancelled', f'{request.user.get_full_name() or request.user.email} cancelled an invitation for {invitation.email}.')
+    invitation_message = f'{request.user.get_full_name() or request.user.email} cancelled an invitation for {invitation.email}.'
+    record_activity(workspace_id, request.user, 'invitation_cancelled', invitation_message)
+    notify_workspace_members(
+        workspace_id, request.user, invitation_message,
+        target_type='workspace', target_id=workspace_id,
+    )
     return JsonResponse({'invitation': invitation.as_dict()})
 
 
@@ -3091,7 +3238,11 @@ def project_list(request, workspace_id):
     except IntegrityError:
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
     record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name}.')
-    notify_managers(workspace_id, request.user, 'created project', project.name, target_type='project', target_id=project.id, dedup_key=f'created_project:{project.id}')
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user, f'{actor_name} created project: {project.name}',
+        target_type='project', target_id=project.id,
+    )
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
@@ -3107,7 +3258,11 @@ def project_detail(request, workspace_id, project_id):
         project_name = project.name
         record_activity(workspace_id, request.user, 'project_deleted', f'{request.user.get_full_name() or request.user.email} deleted project {project_name}.')
         project.delete()
-        notify_managers(workspace_id, request.user, 'deleted project', project_name, target_type='project', target_id=project_id, immediate=True, dedup_key=f'deleted_project:{project_id}')
+        actor_name = request.user.get_full_name() or request.user.email
+        notify_workspace_members(
+            workspace_id, request.user, f'{actor_name} deleted project: {project_name}',
+            target_type='project', target_id=project_id, immediate=True,
+        )
         return JsonResponse({'deleted': project_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -3167,7 +3322,11 @@ def project_detail(request, workspace_id, project_id):
         project.budget_currency = budget_currency
     project.save()
     record_activity(workspace_id, request.user, 'project_updated', f'{request.user.get_full_name() or request.user.email} updated project {project.name}.')
-    notify_managers(workspace_id, request.user, 'updated project', project.name, target_type='project', target_id=project.id)
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user, f'{actor_name} updated project: {project.name}',
+        target_type='project', target_id=project.id,
+    )
     return JsonResponse({'project': project.as_dict()})
 
 
@@ -3218,8 +3377,12 @@ def lookup_value_list(request, workspace_id):
     except (TypeError, ValueError):
         return JsonResponse({'error': 'position must be a non-negative integer.'}, status=400)
     value = LookupValue.objects.create(workspace_id=workspace_id, project=project, kind=kind, name=name, slug=value_slug, position=position)
-    if kind == 'workstream':
-        notify_managers(workspace_id, request.user, 'created workstream', value.name, target_type='workstream', target_id=value.id, dedup_key=f'created_workstream:{value.id}')
+    record_activity(
+        workspace_id, request.user, 'lookup_value_created',
+        f'{request.user.get_full_name() or request.user.email} created {kind} {value.name}.',
+        target_type='workstream' if kind == 'workstream' else 'workspace',
+        target_id=value.id if kind == 'workstream' else workspace_id,
+    )
     return JsonResponse({'lookup_value': value.as_dict()}, status=201)
 
 
@@ -3234,8 +3397,12 @@ def lookup_value_detail(request, workspace_id, value_id):
     if request.method == 'DELETE':
         value.is_active = False
         value.save(update_fields=['is_active'])
-        if value.kind == 'workstream':
-            notify_managers(workspace_id, request.user, 'archived workstream', value.name, target_type='workstream', target_id=value.id, immediate=True, dedup_key=f'archived_workstream:{value.id}')
+        record_activity(
+            workspace_id, request.user, 'lookup_value_archived',
+            f'{request.user.get_full_name() or request.user.email} archived {value.kind} {value.name}.',
+            target_type='workstream' if value.kind == 'workstream' else 'workspace',
+            target_id=value.id if value.kind == 'workstream' else workspace_id,
+        )
         return JsonResponse({'archived': value_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -3262,8 +3429,12 @@ def lookup_value_detail(request, workspace_id, value_id):
         value.save()
     except IntegrityError:
         return JsonResponse({'error': 'This lookup value already exists in the selected scope.'}, status=409)
-    if value.kind == 'workstream':
-        notify_managers(workspace_id, request.user, 'updated workstream', value.name, target_type='workstream', target_id=value.id)
+    record_activity(
+        workspace_id, request.user, 'lookup_value_updated',
+        f'{request.user.get_full_name() or request.user.email} updated {value.kind} {value.name}.',
+        target_type='workstream' if value.kind == 'workstream' else 'workspace',
+        target_id=value.id if value.kind == 'workstream' else workspace_id,
+    )
     return JsonResponse({'lookup_value': value.as_dict()})
 
 
@@ -3367,9 +3538,13 @@ def risk_issue_list(request, workspace_id):
         return relation_error
     record = RiskIssue.objects.create(workspace_id=workspace_id, project=project, kind=kind, title=title, detail=str(payload.get('detail', '') or '').strip(), severity=severity, likelihood=payload.get('likelihood') or None, impact=payload.get('impact') or None, mitigation=str(payload.get('mitigation', '') or '').strip(), escalation=str(payload.get('escalation', '') or '').strip(), status=status, owner=owner, owner_name=str(payload.get('owner', '') or '').strip(), due_date=due_date, task=task, expense=expense, created_by=request.user)
     record_activity(workspace_id, request.user, f'{kind}_created', f'{request.user.get_full_name() or request.user.email} created {kind} {record.title}.', related_user_ids={owner.id} if owner else None)
-    notify_managers(workspace_id, request.user, f'created {kind}', record.title, target_type='risk_issue', target_id=record.id, dedup_key=f'created_{kind}:{record.id}')
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user, f'{actor_name} created {kind}: {record.title}',
+        target_type='risk_issue', target_id=record.id,
+        exclude_user_ids={owner.id} if owner else None,
+    )
     if owner is not None and owner.id != request.user.id:
-        actor_name = request.user.get_full_name() or request.user.email
         create_notification(
             workspace_id, owner, 'risk_issue_assigned',
             f'You own the {kind}: {record.title}',
@@ -3394,7 +3569,11 @@ def risk_issue_detail(request, workspace_id, record_id):
             return JsonResponse({'error': 'Only workspace leaders can archive risks and issues.'}, status=403)
         record.archived_at = timezone.now()
         record.save(update_fields=['archived_at', 'updated_at'])
-        notify_managers(workspace_id, request.user, f'archived {record.kind}', record.title, target_type='risk_issue', target_id=record.id, immediate=True, dedup_key=f'archived_{record.kind}:{record.id}')
+        actor_name = request.user.get_full_name() or request.user.email
+        notify_workspace_members(
+            workspace_id, request.user, f'{actor_name} archived {record.kind}: {record.title}',
+            target_type='risk_issue', target_id=record.id, immediate=True,
+        )
         return JsonResponse({'archived': record_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -3443,7 +3622,11 @@ def risk_issue_detail(request, workspace_id, record_id):
         record.task = task
         record.expense = expense
     record.save()
-    notify_managers(workspace_id, request.user, f'updated {record.kind}', record.title, target_type='risk_issue', target_id=record.id)
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user, f'{actor_name} updated {record.kind}: {record.title}',
+        target_type='risk_issue', target_id=record.id,
+    )
     if record.owner_id != previous_owner_id and record.owner is not None and record.owner_id != request.user.id:
         actor_name = request.user.get_full_name() or request.user.email
         create_notification(
@@ -3507,7 +3690,11 @@ def calendar_event_list(request, workspace_id):
         created_by=request.user,
     )
     record_activity(workspace_id, request.user, 'calendar_created', f'{request.user.get_full_name() or request.user.email} created calendar event {event.title}.')
-    notify_managers(workspace_id, request.user, 'created event', event.title, target_type='calendar_event', target_id=event.id, dedup_key=f'created_event:{event.id}')
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user, f'{actor_name} created event: {event.title}',
+        target_type='calendar_event', target_id=event.id,
+    )
     return JsonResponse({'event': event.as_dict()}, status=201)
 
 
@@ -3525,7 +3712,11 @@ def calendar_event_detail(request, workspace_id, event_id):
         event_title = event.title
         record_activity(workspace_id, request.user, 'calendar_deleted', f'{request.user.get_full_name() or request.user.email} deleted calendar event {event_title}.')
         event.delete()
-        notify_managers(workspace_id, request.user, 'deleted event', event_title, target_type='calendar_event', target_id=event_id, immediate=True, dedup_key=f'deleted_event:{event_id}')
+        actor_name = request.user.get_full_name() or request.user.email
+        notify_workspace_members(
+            workspace_id, request.user, f'{actor_name} deleted event: {event_title}',
+            target_type='calendar_event', target_id=event_id, immediate=True,
+        )
         return JsonResponse({'deleted': event_id})
     try:
         payload = json.loads(request.body or '{}')
@@ -3568,7 +3759,11 @@ def calendar_event_detail(request, workspace_id, event_id):
     event.end_at = end_at
     event.save()
     record_activity(workspace_id, request.user, 'calendar_updated', f'{request.user.get_full_name() or request.user.email} updated calendar event {event.title}.')
-    notify_managers(workspace_id, request.user, 'updated event', event.title, target_type='calendar_event', target_id=event.id)
+    actor_name = request.user.get_full_name() or request.user.email
+    notify_workspace_members(
+        workspace_id, request.user, f'{actor_name} updated event: {event.title}',
+        target_type='calendar_event', target_id=event.id,
+    )
     return JsonResponse({'event': event.as_dict()})
 
 
@@ -3667,13 +3862,20 @@ def check_in_list(request, workspace_id):
     )
     actor_name = request.user.get_full_name() or request.user.email
     action = 'submitted' if created else 'updated'
-    record_activity(workspace_id, request.user, 'check_in_submitted', f'{actor_name} {action} a daily check-in for {display_date(check_in.date)}.')
+    check_in_message = f'{actor_name} {action} a daily check-in for {display_date(check_in.date)}.'
+    record_activity(
+        workspace_id, request.user, 'check_in_submitted', check_in_message,
+        target_type='check_in', target_id=check_in.id,
+    )
+    # Daily check-ins are team updates, not manager-only oversight. Everyone
+    # except the submitter gets the same alert whether the check-in is new or a
+    # later edit changes it.
+    notify_workspace_members(
+        workspace_id, request.user, check_in_message,
+        target_type='check_in', target_id=check_in.id,
+        kind='check_in_submitted', immediate=created,
+    )
     if created:
-        notify_managers(
-            workspace_id, request.user, 'submitted a check-in', display_date(check_in.date),
-            target_type='check_in', target_id=check_in.id,
-            immediate=True, dedup_key=f'check_in:{check_in.id}:{check_in.date.isoformat()}',
-        )
         # A receipt for the submitter. notify_managers never notifies the actor
         # and only targets owners and managers, so in a workspace with a single
         # leader a check-in produced no notification for anyone and the bell
@@ -4020,7 +4222,11 @@ def chat_channel_list(request, workspace_id):
         requested_ids = {int(value) for value in data.get('member_ids', []) if str(value).isdigit()}
         valid_ids = set(Membership.objects.filter(workspace_id=workspace_id, user_id__in=requested_ids).values_list('user_id', flat=True))
         channel.members.add(request.user, *User.objects.filter(id__in=valid_ids))
-    record_activity(workspace_id, request.user, 'chat_channel_created', f'{request.user.get_full_name() or request.user.email} created #{name}.')
+    record_activity(
+        workspace_id, request.user, 'chat_channel_created',
+        f'{request.user.get_full_name() or request.user.email} created #{name}.',
+        target_type='chat_channel', target_id=name,
+    )
     return JsonResponse({'channel': {**channel.as_dict(), 'message_count': 0}}, status=201)
 
 
@@ -4041,7 +4247,13 @@ def chat_channel_detail(request, channel_id):
             return JsonResponse({'error': 'The general channel cannot be deleted.'}, status=400)
         ChatMessage.objects.filter(workspace_id=channel.workspace_id, channel=channel.name).delete()
         channel_id_value = channel.id
+        channel_name = channel.name
         channel.delete()
+        record_activity(
+            channel.workspace_id, request.user, 'chat_channel_deleted',
+            f'{request.user.get_full_name() or request.user.email} deleted #{channel_name}.',
+            target_type='chat_channel', target_id=channel_name,
+        )
         return JsonResponse({'deleted': channel_id_value})
     try:
         data = json.loads(request.body or '{}')
@@ -4057,6 +4269,11 @@ def chat_channel_detail(request, channel_id):
         valid_users = User.objects.filter(id__in=requested_ids, workspace_memberships__workspace_id=channel.workspace_id)
         channel.members.set([request.user, *valid_users])
     channel.save()
+    record_activity(
+        channel.workspace_id, request.user, 'chat_channel_updated',
+        f'{request.user.get_full_name() or request.user.email} updated #{channel.name}.',
+        target_type='chat_channel', target_id=channel.name,
+    )
     return JsonResponse({'channel': channel.as_dict()})
 
 
@@ -4673,7 +4890,10 @@ def work_shift_list(request, workspace_id):
                 started_at=now,
                 note=note,
             )
-            record_activity(workspace_id, request.user, 'clocked_in', f'{actor_name} clocked in.')
+            record_activity(
+                workspace_id, request.user, 'clocked_in', f'{actor_name} clocked in.',
+                target_type='workspace', target_id=workspace_id,
+            )
             status_code = 201
         else:
             if open_shift is None:
@@ -4685,6 +4905,11 @@ def work_shift_list(request, workspace_id):
                 shift.break_started_at = now
                 shift.break_plan_minutes = break_minutes
                 shift.save(update_fields=['break_started_at', 'break_plan_minutes', 'updated_at'])
+                record_activity(
+                    workspace_id, request.user, 'break_started',
+                    f'{actor_name} started a break.',
+                    target_type='workspace', target_id=workspace_id,
+                )
             elif action == 'end_break':
                 if shift.break_started_at is None:
                     return JsonResponse({'error': 'You are not on a break.'}, status=409)
@@ -4692,6 +4917,11 @@ def work_shift_list(request, workspace_id):
                 shift.break_started_at = None
                 shift.break_plan_minutes = 0
                 shift.save(update_fields=['break_seconds', 'break_started_at', 'break_plan_minutes', 'updated_at'])
+                record_activity(
+                    workspace_id, request.user, 'break_ended',
+                    f'{actor_name} returned from a break.',
+                    target_type='workspace', target_id=workspace_id,
+                )
             else:
                 if shift.break_started_at is not None:
                     shift.break_seconds += int((now - shift.break_started_at).total_seconds())
@@ -4701,7 +4931,11 @@ def work_shift_list(request, workspace_id):
                 if note:
                     shift.note = note
                 shift.save(update_fields=['break_seconds', 'break_started_at', 'break_plan_minutes', 'ended_at', 'note', 'updated_at'])
-                record_activity(workspace_id, request.user, 'clocked_out', f'{actor_name} clocked out after {format_worked_duration(shift.worked_seconds(now))}.')
+                record_activity(
+                    workspace_id, request.user, 'clocked_out',
+                    f'{actor_name} clocked out after {format_worked_duration(shift.worked_seconds(now))}.',
+                    target_type='workspace', target_id=workspace_id,
+                )
             status_code = 200
 
     return JsonResponse({'work_shift': shift.as_dict()}, status=status_code)

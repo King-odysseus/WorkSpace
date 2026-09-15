@@ -14,7 +14,7 @@ it('lists what shipped, newest first, with the day in the app wide format', () =
   const headings = screen.getAllByRole('heading', { level: 2 }).map(node => node.textContent)
   expect(headings).toEqual(RELEASE_NOTES.map(note => note.title))
   // Day first, because that is how the rest of the app writes a date.
-  expect(screen.getAllByText(/\d{2}-\d{2}-\d{4}/).length).toBeGreaterThan(0)
+  expect(screen.getAllByText(/\d{2}-\d{2}-\d{2}/).length).toBeGreaterThan(0)
 })
 
 it('keeps release details compact until the reader opens one', async () => {

@@ -540,12 +540,12 @@ workspace layer rather than creating a parallel vocabulary.
 
 ## 7. Date And Formatting Decisions
 
-User-facing dates use one numeric order everywhere: `DD-MM-YYYY`.
+User-facing dates use one numeric order everywhere: `DD-MM-YY`.
 
 Examples:
 
-- Date only: `13-09-2026`.
-- Date and time: `13-09-2026 14:05`.
+- Date only: `13-09-26`.
+- Date and time: `13-09-26 14:05`.
 - Narrow day and month: `13-09`.
 - Today headline: `Sunday September 13 2026`.
 
@@ -1135,7 +1135,7 @@ and tokens.
 
 ### 12.10 Date Standardization
 
-Dates moved from locale-dependent output to a fixed `DD-MM-YYYY` display
+Dates moved from locale-dependent output to a fixed `DD-MM-YY` display
 format, with ISO retained in data and local day arithmetic. This prevents a
 date from moving around the world because of timezone or browser settings.
 

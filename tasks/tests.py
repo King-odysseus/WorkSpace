@@ -1410,9 +1410,13 @@ class TaskApiTests(TestCase):
         self.assertEqual(CheckIn.objects.count(), 1)
         self.assertEqual(second.json()['check_in']['blockers'], 'Waiting on approval')
 
-    def test_check_in_records_activity_and_notifies_leaders_of_blockers(self):
+    def test_check_in_records_activity_and_notifies_the_team_and_leaders_of_blockers(self):
         teammate = User.objects.create_user(username='checkin-member@example.com', email='checkin-member@example.com', password='secure-pass-123')
+        manager = User.objects.create_user(username='checkin-manager@example.com', email='checkin-manager@example.com', password='secure-pass-123')
+        team_member = User.objects.create_user(username='checkin-team@example.com', email='checkin-team@example.com', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=team_member, role='member')
         self.client.force_login(teammate)
         response = self.client.post(
             reverse('check-in-list', args=[self.workspace.id]),
@@ -1422,9 +1426,17 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(ActivityEvent.objects.filter(workspace=self.workspace, kind='check_in_submitted').count(), 1)
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_blocker').count(), 1)
-        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='manager_activity').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=manager, kind='check_in_blocker').count(), 1)
+        team_recipients = set(
+            WorkspaceNotification.objects
+            .filter(workspace=self.workspace, kind='check_in_submitted')
+            .exclude(recipient=teammate)
+            .values_list('recipient_id', flat=True)
+        )
+        self.assertEqual(team_recipients, {self.user.id, manager.id, team_member.id})
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=teammate, kind='check_in_submitted').count(), 1)
 
-    def test_check_in_update_does_not_repeat_manager_or_unchanged_blocker_alerts(self):
+    def test_check_in_update_notifies_the_team_without_repeating_unchanged_blocker_alerts(self):
         teammate = User.objects.create_user(username='checkin-member@example.com', email='checkin-member@example.com', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
         self.client.force_login(teammate)
@@ -1432,7 +1444,7 @@ class TaskApiTests(TestCase):
         payload = {'date': '2026-09-02', 'completed': 'First update', 'blockers': 'Waiting on approval.'}
         self.client.post(url, data=json.dumps(payload), content_type='application/json')
         self.client.post(url, data=json.dumps({**payload, 'completed': 'Second update'}), content_type='application/json')
-        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='manager_activity').count(), 1)
+        self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_submitted').count(), 2)
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_blocker').count(), 1)
 
     def test_check_in_blocker_change_alerts_and_clear_alert(self):
@@ -1447,17 +1459,21 @@ class TaskApiTests(TestCase):
         self.assertEqual(notifications.count(), 3)
         self.assertEqual(notifications.last().title, 'checkin-member@example.com cleared a blocker')
 
-    def test_check_in_manager_notifications_exclude_submitter(self):
-        # The manager-activity broadcast must not loop back to the person who
-        # submitted, but the submitter does get their own receipt so the bell
-        # is not empty when they are the only leader in the workspace.
+    def test_check_in_team_notifications_exclude_submitter_and_keep_receipt(self):
+        # The team broadcast must not loop back to the person who submitted,
+        # but the submitter does get their own receipt so the bell is not empty
+        # when they are the only member in the workspace.
         self.client.force_login(self.user)
         self.client.post(
             reverse('check-in-list', args=[self.workspace.id]),
             data=json.dumps({'date': '2026-09-02', 'completed': 'Owner update'}),
             content_type='application/json',
         )
-        self.assertFalse(WorkspaceNotification.objects.filter(recipient=self.user, kind='manager_activity').exists())
+        self.assertFalse(
+            WorkspaceNotification.objects
+            .filter(recipient=self.user, kind='check_in_submitted', title__contains='Owner update')
+            .exists()
+        )
         self.assertEqual(WorkspaceNotification.objects.filter(recipient=self.user, kind='check_in_submitted').count(), 1)
 
     def test_a_solo_owner_sees_their_own_check_in_in_the_notification_feed(self):
@@ -5067,10 +5083,10 @@ class NotificationCoverageTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200)
-        # The manager is both the new owner and a workspace leader, so they get
-        # the assignment as well as the leader broadcast for the update.
+        # The manager is both the new owner and a team member, so they get the
+        # assignment as well as the workspace update broadcast.
         self.assertIn('risk_issue_assigned', self._kinds_for(self.manager))
-        self.assertEqual(self._kinds_for(self.member), [])
+        self.assertEqual(self._kinds_for(self.member), ['workspace_activity'])
 
     def test_task_comment_pushes_to_the_assignee_straight_away(self):
         task = Task.objects.create(workspace=self.workspace, title='Prepare brief', assignee=self.member)
@@ -5885,7 +5901,7 @@ class PersonalPlannerApiTests(TestCase):
 
 
 class DisplayDateTests(TestCase):
-    """The server writes dates for people the same way the UI does: DD-MM-YYYY.
+    """The server writes dates for people the same way the UI does: DD-MM-YY.
 
     Wording that reaches a person - an activity line, a notification body, a
     search result title - is formatted here, while anything a client reads back
@@ -5893,12 +5909,12 @@ class DisplayDateTests(TestCase):
     """
 
     def test_a_date_only_value_reads_as_day_month_year(self):
-        self.assertEqual(display_date(date(2026, 9, 5)), '05-09-2026')
+        self.assertEqual(display_date(date(2026, 9, 5)), '05-09-26')
 
     def test_a_moment_in_time_keeps_the_clock_beside_it_when_asked(self):
         moment = timezone.make_aware(datetime(2026, 9, 5, 14, 5))
-        self.assertEqual(display_date(moment), '05-09-2026')
-        self.assertEqual(display_date(moment, with_time=True), '05-09-2026 14:05')
+        self.assertEqual(display_date(moment), '05-09-26')
+        self.assertEqual(display_date(moment, with_time=True), '05-09-26 14:05')
 
     def test_nothing_rather_than_a_broken_date(self):
         self.assertEqual(display_date(None), '')
