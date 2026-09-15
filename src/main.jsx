@@ -381,6 +381,21 @@ function App() {
   const [chatThreadRequest, setChatThreadRequest] = useState(0);
   const [pendingActivity, setPendingActivity] = useState(null);
   const clearPendingActivity = useCallback(() => setPendingActivity(null), []);
+  // Activity rows live in the App header, but their detail state belongs to the
+  // workspace view. Hold the pending targets here so a bell click can switch
+  // views first and let the destination load or open the exact record.
+  const [pendingCheckInId, setPendingCheckInId] = useState(null);
+  const [pendingEventId, setPendingEventId] = useState(null);
+  const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
+  const [pendingProjectNotification, setPendingProjectNotification] = useState(null);
+  const [pendingWorkstreamNotification, setPendingWorkstreamNotification] = useState(null);
+  useEffect(() => {
+    setPendingCheckInId(null);
+    setPendingEventId(null);
+    setPendingFollowUpId(null);
+    setPendingProjectNotification(null);
+    setPendingWorkstreamNotification(null);
+  }, [activeWorkspaceId]);
   useEffect(() => {
     setNotificationUnreadCount(null);
     if (session.user?.id) return startNotificationAlerts(data => setNotificationUnreadCount(data.unread_count));
@@ -1723,24 +1738,16 @@ function App() {
       return;
     }
     if (notification.target_type === "workstream") {
-      const targetWorkstream = resolved.action === "open" ? resolved.target : null;
-      if (targetWorkstream) setPlannerProjectFilter("operations");
       setPendingWorkstreamNotification(notification.target_id);
       setActive("Planner");
       return;
     }
     if (["project", "risk_issue"].includes(notification.target_type)) {
-      const targetProject = resolved.action === "open" ? resolved.target : null;
-      if (targetProject) {
-        setSelectedProjectWorkspace(targetProject);
-        setProjectOperation(notification.target_type === "risk_issue" ? "risks" : "");
-      } else {
-        setPendingProjectNotification({
-          id: resolved.targetId,
-          operation: resolved.operation || "",
-          targetType: notification.target_type,
-        });
-      }
+      setPendingProjectNotification({
+        id: resolved.targetId,
+        operation: resolved.operation || "",
+        targetType: notification.target_type,
+      });
       setActive("Projects");
       return;
     }
@@ -2970,6 +2977,16 @@ function App() {
                 screenShareNotificationId={screenShareNotificationId}
                 pendingActivity={pendingActivity}
                 onPendingActivityHandled={clearPendingActivity}
+                pendingCheckInId={pendingCheckInId}
+                setPendingCheckInId={setPendingCheckInId}
+                pendingEventId={pendingEventId}
+                setPendingEventId={setPendingEventId}
+                pendingFollowUpId={pendingFollowUpId}
+                setPendingFollowUpId={setPendingFollowUpId}
+                pendingProjectNotification={pendingProjectNotification}
+                setPendingProjectNotification={setPendingProjectNotification}
+                pendingWorkstreamNotification={pendingWorkstreamNotification}
+                setPendingWorkstreamNotification={setPendingWorkstreamNotification}
               />
             )}
             {active === "Today" && (
@@ -3430,6 +3447,16 @@ function WorkspaceView({
   screenShareNotificationId,
   pendingActivity,
   onPendingActivityHandled,
+  pendingCheckInId,
+  setPendingCheckInId,
+  pendingEventId,
+  setPendingEventId,
+  pendingFollowUpId,
+  setPendingFollowUpId,
+  pendingProjectNotification,
+  setPendingProjectNotification,
+  pendingWorkstreamNotification,
+  setPendingWorkstreamNotification,
 }) {
   const today = toDateKey(new Date());
   const [localData, setLocalData] = useState(data);
@@ -3441,7 +3468,6 @@ function WorkspaceView({
     () => localStorage.getItem("workspace-calendar-upcoming-open") !== "false",
   );
   const [checkInRange, setCheckInRange] = useState("today");
-  const [pendingCheckInId, setPendingCheckInId] = useState(null);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
@@ -3507,14 +3533,10 @@ function WorkspaceView({
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
-  const [pendingProjectNotification, setPendingProjectNotification] = useState(null);
-  const [pendingWorkstreamNotification, setPendingWorkstreamNotification] = useState(null);
   const [projectOperation, setProjectOperation] = useState("");
-  const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
-  const [pendingEventId, setPendingEventId] = useState(null);
   const [savedViews, setSavedViews] = useState(data.savedViews || []);
   const canCommentCheckIns = Boolean(currentWorkspace?.permissions?.includes("comment_check_ins"));
   const [form, setForm] = useState({
