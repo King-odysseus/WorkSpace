@@ -93,6 +93,7 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
    own has to say so. Parked at the foot of the file this rule silently won all of
    those ties and stamped a 40px field onto every one of them. */
 [data-slot='select-trigger'].app-select-trigger { min-height:40px; max-width:100%; border-radius:999px; padding:9px 12px; font-size:13px; background:var(--workspace-surface); color:var(--workspace-text); }
+[data-slot='select-trigger'].app-select-trigger [data-slot='select-value'] { min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .modal input { border: 1px solid #dce2e9; border-radius: 7px; padding: 11px; color: #263248; background: #fff; font: 500 12px 'Roboto'; outline: none; }
 .modal input:focus, .modal [data-slot='select-trigger']:focus { border-color: #4d7da8; box-shadow: 0 0 0 3px #0b1f3a12; }
 .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -572,7 +573,7 @@ html[data-theme='light'] .theme-toggle {
 .project-summary .is-danger strong { color: #B42318; }
 .project-toolbar { display: flex; align-items: center; gap: 9px; margin: 15px 0; }
 .project-toolbar > span { margin-left: auto; color: #8A93A3; font-size: 11px; }
-.project-toolbar [data-slot='select-trigger'] { min-width: 130px; padding: 8px 10px; border: 1px solid var(--workspace-border); background: var(--workspace-surface-soft); color: var(--workspace-text); font: 600 11px 'Roboto'; }
+.project-toolbar [data-slot='select-trigger'] { min-width: 155px; max-width: 195px; padding: 8px 10px; border: 1px solid var(--workspace-border); background: var(--workspace-surface-soft); color: var(--workspace-text); font: 600 11px 'Roboto'; }
 .project-search { display: flex; align-items: center; position: relative; min-width: 240px; }
 .project-search svg { position: absolute; left: 10px; color: #8A93A3; }
 .project-search input { width: 100%; padding-left: 32px; }
@@ -8273,6 +8274,7 @@ html[data-theme='dark'] .planner-bucket-menu {
   .workspace-view.projects-view .project-toolbar [data-slot='select-trigger'] {
     width: 100%;
     min-width: 0;
+    max-width: none;
   }
 }
 
@@ -8298,7 +8300,7 @@ html[data-theme='dark'] .planner-bucket-menu {
 
 .workspace-view.planner-view .planner-commandbar {
   display: grid;
-  grid-template-columns: auto minmax(150px, 1fr) repeat(2, minmax(130px, 170px)) auto auto auto;
+  grid-template-columns: auto minmax(180px, 1fr) repeat(2, minmax(170px, 200px)) auto auto auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 0;
@@ -8535,7 +8537,7 @@ html[data-theme='dark'] .planner-bucket-menu {
   }
 }
 
-@media (min-width: 1001px) and (max-width: 1100px) {
+@media (max-width: 1250px) {
   .workspace-view.planner-view .planner-commandbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
