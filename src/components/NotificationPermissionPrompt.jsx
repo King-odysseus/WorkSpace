@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { savePushSubscription, urlBase64ToUint8Array } from '../lib/push-subscriptions.js'
+import { AUTH_REQUIRED_CODE } from '../lib/auth-events.js'
 
 export default function NotificationPermissionPrompt({ unreadCount }) {
   const supported = 'Notification' in window && 'PushManager' in window && 'serviceWorker' in navigator
@@ -37,7 +38,9 @@ export default function NotificationPermissionPrompt({ unreadCount }) {
         }
         if (current) setStatus(subscription ? 'enabled' : 'off')
       } catch (failure) {
-        if (current) { setStatus('error'); setError(failure.message) }
+        if (!current) return
+        if (failure.code === AUTH_REQUIRED_CODE) { setStatus('off'); setError(''); return }
+        setStatus('error'); setError(failure.message)
       }
     }
     check()
@@ -81,7 +84,10 @@ export default function NotificationPermissionPrompt({ unreadCount }) {
       catch (failure) { if (created) await subscription.unsubscribe(); throw failure }
       setStatus('enabled')
       window.dispatchEvent(new Event('workspace:push-changed'))
-    } catch (failure) { setStatus('error'); setError(failure.message || 'Notifications could not be enabled.') }
+    } catch (failure) {
+      if (failure.code === AUTH_REQUIRED_CODE) { setStatus('off'); setError(''); return }
+      setStatus('error'); setError(failure.message || 'Notifications could not be enabled.')
+    }
     finally { setBusy(false) }
   }
   const messages = {

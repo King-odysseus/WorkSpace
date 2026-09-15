@@ -1,4 +1,5 @@
 import { playNotificationSound, primeNotificationAudio } from './notification-sounds.js'
+import { signalAuthenticationRequired } from './auth-events.js'
 
 // A separate lightweight poll keeps badges current without loading every workspace
 // collection. Push wakes this poll immediately, including while minimized.
@@ -47,6 +48,10 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     pending = true
     try {
       const response = await fetch('/api/notifications/summary/', { credentials: 'include', cache: 'no-store' })
+      if (response.status === 401) {
+        signalAuthenticationRequired()
+        return
+      }
       if (!response.ok) throw new Error(`Notification summary returned ${response.status}`)
       const data = await response.json()
       if (stopped) return

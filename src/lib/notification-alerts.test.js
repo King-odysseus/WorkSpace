@@ -80,6 +80,20 @@ it('ignores an outstanding response after logout and cleans up sound and badge',
   expect(document.title).toBe('WorkSpace')
 })
 
+it('asks the app to re-authenticate when the notification session expires', async () => {
+  const authRequired = vi.fn()
+  fetch.mockResolvedValueOnce({ status: 401, ok: false, json: async () => ({ error: 'Authentication is required.' }) })
+  window.addEventListener('workspace:auth-required', authRequired)
+  try {
+    stop = startNotificationAlerts(() => {}, playSound)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(authRequired).toHaveBeenCalledOnce()
+    expect(navigator.setAppBadge).not.toHaveBeenCalled()
+  } finally {
+    window.removeEventListener('workspace:auth-required', authRequired)
+  }
+})
+
 it('plays an arrival even when it was read before the next poll', async () => {
   summary = { unread_count: 0, latest_unread_id: 0, latest_notification_id: 25 }
   stop = startNotificationAlerts(() => {}, playSound)

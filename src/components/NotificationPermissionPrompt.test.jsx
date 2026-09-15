@@ -51,6 +51,19 @@ it('replaces a stale browser subscription after the server VAPID key changes', a
   await waitFor(() => expect(screen.queryByLabelText('Notification status')).not.toBeInTheDocument())
 })
 
+it('signals an expired session instead of showing the push save error', async () => {
+  const authRequired = vi.fn()
+  window.addEventListener('workspace:auth-required', authRequired)
+  try {
+    setup('granted', 401, { existing: true })
+
+    await waitFor(() => expect(authRequired).toHaveBeenCalledOnce())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  } finally {
+    window.removeEventListener('workspace:auth-required', authRequired)
+  }
+})
+
 it('explains Home Screen setup when push is unsupported', () => {
   vi.stubGlobal('Notification', undefined)
   vi.stubGlobal('navigator', {})

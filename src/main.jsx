@@ -824,22 +824,29 @@ function App() {
     };
   }, [searchQuery, activeWorkspaceId]);
 
-  useEffect(() => {
-    fetch("/api/auth/me/", { credentials: "include" })
-      .then((response) =>
-        response.json().then((data) => ({ ok: response.ok, data })),
-      )
-      .then(({ ok, data }) => {
-        if (!ok)
-          throw new Error(
-            data.error || "The authentication service is unavailable.",
-          );
-        setSession({ loading: false, user: data.user || null, error: "" });
-      })
-      .catch((error) =>
-        setSession({ loading: false, user: null, error: error.message }),
-      );
+  const refreshSession = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/me/", { credentials: "include" });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(
+          data.error || "The authentication service is unavailable.",
+        );
+      setSession({ loading: false, user: data.user || null, error: "" });
+    } catch (error) {
+      setSession({ loading: false, user: null, error: error.message });
+    }
   }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
+
+  useEffect(() => {
+    window.addEventListener("workspace:auth-required", refreshSession);
+    return () =>
+      window.removeEventListener("workspace:auth-required", refreshSession);
+  }, [refreshSession]);
 
   useEffect(() => {
     if (!session.user) return undefined;

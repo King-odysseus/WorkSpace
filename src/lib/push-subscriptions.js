@@ -1,4 +1,5 @@
 import { getCsrfToken } from "./workspace-format.js";
+import { authenticationRequiredError, signalAuthenticationRequired } from "./auth-events.js";
 
 export const urlBase64ToUint8Array = (base64String) => {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -23,6 +24,10 @@ export const savePushSubscription = async (subscription) => {
       }),
     });
     const data = await response.json();
+    if (response.status === 401) {
+      signalAuthenticationRequired();
+      throw authenticationRequiredError(data.error || "Authentication is required.");
+    }
     if (!response.ok)
       throw new Error(data.error || "Push notifications could not be saved for this device.");
   };
