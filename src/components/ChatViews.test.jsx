@@ -382,7 +382,7 @@ it('offers Reply on a channel reply and sends the reply id as the parent', async
   })
 })
 
-it('shows both edit actions and saves an inline message edit', async () => {
+it('shows both edit actions and saves a message from the bottom composer', async () => {
   const original = { id: 1, author_id: currentUserId, author_name: 'Ada Lane', message: 'Before the edit.', created_at: '2026-09-12T10:00:00Z' }
   const updated = { ...original, message: 'After the edit.', edited_at: '2026-09-12T10:05:00Z' }
   const fetchMock = mockApi({
@@ -1039,4 +1039,66 @@ it('points the feed at the message a chat notification names', async () => {
   expect(row).toHaveClass('chat-message-highlight')
   expect(screen.getByText('Earlier note.').closest('.chat-message')).not.toHaveClass('chat-message-highlight')
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('around=9') && String(url).includes('limit=10'))).toBe(true)
+})
+
+
+it.each(['direct', 'channels'])('edits %s messages in the composer and preserves the unsent draft', async viewType => {
+  localStorage.clear()
+  const original = { id: 51, author_id: currentUserId, author_name: 'Ada Lane', channel: 'general', message: 'Original message', created_at: '2026-09-12T10:00:00Z' }
+  const endpoint = viewType === 'direct' ? '/direct-messages/51/' : '/chat-messages/51/'
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] }, '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [original] },
+    '/chat-messages/?': { messages: [original] },
+    [endpoint]: { message: { ...original, message: 'Updated message' } },
+    '/notifications/': { body: {} },
+  })
+  const props = { viewType, data: { ...dataFor(), members: launchMembers, channels: [{ id: 1, name: 'general' }], messages: [original] }, workspaceId, currentUserId, onRefresh: vi.fn(), onConfirm: vi.fn(), onError: vi.fn(), onNavigate: vi.fn() }
+  const { rerender } = render(<ChatWorkspaceView {...props} />)
+  if (viewType === 'direct') fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByText('Original message')
+  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), { target: { value: 'Unsent draft' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  const editor = screen.getByRole('textbox', { name: 'Edit message' })
+  expect(editor.closest('.chat-inline-composer')).toBeTruthy()
+  expect(editor.closest('.chat-message')).toBeNull()
+  expect(editor).toHaveValue('Original message')
+  expect(editor).toHaveFocus()
+  expect(screen.getByText('Original message', { selector: 'p' })).toBeVisible()
+  fireEvent.change(editor, { target: { value: 'Discarded edit' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Unsent draft')
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  fireEvent.change(editor, { target: { value: 'Updated message' } })
+  fireEvent.submit(editor.closest('form'))
+  await screen.findByText('Updated message', { selector: 'p' })
+  expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Unsent draft')
+  expect(fetchMock.mock.calls.filter(([url, init]) => String(url).includes(endpoint) && init.method === 'PATCH')).toHaveLength(1)
+  expect(fetchMock.mock.calls.some(([, init]) => init.method === 'POST')).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  rerender(<ChatWorkspaceView {...props} workspaceId={5} />)
+  expect(screen.queryByRole('textbox', { name: 'Edit message' })).not.toBeInTheDocument()
+})
+
+it('keeps failed edits available for retry and cancels with Escape', async () => {
+  const original = { id: 51, author_id: currentUserId, author_name: 'Ada Lane', message: 'Original message', created_at: '2026-09-12T10:00:00Z' }
+  mockApi({
+    '/documents/': { documents: [] }, '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [original] },
+    '/direct-messages/51/': { status: 500, body: { error: 'Save failed' } },
+    '/notifications/': { body: {} },
+  })
+  renderChat({ ...dataFor(), members: launchMembers })
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByText('Original message')
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  const editor = screen.getByRole('textbox', { name: 'Edit message' })
+  fireEvent.change(editor, { target: { value: 'Try again' } })
+  fireEvent.submit(editor.closest('form'))
+  await screen.findByText('Save failed')
+  expect(editor).toHaveValue('Try again')
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  fireEvent.keyDown(editor, { key: 'Escape' })
+  expect(screen.queryByRole('textbox', { name: 'Edit message' })).not.toBeInTheDocument()
+  expect(screen.queryByText('Save failed')).not.toBeInTheDocument()
 })

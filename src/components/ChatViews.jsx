@@ -155,6 +155,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [messageDeletes, setMessageDeletes] = useState({})
   const [editingMessageId, setEditingMessageId] = useState(null)
   const [editDraft, setEditDraft] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const editRequestRef = useRef(null)
+  const composerDraft = editingMessageId !== null ? editDraft : draft
+  const setComposerDraft = editingMessageId !== null ? setEditDraft : setDraft
   const [workspaceDocuments, setWorkspaceDocuments] = useState([])
   const [workspaceFiles, setWorkspaceFiles] = useState([])
   const [sharedDocumentIds, setSharedDocumentIds] = useState([])
@@ -200,6 +204,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setUnreadMarker(null)
     setShowJumpToLatest(false)
   }, [viewType])
+
+  useEffect(() => {
+    setEditingMessageId(null)
+    setEditDraft('')
+    setSavingEdit(false)
+    editRequestRef.current = null
+    setEmojiOpen(false)
+    setMentionOpen(false)
+  }, [draftKey, workspaceId])
 
   useEffect(() => {
     const storedDraft = draftKeyRef.current
@@ -412,7 +425,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     if (!nextHeight) return
     input.style.height = `${nextHeight}px`
     input.style.overflowY = input.scrollHeight > CHAT_COMPOSER_MAX_HEIGHT ? 'auto' : 'hidden'
-  }, [draft, mode, selectedChannel, selectedConversationId, activePane])
+  }, [composerDraft, mode, selectedChannel, selectedConversationId, activePane])
 
   // Bring the alerted message into view in the middle of the feed, the same way
   // the pin scrolls the feed element rather than calling scrollIntoView. Re-runs
@@ -693,10 +706,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   }
   const insertEmoji = emoji => {
     const input = messageInputRef.current
-    const start = input?.selectionStart ?? draft.length
+    const start = input?.selectionStart ?? composerDraft.length
     const end = input?.selectionEnd ?? start
-    const nextDraft = `${draft.slice(0, start)}${emoji}${draft.slice(end)}`
-    setDraft(nextDraft.slice(0, 4000))
+    const nextDraft = `${composerDraft.slice(0, start)}${emoji}${composerDraft.slice(end)}`
+    setComposerDraft(nextDraft.slice(0, 4000))
     setEmojiOpen(false)
     requestAnimationFrame(() => {
       const cursor = Math.min(start + emoji.length, 4000)
@@ -706,15 +719,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   }
   const insertMention = member => {
     const input = messageInputRef.current
-    const start = input?.selectionStart ?? draft.length
+    const start = input?.selectionStart ?? composerDraft.length
     const end = input?.selectionEnd ?? start
-    const context = getMentionContext(draft, start)
+    const context = getMentionContext(composerDraft, start)
     const replaceStart = context?.start ?? start
     const replaceEnd = context?.end ?? end
     const alias = (member.email || memberName(member)).split('@')[0].trim().toLowerCase().replace(/\s+/g, '')
-    const prefix = !context && start && !/\s/.test(draft[start - 1]) ? ' ' : ''
+    const prefix = !context && start && !/\s/.test(composerDraft[start - 1]) ? ' ' : ''
     const mention = `${prefix}@${alias} `
-    setDraft(`${draft.slice(0, replaceStart)}${mention}${draft.slice(replaceEnd)}`.slice(0, 4000))
+    setComposerDraft(`${composerDraft.slice(0, replaceStart)}${mention}${composerDraft.slice(replaceEnd)}`.slice(0, 4000))
     setMentionOpen(false)
     setMentionQuery('')
     requestAnimationFrame(() => {
@@ -860,6 +873,11 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     } catch (reactionError) { setError(reactionError.message) }
   }
   const startEditing = message => {
+    if (savingEdit || submitting || uploadingFile) return
+    setEmojiOpen(false)
+    setMentionOpen(false)
+    setShareOpen(false)
+    messageInputRef.current?.focus({ preventScroll: true })
     setEditingMessageId(message.id)
     setEditDraft(messageEdits[message.id]?.message ?? message.message)
     setError('')
@@ -867,10 +885,19 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const cancelEditing = () => {
     setEditingMessageId(null)
     setEditDraft('')
+    setEmojiOpen(false)
+    setMentionOpen(false)
+    setError('')
   }
-  const saveEdit = async message => {
+  const saveEdit = async event => {
+    event.preventDefault()
+    if (editRequestRef.current || editingMessageId === null) return
+    const message = { id: editingMessageId }
+    const request = { thread: draftKey }
+    editRequestRef.current = request
     const text = editDraft.trim()
-    if (!text) { setError('Message is required.'); return }
+    if (!text) { editRequestRef.current = null; setError('Message is required.'); return }
+    setSavingEdit(true)
     const direct = mode === 'direct'
     const endpoint = direct ? `/api/direct-messages/${message.id}/` : `/api/chat-messages/${message.id}/`
     setError('')
@@ -881,9 +908,17 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Message could not be updated.')
+      if (editRequestRef.current !== request) return
       setMessageEdits(current => ({ ...current, [message.id]: payload.message }))
       cancelEditing()
-    } catch (editError) { setError(editError.message) }
+    } catch (editError) {
+      if (editRequestRef.current === request) setError(editError.message)
+    } finally {
+      if (editRequestRef.current === request) {
+        editRequestRef.current = null
+        setSavingEdit(false)
+      }
+    }
   }
   const deleteMessage = async message => {
     const direct = mode === 'direct'
@@ -934,13 +969,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         </div>
         {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.deleted_at ? 'Original message was deleted.' : (parent?.message || 'Original message is unavailable.')}</span></div>}
         <div className={`chat-message-bubble chat-member-tone-${Number(author.id) % 5}`}>
-          {isEditing ? <div className="chat-edit-form">
-            <textarea value={editDraft} onChange={event => setEditDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); cancelEditing() } }} maxLength="4000" aria-label="Edit message" autoFocus />
-            <div className="chat-edit-actions">
-              <button type="button" className="chat-edit-save" onClick={() => saveEdit(message)}>Save changes</button>
-              <button type="button" className="chat-edit-cancel" onClick={cancelEditing}>Cancel</button>
-            </div>
-          </div> : deletedAt ? <p className="chat-deleted-text" title={`Deleted ${formatRelativeActivityTime(deletedAt)}`}>This message was deleted</p> : <p>{renderMessageText(bodyText)}</p>}
+          {deletedAt ? <p className="chat-deleted-text" title={`Deleted ${formatRelativeActivityTime(deletedAt)}`}>This message was deleted</p> : <p>{renderMessageText(bodyText)}</p>}
         </div>
         {hasMessageActions && <div className={`chat-message-actions ${reactions.length ? 'has-reactions' : ''}`}>
           <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />
@@ -1092,17 +1121,18 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         <div className={`chat-feed-body ${detailsOpen ? 'details-open' : ''}`}>
           <div className="chat-main-pane">
             {activePane === 'posts' ? renderPostsPane() : activePane === 'files' ? renderFilesPane() : renderAboutPane()}
-        {activePane === 'posts' && (mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
-          {replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
-          {(sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
+        {activePane === 'posts' && (mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={editingMessageId !== null ? saveEdit : mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
+          {editingMessageId !== null && <div className="reply-context"><span>Editing message</span><button type="button" disabled={savingEdit} onClick={cancelEditing}>Cancel</button></div>}
+          {editingMessageId === null && replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
+          {editingMessageId === null && (sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
           <div className="chat-compose-surface">
             <div className="chat-compose-input">
-              <textarea ref={messageInputRef} rows={1} value={draft} onChange={event => { const nextDraft = event.target.value; setDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : selectedConversation?.is_self ? 'Message yourself' : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label="Message" />
+              <textarea ref={messageInputRef} rows={1} value={composerDraft} readOnly={savingEdit} onChange={event => { const nextDraft = event.target.value; setComposerDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Escape' && editingMessageId !== null && !savingEdit) { event.preventDefault(); cancelEditing(); return } if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : selectedConversation?.is_self ? 'Message yourself' : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label={editingMessageId !== null ? 'Edit message' : 'Message'} />
               <div className="chat-compose-actions">
                 <Popover.Root open={mentionOpen} onOpenChange={nextOpen => { setMentionOpen(nextOpen); setMentionQuery(''); if (nextOpen) { setEmojiOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-mention-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Mention a workspace member"><MentionPicker members={mentionMembers} getMemberName={memberName} onSelect={insertMention} /><Popover.Arrow className="chat-mention-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
                 <Popover.Root open={emojiOpen} onOpenChange={nextOpen => { setEmojiOpen(nextOpen); if (nextOpen) { setMentionOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-emoji-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Choose an emoji"><EmojiPicker onSelect={insertEmoji} /><Popover.Arrow className="chat-emoji-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
-                <label className="chat-upload-button" aria-label={uploadingFile ? 'Uploading file' : 'Upload and attach a file'} title={uploadingFile ? 'Uploading file' : 'Attach file'}><Paperclip size={17} /><input type="file" onChange={uploadChatFile} disabled={uploadingFile} /></label>
-                <button type="submit" className="primary-button" disabled={submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{submitting ? 'Sending…' : 'Send'}</button>
+                {editingMessageId === null && <label className="chat-upload-button" aria-label={uploadingFile ? 'Uploading file' : 'Upload and attach a file'} title={uploadingFile ? 'Uploading file' : 'Attach file'}><Paperclip size={17} /><input type="file" onChange={uploadChatFile} disabled={uploadingFile} /></label>}
+                <button type="submit" className="primary-button" aria-label={editingMessageId !== null ? 'Save changes' : 'Send'} disabled={editingMessageId !== null ? savingEdit || !editDraft.trim() : submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{editingMessageId !== null ? savingEdit ? 'Saving...' : 'Save' : submitting ? 'Sending…' : 'Send'}</button>
               </div>
             </div>
           </div>

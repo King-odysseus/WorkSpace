@@ -3912,12 +3912,6 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
 .chat-workspace-view .chat-receipt { display:inline-flex; align-items:center; color:var(--workspace-text-soft); }
 .chat-workspace-view .chat-receipt-read { color:#1D4ED8; }
 .chat-workspace-view .chat-deleted-text { color:var(--workspace-text-soft); font-style:italic; }
-.chat-workspace-view .chat-edit-form { display:grid; gap:6px; width:min(560px, 100%); margin-top:3px; }
-.chat-workspace-view .chat-edit-form textarea { width:100%; min-height:64px; padding:9px 12px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface); color:var(--workspace-text); font:inherit; font-size:13px; line-height:1.4; resize:vertical; }
-.chat-workspace-view .chat-edit-actions { display:flex; gap:8px; justify-content:flex-end; }
-.chat-workspace-view .chat-edit-actions button { border:0; border-radius: 999px; padding:5px 10px; font-size:11px; font-weight:700; cursor:pointer; }
-.chat-workspace-view .chat-edit-save { background:var(--navy); color:#fff; }
-.chat-workspace-view .chat-edit-cancel { background:var(--workspace-surface-soft); color:var(--workspace-text-soft); }
 .chat-member-profile-summary { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
 .chat-member-profile-summary .avatar { width:44px; height:44px; font-size:14px; }
 .chat-member-profile-summary div { display:grid; gap:2px; }
@@ -9697,4 +9691,17 @@ html[data-theme="dark"] .auth-error {
 @media (prefers-reduced-motion: reduce) {
   .settings-switch-track,
   .settings-switch-track::after { transition:none; }
+}
+
+/* Keep focused mobile fields at a readable size without browser auto-zoom. */
+.chat-workspace-view .chat-inline-composer,
+.chat-workspace-view .chat-compose-surface,
+.chat-workspace-view .chat-message-body { min-width:0; max-width:100%; }
+.chat-workspace-view .chat-message p,
+.chat-workspace-view .reply-context { overflow-wrap:anywhere; }
+@media (max-width: 767px) {
+  .chat-workspace-view input,
+  .chat-workspace-view textarea,
+  .chat-workspace-view .chat-inline-composer .chat-compose-surface textarea { font-size:16px; }
+  .chat-workspace-view .chat-compose-surface textarea { box-sizing:border-box; }
 }
