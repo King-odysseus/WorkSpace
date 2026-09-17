@@ -51,7 +51,7 @@ const channelNotification = {
 }
 
 const mountApp = async () => {
-  mockApi({
+  const fetchMock = mockApi({
     '/api/auth/me/': session,
     '/api/tasks/': { tasks: [], pagination: { has_next: false } },
     '/api/workspaces/1/notifications/?exclude_chat=1': {
@@ -71,10 +71,11 @@ const mountApp = async () => {
   })
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main.jsx')
+  return fetchMock
 }
 
 it('separates message alerts from workspace activity across the header and mobile nav', async () => {
-  await mountApp()
+  const fetchMock = await mountApp()
 
   const mobileNav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   expect(within(mobileNav).getByRole('button', { name: /Chats/ })).toBeInTheDocument()
@@ -123,6 +124,7 @@ it('separates message alerts from workspace activity across the header and mobil
 
   fireEvent.click(screen.getByRole('button', { name: 'View all workspace activity' }))
 
+  expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/notifications/?page=1&exclude_chat=1&sort=newest'))).toBe(true)
   await screen.findByText('Notifications outside chats and channels.')
   await waitFor(() => expect(screen.getAllByText('14-09-26 10:44')).toHaveLength(1))
   const historyRow = screen.getByText('Deployment finished').closest('button')

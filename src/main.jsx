@@ -3673,7 +3673,7 @@ function WorkspaceView({
     let current = true;
     setNotificationLoading(true);
     setNotificationError("");
-    fetch(`/api/workspaces/${workspaceId}/notifications/?page=${notificationPage}&exclude_chat=1`, {
+    fetch(`/api/workspaces/${workspaceId}/notifications/?page=${notificationPage}&exclude_chat=1&sort=newest`, {
       credentials: "include",
     })
       .then(async (response) => {

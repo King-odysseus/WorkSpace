@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
@@ -103,6 +104,31 @@ class NotificationSummaryTests(TestCase):
         self.assertIsNotNone(activity.read_at)
         self.assertIsNone(channel.read_at)
         self.assertIsNone(chat.read_at)
+
+    def test_activity_history_can_be_sorted_newest_first(self):
+        user = User.objects.create_user(username='chronological-user')
+        workspace = Workspace.objects.create(name='Chronological', slug='chronological')
+        Membership.objects.create(workspace=workspace, user=user)
+        older_unread = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='task_assigned', title='Older unread',
+            target_type='task', target_id='7',
+        )
+        newer_read = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='task_status', title='Newer read',
+            target_type='task', target_id='8', read_at=timezone.now(),
+        )
+        now = timezone.now()
+        WorkspaceNotification.objects.filter(pk=older_unread.pk).update(created_at=now - timedelta(minutes=5))
+        WorkspaceNotification.objects.filter(pk=newer_read.pk).update(created_at=now)
+        self.client.force_login(user)
+
+        default_payload = self.client.get(reverse('notification-list', args=[workspace.id]) + '?exclude_chat=1').json()
+        newest_payload = self.client.get(reverse('notification-list', args=[workspace.id]) + '?exclude_chat=1&sort=newest').json()
+
+        # The default ordering keeps the unread row first for the bell popup.
+        self.assertEqual([item['id'] for item in default_payload['notifications']], [older_unread.id, newer_read.id])
+        # Activity history can opt into a strictly chronological order.
+        self.assertEqual([item['id'] for item in newest_payload['notifications']], [newer_read.id, older_unread.id])
 
     def test_unread_counts_cover_rows_beyond_the_paged_list(self):
         user = User.objects.create_user(username='counts-user')

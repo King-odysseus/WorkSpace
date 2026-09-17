@@ -2451,6 +2451,14 @@ def notification_list(request, workspace_id):
             notifications = notifications.exclude(target_type__in=['chat_channel', 'direct_conversation'])
         elif only_conversation:
             notifications = notifications.filter(target_type__in=['chat_channel', 'direct_conversation'])
+        sort = request.GET.get('sort', '').strip()
+        if sort == 'newest':
+            # The history page is chronological even when it contains a mix of
+            # read and unread rows. The default model ordering intentionally
+            # keeps unread rows first for the bell and message popups.
+            notifications = notifications.order_by('-created_at', '-id')
+        elif sort:
+            return JsonResponse({'error': 'Unsupported sort value.'}, status=400)
         # Unread totals are counted over every row, not over the page below.
         # The page is capped at 20, so a badge derived from it silently stops
         # counting once a workspace accumulates more unread alerts than that,
