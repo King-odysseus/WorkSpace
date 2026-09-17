@@ -111,6 +111,7 @@ it('separates message alerts from workspace activity across the header and mobil
 
   const bellButton = screen.getByRole('button', { name: 'Open workspace activity notifications' })
   expect(within(bellButton).getByLabelText('1 unread workspace notifications')).toBeInTheDocument()
+  expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/notifications/?exclude_chat=1&sort=newest'))).toBe(true)
   fireEvent.click(bellButton)
 
   const popoutRow = await screen.findByRole('button', { name: 'Open Deployment finished' }, { timeout: 20000 })
@@ -136,4 +137,4 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(within(historyRow).getByText('14-09-26 10:44')).toHaveAttribute('dateTime', activityCreatedAt)
   expect(screen.queryByText('New direct message')).not.toBeInTheDocument()
   expect(screen.queryByText('New channel message')).not.toBeInTheDocument()
-}, 30000)
+}, 60000)

@@ -409,7 +409,7 @@ function App() {
       const loadFeed = (query) =>
         fetch(`/api/workspaces/${activeWorkspaceId}/notifications/?${query}`, { credentials: "include" })
           .then((response) => (response.ok ? response.json() : null));
-      Promise.all([loadFeed("exclude_chat=1"), loadFeed("only_conversation=1")])
+      Promise.all([loadFeed("exclude_chat=1&sort=newest"), loadFeed("only_conversation=1")])
         .then(([activityPayload, conversationPayload]) => {
           if (!activityPayload && !conversationPayload) return;
           setWorkspaceData((current) => ({
@@ -954,7 +954,7 @@ function App() {
         read(`/api/workspaces/${workspaceId}/work-shifts/`, {
           work_shifts: [],
         }),
-        read(`/api/workspaces/${workspaceId}/notifications/?exclude_chat=1`, {
+        read(`/api/workspaces/${workspaceId}/notifications/?exclude_chat=1&sort=newest`, {
           notifications: [],
         }),
         read(`/api/workspaces/${workspaceId}/notifications/?only_conversation=1`, {
