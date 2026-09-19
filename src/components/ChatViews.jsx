@@ -992,7 +992,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {editedAt && !deletedAt && <span className="chat-edited-marker" title={`Edited ${formatRelativeActivityTime(editedAt)}`}>edited</span>}
         </div>
         {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.deleted_at ? 'Original message was deleted.' : (parent?.message || 'Original message is unavailable.')}</span></div>}
-        <div className={`chat-message-bubble chat-member-tone-${Number(author.id) % 5}`}>
+        <div className="chat-message-bubble">
           {deletedAt ? <p className="chat-deleted-text" title={`Deleted ${formatRelativeActivityTime(deletedAt)}`}>This message was deleted</p> : <p>{renderMessageText(bodyText)}</p>}
         </div>
         {hasMessageActions && <div className={`chat-message-actions ${reactions.length ? 'has-reactions' : ''}`}>
