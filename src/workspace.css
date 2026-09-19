@@ -6,11 +6,34 @@
    cascade order. Third-party Flowbite CSS is imported before this file from
    main.jsx, so WorkSpace remains the final owner of its own visual system.
    ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Roboto:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @import "flowbite-react/plugin/tailwindcss";
 @source "../.flowbite-react/class-list.json";
 @import "tw-animate-css";
+
+/* Open Pencil typography compatibility for retained component declarations.
+   Existing component rules may still name their historical aliases, but both
+   aliases resolve to the live Inter face so they cannot reintroduce the old
+   Montserrat/Roboto visual system. */
+@font-face { font-family: 'Montserrat'; src: local('Inter'); font-style: normal; font-weight: 400 800; }
+@font-face { font-family: 'Roboto'; src: local('Inter'); font-style: normal; font-weight: 400 800; }
+
+html,
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+body,
+body * {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+}
+
+code,
+pre,
+[data-font-mono] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+}
 /* ==========================================================================
    Legacy base layer (formerly styles.css) - the handful of rules from the
    pre-redesign stylesheet that real elements still depend on today: the
@@ -253,10 +276,10 @@ span.planner-status-pill { display:inline-flex; align-items:center; justify-cont
    were unused duplicates of --color-border / --color-accent-hover and are removed. */
 :root {
   --navy: var(--color-navy);
-  --navy2: #15155C;
-  --brand-navy-soft: #1C1C6E;
+  --navy2: var(--brand-navy-hover);
+  --brand-navy-soft: var(--brand-navy-active);
   --brand-accent: var(--color-accent);
-  --muted: #6B7280;
+  --muted: var(--neutral-text-muted);
   --blue: var(--color-info);
   --teal: var(--color-success);
   --warning: var(--color-warning);
@@ -267,7 +290,8 @@ span.planner-status-pill { display:inline-flex; align-items:center; justify-cont
 
 body,
 .main-content {
-  background: var(--navy);
+  background: var(--neutral-background);
+  color: var(--neutral-text-primary);
 }
 
 .sidebar,
@@ -1347,7 +1371,7 @@ html[data-theme='dark'] :where(.task-card, .directory-row, .channel-row, .activi
 }
 
 .nav-item.active {
-  background: linear-gradient(90deg, #1C1C6E 0%, #15155C 100%);
+  background: linear-gradient(90deg, var(--brand-navy-active) 0%, var(--brand-navy-hover) 100%);
   box-shadow: inset 3px 0 var(--brand-accent), 0 6px 16px rgb(0 0 0 / 12%);
   color: #FFFFFF;
 }
@@ -3989,38 +4013,32 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 }
 
 /* =============================================================================
-   WorkSpace foundation tokens - the single source of truth for the visual
-   system. Values are reconciled against the OpenPencil "01 Foundations" page in
-   Workspace.fig (03 Colour system, 04 Typography, 12 Spacing shape elevation,
-   14 Status and priority semantics). Every token below is semantic: components
-   reference these names and never paste a raw hex value.
-
-   Brand exception: the design source marks its navy (#0E2A47) and bronze
-   (#B7791F) as provisional and instructs the reader to swap in the official
-   brand values. WorkSpace ships #0B0B45 and #C49A6C, so the navy and bronze
-   ramps below are re-derived on those official hues using the design's own
-   lightness ladder rather than copied from the design's different hues.
+   Open Pencil foundation tokens - the single source of truth for the rebuilt
+   application. These values are copied from the live Workspace.fig document
+   and are shared by the Flowbite-aligned shell, pages, states and mobile views.
+   Legacy brand ramps are intentionally removed: the Pencil navy and bronze are
+   the visual source of truth for this UI.
    ============================================================================= */
 :root {
-  /* Brand - WorkSpace navy. Holds every interactive state. */
-  --brand-navy: #0B0B45;
-  --brand-navy-dark: #080831;
-  --brand-navy-hover: #101065;
-  --brand-navy-active: #090939;
-  --brand-navy-tint: #EAEAF6;
-  --brand-navy-focus: #2E2EB8;
-  --brand-navy-disabled: #A9A9C6;
+  /* Pencil brand - navy navigation and bronze accent. */
+  --brand-navy: #0E2A47;
+  --brand-navy-dark: #0A2037;
+  --brand-navy-hover: #163C61;
+  --brand-navy-active: #123352;
+  --brand-navy-tint: #E7EEF6;
+  --brand-navy-focus: #2E6FB7;
+  --brand-navy-disabled: #93B4D4;
   --brand-navy-foreground: #FFFFFF;
 
   /* Brand - WorkSpace bronze. A supporting accent only: onboarding highlights,
      comparison series and warm emphasis. Never a primary action, a navigation
      state or a status colour. */
-  --brand-bronze: #C49A6C;
-  --brand-bronze-hover: #7C5831;
-  --brand-bronze-active: #664829;
-  --brand-bronze-muted: #D3B492;
-  --brand-bronze-soft: #F1E6DA;
-  --brand-bronze-text: #593E22;
+  --brand-bronze: #B7791F;
+  --brand-bronze-hover: #975F12;
+  --brand-bronze-active: #7E4F0F;
+  --brand-bronze-muted: #D6A85C;
+  --brand-bronze-soft: #F7E8C5;
+  --brand-bronze-text: #7E2A0C;
 
   /* Neutral - surfaces, text and borders. */
   --neutral-background: #F9FAFB;
@@ -4138,23 +4156,19 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --elevation-modal: 0 12px 40px -12px rgb(0 0 0 / 0.18);
 }
 
-/* Type scale - foundations 04.
+/* Type scale - Open Pencil 04 Typography.
 
-   The design leaves the font family as an alias slot. WorkSpace's families are
-   Montserrat for display and headings, Roboto for body and controls - the pair
-   the app already loads and renders. They are declared here so the migrated
-   views use `font-display` and `font-sans` rather than repeating literal family
-   names, and so a future licensed font is a single-line change. The generic
-   fallbacks are kept in the stack because Montserrat and Roboto arrive over the
-   network and a cold load should not fall back to Times.
+   The live document uses Inter for every text node. Both display and body
+   aliases intentionally resolve to the same family so no legacy typography
+   layer can leak into a rebuilt page.
 
    These blocks are "static" so Tailwind emits every variable even before a
    utility consumes it. Without that, Tailwind tree-shakes unused theme
    variables and a hand-written `var(--radius-control)` in this stylesheet
    resolves to nothing. */
 @theme static {
-  --font-display: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
-  --font-sans: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --text-display: 40px;
@@ -4227,7 +4241,7 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --radius-container: 16px;
 }
 
-/* Light values: shared WorkSpace tokens for the shadcn primitives. Every value
+/* Light values: shared Pencil tokens for the Flowbite/shadcn primitives. Every value
    now points at the foundation layer above, so a change to the design system
    reaches the primitives without editing this block. */
 :root {
@@ -4266,7 +4280,7 @@ html[data-theme='dark'] {
   --sc-secondary-foreground: #ECECF7;
   --sc-muted: #0C0C28;
   --sc-muted-foreground: #C2C2DC;
-  --sc-accent: #C49A6C;
+  --sc-accent: var(--brand-bronze);
   --sc-accent-foreground: #071A2E;
   --sc-destructive: #E15A67;
   --sc-destructive-foreground: #FFFFFF;
@@ -5465,8 +5479,8 @@ html[data-theme='dark'] .report-progress-track {
   height: 40px;
   place-items: center;
   border-radius: 13px;
-  background: rgb(11 11 69 / 7%);
-  color: #0B0B45;
+  background: color-mix(in srgb, var(--brand-navy) 7%, transparent);
+  color: var(--brand-navy);
 }
 
 .workspace-view .project-progress-track,
@@ -5520,7 +5534,7 @@ html[data-theme='dark'] .report-progress-track {
 
 .workspace-view :is(.calendar-view-switcher) button[data-state='active'],
 .workspace-view :is(.calendar-view-switcher) button.active {
-  background: #0B0B45 !important;
+  background: var(--brand-navy) !important;
   color: #FFFFFF !important;
 }
 
