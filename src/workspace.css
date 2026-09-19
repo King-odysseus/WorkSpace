@@ -4551,6 +4551,27 @@ aside[class*='bg-navy'] nav::-webkit-scrollbar-thumb:hover {
   background: rgb(255 255 255 / 0.28);
 }
 
+/* Navy shell navigation: retain the old rail's quiet gradient/indicator
+   treatment, but make the labels and icons readable on the branded surface. */
+aside[class*='bg-navy'] nav > div > p {
+  color: rgb(255 255 255 / 0.56) !important;
+}
+aside[class*='bg-navy'] nav button {
+  color: rgb(255 255 255 / 0.82) !important;
+}
+aside[class*='bg-navy'] nav button:hover {
+  background: rgb(255 255 255 / 0.08) !important;
+  color: #FFFFFF !important;
+}
+aside[class*='bg-navy'] nav button[aria-current='page'] {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.08)) !important;
+  color: #FFFFFF !important;
+  box-shadow: inset 3px 0 #E6BF91;
+}
+aside[class*='bg-navy'] nav button[aria-current='page'] > span[aria-hidden='true'] {
+  background: #E6BF91 !important;
+}
+
 /* Every other scroll container (page body, drawers, dialogs, the planner board,
    chat feed, card lists, ...) - same quiet treatment as the sidebar nav above,
    just tinted for a light surface instead of the dark rail. The track stays
