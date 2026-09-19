@@ -488,6 +488,7 @@ function App() {
   const [inviteInfo, setInviteInfo] = useState(null);
   const [inviteActionError, setInviteActionError] = useState("");
   const [inviteActionBusy, setInviteActionBusy] = useState(false);
+  const [pendingInvitationBusyId, setPendingInvitationBusyId] = useState(null);
 
   useEffect(() => {
     // Tidy up a ?view= deep link (PWA shortcut, bookmark) once it has been applied
@@ -602,6 +603,44 @@ function App() {
     } finally {
       setInviteActionBusy(false);
     }
+  };
+
+  const declinePendingInvitation = async (invitation) => {
+    if (!invitation?.id || pendingInvitationBusyId) return;
+    setInviteActionError("");
+    setPendingInvitationBusyId(invitation.id);
+    try {
+      const response = await fetch(`/api/invitations/${invitation.id}/decline/`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-CSRFToken": await getCsrfToken() },
+      });
+      const data = await readJsonResponse(
+        response,
+        "Invitation could not be declined.",
+      );
+      if (!response.ok)
+        throw new Error(data.error || "Invitation could not be declined.");
+      const sessionResponse = await fetch("/api/auth/me/", {
+        credentials: "include",
+      });
+      const sessionData = await sessionResponse.json();
+      if (sessionResponse.ok && sessionData.user)
+        setSession((current) => ({ ...current, user: sessionData.user }));
+      toast.success("Invitation declined.");
+    } catch (actionError) {
+      setInviteActionError(
+        actionError.message || "Invitation could not be declined.",
+      );
+    } finally {
+      setPendingInvitationBusyId(null);
+    }
+  };
+
+  const handleWorkspaceCreated = (data) => {
+    if (data?.user) setSession((current) => ({ ...current, user: data.user }));
+    if (data?.workspace?.id) setActiveWorkspaceId(data.workspace.id);
+    setWorkspaceNotice(`${data?.workspace?.name || "Workspace"} created.`);
   };
 
   useEffect(() => {
@@ -1199,11 +1238,23 @@ function App() {
     );
   if (!session.user.workspaces.length)
     return (
-      <NoWorkspaceScreen
-        pendingInvitations={session.user.pending_invitations || []}
-        onReview={reviewInvitation}
-        onSignOut={logout}
-      />
+      <>
+        <NoWorkspaceScreen
+          currentUserEmail={session.user.email}
+          pendingInvitations={session.user.pending_invitations || []}
+          onCreate={() => setCreateWorkspaceOpen(true)}
+          onReview={reviewInvitation}
+          onDecline={declinePendingInvitation}
+          onSignOut={logout}
+          decliningInvitationId={pendingInvitationBusyId}
+          error={inviteActionError}
+        />
+        <CreateWorkspaceDialog
+          open={createWorkspaceOpen}
+          onOpenChange={setCreateWorkspaceOpen}
+          onCreated={handleWorkspaceCreated}
+        />
+      </>
     );
   const mapApiTask = (apiTask) =>
     mapTaskFromApi(apiTask, {
@@ -2084,11 +2135,6 @@ function App() {
     } catch (error) {
       toast.error(error.message || "Default workspace could not be saved.");
     }
-  };
-  const handleWorkspaceCreated = (data) => {
-    if (data?.user) setSession((current) => ({ ...current, user: data.user }));
-    if (data?.workspace?.id) setActiveWorkspaceId(data.workspace.id);
-    setWorkspaceNotice(`${data?.workspace?.name || "Workspace"} created.`);
   };
   const todayTasks = tasks.filter(
     (task) => !task.due_date || task.due_date <= today,

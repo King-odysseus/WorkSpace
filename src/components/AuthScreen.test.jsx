@@ -105,7 +105,8 @@ describe('InvitationReview', () => {
   it('lets the matching account accept the invitation', async () => {
     const onAccept = vi.fn()
     render(<InvitationReview invitation={invitation} currentUserEmail="invitee@example.com" onAccept={onAccept} onDecline={vi.fn()} onDismiss={vi.fn()} onSignOut={vi.fn()} />)
-    expect(screen.getByText('Northstar')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /join northstar/i })).toBeInTheDocument()
+    expect(screen.getByText('This invitation is for')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /accept invitation/i }))
     expect(onAccept).toHaveBeenCalled()
   })
@@ -135,15 +136,32 @@ describe('NoWorkspaceScreen', () => {
   it('lists pending invitations for a user with no memberships', async () => {
     const onReview = vi.fn()
     const invitation = { id: 9, workspace_name: 'Northstar', role: 'member', invited_by_name: 'Ada Lovelace' }
-    render(<NoWorkspaceScreen pendingInvitations={[invitation]} onReview={onReview} onSignOut={vi.fn()} />)
+    render(<NoWorkspaceScreen currentUserEmail="invitee@example.com" pendingInvitations={[invitation]} onReview={onReview} onSignOut={vi.fn()} />)
     expect(screen.getByText(/Northstar/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /review invitation/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^review$/i }))
     expect(onReview).toHaveBeenCalledWith(invitation)
+  })
+
+  it('lets the user decline a pending invitation without joining', async () => {
+    const onDecline = vi.fn()
+    const invitation = { id: 11, workspace_name: 'Northstar', role: 'member', invited_by_name: 'Ada Lovelace' }
+    render(<NoWorkspaceScreen pendingInvitations={[invitation]} onReview={vi.fn()} onDecline={onDecline} onSignOut={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /^decline$/i }))
+    expect(onDecline).toHaveBeenCalledWith(invitation)
+  })
+
+  it('offers the supported workspace creation path', async () => {
+    const onCreate = vi.fn()
+    render(<NoWorkspaceScreen pendingInvitations={[]} onCreate={onCreate} onReview={vi.fn()} onSignOut={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /create a workspace/i }))
+    expect(onCreate).toHaveBeenCalled()
   })
 
   it('explains there is nothing to review when there are no invitations', () => {
     render(<NoWorkspaceScreen pendingInvitations={[]} onReview={vi.fn()} onSignOut={vi.fn()} />)
-    expect(screen.getByText(/no pending workspace invitations/i)).toBeInTheDocument()
+    expect(screen.getByText(/no pending invitations are linked/i)).toBeInTheDocument()
   })
 })
 

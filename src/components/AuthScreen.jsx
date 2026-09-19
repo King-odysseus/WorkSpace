@@ -2,7 +2,7 @@
 // Today feed and the Activity view.
 
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Eye, EyeOff, LoaderCircle, Mail, X } from 'lucide-react'
+import { Building2, CheckCircle2, Eye, EyeOff, LoaderCircle, Mail, Plus } from 'lucide-react'
 import { formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 
 function Activity({ avatar, color, kind, text, strong, suffix, time }) { const detail = strong && text && strong.toLowerCase().startsWith(`${text.toLowerCase()} `) ? strong.slice(text.length + 1) : strong; return <div className="activity-item"><span className={`activity-kind activity-kind-${kind || 'default'}`} aria-hidden="true">{(kind || '•').slice(0, 1).toUpperCase()}</span><span className={`avatar small ${color}`}>{avatar}</span><p><strong>{text}</strong> {detail} {suffix}<span title={time}>{time}</span></p></div> }
@@ -179,6 +179,15 @@ const ROLE_ACCESS_SUMMARY = {
   member: 'Can view and work on tasks, projects, and conversations shared with the team.',
 }
 
+function workspaceInitials(name) {
+  return String(name || 'Workspace')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || 'W'
+}
+
 // Shown instead of the normal app shell once we have an invitation to review -
 // either from the public ?invite= link (before or right after authenticating)
 // or from the "Workspace invitations" list for an already-signed-in user with
@@ -189,43 +198,120 @@ function InvitationReview({ invitation, currentUserEmail, submitting, error, onA
   const wrongAccount = currentUserEmail && invitation.email.toLowerCase() !== currentUserEmail.toLowerCase()
   const status = invitation.status || 'pending'
   const resolved = status !== 'pending'
-  return <div className="auth-screen"><div className="auth-panel invitation-review-panel"><div className="auth-brand"><img src="/tijha-logo.png" alt="TijhaBooks" className="brand-mark" /><span>WorkSpace</span></div><p className="eyebrow">Workspace invitation</p><h1>Join {invitation.workspace_name}</h1>
-    <div className="invitation-review-details">
-      <p><strong>Workspace:</strong> {invitation.workspace_name}</p>
-      {invitation.invited_by_name && <p><strong>Invited by:</strong> {invitation.invited_by_name}</p>}
-      <p><strong>Role:</strong> {invitation.role}</p>
-      <p className="auth-subtitle">{ROLE_ACCESS_SUMMARY[invitation.role] || 'Access is limited to what this role permits.'}</p>
-      {invitation.expires_at && status === 'pending' && <p className="auth-subtitle">Expires {formatDateTime(invitation.expires_at)}</p>}
-    </div>
-    {wrongAccount && <p className="auth-error" role="alert">This invitation was sent to <strong>{invitation.email}</strong>, which does not match the account you are signed in with ({currentUserEmail}). Sign out and sign in with the invited address to continue.</p>}
-    {!wrongAccount && status === 'expired' && <p className="auth-error" role="alert">This invitation has expired. Ask {invitation.invited_by_name || 'the inviter'} to send a new one.</p>}
-    {!wrongAccount && status === 'cancelled' && <p className="auth-error" role="alert">This invitation was revoked by the workspace.</p>}
-    {!wrongAccount && status === 'declined' && <p className="auth-subtitle">You already declined this invitation.</p>}
-    {!wrongAccount && status === 'accepted' && <p className="auth-subtitle">You already accepted this invitation.</p>}
-    {error && <p className="auth-error" role="alert">{error}</p>}
-    <div className="invitation-review-actions">
-      {!wrongAccount && !resolved && <>
-        <button type="button" className="primary-button auth-submit" disabled={submitting} onClick={onAccept}>{submitting ? 'Joining...' : 'Accept invitation'}</button>
-        <button type="button" className="secondary-button" disabled={submitting} onClick={onDecline}>Decline</button>
-      </>}
-      {wrongAccount && <button type="button" className="primary-button auth-submit" onClick={onSignOut}>Sign out</button>}
-      <button type="button" className="auth-switch" onClick={onDismiss}>{wrongAccount ? 'Continue without accepting' : 'Not now'}</button>
-    </div>
-  </div></div>
+  const invitedBy = invitation.invited_by_name || 'the workspace team'
+  const expiry = invitation.expires_at ? formatDateTime(invitation.expires_at) : 'Not provided'
+
+  return (
+    <main className="auth-screen invitation-review-screen">
+      <section className="invitation-review-panel" aria-labelledby="invitation-review-title">
+        <header className="invitation-review-workspace">
+          <span className="invitation-workspace-tile" aria-hidden="true">{workspaceInitials(invitation.workspace_name)}</span>
+          <span className="invitation-workspace-copy">
+            <strong>{invitation.workspace_name}</strong>
+            <small>Workspace invitation</small>
+          </span>
+        </header>
+
+        <div className="invitation-review-rule" />
+        <p className="invitation-review-eyebrow">Your invitation</p>
+        <h1 id="invitation-review-title">Join <span>{invitation.workspace_name}</span></h1>
+        <p className="invitation-review-copy">Review the invitation details below. Joining is only completed when you choose Accept invitation.</p>
+
+        <div className="invitation-recipient-box">
+          <span>This invitation is for</span>
+          <strong>{invitation.email}</strong>
+        </div>
+
+        <dl className="invitation-review-details">
+          <div>
+            <dt>Role</dt>
+            <dd><span className="invitation-role-badge">{invitation.role}</span></dd>
+          </div>
+          <div>
+            <dt>Invited by</dt>
+            <dd>{invitedBy}</dd>
+          </div>
+          <div>
+            <dt>Expires</dt>
+            <dd>{expiry}</dd>
+          </div>
+        </dl>
+
+        <p className="invitation-role-summary">{ROLE_ACCESS_SUMMARY[invitation.role] || 'Access is limited to what this role permits.'}</p>
+
+        {wrongAccount && <p className="auth-error invitation-review-message" role="alert">This invitation was sent to <strong>{invitation.email}</strong>, which does not match the account you are signed in with ({currentUserEmail}). Sign out and sign in with the invited address to continue.</p>}
+        {!wrongAccount && status === 'expired' && <p className="auth-error invitation-review-message" role="alert">This invitation has expired. Ask {invitedBy} to send a new one.</p>}
+        {!wrongAccount && status === 'cancelled' && <p className="auth-error invitation-review-message" role="alert">This invitation was revoked by the workspace.</p>}
+        {!wrongAccount && status === 'declined' && <p className="invitation-review-message" role="status">You already declined this invitation.</p>}
+        {!wrongAccount && status === 'accepted' && <p className="invitation-review-message" role="status">You already accepted this invitation.</p>}
+        {error && <p className="auth-error invitation-review-message" role="alert">{error}</p>}
+
+        <div className="invitation-review-rule invitation-review-actions-rule" />
+        <div className="invitation-review-actions">
+          {!wrongAccount && !resolved && <>
+            <button type="button" className="primary-button invitation-review-accept" disabled={submitting} onClick={onAccept}>{submitting ? 'Joining...' : 'Accept invitation'}</button>
+            <button type="button" className="secondary-button invitation-review-decline" disabled={submitting} onClick={onDecline}>Decline invitation</button>
+          </>}
+          {wrongAccount && <button type="button" className="primary-button invitation-review-accept" onClick={onSignOut}>Sign out and switch account</button>}
+        </div>
+
+        <div className="invitation-review-note">
+          <button type="button" onClick={onDismiss}>Not now</button>
+          <span>Signed in as {currentUserEmail || 'your account'}</span>
+          {!wrongAccount && <button type="button" onClick={onSignOut}>Sign out</button>}
+        </div>
+      </section>
+    </main>
+  )
 }
 
 // Shown instead of the workspace app shell for a signed-in user who does not
 // belong to any workspace yet - a new account created solely to join an
 // invited workspace never gets a throwaway personal one, so this is the
 // "Workspace invitations" area for users with zero memberships.
-function NoWorkspaceScreen({ pendingInvitations, onReview, onSignOut }) {
-  return <div className="auth-screen"><div className="auth-panel"><div className="auth-brand"><img src="/tijha-logo.png" alt="TijhaBooks" className="brand-mark" /><span>WorkSpace</span></div><p className="eyebrow">Workspace invitations</p><h1>You are not in a workspace yet</h1>
-    {pendingInvitations.length > 0 ? <>
-      <p className="auth-subtitle">Review the invitation below to join a team.</p>
-      {pendingInvitations.map(invitation => <div className="workspace-status" key={invitation.id}><span>Invited to <strong>{invitation.workspace_name}</strong> as a {invitation.role} by {invitation.invited_by_name}.</span><button type="button" className="secondary-button" onClick={() => onReview(invitation)}>Review invitation</button></div>)}
-    </> : <p className="auth-subtitle">You have no pending workspace invitations. Ask a workspace owner or manager to invite your account's email address.</p>}
-    <button type="button" className="auth-switch" onClick={onSignOut}>Sign out</button>
-  </div></div>
+function NoWorkspaceScreen({ currentUserEmail, pendingInvitations = [], onCreate, onCreateBusy, onReview, onDecline, onSignOut, decliningInvitationId, error }) {
+  const hasInvitations = pendingInvitations.length > 0
+  const invitationCount = pendingInvitations.length
+
+  return (
+    <main className="auth-screen no-workspace-screen">
+      <section className="no-workspace-panel" aria-labelledby="no-workspace-title">
+        <span className="no-workspace-icon" aria-hidden="true"><Building2 size={32} strokeWidth={1.8} /></span>
+        <h1 id="no-workspace-title">You are not in a workspace yet</h1>
+        <p className="no-workspace-copy">Join a workspace you have been invited to, or create one of your own to get started.</p>
+
+        <section className="pending-invitations-card" aria-labelledby="pending-invitations-title">
+          <header>
+            <h2 id="pending-invitations-title">Pending invitations</h2>
+            <span className="pending-invitations-count">{invitationCount}</span>
+          </header>
+          <div className="pending-invitations-rule" />
+          {hasInvitations ? pendingInvitations.map(invitation => (
+            <div className="pending-invitation-row" key={invitation.id}>
+              <span className="pending-invitation-tile" aria-hidden="true">{workspaceInitials(invitation.workspace_name)}</span>
+              <span className="pending-invitation-copy">
+                <strong>{invitation.workspace_name}</strong>
+                <small>Invited by {invitation.invited_by_name || 'the workspace team'} · {invitation.role}</small>
+              </span>
+              <span className="pending-invitation-actions">
+                <button type="button" className="secondary-button" onClick={() => onReview(invitation)}>Review</button>
+                <button type="button" disabled={decliningInvitationId === invitation.id} onClick={() => onDecline?.(invitation)}>{decliningInvitationId === invitation.id ? 'Declining...' : 'Decline'}</button>
+              </span>
+            </div>
+          )) : (
+            <p className="pending-invitations-empty">No pending invitations are linked to this account.</p>
+          )}
+          <p className="pending-invitations-note">Invitations are never accepted automatically. Review an invitation before joining.</p>
+        </section>
+
+        {error && <p className="auth-error no-workspace-error" role="alert">{error}</p>}
+
+        <button type="button" className="primary-button no-workspace-create" disabled={onCreateBusy} onClick={onCreate}><Plus size={20} /> {onCreateBusy ? 'Creating...' : 'Create a workspace'}</button>
+        <button type="button" className="no-workspace-signout" onClick={onSignOut}>Sign out</button>
+        <p className="no-workspace-help">Need access to an existing workspace? Ask an owner or manager to invite {currentUserEmail || 'this account'}.</p>
+      </section>
+    </main>
+  )
 }
 
 export { Activity, AuthScreen, InvitationReview, NoWorkspaceScreen }
