@@ -484,6 +484,15 @@ individual card. Two separate sections pin the same slot; both now read the
 radius token, so the ladder keeps a single owner even though the rule is
 duplicated. Collapsing them into one is worthwhile but not yet done.
 
+The elevation tokens were declared without units on their offsets -
+`--elevation-card: 0 1 2 0 rgb(...)`, `--elevation-modal: 0 12 40px -12px
+rgb(...)`. A length without a unit is invalid, so every one of those
+declarations was dropped, and `shadow-card` (every Card) and `shadow-elevated`
+(five popovers and dropdowns) silently drew no shadow at all. They now carry
+`px`, which is what makes the design's level 1 and level 3 shadows visible. If a
+shadow utility ever looks like it is doing nothing, check the token for units
+before checking the element.
+
 Avoid hard-coded viewport-scaled font sizes. Use stable dimensions, `minmax()`,
 `aspect-ratio`, and wrapping constraints so controls do not resize unexpectedly.
 

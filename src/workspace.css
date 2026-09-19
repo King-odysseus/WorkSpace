@@ -4676,9 +4676,9 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   /* Elevation. Level 0 is flat (border only), level 1 is the only shadow on a
      surface, level 2 is for floating layers, level 3 is the modal scrim pair. */
   --elevation-flat: none;
-  --elevation-card: 0 1 2 0 rgb(0 0 0 / 0.03);
-  --elevation-floating: 0 4 10 rgb(0 0 0 / 0.05);
-  --elevation-modal: 0 12 40px -12px rgb(0 0 0 / 0.18);
+  --elevation-card: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --elevation-floating: 0 4px 10px rgb(0 0 0 / 0.05);
+  --elevation-modal: 0 12px 40px -12px rgb(0 0 0 / 0.18);
 }
 
 /* Type scale - foundations 04.
