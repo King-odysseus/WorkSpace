@@ -2843,7 +2843,7 @@ function ClockInCard({
 }) {
   const [pending, setPending] = useState("");
   const [tick, setTick] = useState(() => Date.now());
-  const mine = shifts.filter(
+  const mine = (shifts || []).filter(
     (shift) => String(shift.user_id) === String(currentUserId),
   );
   const openShift = mine.find((shift) => shift.is_open) || null;
