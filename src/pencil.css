@@ -44,6 +44,7 @@
   --color-text-primary: var(--pencil-text);
   --color-text-secondary: var(--pencil-text-secondary);
   --color-text-muted: var(--pencil-text-muted);
+  --color-text-on-navy: #FFFFFF;
   --color-primary: var(--pencil-navy);
   --color-primary-foreground: #FFFFFF;
   --color-foreground: var(--pencil-text);
@@ -55,6 +56,26 @@
   --radius-icon: 8px;
   --radius-control: 12px;
   --shadow-elevated: 0 4px 10px rgb(16 24 40 / 5%);
+  --text-page-heading: 30px;
+  --text-page-heading--line-height: 36px;
+  --text-page-heading--font-weight: 700;
+  --text-page-heading--letter-spacing: -.4px;
+  --text-card-heading: 18px;
+  --text-card-heading--line-height: 22px;
+  --text-card-heading--font-weight: 600;
+  --text-metric: 32px;
+  --text-metric--line-height: 36px;
+  --text-metric--font-weight: 700;
+  --text-body-small: 14px;
+  --text-body-small--line-height: 20px;
+  --text-body-compact: 13px;
+  --text-body-compact--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-overline: 11px;
+  --text-overline--line-height: 16px;
+  --text-overline--font-weight: 600;
+  --text-overline--letter-spacing: 1.6px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -62,6 +83,14 @@ html, body, #root { min-height: 100%; }
 body { margin: 0; background: var(--pencil-canvas); color: var(--pencil-text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
+.screen-share-video-source { display: none !important; }
+.skip-link { position: fixed; z-index: 100; top: -64px; left: 16px; padding: 8px 12px; border-radius: 8px; background: var(--pencil-navy); color: #fff; }
+.skip-link:focus { top: 16px; }
+.cookie-consent { position: fixed; right: 24px; bottom: 24px; z-index: 80; display: flex; max-width: 520px; align-items: end; gap: 20px; padding: 16px; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; box-shadow: 0 12px 40px rgb(16 24 40 / 18%); }
+.cookie-consent p { margin: 6px 0; color: var(--pencil-text-secondary); font-size: 13px; }
+.cookie-link { padding: 0; border: 0; background: transparent; color: var(--pencil-blue); font-size: 13px; }
+.cookie-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.cookie-actions .primary-button, .cookie-actions .secondary-button { min-height: 36px; padding: 0 12px; white-space: nowrap; }
 
 /* Application shell: P1's 264px navy rail, 64px header and 32px canvas gap. */
 .main-content { min-width: 0; background: var(--pencil-canvas) !important; color: var(--pencil-text); }
