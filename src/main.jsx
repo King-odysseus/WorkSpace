@@ -4204,8 +4204,9 @@ function WorkspaceView({
     onPendingComposerHandled?.();
   }, [active, pendingComposer, onPendingComposerHandled, openComposer]);
 
-  const submitComposer = async (event) => {
+  const submitComposer = async (event, typeOverride) => {
     event.preventDefault();
+    const composerKind = typeOverride || composerType;
     setComposerError("");
     setSubmitting(true);
     const endpoints = {
@@ -4250,7 +4251,7 @@ function WorkspaceView({
       invite: { email: form.email, role: form.role },
     };
     try {
-      const response = await fetch(endpoints[composerType], {
+      const response = await fetch(endpoints[composerKind], {
         method: "POST",
         credentials: "include",
         headers: {
@@ -4258,7 +4259,7 @@ function WorkspaceView({
           "X-CSRFToken": await getCsrfToken(),
           "X-Workspace-Id": String(workspaceId),
         },
-        body: JSON.stringify(payloads[composerType]),
+        body: JSON.stringify(payloads[composerKind]),
       });
       const responseData = await readJsonResponse(
         response,
@@ -4274,12 +4275,12 @@ function WorkspaceView({
         followup: ["followUps", "follow_up"],
         invite: ["invitations", "invitation"],
       };
-      const [collection, itemKey] = collections[composerType];
+      const [collection, itemKey] = collections[composerKind];
       const item = responseData[itemKey];
       setLocalData((current) => ({
         ...current,
         [collection]:
-          composerType === "checkin"
+          composerKind === "checkin"
             ? [
                 ...current[collection].filter(
                   (existing) => existing.id !== item.id,
@@ -4291,7 +4292,7 @@ function WorkspaceView({
       onRefresh();
       setComposerOpen(false);
       setReplyTo(null);
-      if (composerType === "invite")
+      if (composerKind === "invite")
         toast.success(
           responseData.message || `Invitation sent to ${form.email}.`,
         );
@@ -7420,35 +7421,33 @@ function WorkspaceView({
       (followUp) =>
         followUpFilter === "all" ||
         followUp.status === followUpFilter ||
+        (followUpFilter === "today" &&
+          followUp.status === "open" &&
+          followUp.due_date === today) ||
         (followUpFilter === "overdue" && isOverdueFollowUp(followUp)),
     );
+    const dueToday = visibleFollowUps.filter((item) => item.status === "open" && item.due_date === today).length;
+    const overdueFollowUps = visibleFollowUps.filter(isOverdueFollowUp).length;
+    const updateFollowUpForm = (event) =>
+      setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
     return (
-      <section className="workspace-view">
+      <section className="workspace-view pencil-followup-view">
         <WorkspaceViewHeading
           title={title}
           subtitle={subtitle}
-          action="Add follow-up"
+          eyebrow="Collaborate"
+          action="New follow-up"
           onAction={() => openComposer("followup")}
         />
-        <div className="follow-up-toolbar">
-          <label>
-            Filter follow-ups
-            <AppSelect
-              value={followUpFilter}
-              onChange={(event) => setFollowUpFilter(event.target.value)}
-              aria-label="Filter follow-ups"
-            >
-              <option value="all">All follow-ups</option>
-              <option value="open">Open</option>
-              <option value="completed">Completed</option>
-              <option value="overdue">Overdue</option>
-            </AppSelect>
-          </label>
-          <span>{visibleFollowUps.length} shown</span>
+        <div className="pencil-followup-filters" role="tablist" aria-label="Filter follow-ups">
+          {[["all", "All"], ["today", "Due today"], ["overdue", "Overdue"], ["completed", "Done"]].map(([value, label]) => <button type="button" key={value} className={followUpFilter === value ? "active" : ""} onClick={() => setFollowUpFilter(value)}>{label} {value === "all" ? localData.followUps.length : value === "today" ? dueToday : value === "overdue" ? overdueFollowUps : localData.followUps.filter((item) => item.status === "completed").length}</button>)}
+          <AppSelect value={followUpFilter} onChange={(event) => setFollowUpFilter(event.target.value)} aria-label="Sort follow-ups"><option value="all">Due date</option><option value="open">Open</option><option value="completed">Completed</option><option value="overdue">Overdue</option></AppSelect>
         </div>
-        <Card className="follow-up-list px-5">
-          {visibleFollowUps.length ? (
-            visibleFollowUps.map((followUp) => {
+        <div className="pencil-followup-layout">
+          <div className="pencil-followup-main">
+            <div className="pencil-followup-list-head"><span>Follow-up</span><span>Assigned</span><span>Linked task</span><span>Due</span></div>
+            <div className="pencil-followup-list">
+              {visibleFollowUps.length ? visibleFollowUps.map((followUp) => {
               const linkedTask = tasks.find(
                 (task) => task.id === followUp.task_id,
               );
@@ -7456,24 +7455,13 @@ function WorkspaceView({
                 canManageMembers ||
                 followUp.created_by === currentUserId ||
                 followUp.assigned_to === currentUserId;
-              return (
-                <div className="follow-up-row" key={followUp.id}>
-                  <span
-                    className={`follow-up-status ${followUp.status} ${isOverdueFollowUp(followUp) ? "overdue" : ""}`}
-                  />{" "}
-                  <div>
-                    <strong>{followUp.note}</strong>
-                    <span>
-                      {followUp.due_date
-                        ? `Due ${formatDay(followUp.due_date)}`
-                        : "No due date"}
-                      {linkedTask ? ` | ${linkedTask.title}` : ""}
-                      {followUp.assigned_to_name
-                        ? ` | ${followUp.assigned_to_name}`
-                        : ""}
-                    </span>
-                  </div>
-                  <div className="follow-up-actions">
+              return <article className={`pencil-followup-row ${followUp.status}`} key={followUp.id}>
+                  <button type="button" className={`pencil-followup-check ${followUp.status === "completed" ? "done" : ""}`} onClick={() => completeFollowUp(followUp)} aria-label={`${followUp.status === "completed" ? "Reopen" : "Complete"} ${followUp.note}`}><Check size={13} /></button>
+                  <div className="pencil-followup-copy"><strong>{followUp.note}</strong><small>{followUp.status === "completed" ? "Completed" : "Needs a response or later action."}</small></div>
+                  <span className="pencil-followup-assignee">{followUp.assigned_to_name || "Unassigned"}</span>
+                  <span className="pencil-followup-task">{linkedTask?.title || "No linked task"}</span>
+                  <span className={`pencil-followup-due ${isOverdueFollowUp(followUp) ? "overdue" : ""}`}>{followUp.due_date ? (isOverdueFollowUp(followUp) ? `${Math.abs(Math.round((new Date(today) - new Date(followUp.due_date)) / 86400000))} days over` : followUp.due_date === today ? "Due today" : formatDay(followUp.due_date)) : "No date"}</span>
+                  <div className="pencil-followup-actions">
                     {canEdit && (
                       <Button
                         type="button"
@@ -7484,14 +7472,6 @@ function WorkspaceView({
                         Edit
                       </Button>
                     )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => completeFollowUp(followUp)}
-                    >
-                      {followUp.status === "completed" ? "Reopen" : "Mark done"}
-                    </Button>
                     {(canManageMembers ||
                       followUp.created_by === currentUserId) && (
                       <Button
@@ -7504,14 +7484,15 @@ function WorkspaceView({
                         <X size={14} />
                       </Button>
                     )}
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <EmptyState text="Nothing needs follow-up right now." />
-          )}
-        </Card>
+                  </div></article>;
+              }) : <EmptyState text="Nothing needs follow-up right now." />}
+            </div>
+          </div>
+          <aside className="pencil-followup-side">
+            <section className="pencil-followup-card"><h2>Queue summary</h2><div className="pencil-followup-summary"><strong>{localData.followUps.filter((item) => item.status === "open").length}<small>Open</small></strong><strong>{dueToday}<small>Due today</small></strong><strong>{overdueFollowUps}<small>Overdue</small></strong></div><p>{overdueFollowUps ? `Oldest open item needs attention.` : "No overdue follow-ups."}</p></section>
+            <form className="pencil-followup-form" onSubmit={(event) => submitComposer(event, "followup")}><h2>New follow-up</h2><label>Follow-up note<textarea name="note" value={form.note || ""} onChange={updateFollowUpForm} placeholder="What needs to happen, and by when?" required /></label><label>Due date<input type="date" name="due_date" value={form.due_date || ""} onChange={updateFollowUpForm} required /></label><label>Assign to<AppSelect name="assigned_to" value={form.assigned_to || ""} onChange={updateFollowUpForm}><option value="">Unassigned</option>{localData.members.map((member) => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(" ") || member.email}</option>)}</AppSelect></label><label>Link to task<AppSelect name="task_id" value={form.task_id || ""} onChange={updateFollowUpForm}><option value="">No linked task</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</AppSelect></label>{composerError && <p className="auth-error">{composerError}</p>}<div><button type="button" onClick={() => setForm((current) => ({ ...current, note: "", due_date: "", assigned_to: "", task_id: "" }))}>Cancel</button><Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save"}</Button></div></form>
+          </aside>
+        </div>
         {composerOpen && (
           <WorkspaceComposer
             type="followup"
