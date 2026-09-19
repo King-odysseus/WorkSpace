@@ -6734,11 +6734,12 @@ function WorkspaceView({
         : formatDay(value);
 
     return (
-      <section className="workspace-view">
+      <section className="workspace-view pencil-checkins-view">
         <WorkspaceViewHeading
+          eyebrow="Collaborate"
           title={title}
           subtitle={subtitle}
-          action="Start check-in"
+          action="My check-in"
           icon={MessageSquare}
           onAction={() => openComposer("checkin")}
         />
@@ -6777,6 +6778,7 @@ function WorkspaceView({
             {checkInError}
           </p>
         )}
+        <div className="pencil-checkin-layout">
         <div className="checkin-grid">
           {visibleCheckIns.length ? (
             visibleCheckIns.map((checkIn) => (
@@ -6861,6 +6863,11 @@ function WorkspaceView({
               text={`No check-ins in ${activeRangeLabel.toLowerCase()}. Start the first update.`}
             />
           )}
+        </div>
+        <aside className="pencil-checkin-side">
+          <section className="pencil-checkin-card"><h2>Today&apos;s check-ins</h2><strong>{visibleCheckIns.length} of {localData.members.length}<small>received</small></strong><div className="pencil-checkin-progress"><i style={{ width: `${localData.members.length ? Math.min(100, Math.round((visibleCheckIns.length / localData.members.length) * 100)) : 0}%` }} /></div><p>{Math.max(0, localData.members.length - visibleCheckIns.length)} members still to submit</p><div className="pencil-checkin-missing">{localData.members.filter((member) => !visibleCheckIns.some((item) => String(item.user_id) === String(member.id))).slice(0, 4).map((member) => <div key={member.id}><span>{[member.first_name, member.last_name].filter(Boolean).join(" ") || member.email}</span><button type="button" onClick={() => onNavigate("Chats")}>Nudge</button></div>)}</div></section>
+          <section className="pencil-checkin-card"><h2>Blockers raised today</h2>{visibleCheckIns.filter((item) => item.blockers).slice(0, 3).map((item) => <div className="pencil-checkin-blocker" key={item.id}><i /> <span>{item.blockers}<small>{item.user_name}</small></span></div>)}{!visibleCheckIns.some((item) => item.blockers) && <p>No blockers reported today.</p>}</section>
+        </aside>
         </div>
         {composerOpen && (
           <WorkspaceComposer
