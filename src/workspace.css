@@ -4569,6 +4569,168 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   .screen-share-active div span { display: none; }
 }
 
+/* =============================================================================
+   WorkSpace foundation tokens - the single source of truth for the visual
+   system. Values are reconciled against the OpenPencil "01 Foundations" page in
+   Workspace.fig (03 Colour system, 04 Typography, 12 Spacing shape elevation,
+   14 Status and priority semantics). Every token below is semantic: components
+   reference these names and never paste a raw hex value.
+
+   Brand exception: the design source marks its navy (#0E2A47) and bronze
+   (#B7791F) as provisional and instructs the reader to swap in the official
+   brand values. WorkSpace ships #0B0B45 and #C49A6C, so the navy and bronze
+   ramps below are re-derived on those official hues using the design's own
+   lightness ladder rather than copied from the design's different hues.
+   ============================================================================= */
+:root {
+  /* Brand - WorkSpace navy. Holds every interactive state. */
+  --brand-navy: #0B0B45;
+  --brand-navy-dark: #080831;
+  --brand-navy-hover: #101065;
+  --brand-navy-active: #090939;
+  --brand-navy-tint: #EAEAF6;
+  --brand-navy-focus: #2E2EB8;
+  --brand-navy-disabled: #A9A9C6;
+  --brand-navy-foreground: #FFFFFF;
+
+  /* Brand - WorkSpace bronze. A supporting accent only: onboarding highlights,
+     comparison series and warm emphasis. Never a primary action, a navigation
+     state or a status colour. */
+  --brand-bronze: #C49A6C;
+  --brand-bronze-hover: #7C5831;
+  --brand-bronze-active: #664829;
+  --brand-bronze-muted: #D3B492;
+  --brand-bronze-soft: #F1E6DA;
+  --brand-bronze-text: #593E22;
+
+  /* Neutral - surfaces, text and borders. */
+  --neutral-background: #F9FAFB;
+  --neutral-surface: #FFFFFF;
+  --neutral-surface-hover: #F3F4F6;
+  --neutral-border: #E5E7EB;
+  --neutral-border-strong: #D1D5DC;
+  --neutral-text-primary: #101828;
+  --neutral-text-secondary: #4A5565;
+  --neutral-text-muted: #6A7282;
+
+  /* Semantic - always paired with an icon or a word, never colour alone. */
+  --semantic-success: #007A55;
+  --semantic-success-bg: #ECFDF5;
+  --semantic-warning: #FF6900;
+  --semantic-warning-bg: #FFF7ED;
+  --semantic-error: #C70036;
+  --semantic-error-bg: #FFF1F2;
+  --semantic-info: #2563EB;
+  --semantic-info-bg: var(--brand-navy-tint);
+
+  /* Data visualisation sequence. Ordered; series-1 is the primary series. */
+  --chart-series-1: var(--brand-navy);
+  --chart-series-2: #2E6FB7;
+  --chart-series-3: #7FB2DE;
+  --chart-comparison: #94A3B8;
+  --chart-completed: var(--semantic-success);
+  --chart-in-progress: #E0A33D;
+  --chart-delayed: var(--semantic-error);
+
+  /* Task status pairs. Fixed foreground on background, per foundations 14.
+     Navy is never a status - it means the user can act. */
+  --status-todo-fg: #4A5565;
+  --status-todo-bg: #F3F4F6;
+  --status-progress-fg: #1C398E;
+  --status-progress-bg: #DBEAFE;
+  --status-review-fg: #7E2A0C;
+  --status-review-bg: #FFF7ED;
+  --status-blocked-fg: #A50036;
+  --status-blocked-bg: #FFF1F2;
+  --status-hold-fg: #854D0E;
+  --status-hold-bg: #FEF9C3;
+  --status-cancelled-fg: #6A7282;
+  --status-cancelled-bg: #F3F4F6;
+  --status-done-fg: #006045;
+  --status-done-bg: #ECFDF5;
+
+  /* Priority pairs. */
+  --priority-low-fg: #4A5565;
+  --priority-low-bg: #F3F4F6;
+  --priority-medium-fg: #1C398E;
+  --priority-medium-bg: #DBEAFE;
+  --priority-high-fg: #854D0E;
+  --priority-high-bg: #FEF9C3;
+  --priority-urgent-fg: #A50036;
+  --priority-urgent-bg: #FFF1F2;
+
+  /* Elevation. Level 0 is flat (border only), level 1 is the only shadow on a
+     surface, level 2 is for floating layers, level 3 is the modal scrim pair. */
+  --elevation-flat: none;
+  --elevation-card: 0 1 2 0 rgb(0 0 0 / 0.03);
+  --elevation-floating: 0 4 10 rgb(0 0 0 / 0.05);
+  --elevation-modal: 0 12 40px -12px rgb(0 0 0 / 0.18);
+}
+
+/* Type scale - foundations 04. Sizes are provisional relative to the font
+   family, which remains an alias slot pending the licensed WorkSpace font.
+
+   These blocks are "static" so Tailwind emits every variable even before a
+   utility consumes it. Without that, Tailwind tree-shakes unused theme
+   variables and a hand-written `var(--radius-control)` in this stylesheet
+   resolves to nothing. */
+@theme static {
+  --text-display: 40px;
+  --text-display--line-height: 44px;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.8px;
+  --text-page-heading: 30px;
+  --text-page-heading--line-height: 36px;
+  --text-page-heading--font-weight: 700;
+  --text-page-heading--letter-spacing: -0.4px;
+  --text-section-heading: 24px;
+  --text-section-heading--line-height: 32px;
+  --text-section-heading--font-weight: 600;
+  --text-card-heading: 20px;
+  --text-card-heading--line-height: 28px;
+  --text-card-heading--font-weight: 600;
+  --text-subheading: 16px;
+  --text-subheading--line-height: 24px;
+  --text-subheading--font-weight: 600;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-body--font-weight: 400;
+  --text-body-small: 14px;
+  --text-body-small--line-height: 20px;
+  --text-body-small--font-weight: 400;
+  --text-label: 14px;
+  --text-label--line-height: 20px;
+  --text-label--font-weight: 500;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 400;
+  --text-overline: 11px;
+  --text-overline--line-height: 16px;
+  --text-overline--font-weight: 600;
+  --text-overline--letter-spacing: 1.6px;
+  --text-metric: 32px;
+  --text-metric--line-height: 36px;
+  --text-metric--font-weight: 700;
+
+  /* Spacing scale - a 4px base unit. No arbitrary numbers. */
+  --spacing-icon-gap: 4px;
+  --spacing-chip-pad: 8px;
+  --spacing-label-gap: 12px;
+  --spacing-header-gap: 16px;
+  --spacing-card-pad: 24px;
+  --spacing-page-pad: 32px;
+  --spacing-section: 48px;
+  --spacing-hero: 64px;
+
+  /* Corner radius ladder. Inner radius = outer radius - inset, so a 12px card
+     with a 16px inset takes an 8px inner radius rather than the same 12px. */
+  --radius-chip: 4px;
+  --radius-badge: 6px;
+  --radius-icon: 8px;
+  --radius-control: 12px;
+  --radius-container: 16px;
+}
+
 /* Light values: shared WorkSpace tokens for the shadcn primitives. */
 :root {
   --sc-background: #FFFFFF;
