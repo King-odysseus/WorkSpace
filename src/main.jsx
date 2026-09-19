@@ -5283,6 +5283,33 @@ function WorkspaceView({
     const memberName = (member) =>
       [member.first_name, member.last_name].filter(Boolean).join(" ") ||
       member.email;
+    const reportProjectRows = report.progress_by_project.slice(0, 6);
+    const reportStatusColors = {
+      todo: "#2563eb",
+      in_progress: "#0e2a47",
+      review: "#ff6900",
+      blocked: "#c70036",
+      on_hold: "#f59e0b",
+      cancelled: "#94a3b8",
+      done: "#007a55",
+    };
+    const reportStatusEntries = Object.entries(report.status_counts).filter(
+      ([, count]) => count > 0,
+    );
+    const reportStatusTotal = reportStatusEntries.reduce(
+      (total, [, count]) => total + count,
+      0,
+    );
+    let reportDonutOffset = 0;
+    const reportDonutGradient = reportStatusTotal
+      ? `conic-gradient(${reportStatusEntries
+          .map(([key, count]) => {
+            const start = reportDonutOffset;
+            reportDonutOffset += (count / reportStatusTotal) * 100;
+            return `${reportStatusColors[key] || "#94a3b8"} ${start}% ${reportDonutOffset}%`;
+          })
+          .join(", ")})`
+      : "conic-gradient(#e2e8f0 0 100%)";
     return (
       <section className="workspace-view" aria-busy={reportDetailLoading}>
         <WorkspaceViewHeading title="Reports" subtitle={subtitle} />
@@ -5369,6 +5396,73 @@ function WorkspaceView({
             <em>
               {report.check_ins_today} of {report.members} members
             </em>
+          </Card>
+        </div>
+        <div className="report-p5-grid">
+          <Card className="report-panel report-projects-panel">
+            <div className="drawer-section-heading">
+              <h3>Projects</h3>
+              <span>{reportProjectRows.length} tracked</span>
+            </div>
+            {reportProjectRows.length ? (
+              <div className="report-project-table" role="table" aria-label="Project progress">
+                <div className="report-project-row report-project-header" role="row">
+                  <span role="columnheader">Project</span>
+                  <span role="columnheader">Owner</span>
+                  <span role="columnheader">Progress</span>
+                  <span role="columnheader">Status</span>
+                </div>
+                {reportProjectRows.map((project) => (
+                  <div className="report-project-row" role="row" key={project.name}>
+                    <strong role="cell">{project.name}</strong>
+                    <span role="cell">{project.owner_name || "Unassigned"}</span>
+                    <span role="cell" className="report-project-progress">
+                      <i style={{ width: `${project.completion_rate || 0}%` }} />
+                      {project.completion_rate || 0}%
+                    </span>
+                    <span role="cell" className="report-project-status">{project.total ? `${project.completed || 0}/${project.total}` : "No tasks"}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState text="No project progress is available for this report." />
+            )}
+          </Card>
+          <Card className="report-panel report-bar-chart-panel">
+            <div className="drawer-section-heading">
+              <h3>Task trend</h3>
+              <span>{reportPeriodLabel}</span>
+            </div>
+            <div className="report-chart-bars" aria-label="Task status comparison">
+              {Object.entries(statusLabels).slice(0, 5).map(([key, label]) => {
+                const count = report.status_counts[key] || 0;
+                const max = Math.max(...Object.values(report.status_counts), 1);
+                return <div className="report-chart-bar" key={key} title={`${label}: ${count}`}><span>{label}</span><i style={{ height: `${Math.max((count / max) * 100, count ? 12 : 4)}%`, background: reportStatusColors[key] }} /><strong>{count}</strong></div>;
+              })}
+            </div>
+          </Card>
+          <Card className="report-panel report-donut-panel">
+            <div className="drawer-section-heading">
+              <h3>Task mix</h3>
+              <span>{reportStatusTotal} tasks</span>
+            </div>
+            <div className="report-donut-wrap">
+              <div className="report-donut" style={{ background: reportDonutGradient }} aria-label="Task mix chart"><span>{report.completion_rate}%<small>complete</small></span></div>
+              <div className="report-donut-legend">
+                {reportStatusEntries.slice(0, 5).map(([key, count]) => <div key={key}><i style={{ background: reportStatusColors[key] || "#94a3b8" }} /><span>{statusLabels[key] || key}</span><strong>{reportStatusTotal ? Math.round((count / reportStatusTotal) * 100) : 0}%</strong></div>)}
+              </div>
+            </div>
+          </Card>
+          <Card className="report-panel report-blockers-panel">
+            <div className="drawer-section-heading">
+              <h3>Top blockers</h3>
+              <span>{report.blocked_tasks} open</span>
+            </div>
+            <div className="report-blocker-list">
+              <button type="button" onClick={() => openPlannerWithFilter("blocked")}><i className="report-blocker-dot is-danger" /><span><strong>Blocked tasks</strong><small>Open Planner to resolve</small></span><b>{report.blocked_tasks}</b></button>
+              <button type="button" onClick={() => openPlannerWithFilter("overdue")}><i className="report-blocker-dot is-warning" /><span><strong>Overdue delivery</strong><small>Needs attention</small></span><b>{report.overdue_tasks}</b></button>
+              <button type="button" onClick={() => openPlannerWithFilter("unassigned")}><i className="report-blocker-dot is-warning" /><span><strong>Unassigned work</strong><small>Needs an owner</small></span><b>{report.unassigned_tasks}</b></button>
+            </div>
           </Card>
         </div>
         <div className="report-grid">
