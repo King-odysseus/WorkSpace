@@ -7191,6 +7191,50 @@ html[data-theme='dark'] .planner-bucket-menu {
 .workspace-view.projects-view .project-grid.is-list { grid-template-columns: 1fr; }
 .workspace-view.projects-view .project-grid.is-list .project-card { min-height: 220px; }
 
+/* Open Pencil P29 project overview. Keep the project actions/data model from
+   the existing detail view while presenting the designed two-column surface. */
+.workspace-view.project-detail-view { gap: 0; }
+.project-detail-view .project-back-button { margin-bottom: 12px; }
+.project-detail-tabs { display: flex; align-items: center; gap: 4px; margin-top: 18px; padding-bottom: 0; border-bottom: 1px solid var(--workspace-border); }
+.project-detail-tabs button { min-height: 44px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--workspace-text-soft); font: 500 13px 'Roboto'; cursor: pointer; }
+.project-detail-tabs button.active { border-bottom-color: var(--brand-navy, #0B0B45); color: var(--workspace-text); font-weight: 700; }
+.project-detail-overview { display: grid; grid-template-columns: minmax(0, 712px) minmax(320px, 376px); gap: 24px; margin-top: 24px; align-items: start; }
+.project-detail-main-column, .project-detail-side-column { display: grid; min-width: 0; gap: 16px; align-content: start; }
+.project-detail-card { min-width: 0; border: 1px solid var(--workspace-border); border-radius: 12px; padding: 20px; background: var(--workspace-surface); box-shadow: none; }
+.project-detail-card-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.project-detail-card-heading .eyebrow { margin: 0 0 5px; }
+.project-detail-card-heading h2 { margin: 0; color: var(--workspace-text); font: 600 16px/1.25 'Montserrat', sans-serif; }
+.project-detail-card-heading > strong { color: var(--workspace-text); font: 700 30px/1 'Montserrat', sans-serif; }
+.project-detail-card-note { color: var(--workspace-text-soft); font-size: 12px; }
+.project-detail-progress-card { min-height: 164px; }
+.project-detail-progress-track { height: 10px; margin-top: 28px; overflow: hidden; border-radius: 999px; background: var(--workspace-border); }
+.project-detail-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--brand-navy, #0B0B45); }
+.project-detail-stat-line { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; color: var(--workspace-text-soft); font-size: 12px; }
+.project-detail-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.project-detail-stat-grid > div { display: grid; gap: 5px; min-height: 64px; padding: 12px; border-radius: 8px; background: var(--workspace-surface-soft); }
+.project-detail-stat-grid strong { color: var(--workspace-text); font: 700 22px/1 'Montserrat', sans-serif; }
+.project-detail-stat-grid strong.is-danger { color: var(--color-danger, #B42318); }
+.project-detail-stat-grid strong.is-warning { color: var(--color-warning, #C2410C); }
+.project-detail-stat-grid span { color: var(--workspace-text-soft); font-size: 11px; }
+.project-detail-list { display: grid; gap: 8px; margin-top: 18px; }
+.project-detail-list button { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 36px; border: 0; background: transparent; color: var(--workspace-text); text-align: left; cursor: pointer; }
+.project-detail-list button > span:first-child { width: 8px; height: 8px; border-radius: 50%; background: var(--workspace-text-muted); }
+.project-detail-list button > span.is-danger { background: var(--color-danger, #B42318); }
+.project-detail-list button > span.is-warning { background: var(--color-warning, #C2410C); }
+.project-detail-list small { color: var(--workspace-text-soft); font-size: 11px; }
+.project-detail-empty { margin: 18px 0 0; color: var(--workspace-text-soft); font-size: 12px; }
+.project-detail-side-column .project-detail-links { grid-template-columns: 1fr; gap: 0; margin: 0; }
+.project-detail-side-column .project-detail-links button { min-height: 74px; border-radius: 12px; padding: 16px 20px; box-shadow: none; }
+.project-detail-side-column .project-detail-links button + button { border-top: 0; border-radius: 0; }
+.project-detail-meta-row { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; color: var(--workspace-text-soft); font-size: 12px; }
+.project-detail-meta-row svg { flex: 0 0 auto; color: var(--brand-navy, #0B0B45); }
+.project-detail-quick-actions { display: grid; gap: 8px; }
+.project-detail-quick-actions .project-detail-card-heading { margin-bottom: 4px; }
+.project-detail-quick-actions > button { display: flex; min-height: 40px; align-items: center; gap: 9px; border: 1px solid var(--workspace-border); border-radius: 8px; padding: 0 12px; background: var(--workspace-surface); color: var(--workspace-text); text-align: left; font-size: 12px; cursor: pointer; }
+.project-detail-quick-actions > button:hover { border-color: var(--brand-navy, #0B0B45); }
+@media (max-width: 1100px) { .project-detail-overview { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .project-detail-tabs { overflow-x: auto; } .project-detail-tabs button { flex: 0 0 auto; padding-inline: 11px; } .project-detail-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-stat-line { flex-direction: column; gap: 4px; } }
+
 .workspace-view.projects-view .project-task-stats {
   gap: 5px;
   margin-top: 9px;

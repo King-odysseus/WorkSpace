@@ -6990,6 +6990,13 @@ function WorkspaceView({
       budgeted: withStats.filter((project) => project.budget_amount !== null && project.budget_amount !== undefined).length,
     };
     if (selectedProjectWorkspace) {
+      const projectTasks = tasks.filter((task) => String(task.project_id || "") === String(selectedProjectWorkspace.id));
+      const projectCompleted = projectTasks.filter((task) => task.status === "done").length;
+      const projectBlocked = projectTasks.filter((task) => task.status === "blocked").length;
+      const projectOverdue = projectTasks.filter((task) => task.status !== "done" && task.due_date && task.due_date < today).length;
+      const projectOpen = projectTasks.filter((task) => task.status !== "done").length;
+      const projectProgress = projectTasks.length ? Math.round((projectCompleted / projectTasks.length) * 100) : 0;
+      const projectDeadline = selectedProjectWorkspace.due_date ? formatDay(selectedProjectWorkspace.due_date) : "No deadline set";
       const openOperation = (operation) => {
         setProjectOperation(operation);
         window.history.replaceState(
@@ -7037,27 +7044,38 @@ function WorkspaceView({
           />
           {!projectOperation && (
             <>
-              <div className="project-detail-links">
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent("planner:project", {
-                        detail: String(selectedProjectWorkspace.id),
-                      }),
-                    );
-                    onNavigate("Planner");
-                  }}
-                >
-                  <strong>Planner</strong>
-                  <span>Open tasks for this project</span>
-                </button>
+              <div className="project-detail-tabs" role="tablist" aria-label="Project sections">
+                <button type="button" className="active" role="tab" aria-selected="true">Overview</button>
+                <button type="button" role="tab" onClick={() => {
+                  window.dispatchEvent(new CustomEvent("planner:project", { detail: String(selectedProjectWorkspace.id) }));
+                  onNavigate("Planner");
+                }}>Tasks</button>
+                <button type="button" role="tab" onClick={() => openOperation("risks")}>Risks</button>
+                <button type="button" role="tab" onClick={() => openOperation("resources")}>Resources</button>
+                <button type="button" role="tab" onClick={() => openOperation("budget")}>Budget</button>
               </div>
-              <ProjectOperationsSummary
-                project={selectedProjectWorkspace}
-                workspaceId={workspaceId}
-                onOpen={openOperation}
-              />
+              <div className="project-detail-overview">
+                <div className="project-detail-main-column">
+                  <section className="project-detail-card project-detail-progress-card">
+                    <div className="project-detail-card-heading"><div><p className="eyebrow">Delivery overview</p><h2>Progress summary</h2></div><strong>{projectProgress}%</strong></div>
+                    <div className="project-detail-progress-track"><span style={{ width: `${projectProgress}%` }} /></div>
+                    <div className="project-detail-stat-line"><span>{projectCompleted} of {projectTasks.length} tasks complete</span><span>{projectOpen} open</span></div>
+                  </section>
+                  <section className="project-detail-card">
+                    <div className="project-detail-card-heading"><div><p className="eyebrow">Workload</p><h2>Task totals</h2></div><button type="button" className="text-button" onClick={() => onNavigate("Planner")}>Open Planner</button></div>
+                    <div className="project-detail-stat-grid"><div><strong>{projectTasks.length}</strong><span>Total tasks</span></div><div><strong>{projectCompleted}</strong><span>Completed</span></div><div><strong className={projectBlocked ? "is-danger" : ""}>{projectBlocked}</strong><span>Blocked</span></div><div><strong className={projectOverdue ? "is-warning" : ""}>{projectOverdue}</strong><span>Overdue</span></div></div>
+                  </section>
+                  <section className="project-detail-card">
+                    <div className="project-detail-card-heading"><div><p className="eyebrow">Attention</p><h2>Current blockers</h2></div><span className="project-detail-card-note">{projectBlocked + projectOverdue} open</span></div>
+                    {projectBlocked || projectOverdue ? <div className="project-detail-list">{projectTasks.filter((task) => task.status === "blocked" || (task.status !== "done" && task.due_date && task.due_date < today)).slice(0, 4).map((task) => <button type="button" key={task.id} onClick={() => onOpenTask(task)}><span className={task.status === "blocked" ? "is-danger" : "is-warning"} /><span>{task.title}</span><small>{task.status === "blocked" ? "Blocked" : "Overdue"}</small></button>)}</div> : <p className="project-detail-empty">No blockers or overdue tasks in this project.</p>}
+                  </section>
+                </div>
+                <aside className="project-detail-side-column">
+                  <ProjectOperationsSummary project={selectedProjectWorkspace} workspaceId={workspaceId} onOpen={openOperation} />
+                  <section className="project-detail-card"><div className="project-detail-card-heading"><div><p className="eyebrow">Delivery</p><h2>Delivery summary</h2></div></div><p className="project-detail-meta-row"><CalendarDays size={16} />{projectDeadline}</p><p className="project-detail-meta-row"><Users size={16} />{selectedProjectWorkspace.member_count || 0} members assigned</p><p className="project-detail-meta-row"><RefreshCw size={16} />Updated {formatRelativeActivityTime(selectedProjectWorkspace.updated_at)}</p></section>
+                  <section className="project-detail-card project-detail-quick-actions"><div className="project-detail-card-heading"><div><p className="eyebrow">Next step</p><h2>Quick actions</h2></div></div><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent("planner:project", { detail: String(selectedProjectWorkspace.id) })); onNavigate("Planner"); }}><LayoutGrid size={16} />Open project tasks</button><button type="button" onClick={() => openOperation("risks")}><AlertCircle size={16} />Review risks</button></section>
+                </aside>
+              </div>
             </>
           )}
           {projectOperation === "risks" && (
