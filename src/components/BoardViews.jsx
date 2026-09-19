@@ -4255,7 +4255,7 @@ function TodayDashboard({
         ))}
       </section>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
+      <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
         <div className="grid content-start gap-8">
           <section data-panel="tasks">
             <div className="flex items-center justify-between gap-3">
