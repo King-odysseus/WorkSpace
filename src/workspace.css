@@ -96,6 +96,41 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
    those ties and stamped a 40px field onto every one of them. */
 [data-slot='select-trigger'].app-select-trigger { min-height:40px; max-width:100%; border-radius:999px; padding:9px 12px; font-size:13px; background:var(--workspace-surface); color:var(--workspace-text); }
 [data-slot='select-trigger'].app-select-trigger [data-slot='select-value'] { min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Toolbar chip: the square-cornered control the rebuilt page toolbars use for
+   a scope or a sort. Same 42px height and 12px radius as the buttons and the
+   search field beside it - the base rule above rounds selects into pills, which
+   is the shape the old toolbars wanted and this one does not. */
+[data-slot='select-trigger'].app-select-trigger.chip-select { min-height:42px; border-radius:var(--radius-control); border:1px solid var(--color-border); padding:0 12px; font-size:14px; font-weight:400; background:var(--color-card); color:var(--color-text-primary); }
+/* The sort chip says "Sort" and nothing else, so the caret would only make it
+   wider without saying anything the label does not. */
+[data-slot='select-trigger'].app-select-trigger.chip-select-plain > svg { display:none; }
+
+/* Status chip in a rebuilt task row. The design's Status component is a fixed
+   96x24 mark, so every row's chip lands on the same column edge; the chevron
+   goes because the chip is the control, not a field with a caret. */
+[data-slot='select-trigger'].app-select-trigger.task-status-pill { width:96px; min-height:24px; height:24px; justify-content:center; gap:0; border:0; border-radius:var(--radius-badge); padding:0 8px; font-size:12px; font-weight:500; box-shadow:none; background:var(--status-bg); color:var(--status-color); }
+[data-slot='select-trigger'].app-select-trigger.task-status-pill [data-slot='select-value'] { flex:0 1 auto; }
+[data-slot='select-trigger'].app-select-trigger.task-status-pill > svg { display:none; }
+/* The status arrives as a class name, so "in progress" lands as two classes -
+   the same shape .task-status above already reads. */
+.task-status-pill { --status-color: var(--status-todo-fg); --status-bg: var(--status-todo-bg); }
+.task-status-pill.in.progress { --status-color: var(--status-progress-fg); --status-bg: var(--status-progress-bg); }
+.task-status-pill.review { --status-color: var(--status-review-fg); --status-bg: var(--status-review-bg); }
+.task-status-pill.blocked { --status-color: var(--status-blocked-fg); --status-bg: var(--status-blocked-bg); }
+.task-status-pill.on_hold { --status-color: var(--status-hold-fg); --status-bg: var(--status-hold-bg); }
+.task-status-pill.cancelled { --status-color: var(--status-cancelled-fg); --status-bg: var(--status-cancelled-bg); }
+.task-status-pill.done { --status-color: var(--status-done-fg); --status-bg: var(--status-done-bg); }
+/* The task row's assignee circle is 28px, between the avatar's two existing
+   sizes, so it gets a modifier of its own. It has to live here rather than as
+   a utility on the element: this stylesheet is unlayered, so its rules beat
+   Tailwind's layered ones no matter how specific the utility is. */
+.avatar.row-avatar { height: 28px; width: 28px; font-size: 9px; }
+/* The task row's assignee circle is 28px, between the avatar's two existing
+   sizes, so it gets a modifier of its own. It has to live here rather than as
+   a utility on the element: this stylesheet is unlayered, so its rules beat
+   Tailwind's layered ones no matter how specific the utility is. */
+.avatar.row-avatar { height: 28px; width: 28px; font-size: 9px; }
 .modal input { border: 1px solid #dce2e9; border-radius: 7px; padding: 11px; color: #263248; background: #fff; font: 500 12px 'Roboto'; outline: none; }
 .modal input:focus, .modal [data-slot='select-trigger']:focus { border-color: #4d7da8; box-shadow: 0 0 0 3px #0b1f3a12; }
 .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -4541,6 +4576,9 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --neutral-text-primary: #101828;
   --neutral-text-secondary: #4A5565;
   --neutral-text-muted: #6A7282;
+  /* A fourth step below muted, for metadata that should recede further than
+     the label above it: the squad and timestamp under a completed task. */
+  --neutral-text-subtle: #99A1AF;
   /* The surface behind the active navigation item. A pale navy, one step
      stronger than the hover grey, so a selected row reads as chosen rather
      than merely pointed at. */
@@ -4611,6 +4649,18 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --status-done-fg: #006045;
   --status-done-bg: #ECFDF5;
 
+  /* Task status marks. The By-status breakdown paints its dots and its bars
+     from a ramp of its own rather than the pill foregrounds above: those are
+     darkened to stay legible as 12px text on a tinted pill, and at 8px on
+     white they read as mud. These are the design's chart tones. */
+  --status-todo-mark: #6A7282;
+  --status-progress-mark: #1447E6;
+  --status-review-mark: #FF6900;
+  --status-blocked-mark: #C70036;
+  --status-hold-mark: #CA8A04;
+  --status-cancelled-mark: #D1D5DB;
+  --status-done-mark: #007A55;
+
   /* Priority pairs. */
   --priority-low-fg: #4A5565;
   --priority-low-bg: #F3F4F6;
@@ -4659,8 +4709,11 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --text-section-heading: 24px;
   --text-section-heading--line-height: 32px;
   --text-section-heading--font-weight: 600;
-  --text-card-heading: 20px;
-  --text-card-heading--line-height: 28px;
+  /* 18px, not 20: a census of the design's own text nodes across the rebuilt
+     pages turns up no 20px run at all, while the heading above a card's body
+     is 18/600 with a 22px box. */
+  --text-card-heading: 18px;
+  --text-card-heading--line-height: 22px;
   --text-card-heading--font-weight: 600;
   --text-subheading: 16px;
   --text-subheading--line-height: 24px;
@@ -4671,6 +4724,11 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --text-body-small: 14px;
   --text-body-small--line-height: 20px;
   --text-body-small--font-weight: 400;
+  /* The design's text ramp has a 13px step the app's did not: card links,
+     completed-task titles, and the unit suffix beside a large value all sit
+     there. Weight is left to the call site. */
+  --text-body-compact: 13px;
+  --text-body-compact--line-height: 18px;
   --text-label: 14px;
   --text-label--line-height: 20px;
   --text-label--font-weight: 500;
@@ -4696,11 +4754,17 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --spacing-hero: 64px;
 
   /* Corner radius ladder. Inner radius = outer radius - inset, so a 12px card
-     with a 16px inset takes an 8px inner radius rather than the same 12px. */
+     with a 16px inset takes an 8px inner radius rather than the same 12px.
+
+     12px covers both controls and cards - the design draws a metric tile, a
+     task row and a button at the same radius - while 16px is reserved for the
+     large surfaces: dialogs, drawers, the preferences panel. Reading the two
+     as one token would over-round every card on every page. */
   --radius-chip: 4px;
   --radius-badge: 6px;
   --radius-icon: 8px;
   --radius-control: 12px;
+  --radius-card: 12px;
   --radius-container: 16px;
 }
 
@@ -4779,6 +4843,7 @@ html[data-theme='dark'] {
   --neutral-text-primary: #ECECF7;
   --neutral-text-secondary: #C2C2DC;
   --neutral-text-muted: #8C8CAE;
+  --neutral-text-subtle: #6A7282;
 
   --semantic-success: #4ADE80;
   --semantic-success-bg: #153A31;
@@ -4826,6 +4891,13 @@ html[data-theme='dark'] {
   --status-cancelled-fg: #8C8CAE;
   --status-cancelled-bg: #23233F;
   --status-done-fg: #6EE7B7;
+  --status-todo-mark: #98A2B3;
+  --status-progress-mark: #60A5FA;
+  --status-review-mark: #FB923C;
+  --status-blocked-mark: #FB7185;
+  --status-hold-mark: #FBBF24;
+  --status-cancelled-mark: #4A5565;
+  --status-done-mark: #4ADE80;
   --status-done-bg: #0E3830;
 
   --priority-low-fg: #C2C2DC;
@@ -4880,6 +4952,7 @@ html[data-theme='dark'] {
   --color-text-primary: var(--neutral-text-primary);
   --color-text-secondary: var(--neutral-text-secondary);
   --color-text-muted: var(--neutral-text-muted);
+  --color-text-subtle: var(--neutral-text-subtle);
 
   --color-border: var(--neutral-border);
   --color-border-strong: var(--neutral-border-strong);
@@ -4919,6 +4992,13 @@ html[data-theme='dark'] {
   --color-status-cancelled-bg: var(--status-cancelled-bg);
   --color-status-done: var(--status-done-fg);
   --color-status-done-bg: var(--status-done-bg);
+  --color-status-todo-mark: var(--status-todo-mark);
+  --color-status-progress-mark: var(--status-progress-mark);
+  --color-status-review-mark: var(--status-review-mark);
+  --color-status-blocked-mark: var(--status-blocked-mark);
+  --color-status-hold-mark: var(--status-hold-mark);
+  --color-status-cancelled-mark: var(--status-cancelled-mark);
+  --color-status-done-mark: var(--status-done-mark);
 
   --color-priority-low: var(--priority-low-fg);
   --color-priority-low-bg: var(--priority-low-bg);
