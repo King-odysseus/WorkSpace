@@ -81,7 +81,7 @@ const renderBoard = ({
     />,
   )
 
-it('loads Team tasks one page at a time with server summary counts', async () => {
+it('loads Team task data for the Pencil capacity screen', async () => {
   const fetchMock = mockApi({
     '/api/workspaces/5/tasks/': {
       tasks: [
@@ -122,10 +122,9 @@ it('loads Team tasks one page at a time with server summary counts', async () =>
   const [url] = expectRequest(fetchMock, '/api/workspaces/5/tasks/')
   expect(url).toContain('page_size=25')
   expect(url).toContain('summary=true')
-  expect(await screen.findByText('Blocked delivery')).toBeInTheDocument()
-  const metrics = container.querySelectorAll('.team-board-metrics button')
-  expect(metrics[0].textContent).toContain('34')
-  expect(metrics[1].textContent).toContain('3')
+  expect(container.querySelector('.pencil-team-view')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open Dana Reed profile' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Team capacity' })).toBeInTheDocument()
 })
 
 const todayPanel = name => document.querySelector(`[data-panel="${name}"]`)
@@ -345,9 +344,7 @@ it('opens the board on the tasks its tile counted, not the personal queue', () =
   expect(onOpenBoard).toHaveBeenCalledWith('due-today')
 })
 
-it('lists exactly the tasks a focus counts, including ones nobody owns', () => {
-  // The board's own Unassigned tile counted tasks no member card could ever show,
-  // because the people view lists a task only under the member who owns it.
+it('renders the Pencil capacity table from live members', () => {
   const tasks = [
     { id: 1, title: 'Late and unowned', status: 'todo', assignee_id: null, member: 'Unassigned', priority: 'high', due_date: dayOffset(-3) },
     { id: 2, title: 'Late for Dana', status: 'todo', assignee_id: 9, member: 'Dana Reed', priority: 'normal', due_date: dayOffset(-1) },
@@ -355,26 +352,17 @@ it('lists exactly the tasks a focus counts, including ones nobody owns', () => {
   ]
   renderBoard({ tasks, focus: 'overdue' })
 
-  expect(screen.getByText('Late and unowned')).toBeInTheDocument()
-  expect(screen.getByText('Late for Dana')).toBeInTheDocument()
-  expect(screen.queryByText('Someday')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open Dana Reed profile' })).toBeInTheDocument()
+  expect(screen.getAllByText('Available').length).toBeGreaterThan(0)
 })
 
-it('clears the focus when the tile that set it is pressed again', () => {
-  const onFocusChange = vi.fn()
-  const { container } = renderBoard({
-    tasks: [
-      { id: 1, title: 'Late', status: 'todo', assignee_id: null, member: 'Unassigned', priority: 'high', due_date: dayOffset(-3) },
-    ],
-    focus: 'overdue',
-    onFocusChange,
-  })
-
-  fireEvent.click(container.querySelector('.team-board-metrics button.active'))
-  expect(onFocusChange).toHaveBeenCalledWith('all')
+it('shows P9 availability filters', () => {
+  renderBoard({ tasks: [] })
+  expect(screen.getByRole('tablist', { name: 'Team capacity filters' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /At capacity/ })).toBeInTheDocument()
 })
 
-it('treats cancelled work as terminal in Team totals', () => {
+it('does not turn cancelled work into capacity allocation', () => {
   const { container } = renderBoard({
     tasks: [
       { id: 1, title: 'Open work', status: 'todo', assignee_id: 9, member: 'Dana Reed', priority: 'normal' },
@@ -382,14 +370,12 @@ it('treats cancelled work as terminal in Team totals', () => {
     ],
   })
 
-  const counts = [...container.querySelectorAll('.team-board-metrics strong')].map(
-    node => node.textContent,
-  )
-  expect(counts).toEqual(['1', '0', '0', '0'])
+  const counts = [...container.querySelectorAll('.pencil-team-task-count')].map(node => node.textContent)
+  expect(counts).toEqual(['1 tasks'])
   expect(screen.queryByText('Cancelled overdue work')).not.toBeInTheDocument()
 })
 
-it('excludes cancelled work from a member completion rate', () => {
+it('keeps the Team member profile action available', () => {
   renderBoard({
     tasks: [
       { id: 1, title: 'Finished work', status: 'done', assignee_id: 9, member: 'Dana Reed', priority: 'normal' },
@@ -397,22 +383,16 @@ it('excludes cancelled work from a member completion rate', () => {
     ],
   })
 
-  fireEvent.click(screen.getByRole('tab', { name: /Workload/ }))
-  const card = screen.getByRole('button', { name: 'Open workload for Dana Reed' })
-  expect(within(card).getByText('100%')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Open Dana Reed profile' }))
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
 })
 
-it('keeps access administration inside the admin-only Team tab', () => {
+it('keeps the admin invitation action on the Pencil Team screen', () => {
   const memberView = renderBoard({ tasks: [] })
 
-  expect(screen.getByRole('tab', { name: /Overview/ })).toBeInTheDocument()
-  expect(screen.getByRole('tab', { name: /Workload/ })).toBeInTheDocument()
-  expect(screen.getByRole('tab', { name: /Tasks/ })).toBeInTheDocument()
-  expect(screen.getByRole('tab', { name: /Availability/ })).toBeInTheDocument()
-  expect(screen.queryByRole('tab', { name: /People & access/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Invite' })).not.toBeInTheDocument()
 
   memberView.unmount()
   renderBoard({ tasks: [], canManageMembers: true })
-  fireEvent.click(screen.getByRole('tab', { name: /People & access/ }))
-  expect(screen.getByRole('heading', { name: 'People & access' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Invite' })).toBeInTheDocument()
 })

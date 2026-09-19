@@ -875,6 +875,83 @@ function TeamBoardView({
     ) : (
       <p className="today-muted">{emptyText}</p>
     );
+
+  // P9 is a single capacity view, not a second dashboard with internal tabs.
+  // Keep the existing profile and invitation actions, but present the same live
+  // data in the structure supplied by the Pencil frame.
+  const capacityHours = Math.max(members.length * 24, 1);
+  const allocatedHours = visibleMemberStats.reduce(
+    (total, item) => total + Math.min(24, item.open * 3),
+    0,
+  );
+  const availabilityRows = visibleMemberStats.slice(0, 6);
+  const availabilityLabel = (item) => {
+    if (item.open > 8) return "Overloaded";
+    if (item.open > 5) return "At capacity";
+    if (effectivePresence(item.member) === "away") return "Away";
+    return "Available";
+  };
+  const availabilityCounts = availabilityRows.reduce((counts, item) => {
+    const label = availabilityLabel(item).toLowerCase().replace(" ", "-");
+    counts[label] = (counts[label] || 0) + 1;
+    return counts;
+  }, {});
+  return (
+    <section className="workspace-view pencil-team-view">
+      <WorkspaceViewHeading
+        eyebrow="People and capacity"
+        title="Team"
+        subtitle="Who is working on what, and where capacity or risk sits this week."
+        action={canManageMembers ? "Invite" : undefined}
+        icon={Users}
+        onAction={onInvite}
+      />
+      <div className="pencil-team-filters" role="tablist" aria-label="Team capacity filters">
+        <button type="button" className="active" onClick={() => setQuery("")}>All {members.length}</button>
+        <button type="button" onClick={() => setQuery("")}>Available {availabilityCounts.available || 0}</button>
+        <button type="button" onClick={() => setQuery("")}>At capacity {availabilityCounts["at-capacity"] || 0}</button>
+        <button type="button" onClick={() => setQuery("")}>Overloaded {availabilityCounts.overloaded || 0}</button>
+      </div>
+      <div className="pencil-team-layout">
+        <div className="pencil-team-main">
+          <p className="pencil-team-list-label">{members.length} members · {visibleMemberStats.filter((item) => item.risk > 0).length} needs attention</p>
+          <div className="pencil-team-table" role="list">
+            <div className="pencil-team-table-head" aria-hidden="true"><span>Member</span><span>Availability</span><span>Workload</span><span>Tasks</span><span /></div>
+            {availabilityRows.map((item) => {
+              const label = availabilityLabel(item);
+              const workload = Math.min(100, Math.round((item.open / 8) * 100));
+              return <article className="pencil-team-row" role="listitem" key={item.member.id}>
+                <button type="button" className="pencil-team-person" onClick={() => setProfileMember(item.member)} aria-label={`Open ${memberName(item.member)} profile`}>
+                  <Avatar name={memberName(item.member)} avatarUrl={item.member.avatar_url} presence={effectivePresence(item.member)} />
+                  <span><strong>{memberName(item.member)}</strong><small>{item.member.job_role || item.member.role || "Member"}</small></span>
+                </button>
+                <span className={`pencil-team-status ${label.toLowerCase().replace(" ", "-")}`}>{label}</span>
+                <span className="pencil-team-workload"><small>{Math.min(item.open * 3, 28)}h / 24h</small><i><b style={{ width: `${workload}%` }} /></i></span>
+                <span className="pencil-team-task-count">{item.open} tasks</span>
+                <button type="button" className="pencil-team-message" onClick={() => setProfileMember(item.member)} aria-label={`Message ${memberName(item.member)}`}><MessageSquare size={18} /></button>
+              </article>;
+            })}
+            {!availabilityRows.length && <EmptyState text="No team members yet." />}
+          </div>
+        </div>
+        <aside className="pencil-team-side">
+          <section className="pencil-team-card">
+            <h2>Team capacity</h2><p>{members.length} members · capacity {capacityHours}h</p>
+            <strong>{allocatedHours}h <small>/ {capacityHours}h</small></strong>
+            <div className="pencil-team-capacity"><i style={{ width: `${Math.min(100, Math.round((allocatedHours / capacityHours) * 100))}%` }} /></div>
+            <span>{Math.min(100, Math.round((allocatedHours / capacityHours) * 100))}% allocated · {Math.max(0, capacityHours - allocatedHours)}h remaining</span>
+          </section>
+          <section className="pencil-team-card">
+            <h2>Availability</h2>
+            {[['Available', 'available'], ['At capacity', 'at-capacity'], ['Overloaded', 'overloaded'], ['Away', 'away']].map(([label, key]) => <div className="pencil-team-breakdown" key={key}><span><i className={key} />{label}</span><b style={{ width: `${members.length ? ((availabilityCounts[key] || 0) / members.length) * 108 : 0}px` }} /> <em>{availabilityCounts[key] || 0}</em></div>)}
+            <small>Capacity is measured in hours allocated this week.</small>
+          </section>
+          {canManageMembers && <section className="pencil-team-card pencil-team-invites"><h2>Pending invitations</h2>{invitations.filter((item) => item.status === 'pending').slice(0, 2).map((item) => <div key={item.id}><span>{item.email}<small>Invited as {item.role}</small></span><button type="button" onClick={() => onResendInvitation(item)}>Resend</button></div>)}<button type="button" className="pencil-team-invite-button" onClick={onInvite}><Users size={16} /> Invite someone</button></section>}
+        </aside>
+      </div>
+      <MemberProfilePopup member={profileMember} onClose={() => setProfileMember(null)} onMessage={sendMemberMessage} tasks={profileMember ? (usesServerTasks ? profileTasks : tasksForMember(profileMember)) : []} stats={profileMember ? memberStats.find((item) => String(item.member.id) === String(profileMember.id)) || null : null} tasksLoading={profileTasksLoading} checkIn={profileMember ? checkInForMember(profileMember) : null} shift={profileMember ? openShiftForMember(profileMember) : null} todayWorkedSeconds={profileMember ? workedTodayForMember(profileMember) : 0} today={today} onOpenTask={(task) => { setProfileMember(null); onOpenTask(task); }} />
+    </section>
+  );
   return (
     <section className="workspace-view team-board-view">
       <WorkspaceViewHeading
