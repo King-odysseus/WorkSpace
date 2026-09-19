@@ -89,7 +89,9 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   const nav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   const tabs = [...nav.children]
 
-  expect(nav.className).toContain('border-t')
+  expect(nav.className).toContain('bottom-4')
+  expect(nav.className).toContain('rounded-[32px]')
+  expect(nav.className).toContain('bg-navy')
   expect(tabs).toHaveLength(5)
   expect(tabs.every(tab => tab.className.includes('flex-1'))).toBe(true)
   expect(tabs[0]).toHaveTextContent('Today')

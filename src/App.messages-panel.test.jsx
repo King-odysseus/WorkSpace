@@ -101,7 +101,7 @@ it('reports real unread totals and opens the messages panel from either end of t
   fireEvent.click(messageButton)
   const panelUnderHeader = (await screen.findByRole('button', { name: /^Open Chats/ })).parentElement.parentElement
   expect(panelUnderHeader.className).toContain('sm:top-full')
-  expect(panelUnderHeader.className).not.toContain('bottom-[72px]')
+  expect(panelUnderHeader.className).not.toContain('bottom-[88px]')
   expect(header.contains(panelUnderHeader)).toBe(true)
   // The panel's own count has to come from the same totals as the badge. Read
   // off the page it would say 3, because only 3 conversation rows fit in the
@@ -119,7 +119,7 @@ it('reports real unread totals and opens the messages panel from either end of t
   // and drag the panel up to the top of the screen.
   fireEvent.click(chatsTab)
   const panelAboveNav = (await screen.findByRole('button', { name: /^Open Chats/ })).parentElement.parentElement
-  expect(panelAboveNav.className).toContain('bottom-[72px]')
+  expect(panelAboveNav.className).toContain('bottom-[88px]')
   expect(panelAboveNav.className).not.toContain('top-16')
   expect(panelAboveNav.className).not.toContain('sm:top-full')
   expect(header.contains(panelAboveNav)).toBe(false)

@@ -114,6 +114,32 @@ aside[class*='bg-navy'] nav button[aria-current='page'] svg { color: #F4E1BA !im
 aside[class*='bg-navy'] > div:last-child { padding: 12px 16px !important; }
 aside[class*='bg-navy'] > div:last-child .text-text-primary { color: #fff !important; }
 aside[class*='bg-navy'] > div:last-child .text-text-muted { color: #93B4D4 !important; }
+.sidebar-expand-flyout {
+  position: absolute;
+  z-index: 60;
+  top: 18px;
+  left: 100%;
+  display: grid;
+  width: 28px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid var(--pencil-border);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: #fff;
+  color: var(--pencil-navy);
+  box-shadow: 0 6px 16px rgb(16 24 40 / 10%);
+  transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+.sidebar-expand-flyout:hover {
+  background: #EFF6FF;
+  color: var(--pencil-navy-hover);
+  transform: translateX(1px);
+}
+.sidebar-expand-flyout:focus-visible {
+  outline: 2px solid rgb(20 71 230 / 28%);
+  outline-offset: 2px;
+}
 /* P1 desktop header controls. */
 button[aria-label='Open Zuri'] { height: 36px !important; border: 1px solid #BFDBFE !important; border-radius: 10px !important; background: #EFF6FF !important; color: #1447E6 !important; box-shadow: none !important; }
 button[aria-label='Open Zuri']:hover { background: #DBEAFE !important; }

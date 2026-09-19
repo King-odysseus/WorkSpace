@@ -2254,10 +2254,10 @@ function App() {
         onClick={onSelect || (() => setActive(label))}
         aria-current={isItemActive ? "page" : undefined}
         className={cn(
-          "flex h-full min-w-0 flex-1 flex-col items-center gap-1 pt-3 transition-colors",
+          "flex h-full min-w-0 max-w-[66px] flex-1 flex-col items-center gap-1 pt-3.5 font-medium transition-colors",
           isItemActive
-            ? "font-semibold text-primary"
-            : "font-medium text-text-muted hover:text-text-primary",
+            ? "text-[#F4E1BA]"
+            : "text-[#93B4D4] hover:text-white",
         )}
       >
         <Icon size={20} className="shrink-0" aria-hidden="true" />
@@ -2786,6 +2786,18 @@ function App() {
             )}
           </div>
         </div>
+
+        {railCollapsed && (
+          <button
+            type="button"
+            className="sidebar-expand-flyout"
+            onClick={() => setSidebarCollapsed(false)}
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+          >
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        )}
       </aside>
 
       {/* ── Main ── */}
@@ -3367,7 +3379,7 @@ function App() {
       <nav
         ref={mobileNavRef}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-surface transition-opacity duration-200 lg:hidden",
+          "fixed inset-x-5 bottom-4 z-30 flex h-16 items-center justify-center rounded-[32px] bg-navy shadow-[0_4px_12px_rgba(0,0,0,0.12)] transition-opacity duration-200 lg:hidden",
           mobileOpen && "pointer-events-none opacity-0",
         )}
         aria-label="Primary"
@@ -3378,7 +3390,7 @@ function App() {
           onClick={() => setMobileOpen(true)}
           aria-expanded={mobileOpen}
           aria-haspopup="menu"
-          className="flex h-full min-w-0 flex-1 flex-col items-center gap-1 pt-3 font-medium text-text-muted transition-colors hover:text-text-primary"
+          className="flex h-full min-w-0 max-w-[66px] flex-1 flex-col items-center gap-1 pt-3.5 font-medium text-[#93B4D4] transition-colors hover:text-white"
         >
           <Menu size={20} className="shrink-0" aria-hidden="true" />
           <span className="max-w-full truncate text-[10px] leading-none">
@@ -3393,7 +3405,7 @@ function App() {
       {messagesOpen &&
         messagesOrigin === "nav" &&
         <div ref={messagesNavPanelRef}>
-          {renderMessagesPanel("fixed bottom-[72px] left-1/2 w-[min(calc(100vw-1rem),360px)] -translate-x-1/2")}
+          {renderMessagesPanel("fixed bottom-[88px] left-1/2 w-[min(calc(100vw-1rem),360px)] -translate-x-1/2")}
         </div>}
 
       {showModal && (
