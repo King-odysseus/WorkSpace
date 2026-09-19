@@ -2885,12 +2885,18 @@ function App() {
             </div>
           </div>
         </header>
+        {/* Both banners remount when the user changes, but they are siblings, so
+            the key needs to name the banner as well as the user - sharing one
+            key made React treat them as the same child. */}
         <InstallAppBanner
-          key={session.user.id}
+          key={`install-${session.user.id}`}
           userId={session.user.id}
           onOpenGuide={() => setActive("Install app")}
         />
-        <NotificationPermissionPrompt key={session.user.id} unreadCount={notificationUnreadCount} />
+        <NotificationPermissionPrompt
+          key={`notifications-${session.user.id}`}
+          unreadCount={notificationUnreadCount}
+        />
         <main
           id="main-content"
           className="main-content flex-1 overflow-y-auto min-w-0"
