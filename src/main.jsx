@@ -5818,10 +5818,13 @@ function WorkspaceView({
           : formatDay(key);
     };
     return (
-      <section className="workspace-view" aria-busy={activityLoading}>
+      <section className="workspace-view pencil-activity-view" aria-busy={activityLoading}>
         <WorkspaceViewHeading
+          eyebrow="Insights"
           title="Activity"
-          subtitle="Search and audit the full workspace history."
+          subtitle="Everything that changed in this workspace, and who changed it."
+          action={activityLoading ? "Refreshing..." : "Refresh"}
+          onAction={() => setActivityReload((current) => current + 1)}
         />
         <div className="activity-toolbar">
           <label className="activity-search">
@@ -5890,25 +5893,6 @@ function WorkspaceView({
               Clear filters
             </button>
           )}
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setActivityReload((current) => current + 1)}
-          >
-            {activityLoading ? "Refreshing..." : "Refresh"}
-          </button>
-          <span className="activity-count">
-            {activityPagination?.total_items
-              ? `${activityStart + 1}-${activityStart + activityServer.activity.length} of ${activityPagination.total_items}`
-              : "0"}{" "}
-            events
-          </span>
-        </div>
-        <div className="activity-summary">
-          <div><span>Matching events</span><strong>{activityServer.summary?.total_events || 0}</strong></div>
-          <div><span>Today</span><strong>{activityServer.summary?.today_events || 0}</strong></div>
-          <div><span>Last 7 days</span><strong>{activityServer.summary?.week_events || 0}</strong></div>
-          <div><span>Active people</span><strong>{activityServer.summary?.active_actors || 0}</strong></div>
         </div>
         {activityError && (
           <Alert tone="danger" compact>
