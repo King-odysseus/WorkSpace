@@ -67,7 +67,6 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
-import "flowbite/dist/flowbite.css";
 import "./workspace.css";
 import { ThemeInit } from "../.flowbite-react/init.jsx";
 import { ThemeProvider } from "flowbite-react";
@@ -166,8 +165,6 @@ import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
-import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt.jsx";
-import InstallAppBanner from "./components/InstallAppBanner.jsx";
 import { startInstallPromptCapture } from "./lib/install-prompt.js";
 import {
   CookieConsent,
@@ -378,7 +375,6 @@ function App() {
     error: "",
   });
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
-  const [notificationUnreadCount, setNotificationUnreadCount] = useState(null);
   // Bumped on every "open this thread" request so an already-mounted Chats view
   // re-reads the hand-off instead of only a newly-mounted one.
   const [chatThreadRequest, setChatThreadRequest] = useState(0);
@@ -400,8 +396,7 @@ function App() {
     setPendingWorkstreamNotification(null);
   }, [activeWorkspaceId]);
   useEffect(() => {
-    setNotificationUnreadCount(null);
-    if (session.user?.id) return startNotificationAlerts(data => setNotificationUnreadCount(data.unread_count));
+    if (session.user?.id) return startNotificationAlerts();
   }, [session.user?.id]);
   // The two popups read independent workspace feeds: activity for the bell and
   // conversations for Messages. Loading them separately keeps either category
@@ -472,7 +467,6 @@ function App() {
     activity: [],
     auditLogs: [],
     buckets: [],
-    savedViews: [],
     lookupValues: [],
     taskTemplates: [],
     projectTemplates: [],
@@ -795,7 +789,6 @@ function App() {
       activity: [],
       auditLogs: [],
       buckets: [],
-      savedViews: [],
       lookupValues: [],
       taskTemplates: [],
       projectTemplates: [],
@@ -970,9 +963,6 @@ function App() {
         read(`/api/workspaces/${workspaceId}/invitations/?page_size=500`, {
           invitations: [],
         }),
-        read(`/api/workspaces/${workspaceId}/saved-views/`, {
-          saved_views: [],
-        }),
         read(
           `/api/workspaces/${workspaceId}/reports/summary/?range=${reportRange}&shift_page=${shiftLogPage}${shiftLogUserId ? `&shift_user_id=${shiftLogUserId}` : ""}`,
           { summary: null },
@@ -1000,7 +990,6 @@ function App() {
             activityData,
             bucketData,
             invitationData,
-            savedViewData,
             reportData,
             auditData,
           ]) => {
@@ -1037,7 +1026,6 @@ function App() {
               auditLogs: auditData.audit_logs,
               buckets: bucketData.buckets,
               invitations: invitationData.invitations,
-              savedViews: savedViewData.saved_views,
               lookupValues: lookupData.lookup_values,
               taskTemplates: taskTemplateData.task_templates,
               projectTemplates: projectTemplateData.project_templates,
@@ -2885,18 +2873,6 @@ function App() {
             </div>
           </div>
         </header>
-        {/* Both banners remount when the user changes, but they are siblings, so
-            the key needs to name the banner as well as the user - sharing one
-            key made React treat them as the same child. */}
-        <InstallAppBanner
-          key={`install-${session.user.id}`}
-          userId={session.user.id}
-          onOpenGuide={() => setActive("Install app")}
-        />
-        <NotificationPermissionPrompt
-          key={`notifications-${session.user.id}`}
-          unreadCount={notificationUnreadCount}
-        />
         <main
           id="main-content"
           className="main-content flex-1 overflow-y-auto min-w-0"
@@ -3565,8 +3541,6 @@ function WorkspaceView({
   const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [projectHealthFilter, setProjectHealthFilter] = useState("all");
   const [projectSort, setProjectSort] = useState("due");
-  const [savedViewName, setSavedViewName] = useState("");
-  const [selectedSavedView, setSelectedSavedView] = useState("");
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
@@ -3574,7 +3548,6 @@ function WorkspaceView({
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
-  const [savedViews, setSavedViews] = useState(data.savedViews || []);
   const canCommentCheckIns = Boolean(currentWorkspace?.permissions?.includes("comment_check_ins"));
   const [form, setForm] = useState({
     title: "",
@@ -3821,7 +3794,6 @@ function WorkspaceView({
       })),
     [data],
   );
-  useEffect(() => setSavedViews(data.savedViews || []), [data.savedViews]);
 
   useEffect(() => {
     if (active === "Planner" && pendingWorkstreamNotification && localData.lookupValues.some((value) => value.kind === "workstream" && String(value.id) === String(pendingWorkstreamNotification))) {
@@ -4924,122 +4896,8 @@ function WorkspaceView({
         .map((name) => ({ id: `legacy-${name}`, name })),
     ];
     const availableMembers = localData.members.filter((member) => member.id);
-    const saveView = async (event) => {
-      event.preventDefault();
-      const name = savedViewName.trim();
-      if (!name) return;
-      setBucketError("");
-      try {
-        const response = await fetch(
-          `/api/workspaces/${workspaceId}/saved-views/`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRFToken": await getCsrfToken(),
-            },
-            body: JSON.stringify({
-              name,
-              filter: plannerFilter,
-              search: searchQuery,
-              project_scope: plannerProjectFilter,
-            }),
-          },
-        );
-        const responseData = await readJsonResponse(
-          response,
-          "Saved view could not be created.",
-        );
-        if (!response.ok)
-          return setBucketError(
-            responseData.error || "Saved view could not be created.",
-          );
-        setSavedViews((current) => [
-          ...current.filter((view) => view.name !== name),
-          responseData.saved_view,
-        ]);
-        setSavedViewName("");
-      } catch (error) {
-        setBucketError(error.message || "Saved view could not be created.");
-      }
-    };
-    const applyView = (event) => {
-      const name = event.target.value;
-      setSelectedSavedView(name);
-      const view = savedViews.find((item) => item.name === name);
-      if (view) {
-        setPlannerFilter(view.filter);
-        onSearchChange(view.search || "");
-        setPlannerProjectFilter(view.project_scope || "all");
-      }
-    };
-    const deleteSavedView = async () => {
-      const view = savedViews.find((item) => item.name === selectedSavedView);
-      if (
-        !view ||
-        !(await onConfirm(`Delete saved view "${view.name}"?`, {
-          title: "Delete saved view",
-          confirmLabel: "Delete view",
-        }))
-      )
-        return;
-      setBucketError("");
-      try {
-        const response = await fetch(
-          `/api/workspaces/${workspaceId}/saved-views/${view.id}/`,
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: { "X-CSRFToken": await getCsrfToken() },
-          },
-        );
-        if (!response.ok)
-          return setBucketError("Saved view could not be deleted.");
-        setSavedViews((current) =>
-          current.filter((item) => item.id !== view.id),
-        );
-        setSelectedSavedView("");
-      } catch (error) {
-        setBucketError(error.message || "Saved view could not be deleted.");
-      }
-    };
     return (
       <section className="workspace-view planner-view-wrapper">
-        <div className="planner-saved-views-bar">
-          <AppSelect
-            value={selectedSavedView}
-            onChange={applyView}
-            aria-label="Load saved Planner view"
-          >
-            <option value="">Saved views…</option>
-            {savedViews.map((view) => (
-              <option key={view.name} value={view.name}>
-                {view.name}
-              </option>
-            ))}
-          </AppSelect>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={deleteSavedView}
-            disabled={!selectedSavedView}
-          >
-            Delete view
-          </button>
-          <form className="bucket-create-form" onSubmit={saveView}>
-            <input
-              value={savedViewName}
-              onChange={(event) => setSavedViewName(event.target.value)}
-              placeholder="Save current filter as…"
-              aria-label="Saved view name"
-              maxLength="100"
-            />
-            <button type="submit" className="secondary-button">
-              Save view
-            </button>
-          </form>
-        </div>
         <PlannerBoard
           buckets={buckets}
           tasks={tasks}
