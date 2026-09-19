@@ -1670,7 +1670,7 @@ function MyTasksView({
     return (
       <article
         key={task.id}
-        className="group/card flex items-center gap-3 rounded-card border border-border bg-card px-5 py-6 shadow-card"
+        className="my-task-row group/card flex items-center gap-3 rounded-card border border-border bg-card px-5 py-6 shadow-card"
       >
         <button
           type="button"
@@ -1755,8 +1755,8 @@ function MyTasksView({
     : groups;
 
   return (
-    <section className="pb-10">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
+    <section className="workspace-view my-tasks-view pb-10">
+      <header className="my-task-header flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
         <div className="min-w-0">
           <p className="text-overline uppercase text-navy">All work</p>
           <h1 className="mt-1 text-page-heading text-text-primary">My tasks</h1>
@@ -1767,9 +1767,9 @@ function MyTasksView({
         </Button>
       </header>
 
-      <div className="mt-3.5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-4">
+      <div className="my-task-layout mt-3.5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
+        <div className="my-task-results min-w-0">
+          <div className="my-task-filters flex flex-wrap items-center gap-4">
             <SearchInput
               className="w-full sm:w-[280px]"
               label="Search my tasks"
@@ -1813,7 +1813,7 @@ function MyTasksView({
           </div>
 
           {filtersOpen && (
-            <div className="mt-3 flex flex-wrap items-center gap-4 rounded-card border border-border bg-card px-5 py-4">
+            <div className="my-task-filter-panel mt-3 flex flex-wrap items-center gap-4 rounded-card border border-border bg-card px-5 py-4">
               <AppSelect
                 className="chip-select"
                 value={status}
@@ -1866,10 +1866,10 @@ function MyTasksView({
             </div>
           )}
 
-          <div className="mt-[30px] grid gap-8">
+          <div className="my-task-groups mt-[30px] grid gap-8">
             {rowGroups.map((group) => (
-              <section key={group.key}>
-                <div className="mb-2 flex items-center justify-between gap-3">
+              <section className="my-task-group" key={group.key}>
+                <div className="my-task-group-heading mb-2 flex items-center justify-between gap-3">
                   <h2 className="text-subheading text-text-primary">{group.label}</h2>
                   <span className="text-caption text-text-muted">
                     {group.items.length}{" "}
@@ -1884,7 +1884,7 @@ function MyTasksView({
             ))}
 
             {!rowGroups.length && (
-              <div className="grid justify-items-center gap-2 rounded-card border border-border bg-card px-5 py-12 text-center">
+              <div className="my-task-empty grid justify-items-center gap-2 rounded-card border border-border bg-card px-5 py-12 text-center">
                 <CheckCircle2 size={22} className="text-text-muted" aria-hidden="true" />
                 <p className="text-body-small text-text-secondary">
                   {completedOpen
@@ -1903,8 +1903,8 @@ function MyTasksView({
           </div>
         </div>
 
-        <aside className="grid content-start gap-5">
-          <section className="rounded-card border border-border bg-card p-5">
+        <aside className="my-task-sidebar grid content-start gap-5">
+          <section className="my-task-summary rounded-card border border-border bg-card p-5">
             <h2 className="text-subheading text-text-primary">My workload</h2>
             <p className="mt-[5px] text-caption text-text-muted">
               This week &middot; capacity {capacityHours}h
@@ -1945,7 +1945,7 @@ function MyTasksView({
             </p>
           </section>
 
-          <section className="rounded-card border border-border bg-card p-5">
+          <section className="my-task-status rounded-card border border-border bg-card p-5">
             <h2 className="text-subheading text-text-primary">By status</h2>
             <div className="mt-[17px] grid gap-[18px]">
               {statusRows.map((row) => (
@@ -1983,7 +1983,7 @@ function MyTasksView({
             </div>
           </section>
 
-          <section className="rounded-card border border-border bg-card p-5">
+          <section className="my-task-completed rounded-card border border-border bg-card p-5">
             <h2 className="text-subheading text-text-primary">
               Recently completed
             </h2>
