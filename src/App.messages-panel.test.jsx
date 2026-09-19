@@ -85,9 +85,11 @@ it('reports real unread totals and opens the messages panel from either end of t
   const messageButton = await screen.findByRole('button', { name: 'Open messages' }, { timeout: 20000 })
   await within(messageButton).findByLabelText('25 unread messages', {}, { timeout: 20000 })
 
+  // The design's TabBar draws five bare tabs, so the count lives on the header's
+  // chat icon alone rather than on the bar as well.
   const mobileNav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   const chatsTab = within(mobileNav).getByRole('button', { name: /Chats/ })
-  await within(chatsTab).findByText('9+', {}, { timeout: 20000 })
+  expect(chatsTab.querySelector('[aria-label$="unread messages"]')).toBeNull()
 
   const bellButton = screen.getByRole('button', { name: 'Open workspace activity notifications' })
   await within(bellButton).findByLabelText('5 unread workspace notifications', {}, { timeout: 20000 })

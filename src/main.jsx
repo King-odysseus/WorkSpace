@@ -2243,16 +2243,11 @@ function App() {
       // Chats opens the chat panel rather than the Chats page, which is what the
       // bottom bar did before the design; the page is reachable from "More".
       return label === "Chats"
-        ? {
-            ...item,
-            label,
-            badge: unreadConversationCount,
-            onSelect: () => toggleMessages("nav"),
-          }
+        ? { ...item, label, onSelect: () => toggleMessages("nav") }
         : { ...item, label };
     })
     .filter(Boolean);
-  const renderMobileTab = ({ label, icon: Icon, badge, active: itemActive, onSelect }) => {
+  const renderMobileTab = ({ label, icon: Icon, active: itemActive, onSelect }) => {
     const isItemActive = itemActive ?? active === label;
     return (
       <button
@@ -2261,26 +2256,13 @@ function App() {
         onClick={onSelect || (() => setActive(label))}
         aria-current={isItemActive ? "page" : undefined}
         className={cn(
-          "flex min-w-0 flex-1 flex-col items-center gap-1 pb-4 pt-3 transition-colors",
+          "flex h-full min-w-0 flex-1 flex-col items-center gap-1 pt-3 transition-colors",
           isItemActive
             ? "font-semibold text-primary"
             : "font-medium text-text-muted hover:text-text-primary",
         )}
       >
-        <span className="relative flex shrink-0 items-center justify-center">
-          <Icon size={20} aria-hidden="true" />
-          {/* The design's TabBar draws no badge, but the unread count was the
-              only one on this bar before the redesign, so it keeps the badge
-              the design already uses on the AppBar bell. */}
-          {badge > 0 && (
-            <span
-              aria-label={`${badge} unread messages`}
-              className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface"
-            >
-              {badge > 9 ? "9+" : badge}
-            </span>
-          )}
-        </span>
+        <Icon size={20} className="shrink-0" aria-hidden="true" />
         <span className="max-w-full truncate text-[10px] leading-none">
           {label}
         </span>
@@ -2912,13 +2894,15 @@ function App() {
         {/* The revealed search field. Rendered under the bar rather than in it,
             because the design's bar holds an icon at that slot and nothing else
             - a field dropped in beside it would push all four controls off the
-            right edge. */}
+            right edge. The field itself is the design's mobile search: 40 tall,
+            radius 12, on #F9FAFB with a hairline stroke, icon at 12 and the
+            hint at 40, and 16 of padding either side. */}
         {mobileSearchOpen && (
           <div
-            className="relative z-30 border-b border-border bg-surface px-4 pb-3 lg:hidden"
+            className="relative z-30 border-b border-border bg-surface px-4 py-4 lg:hidden"
             ref={searchRef}
           >
-            <div className="relative flex h-10 w-full items-center rounded-control border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
+            <div className="relative flex h-10 w-full items-center rounded-xl border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-muted" />
               <input
                 type="search"
@@ -2930,7 +2914,7 @@ function App() {
                 placeholder="Search Workspace"
                 aria-label="Search workspace"
                 autoFocus
-                className="shell-search h-full w-full bg-transparent pl-[42px] pr-4 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                className="shell-search h-full w-full bg-transparent pl-10 pr-4 text-[13px] text-text-primary outline-none placeholder:text-text-muted"
               />
               {globalSearchOpen &&
                 searchQuery.trim().length >= 2 &&
