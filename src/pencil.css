@@ -100,6 +100,25 @@ aside[class*='bg-navy'] nav > div > p { color: #93B4D4 !important; }
 aside[class*='bg-navy'] nav button { color: #C7D6E5 !important; border-radius: 8px !important; }
 aside[class*='bg-navy'] nav button:hover { background: rgb(255 255 255 / 8%) !important; color: #fff !important; }
 aside[class*='bg-navy'] nav button[aria-current='page'] { border-left: 3px solid var(--pencil-bronze); border-radius: 0 8px 8px 0 !important; background: rgb(255 255 255 / 10%) !important; color: #fff !important; }
+/* Exact P1 rail: the sidebar is a self-contained navy surface; no light-theme
+   text, selector, or divider is allowed to leak into it. */
+aside[class*='bg-navy'] > div:first-child { padding: 20px 20px 12px !important; gap: 12px !important; }
+aside[class*='bg-navy'] > div:first-child > div:first-child > img { width: 32px !important; height: 32px !important; padding: 7px; border-radius: 8px !important; background: var(--pencil-bronze); filter: brightness(0) invert(1); }
+aside[class*='bg-navy'] > div:first-child > div:first-child > span { color: #fff !important; font-size: 15px !important; font-weight: 700 !important; }
+aside[class*='bg-navy'] > div:first-child > div:first-child button { color: #93B4D4 !important; }
+aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] { border-color: rgb(255 255 255 / 12%) !important; background: rgb(255 255 255 / 8%) !important; color: #fff !important; }
+aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] span:not([aria-hidden]) { color: #fff !important; }
+aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] [aria-hidden='true'] { background: var(--pencil-bronze) !important; color: #fff !important; }
+aside[class*='bg-navy'] > div:first-child .bg-border, aside[class*='bg-navy'] > div:last-child .bg-border { background: rgb(255 255 255 / 12%) !important; }
+aside[class*='bg-navy'] nav { padding: 14px 16px 8px !important; }
+aside[class*='bg-navy'] nav > div { margin-bottom: 17px !important; }
+aside[class*='bg-navy'] nav > div > p { padding-left: 0 !important; color: #93B4D4 !important; font-size: 11px !important; }
+aside[class*='bg-navy'] nav button { height: 36px !important; padding-left: 12px !important; font-size: 14px !important; }
+aside[class*='bg-navy'] nav button svg { width: 20px !important; height: 20px !important; color: #93B4D4 !important; }
+aside[class*='bg-navy'] nav button[aria-current='page'] svg { color: #F4E1BA !important; }
+aside[class*='bg-navy'] > div:last-child { padding: 12px 16px !important; }
+aside[class*='bg-navy'] > div:last-child .text-text-primary { color: #fff !important; }
+aside[class*='bg-navy'] > div:last-child .text-text-muted { color: #93B4D4 !important; }
 
 /* Reusable Pencil primitives. */
 .workspace-view { width: min(1112px, 100%); margin: 0 auto; color: var(--pencil-text); }
