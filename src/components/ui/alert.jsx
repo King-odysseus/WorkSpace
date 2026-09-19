@@ -1,6 +1,11 @@
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// C1 draws info and danger with the same flag-outline glyph and lets the copy
+// carry the difference. That reads poorly at a glance, and C1's own rule is
+// that a tone is never signalled by colour alone, so the four distinct icons
+// stay. Everything else about the alert follows C1: the ramp, the 20px icon,
+// and the 14/13 text pair.
 const alertIcons = {
   info: Info,
   success: CircleCheck,
@@ -21,7 +26,7 @@ function Alert({ tone = 'info', title, className, compact = false, action, child
       {...props}
     >
       <span className="workspace-alert-icon" aria-hidden="true">
-        <Icon size={compact ? 14 : 16} strokeWidth={2.2} />
+        <Icon size={compact ? 16 : 20} strokeWidth={2} />
       </span>
       <div className="workspace-alert-copy">
         {title && <strong>{title}</strong>}

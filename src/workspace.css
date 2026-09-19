@@ -4637,6 +4637,30 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --semantic-info: #2563EB;
   --semantic-info-bg: var(--brand-navy-tint);
 
+  /* The alert ramp, taken from the C1 Feedback frame. Foundations 03 declares
+     one flat pair per tone; the alert components are drawn from a three-part
+     ramp instead - fill, stroke, and a text colour that is darker than both -
+     and that ramp exists nowhere in foundations. It lives here, under its own
+     name, so --semantic-* stays a faithful copy of what foundations 03 lists
+     and the C1 divergence is visible rather than silently blended into it.
+     Note the ramp disagrees with foundations on two tones: C1's info fill is
+     #EFF6FF against foundations' #E7EEF6 info-bg, and C1's warning is a yellow
+     where foundations' warning-bg is an orange. Neither is a mistake to fix
+     here - the status pairs already use the C1 values, so this is the ramp the
+     app has been rendering, just without names for its stroke and text parts. */
+  --alert-info-fill: #EFF6FF;
+  --alert-info-stroke: #DBEAFE;
+  --alert-info-text: #1C398E;
+  --alert-success-fill: #ECFDF5;
+  --alert-success-stroke: #A4F4CF;
+  --alert-success-text: #006045;
+  --alert-warning-fill: #FEF9C3;
+  --alert-warning-stroke: #FDE68A;
+  --alert-warning-text: #854D0E;
+  --alert-danger-fill: #FFF1F2;
+  --alert-danger-stroke: #FFCCD3;
+  --alert-danger-text: #A50036;
+
   /* Data visualisation sequence. Ordered; series-1 is the primary series. */
   --chart-series-1: var(--brand-navy);
   --chart-series-2: #2E6FB7;
@@ -4840,6 +4864,22 @@ html[data-theme='dark'] {
   --semantic-error-bg: #3D1C23;
   --semantic-info: #93C5FD;
   --semantic-info-bg: #132C52;
+
+  /* The C1 alert ramp, re-derived dark. Fill and stroke sit on the tone's hue
+     at the dark surface's lightness, and the text flips to the light end,
+     because a #1C398E alert on a #15153A card is unreadable. */
+  --alert-info-fill: #131C3A;
+  --alert-info-stroke: #21356B;
+  --alert-info-text: #93C5FD;
+  --alert-success-fill: #0F2A22;
+  --alert-success-stroke: #1B5140;
+  --alert-success-text: #4ADE80;
+  --alert-warning-fill: #2E2711;
+  --alert-warning-stroke: #5C4A18;
+  --alert-warning-text: #FBBF24;
+  --alert-danger-fill: #2E1620;
+  --alert-danger-stroke: #5C2436;
+  --alert-danger-text: #FB7185;
 
   --chart-series-1: #93C5FD;
   --chart-series-2: #60A5FA;
@@ -9498,38 +9538,53 @@ html[data-theme='dark'] .planner-bucket-menu {
   to { transform: translateX(100%); }
 }
 
+/* C1's alert: a tone-coloured ramp of fill, 1px stroke and text, with a plain
+   stroked icon and no tile behind it. The tone is picked once here and every
+   part of the box reads from the same three variables, so a new tone is three
+   token lines and one --alert-* alias. */
 .workspace-alert {
-  --alert-color: var(--workspace-primary, #0b0b45);
+  --alert-fill: var(--alert-info-fill);
+  --alert-stroke: var(--alert-info-stroke);
+  --alert-text: var(--alert-info-text);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 10px;
-  padding: 11px 12px;
-  border: 1px solid color-mix(in srgb, var(--alert-color) 22%, transparent);
-  border-radius: 13px;
-  background: color-mix(in srgb, var(--alert-color) 7%, var(--workspace-surface, #fff));
-  color: var(--workspace-text, #1f2937);
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--alert-stroke);
+  border-radius: var(--radius-control);
+  background: var(--alert-fill);
+  color: var(--alert-text);
 }
 
-.workspace-alert.is-compact { padding: 7px 9px; gap: 7px; border-radius: 10px; }
-.workspace-alert[data-tone="success"] { --alert-color: #3d8b6e; }
-.workspace-alert[data-tone="warning"] { --alert-color: #b45309; }
-.workspace-alert[data-tone="danger"] { --alert-color: #c43d4b; }
-
-.workspace-alert-icon {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--alert-color) 12%, transparent);
-  color: var(--alert-color);
+.workspace-alert[data-tone="success"] {
+  --alert-fill: var(--alert-success-fill);
+  --alert-stroke: var(--alert-success-stroke);
+  --alert-text: var(--alert-success-text);
+}
+.workspace-alert[data-tone="warning"] {
+  --alert-fill: var(--alert-warning-fill);
+  --alert-stroke: var(--alert-warning-stroke);
+  --alert-text: var(--alert-warning-text);
+}
+.workspace-alert[data-tone="danger"] {
+  --alert-fill: var(--alert-danger-fill);
+  --alert-stroke: var(--alert-danger-stroke);
+  --alert-text: var(--alert-danger-text);
 }
 
-.workspace-alert.is-compact .workspace-alert-icon { width: 20px; height: 20px; border-radius: 7px; }
-.workspace-alert-copy { display: grid; gap: 2px; min-width: 0; font-size: 11px; line-height: 1.45; }
-.workspace-alert-copy strong { color: var(--workspace-text, #1f2937); font-size: 11px; }
-.workspace-alert-copy > div { color: var(--workspace-text-soft, #6b7280); }
+/* The icon is vertically centred on the title line rather than on the box, so
+   a two-line body does not push it down. */
+.workspace-alert-icon { display: grid; place-items: center; margin-top: 1px; color: var(--alert-text); }
+
+/* The compact form sits inside dialogs, where the full 14/13 pair would compete
+   with the dialog's own heading. */
+.workspace-alert.is-compact { gap: 9px; padding: 8px 10px; border-radius: var(--radius-badge); }
+.workspace-alert-copy { display: grid; gap: 4px; min-width: 0; font-size: 13px; line-height: 18px; }
+.workspace-alert-copy strong { color: var(--alert-text); font-size: 14px; font-weight: 500; line-height: 20px; }
+.workspace-alert-copy > div { color: var(--alert-text); }
+.workspace-alert.is-compact .workspace-alert-copy { font-size: 12px; line-height: 17px; }
+.workspace-alert.is-compact .workspace-alert-copy strong { font-size: 12px; line-height: 17px; }
 .workspace-alert-action { align-self: center; }
 
 /* The search field draws its own box, so it has to opt out of the two global
@@ -9780,8 +9835,7 @@ html[data-theme='dark'] .planner-bucket-menu {
   color: #a8323f;
 }
 
-.auth-error::before,
-.workspace-alert[data-tone="danger"]::before {
+.auth-error::before {
   width: 6px;
   height: 6px;
   flex: 0 0 6px;
@@ -9790,8 +9844,6 @@ html[data-theme='dark'] .planner-bucket-menu {
   background: currentColor;
   content: "";
 }
-
-.workspace-alert[data-tone="danger"]::before { display: none; }
 
 .workspace-toast {
   border: 1px solid rgb(255 255 255 / 16%);

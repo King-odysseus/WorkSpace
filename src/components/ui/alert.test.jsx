@@ -13,4 +13,17 @@ describe('Alert', () => {
     render(<Alert tone="info" compact>Saved</Alert>)
     expect(screen.getByRole('status')).toHaveTextContent('Saved')
   })
+
+  // The tone is carried by a data attribute because the ramp is CSS. If the
+  // attribute stops matching the tone name the alert silently falls back to the
+  // info colours, which no assertion on the text would catch.
+  it('carries the tone the ramp keys off', () => {
+    render(<Alert tone="warning" title="Slow sync">Some rows may lag.</Alert>)
+    expect(screen.getByRole('alert')).toHaveAttribute('data-tone', 'warning')
+  })
+
+  it('falls back to the info icon for an unknown tone', () => {
+    render(<Alert tone="chartreuse">Odd.</Alert>)
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'chartreuse')
+  })
 })

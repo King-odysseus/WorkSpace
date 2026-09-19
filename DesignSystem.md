@@ -313,6 +313,21 @@ app CSS.
 | `--color-border-light` | `#F0F1F3` | `#20204a` | Subtle divider |
 | `--color-selected` | `#E7EEF6` | `#23234F` | Fill behind the active navigation item |
 
+#### Alert Ramp
+
+The `--alert-*` tokens are the C1 alert ramp, not a restatement of the
+`--semantic-*` pairs above them. Values and the reason for the split are in
+Alerts, Skeletons, And Empty States.
+
+| Tone | Fill | Stroke | Text |
+| --- | --- | --- | --- |
+| `--alert-info-*` | `#EFF6FF` / `#131C3A` | `#DBEAFE` / `#21356B` | `#1C398E` / `#93C5FD` |
+| `--alert-success-*` | `#ECFDF5` / `#0F2A22` | `#A4F4CF` / `#1B5140` | `#006045` / `#4ADE80` |
+| `--alert-warning-*` | `#FEF9C3` / `#2E2711` | `#FDE68A` / `#5C4A18` | `#854D0E` / `#FBBF24` |
+| `--alert-danger-*` | `#FFF1F2` / `#2E1620` | `#FFCCD3` / `#5C2436` | `#A50036` / `#FB7185` |
+
+Light value first, then the dark derivation.
+
 #### Status And Priority
 
 Each status and priority ships a fixed foreground and background pair. Use
@@ -609,8 +624,33 @@ segmented controls, spreadsheet tabs, colour swatches, and tile overlays.
 ### Alerts, Skeletons, And Empty States
 
 - Inline errors and status messages use the `.workspace-alert` class with a
-  `data-tone` of `success`, `warning`, or `danger`. There is no `WorkspaceAlert`
-  component; use the class, or `alert.jsx` for the primitive version.
+  `data-tone` of `info`, `success`, `warning`, or `danger`. There is no
+  `WorkspaceAlert` component; use the class, or `alert.jsx` for the primitive
+  version.
+- The alert carries a three-part ramp, taken from the C1 Feedback frame: a
+  fill, a 1px stroke, and a text colour. Each tone is one block of `--alert-*`
+  tokens, and the box reads all three through `--alert-fill`, `--alert-stroke`
+  and `--alert-text`, so a new tone is three token lines plus a `data-tone`
+  block. The values are:
+
+  | Tone | Fill | Stroke | Text |
+  | --- | --- | --- | --- |
+  | info | `#EFF6FF` | `#DBEAFE` | `#1C398E` |
+  | success | `#ECFDF5` | `#A4F4CF` | `#006045` |
+  | warning | `#FEF9C3` | `#FDE68A` | `#854D0E` |
+  | danger | `#FFF1F2` | `#FFCCD3` | `#A50036` |
+
+  Note that this ramp is **not** the same as the `--semantic-*` pairs.
+  Foundations 03 declares one flat pair per tone (`success` `#007A55` on
+  `success-bg` `#ECFDF5`, `warning` `#FF6900` on `warning-bg` `#FFF7ED`,
+  `error` `#C70036` on `error-bg` `#FFF1F2`, plus a lone `info-bg` `#E7EEF6`),
+  and C1 disagrees with it on two of the four. Both layers are kept: the
+  `--semantic-*` block stays a faithful copy of what foundations lists, and the
+  alert ramp lives under its own `--alert-*` names. The status and priority
+  pairs already used the C1 values, so the ramp is what the app was rendering;
+  what was missing was names for its stroke and text parts. A tone is never
+  signalled by colour alone, so the primitive keeps four distinct icons rather
+  than C1's reuse of one flag glyph for both info and danger.
 - Use skeleton primitives while a panel is loading.
 - Empty states use `EmptyState` and explain the next useful action without
   turning into feature marketing.
