@@ -190,7 +190,7 @@ it('leaves a borrowed lane out of the reorder controls', async () => {
   expect(screen.queryByRole('menuitem', { name: 'Move Design left' })).not.toBeInTheDocument()
 })
 
-it('offers lifecycle actions for custom buckets through an overflow menu and protects the default Backlog', async () => {
+it('offers lifecycle actions on every lane the design draws a menu on', async () => {
   const user = userEvent.setup()
   renderPlanner({
     buckets: [
@@ -206,7 +206,18 @@ it('offers lifecycle actions for custom buckets through an overflow menu and pro
   expect(screen.getByRole('menuitem', { name: 'Rename Prototyping' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Archive Prototyping' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Delete Prototyping' })).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Open actions for Backlog' })).not.toBeInTheDocument()
+
+  // Backlog is an ordinary user-managed bucket with the landing lane's special
+  // case: the design draws its menu like any other column, but it keeps its
+  // place, so the reorder items are the ones that stay away. The open menu hides
+  // the rest of the board from the accessibility tree, so close it first.
+  await user.keyboard('{Escape}')
+  await user.click(screen.getByRole('button', { name: 'Open actions for Backlog' }))
+  expect(screen.getByRole('menuitem', { name: 'Rename Backlog' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Archive Backlog' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Delete Backlog' })).toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: 'Move Backlog left' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: 'Move Backlog right' })).not.toBeInTheDocument()
 })
 
 const cardTask = { id: 91, title: 'Design UI', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal' }

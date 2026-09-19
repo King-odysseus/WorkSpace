@@ -280,6 +280,12 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     if (bucket.workstream_id) return lookupValues.find(value => value.kind === 'workstream' && String(value.id) === String(bucket.workstream_id))?.name || 'Workstream'
     return 'Workspace'
   }
+  // The landing lane: where a task goes when nobody picks a bucket for it. It is
+  // an ordinary bucket otherwise, and the design draws the same overflow menu on
+  // it as on every other column - so it carries the lifecycle actions too. What
+  // it does not carry is a position: the server keeps it first and revives it by
+  // name whenever a task lands there, which is why only this lane draws the
+  // dropzone the design puts under Backlog's cards.
   const isDefaultBacklog = bucket => !bucket.project_id && !bucket.workstream_id && bucket.name === 'Backlog'
   const laneSummary = name => {
     const items = orderedFor(name)
@@ -414,9 +420,9 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
                   <button type="submit" aria-label={`Save ${bucket.name} name`} title="Save name"><Check size={14} /></button>
                   <button type="button" onClick={() => setEditingBucketId(null)} aria-label="Cancel rename" title="Cancel"><X size={14} /></button>
                 </form>
-              : <><strong className="block truncate text-body-small font-semibold text-text-primary">{bucket.name}</strong>
-                  <span className="mt-0.5 block text-caption text-text-muted">{laneSummary(bucket.name)}</span></>}
-            {!isDefaultBacklog(bucket) && canManageBuckets && <DropdownMenu>
+              : <><strong className="block truncate pr-[54px] text-body-small font-semibold text-text-primary">{bucket.name}</strong>
+                  <span className="mt-0.5 block truncate pr-[54px] text-caption text-text-muted">{laneSummary(bucket.name)}</span></>}
+            {canManageBuckets && <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="planner-column-menu absolute right-2 top-4" aria-label={`Open actions for ${bucket.name}`} title={`Actions for ${bucket.name}`}><MoreHorizontal size={20} /></button>
               </DropdownMenuTrigger>
@@ -436,10 +442,10 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
           </header>
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
             {orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}
-            <div className="planner-dropzone mt-3 flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-icon bg-border">
+            {isDefaultBacklog(bucket) && <div className="planner-dropzone mt-3 flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-icon bg-border">
               <ArrowDownToLine size={18} className="text-text-muted" aria-hidden="true" />
               <span className="text-caption font-medium text-text-muted">Drop task here</span>
-            </div>
+            </div>}
           </div>
           <div className="px-3 pb-3">
             <button type="button" className="flex h-10 w-full items-center justify-center gap-2.5 rounded-icon border border-border bg-card text-body-compact font-medium text-text-primary transition-colors hover:border-text-muted" onClick={() => addToBucket(bucket.name)}><Plus size={20} className="text-text-secondary" aria-hidden="true" /> Add task</button>
