@@ -1,0 +1,167 @@
+/*
+ * Open Pencil UI system
+ *
+ * This stylesheet is the active visual layer for WorkSpace. It is authored
+ * from Workspace.fig (P1–P37, mobile and project states); workspace.css is
+ * deliberately no longer loaded by the application.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@import "flowbite-react/plugin/tailwindcss";
+@source "../.flowbite-react/class-list.json";
+
+:root {
+  --pencil-navy: #0E2A47;
+  --pencil-navy-hover: #163C61;
+  --pencil-bronze: #B7791F;
+  --pencil-canvas: #F9FAFB;
+  --pencil-surface: #FFFFFF;
+  --pencil-surface-muted: #F3F4F6;
+  --pencil-border: #E5E7EB;
+  --pencil-text: #101828;
+  --pencil-text-secondary: #4A5565;
+  --pencil-text-muted: #6A7282;
+  --pencil-blue: #1447E6;
+  --pencil-blue-soft: #DBEAFE;
+  --pencil-success: #007A55;
+  --pencil-success-soft: #ECFDF5;
+  --pencil-warning: #7E2A0C;
+  --pencil-warning-soft: #FFF7ED;
+  --pencil-danger: #C70036;
+  --pencil-danger-soft: #FFF1F2;
+  color-scheme: light;
+}
+
+@theme {
+  --color-navy: var(--pencil-navy);
+  --color-navy-hover: var(--pencil-navy-hover);
+  --color-bronze: var(--pencil-bronze);
+  --color-background: var(--pencil-canvas);
+  --color-surface: var(--pencil-surface);
+  --color-surface-secondary: var(--pencil-surface-muted);
+  --color-border: var(--pencil-border);
+  --color-border-light: #F3F4F6;
+  --color-text-primary: var(--pencil-text);
+  --color-text-secondary: var(--pencil-text-secondary);
+  --color-text-muted: var(--pencil-text-muted);
+  --color-primary: var(--pencil-navy);
+  --color-primary-foreground: #FFFFFF;
+  --color-foreground: var(--pencil-text);
+  --color-danger: var(--pencil-danger);
+  --color-success: var(--pencil-success);
+  --color-info: var(--pencil-blue);
+  --radius-chip: 6px;
+  --radius-badge: 8px;
+  --radius-icon: 8px;
+  --radius-control: 12px;
+  --shadow-elevated: 0 4px 10px rgb(16 24 40 / 5%);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { min-height: 100%; }
+body { margin: 0; background: var(--pencil-canvas); color: var(--pencil-text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+
+/* Application shell: P1's 264px navy rail, 64px header and 32px canvas gap. */
+.main-content { min-width: 0; background: var(--pencil-canvas) !important; color: var(--pencil-text); }
+.page-content { width: 100%; max-width: none; margin: 0; padding: 32px 32px 64px; }
+aside[class*='bg-navy'] { background: var(--pencil-navy) !important; color: #fff !important; }
+aside[class*='bg-navy'] nav > div > p { color: #93B4D4 !important; }
+aside[class*='bg-navy'] nav button { color: #C7D6E5 !important; border-radius: 8px !important; }
+aside[class*='bg-navy'] nav button:hover { background: rgb(255 255 255 / 8%) !important; color: #fff !important; }
+aside[class*='bg-navy'] nav button[aria-current='page'] { border-left: 3px solid var(--pencil-bronze); border-radius: 0 8px 8px 0 !important; background: rgb(255 255 255 / 10%) !important; color: #fff !important; }
+
+/* Reusable Pencil primitives. */
+.workspace-view { width: min(1112px, 100%); margin: 0 auto; color: var(--pencil-text); }
+.workspace-view h1, .workspace-view h2, .workspace-view h3, .workspace-view p { font-family: inherit; }
+[data-slot='card'], .workspace-view .card, .workspace-view .report-panel, .workspace-view .project-card, .workspace-view .project-detail-panel {
+  border: 1px solid var(--pencil-border) !important;
+  border-radius: 12px !important;
+  background: var(--pencil-surface) !important;
+  box-shadow: none !important;
+}
+.primary-button, .project-detail-primary-action, .project-open-button { border: 0; border-radius: 12px; background: var(--pencil-navy) !important; color: #fff !important; box-shadow: none !important; }
+.primary-button:hover, .project-detail-primary-action:hover, .project-open-button:hover { background: var(--pencil-navy-hover) !important; transform: none !important; }
+.secondary-button { border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: #fff !important; color: var(--pencil-text) !important; box-shadow: none !important; }
+input:not([type='checkbox']):not([type='radio']), textarea, select { border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: #fff !important; color: var(--pencil-text) !important; box-shadow: none !important; }
+input:focus, textarea:focus, select:focus { outline: 2px solid rgb(20 71 230 / 18%); outline-offset: 1px; }
+
+/* P6 Authentication — exact desktop split and source image exported from the
+   P6 image-fill node. The mobile rules follow M12. */
+.auth-screen.auth-layout { display: grid; min-height: 100vh; grid-template-columns: 70% 30%; background: #F9FAFB; color: var(--pencil-text); }
+.auth-brand-panel { display: flex; min-height: 100vh; flex-direction: column; padding: 96px; background: linear-gradient(rgb(14 42 71 / 80%), rgb(14 42 71 / 80%)), url('/auth-background-pencil.png') center / cover; color: #fff; }
+.auth-layout .auth-brand { display: flex; align-items: center; gap: 16px; margin: 0; color: #fff; font-size: 18px; font-weight: 700; }
+.auth-brand-mark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; background: #fff; color: var(--pencil-navy); }
+.auth-brand-mark img { display: none; }
+.auth-brand-mark::before { content: 'W'; font-size: 16px; font-weight: 700; }
+.auth-brand-copy { max-width: 700px; margin-top: 158px; }
+.auth-brand-copy h2 { max-width: 700px; margin: 0 0 56px; color: #fff; font-size: 32px; font-weight: 600; line-height: 42px; letter-spacing: -.5px; }
+.auth-brand-copy ul { display: grid; gap: 24px; margin: 0; padding: 0; list-style: none; }
+.auth-brand-copy li { display: flex; align-items: center; gap: 16px; color: #C7D6E5; font-size: 14px; line-height: 20px; }
+.auth-brand-copy li svg { color: #93B4D4; }
+.auth-brand-rule { height: 1px; margin-top: 64px; background: rgb(255 255 255 / 12%); }
+.auth-brand-note { margin: 24px 0 0; color: #93B4D4; font-size: 13px; line-height: 20px; }
+.auth-brand-footer { margin-top: auto; color: rgb(255 255 255 / 40%); font-size: 12px; }
+.auth-form-panel { display: grid; align-items: start; justify-items: center; padding: 248px 48px 48px; }
+.auth-form-inner { width: 320px; }
+.auth-form-inner > .eyebrow { display: none; }
+.auth-layout .auth-form-inner h1 { margin: 0; color: var(--pencil-text); font-size: 40px; font-weight: 700; line-height: 44px; letter-spacing: -.8px; text-align: center; }
+.auth-layout .auth-subtitle { margin: 16px 0 34px; color: var(--pencil-text-muted); font-size: 14px; line-height: 17px; text-align: center; }
+.auth-layout .auth-form-inner label { display: flex; flex-direction: column; gap: 7px; margin: 0 0 20px; color: var(--pencil-text); font-size: 14px; font-weight: 500; line-height: 17px; }
+.auth-layout .auth-form-inner input { height: 42px; padding: 0 16px; }
+.auth-password-label { display: grid !important; grid-template-columns: 1fr auto; }
+.auth-password-label > input, .auth-password-field { grid-column: 1 / -1; }
+.auth-password-field { position: relative; }
+.auth-password-field input { width: 100%; padding-right: 44px !important; }
+.auth-password-toggle { position: absolute; top: 50%; right: 12px; display: grid; width: 20px; height: 20px; place-items: center; transform: translateY(-50%); border: 0; background: transparent; color: var(--pencil-text-muted); }
+.auth-forgot { border: 0; background: transparent; color: var(--pencil-navy); font-size: 13px; font-weight: 500; }
+.auth-layout .auth-submit { display: flex; width: 100%; height: 44px; align-items: center; justify-content: center; margin-top: 8px; font-size: 14px; font-weight: 500; }
+.auth-invite-banner { display: flex; gap: 12px; margin: 0 0 28px; padding: 14px 16px; border: 1px solid var(--pencil-blue-soft); border-radius: 12px; background: #EFF6FF; color: #1C398E; font-size: 12px; line-height: 15px; }
+.auth-invite-banner span { display: grid; gap: 3px; }
+.auth-invite-banner small { font-size: 12px; }
+.auth-google-wrap { margin-top: 28px; }
+.auth-divider { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin-bottom: 16px; color: var(--pencil-text-muted); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { height: 1px; background: var(--pencil-border); content: ''; }
+.auth-google-button { display: flex; width: 100%; height: 44px; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; color: var(--pencil-text); font-size: 14px; font-weight: 500; }
+.auth-google-mark { color: #4285F4; font: 700 18px/18px Arial, sans-serif; }
+.auth-switch { width: 100%; margin-top: 32px; border: 0; background: transparent; color: var(--pencil-text-muted); font-size: 13px; }
+.auth-policy-links { position: fixed; right: 48px; bottom: 32px; width: 320px; margin: 0 !important; font-size: 12px !important; }
+.auth-policy-links a { color: inherit; text-decoration: none; }
+
+/* Project frame family: P28 index and P29–P36 detail screens. */
+.projects-view { padding-top: 0; }
+.projects-view .project-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; }
+.projects-view .project-card { min-height: 284px; padding: 20px; }
+.project-detail-view { padding-top: 0; }
+.project-detail-header { min-height: 88px; border-bottom: 1px solid var(--pencil-border); }
+.project-detail-tabs { display: flex; height: 44px; align-items: end; gap: 24px; border-bottom: 1px solid var(--pencil-border); }
+.project-detail-tabs button { height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--pencil-text-muted); font-size: 14px; }
+.project-detail-tabs button.active { border-bottom-color: var(--pencil-navy); color: var(--pencil-text); font-weight: 600; }
+.project-detail-view.has-operation .project-detail-tabs { margin-top: 104px; }
+.project-detail-overview { display: grid; grid-template-columns: minmax(0, 712px) 376px; gap: 24px; margin-top: 24px; }
+.project-detail-overview > * { min-width: 0; }
+.project-kanban-board { display: grid; grid-template-columns: repeat(7, minmax(152px, 1fr)); gap: 8px; overflow-x: auto; margin-top: 20px; }
+.project-kanban-column { min-height: 604px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface-muted); }
+.project-task-table, .project-risk-table, .project-resource-table, .project-expense-table, .project-activity-list { border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; }
+
+@media (max-width: 1100px) {
+  .auth-screen.auth-layout { grid-template-columns: 58% 42%; }
+  .auth-brand-panel { padding: 48px; }
+  .auth-brand-copy { margin-top: 112px; }
+  .workspace-view { width: 100%; }
+  .project-detail-overview { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .page-content { padding: 20px 16px 88px; }
+  .auth-screen.auth-layout { display: block; }
+  .auth-brand-panel { min-height: 344px; padding: 28px 24px 34px; }
+  .auth-brand-copy { margin-top: 48px; }
+  .auth-brand-copy h2 { margin-bottom: 26px; font-size: 22px; line-height: 30px; }
+  .auth-brand-copy ul { gap: 14px; }
+  .auth-brand-rule, .auth-brand-note { display: none; }
+  .auth-form-panel { padding: 42px 24px 32px; }
+  .auth-form-inner { width: min(100%, 320px); }
+  .auth-policy-links { position: static; width: auto; margin-top: 32px !important; }
+  .projects-view .project-grid { grid-template-columns: 1fr; }
+}

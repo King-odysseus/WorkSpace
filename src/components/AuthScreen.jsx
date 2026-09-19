@@ -2,7 +2,7 @@
 // Today feed and the Activity view.
 
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, LoaderCircle, Mail, X } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, LoaderCircle, Mail, X } from 'lucide-react'
 import { formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 
 function Activity({ avatar, color, kind, text, strong, suffix, time }) { const detail = strong && text && strong.toLowerCase().startsWith(`${text.toLowerCase()} `) ? strong.slice(text.length + 1) : strong; return <div className="activity-item"><span className={`activity-kind activity-kind-${kind || 'default'}`} aria-hidden="true">{(kind || '•').slice(0, 1).toUpperCase()}</span><span className={`avatar small ${color}`}>{avatar}</span><p><strong>{text}</strong> {detail} {suffix}<span title={time}>{time}</span></p></div> }
@@ -59,7 +59,7 @@ function GoogleSignInButton({ onCredential, theme, mode }) {
       script?.removeEventListener('error', failed)
     }
   }, [clientId, theme, mode, attempt])
-  if (!clientId) return null
+  if (!clientId) return <div className="auth-google-wrap"><div className="auth-divider"><span>or</span></div><button type="button" className="auth-google-button auth-google-fallback" onClick={() => setLoadError(true)}><span className="auth-google-mark">G</span><span>{mode === 'signup' ? 'Sign up with Google' : 'Continue with Google'}</span></button>{loadError && <p className="auth-error" role="alert">Google sign-in is not configured for this environment.</p>}</div>
   return <div className="auth-google-wrap"><div className="auth-divider"><span>or</span></div><div className="auth-google-button" ref={buttonRef} />{loadError && <p className="auth-error" role="alert">Google sign-in could not load. Check your connection or browser blocking settings. <button type="button" onClick={() => { setLoadError(false); setAttempt(value => value + 1) }}>Try again</button></p>}</div>
 }
 
@@ -68,6 +68,7 @@ function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
   const [form, setForm] = useState({ email: inviteInfo?.email || '', password: '', first_name: '', workspace_name: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     if (inviteInfo?.email) setForm(current => ({ ...current, email: inviteInfo.email }))
@@ -123,7 +124,53 @@ function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
     }
   }
 
-  return <div className="auth-screen auth-layout"><aside className="auth-brand-panel"><div className="auth-brand"><span className="auth-brand-mark"><img src="/tijha-logo.png" alt="Workspace" /></span><span>Workspace</span></div><div className="auth-brand-copy"><h2>Team operations, planning and collaboration in one place.</h2><ul><li><CheckCircle2 size={18} />Plan work across shared buckets</li><li><CheckCircle2 size={18} />Track workload, follow-ups and check-ins</li><li><CheckCircle2 size={18} />Report on progress across every project</li></ul></div><p className="auth-brand-footer">Copyright 2025 Workspace | Privacy | Terms</p></aside><main className="auth-form-panel"><div className="auth-form-inner"><p className="eyebrow">{mode === 'login' ? 'Sign in' : 'Create account'}</p><h1>{mode === 'login' ? 'Sign in' : 'Create your workspace'}</h1><p className="auth-subtitle">{mode === 'login' ? 'Welcome back. Sign in to continue to your workspace.' : 'Bring your team, tasks, and follow-ups into one calm workspace.'}</p>{inviteInfo && <p className="auth-invite-banner"><Mail size={17} />You have been invited to join <strong>{inviteInfo.workspace_name}</strong> as a {inviteInfo.role}.</p>}<form onSubmit={submit}>{mode === 'signup' && <><label>First name<input name="first_name" value={form.first_name} onChange={updateField} placeholder="Your first name" required /></label>{!inviteInfo && <label>Workspace name<input name="workspace_name" value={form.workspace_name} onChange={updateField} placeholder="Your team or company" required /></label>}</>}<label>Email<input name="email" type="email" value={form.email} onChange={updateField} placeholder="you@company.com" readOnly={Boolean(inviteInfo?.email)} required /></label><div className="auth-password-label"><span>Password</span>{mode === 'login' && <button type="button" className="auth-forgot" onClick={() => setError('Password reset is available from your workspace administrator.')}>Forgot?</button>}<input aria-label="Password" name="password" type="password" value={form.password} onChange={updateField} placeholder="At least 8 characters" minLength="8" required /></div>{error && <p className="auth-error">{error}</p>}{connectionError && !error && <p className="auth-error">The API is unavailable. Start Django on port 8000.</p>}<button type="submit" className="primary-button auth-submit" disabled={submitting}>{submitting ? <><LoaderCircle size={16} className="auth-spinner" /> Signing in...</> : mode === 'login' ? 'Sign in' : 'Create workspace'}</button></form><GoogleSignInButton onCredential={submitGoogleCredential} theme="light" mode={mode} /><button type="button" className="auth-switch" onClick={() => { setMode(current => current === 'login' ? 'signup' : 'login'); setError('') }}>{mode === 'login' ? 'New to Workspace? Create an account' : 'Already have an account? Sign in'}</button><p className="auth-subtitle auth-policy-links"><a href="/privacy-policy">Privacy policy</a> | <a href="/terms-of-service">Terms of service</a></p></div></main></div>
+  return (
+    <div className="auth-screen auth-layout">
+      <aside className="auth-brand-panel">
+        <div className="auth-brand"><span className="auth-brand-mark" aria-hidden="true" /><span>Workspace</span></div>
+        <div className="auth-brand-copy">
+          <h2>Team operations, planning and collaboration in one place.</h2>
+          <ul>
+            <li><CheckCircle2 size={20} />Plan work across shared buckets</li>
+            <li><CheckCircle2 size={20} />Track workload, follow-ups and check-ins</li>
+            <li><CheckCircle2 size={20} />Report on progress across every project</li>
+          </ul>
+          <div className="auth-brand-rule" />
+          <p className="auth-brand-note">Trusted by operations and delivery teams to keep daily work visible, accountable and on schedule.</p>
+        </div>
+        <p className="auth-brand-footer">© 2025 Workspace · Privacy · Terms</p>
+      </aside>
+      <main className="auth-form-panel">
+        <div className="auth-form-inner">
+          <p className="eyebrow">{mode === 'login' ? 'Sign in' : 'Create account'}</p>
+          <h1>{mode === 'login' ? 'Sign in' : 'Create your workspace'}</h1>
+          <p className="auth-subtitle">{mode === 'login' ? 'Welcome back. Sign in to continue to your workspace.' : 'Bring your team, tasks, and follow-ups into one calm workspace.'}</p>
+          {inviteInfo && <div className="auth-invite-banner"><Mail size={18} /><span><strong>You’ve been invited to {inviteInfo.workspace_name}</strong><small>Sign in with {inviteInfo.email} to review the invitation.</small></span></div>}
+          <form onSubmit={submit}>
+            {mode === 'signup' && <>
+              <label>First name<input name="first_name" value={form.first_name} onChange={updateField} placeholder="Your first name" required /></label>
+              {!inviteInfo && <label>Workspace name<input name="workspace_name" value={form.workspace_name} onChange={updateField} placeholder="Your team or company" required /></label>}
+            </>}
+            <label>Email<input name="email" type="email" value={form.email} onChange={updateField} placeholder="you@company.com" readOnly={Boolean(inviteInfo?.email)} required /></label>
+            <div className="auth-password-label">
+              <span>Password</span>
+              {mode === 'login' && <button type="button" className="auth-forgot" onClick={() => setError('Password reset is available from your workspace administrator.')}>Forgot?</button>}
+              <div className="auth-password-field">
+                <input aria-label="Password" name="password" type={showPassword ? 'text' : 'password'} value={form.password} onChange={updateField} placeholder="At least 8 characters" minLength="8" required />
+                <button type="button" className="auth-password-toggle" aria-label={showPassword ? 'Conceal credentials' : 'Reveal credentials'} onClick={() => setShowPassword(current => !current)}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button>
+              </div>
+            </div>
+            {error && <p className="auth-error">{error}</p>}
+            {connectionError && !error && <p className="auth-error">The API is unavailable. Start Django on port 8000.</p>}
+            <button type="submit" className="primary-button auth-submit" disabled={submitting}>{submitting ? <><LoaderCircle size={16} className="auth-spinner" /> Signing in...</> : mode === 'login' ? 'Sign in' : 'Create workspace'}</button>
+          </form>
+          <GoogleSignInButton onCredential={submitGoogleCredential} theme="light" mode={mode} />
+          <button type="button" className="auth-switch" onClick={() => { setMode(current => current === 'login' ? 'signup' : 'login'); setError('') }}>{mode === 'login' ? 'New to Workspace? Create an account' : 'Already have an account? Sign in'}</button>
+          <p className="auth-subtitle auth-policy-links">Protected by SSO · <a href="/terms-of-service">Terms</a> · <a href="/privacy-policy">Privacy</a></p>
+        </div>
+      </main>
+    </div>
+  )
 }
 
 const ROLE_ACCESS_SUMMARY = {

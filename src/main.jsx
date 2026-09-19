@@ -74,7 +74,7 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
-import "./workspace.css";
+import "./pencil.css";
 import { ThemeInit } from "../.flowbite-react/init.jsx";
 import { ThemeProvider } from "flowbite-react";
 import { flowbiteTheme } from "./lib/flowbite-theme.js";

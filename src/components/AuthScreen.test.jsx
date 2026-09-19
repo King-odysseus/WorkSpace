@@ -73,7 +73,7 @@ describe('AuthScreen invitation handling', () => {
   it('explains the invitation and locks the address it was sent to', () => {
     renderScreen({ inviteInfo })
 
-    expect(screen.getByText(/invited to join/i)).toHaveTextContent('Northstar')
+    expect(screen.getByText(/you.ve been invited to/i)).toHaveTextContent('Northstar')
     const email = screen.getByLabelText(/email/i)
     expect(email).toHaveValue('invitee@example.com')
     expect(email).toHaveAttribute('readonly')
@@ -161,14 +161,14 @@ describe('AuthScreen Google sign-in', () => {
     return id
   }
 
-  it('is hidden when no Google client id is configured', () => {
+  it('keeps the Pencil Google affordance when no Google client id is configured', () => {
     vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '')
-    // VITE_GOOGLE_CLIENT_ID is unset in the test env, matching a deployment that
-    // has not enabled Google sign-in - the button must not render at all.
+    // P6 always includes the Google affordance. Without a configured provider
+    // it stays visible and reports that configuration is required on click.
     const { container } = render(
       <AuthScreen theme="light" onToggleTheme={() => {}} onAuthenticated={vi.fn()} connectionError={false} />,
     )
-    expect(container.querySelector('.auth-google-button')).toBeNull()
+    expect(container.querySelector('.auth-google-button')).not.toBeNull()
   })
 
   it('fits the form and keeps the light Google treatment while switching labels', async () => {
