@@ -2174,6 +2174,7 @@ function ProjectRiskIssuePanel({
   hidden = false,
   tasks = [],
   canManage = false,
+  design = "default",
 }) {
   const [projectId, setProjectId] = useState(() => projects[0]?.id || "");
   const [records, setRecords] = useState([]);
@@ -2351,6 +2352,31 @@ function ProjectRiskIssuePanel({
         ];
 
   if (hidden) return null;
+
+  if (design === "p32") {
+    const openRisks = risks.filter((item) => !["mitigated", "closed"].includes(item.status));
+    const openIssues = issues.filter((item) => !["resolved", "closed"].includes(item.status));
+    const highRisk = risks.filter((item) => ["high", "critical"].includes(item.severity));
+    const escalated = items.filter((item) => item.escalation && !["closed", "resolved"].includes(item.status));
+    return (
+      <section className="project-risk-design">
+        <div className="project-risk-metrics">
+          <div><span>Open risks</span><strong>{openRisks.length}</strong><small>Unmitigated threats</small></div>
+          <div><span>Open issues</span><strong>{openIssues.length}</strong><small>Active delivery blockers</small></div>
+          <div><span>High severity</span><strong>{highRisk.length}</strong><small>Requires attention</small></div>
+          <div><span>Escalations</span><strong>{escalated.length}</strong><small>Needs an owner decision</small></div>
+        </div>
+        <div className="project-risk-design-grid">
+          <section className="project-risk-design-card"><div className="project-risk-design-heading"><h2>Risk by status</h2><span>{risks.length} risks</span></div>{["open", "mitigated", "closed"].map((status) => <div className="project-risk-bar" key={status}><span>{status}</span><i><b style={{ width: `${risks.length ? Math.round((risks.filter((item) => item.status === status).length / risks.length) * 100) : 0}%` }} /></i><strong>{risks.filter((item) => item.status === status).length}</strong></div>)}</section>
+          <section className="project-risk-design-card"><div className="project-risk-design-heading"><h2>Risk matrix</h2><span>Likelihood × impact</span></div><div className="project-risk-matrix">{["Low", "Medium", "High"].map((impact) => <div key={impact}><span>{impact}</span><b>{risks.filter((item) => String(item.impact || "").toLowerCase() === impact.toLowerCase()).length}</b></div>)}</div></section>
+        </div>
+        <h2 className="project-risk-summary-label">Risk summary</h2>
+        <div className="project-risk-escalation"><strong>Escalation watch</strong><span>{escalated.length ? `${escalated.length} records need a decision owner.` : "No active escalations."}</span><button type="button" onClick={openAddModal}>Add risk or issue <Plus size={14} /></button></div>
+        <Card className="project-register-card project-risk-design-table"><div className="project-register-toolbar"><div className="project-register-tabs" role="tablist" aria-label="Project risk register"><button type="button" className={activeTab === "risk" ? "active" : ""} onClick={() => setActiveTab("risk")}>Risk register <span>{risks.length}</span></button><button type="button" className={activeTab === "issue" ? "active" : ""} onClick={() => setActiveTab("issue")}>Issue log <span>{issues.length}</span></button></div>{canManage && <button type="button" className="primary-button project-register-add" onClick={openAddModal}><Plus size={15} /> Add new</button>}</div><div className="project-register-table-wrap"><table className="project-register-table"><thead><tr><th>{activeTab === "risk" ? "Risk" : "Issue"}</th><th>Severity</th><th>Owner</th><th>Target date</th><th>Status</th><th /></tr></thead><tbody>{pageItems.length ? pageItems.map((item) => <tr key={item.id}><td><strong>{item.title}</strong><span>{item.detail || "No description added."}</span></td><td><span className={`record-severity ${item.severity}`}>{item.severity}</span></td><td>{item.owner || <span className="table-muted">Unassigned</span>}</td><td>{item.due || <span className="table-muted">No date</span>}</td><td>{canManage ? <AppSelect value={item.status} onChange={(event) => updateStatus(item.id, event.target.value)} aria-label={`Set status for ${item.title}`}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</AppSelect> : item.status}</td><td>{canManage && <button type="button" className="inline-delete" onClick={() => remove(item.id)} aria-label={`Delete ${item.title}`}><X size={14} /></button>}</td></tr>) : <tr><td className="project-register-empty" colSpan="6"><Brush size={22} /><strong>No {activeTab === "risk" ? "risks" : "issues"} yet</strong><span>Add a record to begin tracking project controls.</span></td></tr>}</tbody></table></div></Card>
+        {modalOpen && <div className="project-register-modal" role="dialog" aria-modal="true"><form onSubmit={addRecord}><div className="drawer-section-heading"><h3>Add {kind}</h3><button type="button" className="inline-delete" onClick={() => setModalOpen(false)} aria-label="Close"><X size={14} /></button></div><label>Title<input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required /></label><label>Details<textarea value={form.detail} onChange={(event) => setForm((current) => ({ ...current, detail: event.target.value }))} /></label><label>Severity<AppSelect value={form.severity} onChange={(event) => setForm((current) => ({ ...current, severity: event.target.value }))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></AppSelect></label><button type="submit" className="primary-button">Save {kind}</button></form></div>}
+      </section>
+    );
+  }
 
   return (
     <section className="project-risk-issues">
@@ -2901,6 +2927,7 @@ function ProjectStakeholderResourcePanel({
   workspaceId,
   canManage,
   tasks = [],
+  design = "default",
 }) {
   const [resources, setResources] = useState([]);
   const [stakeholders, setStakeholders] = useState([]);
@@ -3062,6 +3089,18 @@ function ProjectStakeholderResourcePanel({
       toast.error("Stakeholder could not be archived.");
     }
   };
+  if (design === "p34") {
+    const capacityTotal = resources.reduce((sum, item) => sum + Number(item.capacity_percent || 0), 0);
+    const allocationTotal = resources.reduce((sum, item) => sum + Number(item.allocation_percent || 0), 0);
+    return (
+      <section className="project-resources-design">
+        <div className="project-resource-actions-card"><div><p className="eyebrow">Project delivery</p><h2>Resource planning</h2><p>Assign people, capacity, and stakeholders to this project.</p></div>{canManage && <div className="project-resource-actions"><form onSubmit={addResource}><input value={resourceForm.name} onChange={(event) => setResourceForm((current) => ({ ...current, name: event.target.value }))} placeholder="Resource name" aria-label="Resource name" required /><button type="submit" className="primary-button"><Plus size={15} /> Add resource</button></form><form onSubmit={addStakeholder}><input value={stakeholderForm.name} onChange={(event) => setStakeholderForm((current) => ({ ...current, name: event.target.value }))} placeholder="Stakeholder name" aria-label="Stakeholder name" required /><button type="submit" className="secondary-button"><Plus size={15} /> Add stakeholder</button></form></div>}</div>
+        <section className="project-resource-stakeholder-table project-resources-design-card"><div className="project-resources-design-heading"><h2>Stakeholders</h2><span>{stakeholders.length}</span></div><div className="project-resources-table-head"><span>Name</span><span>Role</span><span>Influence</span><span>Interest</span></div>{stakeholders.map((item) => <div className="project-resources-table-row" key={item.id}><strong>{item.name}</strong><span>{item.role || "—"}</span><span>{item.influence || "—"}</span><span>{item.interest || "—"}</span></div>)}{!stakeholders.length && <p className="project-detail-empty">No stakeholders assigned yet.</p>}</section>
+        <div className="project-resources-lower-grid"><section className="project-resources-design-card project-resource-table"><div className="project-resources-design-heading"><h2>Resources</h2><span>{resources.length}</span></div><div className="project-resources-table-head"><span>Resource</span><span>Role</span><span>Allocation</span><span>Capacity</span></div>{resources.map((item) => <div className="project-resources-table-row" key={item.id}><strong>{item.name}</strong><span>{item.role || item.resource_type || "—"}</span><span>{item.allocation_percent || 0}%</span><span>{item.capacity_percent || 0}%</span></div>)}{!resources.length && <p className="project-detail-empty">No resources assigned yet.</p>}</section><section className="project-resources-design-card project-capacity-card"><div className="project-resources-design-heading"><h2>Capacity</h2><span>{allocationTotal}% allocated</span></div><div className="project-capacity-track"><span style={{ width: `${Math.min(allocationTotal, 100)}%` }} /></div><p>{allocationTotal}% of {capacityTotal || 0}% available capacity allocated.</p><div className="project-capacity-legend"><span><i />Allocated</span><span><i />Available</span></div></section><section className="project-resources-design-card project-influence-card"><div className="project-resources-design-heading"><h2>Influence matrix</h2><span>Stakeholder view</span></div><div className="project-influence-matrix">{["high", "medium", "low"].map((level) => <div key={level}><span>{level} influence</span><strong>{stakeholders.filter((item) => item.influence === level).length}</strong></div>)}</div></section></div>
+      </section>
+    );
+  }
+
   return (
     <section className="project-stakeholder-resource">
       <div className="project-risk-issues-heading">
@@ -3361,6 +3400,7 @@ function ProjectCostBudgetPanel({
   workspaceId,
   canManage,
   onProjectUpdated,
+  design = "default",
 }) {
   const [expenses, setExpenses] = useState([]);
   const [expenseForm, setExpenseForm] = useState({
@@ -3506,6 +3546,20 @@ function ProjectCostBudgetPanel({
       toast.error("Expense could not be archived.");
     }
   };
+  if (design === "p35") {
+    const categoryTotals = ["labor", "software", "materials", "travel", "other"].map((category) => ({ category, total: expenses.filter((item) => item.category === category).reduce((sum, item) => sum + Number(item.amount || 0), 0) }));
+    const usedPercent = budgetAmount ? Math.min(Math.round((totalSpent / budgetAmount) * 100), 999) : 0;
+    return (
+      <section className="project-budget-design">
+        <div className="project-budget-summary-card project-budget-summary-top"><div className="project-resources-design-heading"><h2>Budget summary</h2><span className="project-currency-badge">{project.budget_currency || "USD"}</span></div><div className="project-budget-summary-values"><div><span>Total budget</span><strong>{budgetAmount === null ? "Not set" : formatMoney(budgetAmount)}</strong></div><div><span>Actual spend</span><strong>{formatMoney(actualSpent)}</strong></div><div><span>Remaining</span><strong>{remaining === null ? "n/a" : formatMoney(remaining)}</strong></div><div><span>Variance</span><strong>{budgetAmount ? `${usedPercent}%` : "n/a"}</strong></div></div><div className="project-budget-usage-track"><span style={{ width: `${usedPercent}%` }} /></div><p className="project-budget-warning">{remaining !== null && remaining < 0 ? "Project is over budget." : "Spend is within the approved project budget."}</p></div>
+        <section className="project-budget-expense-table project-budget-card"><div className="project-resources-design-heading"><h2>Expenses</h2><span>{expenses.length} records</span></div><div className="project-resources-table-head"><span>Name</span><span>Category</span><span>Amount</span><span>Date</span></div>{expenses.slice(0, 5).map((item) => <div className="project-resources-table-row" key={item.id}><strong>{item.name}</strong><span>{item.category}</span><span>{formatMoney(item.amount)}</span><span>{item.incurred_on || "—"}</span></div>)}{!expenses.length && <p className="project-detail-empty">No expenses recorded yet.</p>}</section>
+        <Card className="project-budget-form-card project-budget-card"><div className="project-resources-design-heading"><h2>Budget target</h2><span>{project.budget_currency || "USD"}</span></div>{canManage && <form className="project-budget-mini-form" onSubmit={saveBudget}><label>Amount<input type="number" min="0" step="0.01" value={budgetForm.budget_amount} onChange={(event) => setBudgetForm((current) => ({ ...current, budget_amount: event.target.value }))} /></label><label>Currency<AppSelect value={budgetForm.budget_currency} onChange={(event) => setBudgetForm((current) => ({ ...current, budget_currency: event.target.value }))}><option value="USD">USD</option><option value="GBP">GBP</option><option value="NGN">NGN</option></AppSelect></label><button type="submit" className="primary-button">Save budget</button></form>}</Card>
+        <section className="project-budget-currency-list project-budget-card"><div className="project-resources-design-heading"><h2>Currency</h2><span>Supported</span></div><div className="project-currency-options"><span>USD · US Dollar</span><span>GBP · British Pound</span><span>NGN · Nigerian Naira</span></div></section>
+        <section className="project-budget-spend-chart project-budget-card"><div className="project-resources-design-heading"><h2>Spend by category</h2><span>{formatMoney(totalSpent)}</span></div>{categoryTotals.map((item) => <div className="project-budget-category" key={item.category}><span>{item.category}</span><i><b style={{ width: `${totalSpent ? Math.round((item.total / totalSpent) * 100) : 0}%` }} /></i><strong>{formatMoney(item.total)}</strong></div>)}</section>
+        <section className="project-budget-add-expense project-budget-card"><div className="project-resources-design-heading"><h2>Add expense</h2><span>Actual or committed</span></div>{canManage && <form className="project-budget-mini-form" onSubmit={addExpense}><label>Name<input value={expenseForm.name} onChange={(event) => setExpenseForm((current) => ({ ...current, name: event.target.value }))} required /></label><label>Amount<input type="number" min="0" step="0.01" value={expenseForm.amount} onChange={(event) => setExpenseForm((current) => ({ ...current, amount: event.target.value }))} required /></label><button type="submit" className="secondary-button"><Plus size={15} /> Add expense</button></form>}</section>
+      </section>
+    );
+  }
   return (
     <section className="project-stakeholder-resource">
       <div className="project-risk-issues-heading">

@@ -2530,7 +2530,7 @@ function App() {
       {/* ── Sidebar ── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-border bg-surface text-text-primary transition-all duration-200 lg:relative",
+          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 bg-navy text-white transition-all duration-200 lg:relative",
           "w-[264px]",
           railCollapsed && "lg:w-[4.5rem]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
@@ -7017,7 +7017,7 @@ function WorkspaceView({
         risks: "Risks & issues",
       }[projectOperation];
       return (
-        <section className="workspace-view project-detail-view">
+        <section className={`workspace-view project-detail-view ${projectOperation ? "has-operation" : ""}`}>
           <div className="project-detail-header">
             <button type="button" className="project-detail-back" onClick={projectOperation ? () => setProjectOperation("") : closeProject}>
               <ChevronLeft size={16} /> {projectOperation ? "Back to project overview" : "Back to projects"}
@@ -7095,21 +7095,22 @@ function WorkspaceView({
               workspaceId={workspaceId}
               tasks={tasks}
               canManage={canManageMembers}
+              design="p32"
             />
           )}
           {projectOperation === "kanban" && (
             <section className="project-operation-surface project-kanban-surface">
               <div className="project-operation-toolbar"><span className="eyebrow">Project flow</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All owners <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">All priorities <ChevronDown size={14} /></button></div>
               <div className="project-kanban-columns">
-                {["Backlog", "Planned", "In progress", "In review", "Blocked", "Done", "Archived"].map((bucket) => {
+                {["Backlog", "To do", "In progress", "Review", "Blocked", "On hold", "Done"].map((bucket) => {
                   const bucketTasks = projectTasks.filter((task) => {
                     const status = String(task.status || "").toLowerCase().replaceAll("_", "-");
                     if (bucket === "Done") return status === "done" || status === "completed";
                     if (bucket === "Blocked") return status === "blocked";
                     if (bucket === "In progress") return status === "in-progress" || status === "doing";
-                    if (bucket === "In review") return status === "review" || status === "in-review";
-                    if (bucket === "Archived") return status === "archived";
-                    if (bucket === "Planned") return status === "planned" || status === "todo";
+                    if (bucket === "Review") return status === "review" || status === "in-review";
+                    if (bucket === "On hold") return status === "on-hold" || status === "paused";
+                    if (bucket === "To do") return status === "planned" || status === "todo";
                     return status === "backlog" || !status;
                   });
                   return <div className="project-kanban-column" key={bucket}><div className="project-kanban-column-heading"><span>{bucket}</span><strong>{bucketTasks.length}</strong></div>{bucketTasks.map((task) => <button type="button" className="project-kanban-task" key={task.id} onClick={() => onOpenTask(task)}><strong>{task.title}</strong><span>{task.priority || "Normal"}</span></button>)}</div>;
@@ -7120,11 +7121,12 @@ function WorkspaceView({
           {projectOperation === "tasks" && (
             <section className="project-operation-surface project-task-table-surface">
               <div className="project-operation-toolbar"><span className="eyebrow">Project tasks</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All statuses <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">Sort by due date <ChevronDown size={14} /></button></div>
+              <div className="project-task-table-label">Project tasks</div>
               <div className="project-task-table" role="table" aria-label="Project tasks"><div className="project-task-table-row project-task-table-head" role="row"><span>Task</span><span>Status</span><span>Priority</span><span>Due date</span><span>Owner</span></div>{projectTasks.slice(0, 8).map((task) => <button type="button" className="project-task-table-row" role="row" key={task.id} onClick={() => onOpenTask(task)}><strong>{task.title}</strong><span>{task.status || "Planned"}</span><span>{task.priority || "Normal"}</span><span>{task.due_date ? formatDay(task.due_date) : "—"}</span><span>{task.assignee_name || task.owner_name || "Unassigned"}</span></button>)}{!projectTasks.length && <p className="project-detail-empty">No tasks are linked to this project.</p>}</div>
             </section>
           )}
           {projectOperation === "issues" && (
-            <ProjectRiskIssuePanel projects={[selectedProjectWorkspace]} workspaceId={workspaceId} tasks={tasks} canManage={canManageMembers} />
+            <ProjectRiskIssuePanel projects={[selectedProjectWorkspace]} workspaceId={workspaceId} tasks={tasks} canManage={canManageMembers} design="p32" />
           )}
           {projectOperation === "resources" && (
             <ProjectStakeholderResourcePanel
@@ -7132,6 +7134,7 @@ function WorkspaceView({
               workspaceId={workspaceId}
               canManage={canManageMembers}
               tasks={tasks}
+              design="p34"
             />
           )}
           {projectOperation === "budget" && (
@@ -7152,7 +7155,7 @@ function WorkspaceView({
             />
           )}
           {projectOperation === "activity" && (
-            <section className="project-operation-surface project-activity-surface"><div className="project-operation-toolbar"><span className="eyebrow">Project activity</span><strong>Recent updates</strong><button type="button" className="project-operation-filter">All activity <ChevronDown size={14} /></button></div><div className="project-activity-list">{(localData.activity || []).filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)).map((item) => <div className="project-activity-row" key={item.id}><RefreshCw size={16} /><div><strong>{item.description || item.message || "Project activity updated"}</strong><small>{formatRelativeActivityTime(item.created_at || item.updated_at)}</small></div></div>)}{!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && <p className="project-detail-empty">No activity has been recorded for this project.</p>}</div></section>
+            <section className="project-activity-surface"><div className="project-activity-filter-label">Filter activity</div><div className="project-activity-chips">{["All", "Tasks", "Risks", "Issues", "Budget", "Resources", "Stakeholders", "Comments"].map((label) => <button type="button" className={label === "All" ? "active" : ""} key={label}>{label}</button>)}</div><div className="project-activity-list">{(localData.activity || []).filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)).map((item) => <div className="project-activity-row" key={item.id}><RefreshCw size={16} /><div><strong>{item.description || item.message || "Project activity updated"}</strong><small>{formatRelativeActivityTime(item.created_at || item.updated_at)}</small></div></div>)}{!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && <p className="project-detail-empty">No activity has been recorded for this project.</p>}</div></section>
           )}
           {selectedProject && (
             <ProjectEditDrawer
@@ -7170,6 +7173,7 @@ function WorkspaceView({
                 onRefresh();
                 setSelectedProject(null);
               }}
+              design="p35"
             />
           )}
         </section>
