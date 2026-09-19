@@ -3768,6 +3768,7 @@ function WorkspaceView({
   const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [projectHealthFilter, setProjectHealthFilter] = useState("all");
   const [projectSort, setProjectSort] = useState("due");
+  const [projectViewMode, setProjectViewMode] = useState("grid");
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
@@ -6976,17 +6977,17 @@ function WorkspaceView({
       );
     const summary = {
       active: withStats.filter((project) => project.status === "active").length,
-      risk: withStats.filter((project) =>
-        ["at-risk", "off-track"].includes(project.health),
+      onTrack: withStats.filter((project) =>
+        project.health === "on-track" || project.status === "completed",
       ).length,
-      overdue: withStats.filter(
+      attention: withStats.filter(
         (project) =>
-          project.status !== "completed" &&
-          project.due_date &&
-          project.due_date < today,
+          ["at-risk", "off-track"].includes(project.health) ||
+          project.blocked > 0 ||
+          (project.status !== "completed" && project.due_date && project.due_date < today),
       ).length,
-      completed: withStats.filter((project) => project.status === "completed")
-        .length,
+      completed: withStats.filter((project) => project.status === "completed").length,
+      budgeted: withStats.filter((project) => project.budget_amount !== null && project.budget_amount !== undefined).length,
     };
     if (selectedProjectWorkspace) {
       const openOperation = (operation) => {
@@ -7124,19 +7125,23 @@ function WorkspaceView({
         <div className="project-summary">
           <div>
             <strong>{summary.active}</strong>
-            <span>Active</span>
-          </div>
-          <div className="is-warning">
-            <strong>{summary.risk}</strong>
-            <span>At risk</span>
-          </div>
-          <div className="is-danger">
-            <strong>{summary.overdue}</strong>
-            <span>Overdue</span>
+            <span>Active projects</span>
+            <small>{summary.completed || 0} completed this quarter</small>
           </div>
           <div>
-            <strong>{summary.completed}</strong>
-            <span>Completed</span>
+            <strong>{summary.onTrack}</strong>
+            <span>On track</span>
+            <small>{withStats.length ? Math.round((summary.onTrack / withStats.length) * 100) : 0}% of the portfolio</small>
+          </div>
+          <div className="is-warning">
+            <strong>{summary.attention}</strong>
+            <span>Needs attention</span>
+            <small>At risk, delayed or blocked</small>
+          </div>
+          <div>
+            <strong>{summary.budgeted ? `${summary.budgeted}` : "—"}</strong>
+            <span>Budget used</span>
+            <small>{summary.budgeted ? `${summary.budgeted} projects approaching limit` : "No budgets configured"}</small>
           </div>
         </div>
         <div className="project-toolbar">
@@ -7184,8 +7189,12 @@ function WorkspaceView({
           <span>
             {visibleProjects.length} of {withStats.length} projects
           </span>
+          <div className="project-view-toggle" role="group" aria-label="Project view">
+            <button type="button" className={projectViewMode === "grid" ? "active" : ""} aria-pressed={projectViewMode === "grid"} onClick={() => setProjectViewMode("grid")} aria-label="Grid view"><LayoutGrid size={16} /></button>
+            <button type="button" className={projectViewMode === "list" ? "active" : ""} aria-pressed={projectViewMode === "list"} onClick={() => setProjectViewMode("list")} aria-label="List view"><List size={16} /></button>
+          </div>
         </div>
-        <div className="project-grid">
+        <div className={`project-grid ${projectViewMode === "list" ? "is-list" : ""}`}>
           {visibleProjects.length ? (
             visibleProjects.map((project) => (
               <Card
