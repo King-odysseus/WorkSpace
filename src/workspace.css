@@ -126,11 +126,6 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
    a utility on the element: this stylesheet is unlayered, so its rules beat
    Tailwind's layered ones no matter how specific the utility is. */
 .avatar.row-avatar { height: 28px; width: 28px; font-size: 9px; }
-/* The task row's assignee circle is 28px, between the avatar's two existing
-   sizes, so it gets a modifier of its own. It has to live here rather than as
-   a utility on the element: this stylesheet is unlayered, so its rules beat
-   Tailwind's layered ones no matter how specific the utility is. */
-.avatar.row-avatar { height: 28px; width: 28px; font-size: 9px; }
 .modal input { border: 1px solid #dce2e9; border-radius: 7px; padding: 11px; color: #263248; background: #fff; font: 500 12px 'Roboto'; outline: none; }
 .modal input:focus, .modal [data-slot='select-trigger']:focus { border-color: #4d7da8; box-shadow: 0 0 0 3px #0b1f3a12; }
 .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1859,39 +1854,8 @@ html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--works
 .time-clock-row span:not(.clock-state) { color: var(--workspace-text-soft); font-size: 9px; }
 .time-clock-row em { color: var(--workspace-text); font: 700 10px 'Roboto'; font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 900px) { .time-clock-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.my-tasks-view { min-width: 0; }
-.my-task-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 14px; }
-.my-task-summary button { display: grid; gap: 3px; padding: 13px 15px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); color: var(--workspace-text-soft); text-align: left; cursor: pointer; }
-.my-task-summary button.active, .my-task-summary button:hover { border-color: var(--teal); }
-.my-task-summary strong { color: var(--workspace-text); font: 800 20px 'Montserrat'; }
-.my-task-summary span { font-size: 10px; }
-.my-task-toolbar { display: grid; gap: 10px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); }
-.my-task-tabs { display: flex; gap: 5px; overflow-x: auto; }
-.my-task-tabs button { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; border: 0; border-radius: 999px; background: transparent; color: var(--workspace-text-soft); font: 700 10px 'Roboto'; white-space: nowrap; cursor: pointer; }
-.my-task-tabs button.active, .my-task-tabs button:hover { background: var(--workspace-surface-soft); color: var(--workspace-text); }
-.my-task-tabs span { min-width: 16px; padding: 2px 4px; border-radius: 999px; background: var(--workspace-border); color: var(--workspace-text-soft); font-size: 9px; text-align: center; }
-/* The count pill keeps its own colour: inheriting the button's leaves it white
-   on the light pill whenever the tab is the selected one. */
-.my-task-tabs button.active span { background: #FFFFFF; color: var(--color-info); }
-.my-task-filters { display: flex; flex-wrap: wrap; gap: 7px; }
-.my-task-filters input, .my-task-filters [data-slot='select-trigger'] { min-height: 34px; padding: 0 8px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text); font: 500 10px 'Roboto'; }
-.my-task-filters input { flex: 1 1 180px; min-width: 150px; }
-.my-task-results { display: grid; gap: 14px; }
-.my-task-group { padding: 15px 17px; border-radius: 11px; background: var(--workspace-surface); }
-.my-task-group-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
-.my-task-group-heading h2 { margin: 0; color: var(--workspace-text); font: 700 13px 'Montserrat'; }
-.my-task-group-heading span { color: var(--workspace-text-soft); font-size: 10px; }
-.my-task-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 58px auto auto; align-items: center; gap: 10px; min-height: 58px; padding: 9px 0; border-bottom: 1px solid var(--workspace-border); }
-.my-task-row:last-child { border-bottom: 0; }
-.my-task-row.overdue .my-task-row-copy span { color: #e36b43; }
-.my-task-row-copy { min-width: 0; display: grid; gap: 4px; }
-.my-task-row-copy button { overflow: hidden; border: 0; background: transparent; color: var(--workspace-text); font: 700 11px 'Roboto'; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.my-task-row-copy span { overflow: hidden; color: var(--workspace-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .my-task-priority { font-size: 9px; text-transform: capitalize; }
 .my-task-priority.urgent, .my-task-priority.high { color: #e36b43; font-weight: 700; }
-.my-task-empty { display: grid; justify-items: center; gap: 6px; padding: 28px 10px 18px; color: var(--workspace-text-soft); }
-.my-task-empty p { margin: 0; font-size: 11px; }
-.my-task-empty .text-button { margin: 0; }
 .team-board-view { min-width: 0; }
 .team-board-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 14px; }
 .team-board-metrics button { display: grid; gap: 3px; padding: 13px 15px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface); color: var(--workspace-text-soft); text-align: left; cursor: pointer; }
@@ -2143,7 +2107,7 @@ html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, va
 .planner-column-add { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 8px; border: 0; border-radius: 999px; background: transparent; color: var(--workspace-text-soft); cursor: pointer; font: 700 10px 'Roboto'; }
 .planner-column-add:hover { background: var(--workspace-surface-soft); color: var(--workspace-text); }
 @media (max-width: 750px) { .planner-view .planner-board { grid-template-columns: none; grid-auto-columns: min(268px, 82vw); overflow-x: auto; scroll-snap-type: x proximity; } .planner-view .planner-column { width: min(268px, 82vw); scroll-snap-align: start; } .planner-commandbar { align-items: stretch; } .planner-commandbar label, .planner-commandbar [data-slot='select-trigger'] { width: 100%; } .planner-result-count { margin-left: 0; } }
-@media (max-width: 700px) { .my-task-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .my-task-row { grid-template-columns: 20px minmax(0, 1fr) auto auto; } .my-task-priority { display: none; } }
+@media (max-width: 700px) { .my-task-priority { display: none; } }
 @media (max-width: 1050px) { .team-overview-grid { grid-template-columns: 1fr; } .team-overview-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .team-board-toolbar { grid-template-columns: 1fr; } .team-board-toolbar-main { flex-wrap: wrap; } .team-board-tabs { flex: 1 1 100%; } }
 @media (max-width: 700px) { .team-board-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .team-board-toolbar { align-items: stretch; grid-template-columns: 1fr; } .team-board-toolbar-main { align-items:stretch; flex-direction:column; } .team-board-tabs { width:100%; } .team-board-toolbar input { width: 100%; } .team-member-grid { grid-template-columns: 1fr; } .team-task-row { grid-template-columns: 20px minmax(0,1fr) auto; } .team-task-row .my-task-priority { display: none; } .team-overview-stack { grid-template-columns:1fr; } .team-workload-list { grid-template-columns:1fr; } .team-workload-stats { grid-template-columns:repeat(2, minmax(0,1fr)); } .team-task-controls { align-items:stretch; flex-direction:column; } .team-task-controls label, .team-task-controls > button { width:100%; justify-content:space-between; } .team-availability-summary { grid-template-columns:repeat(2, minmax(0,1fr)); } .team-availability-summary .team-checkin-progress { grid-column:1 / -1; } .member-profile-stats { grid-template-columns:repeat(2, minmax(0,1fr)); } .member-profile-detail-grid { grid-template-columns:1fr; } }
@@ -2285,16 +2249,14 @@ html[data-theme='dark'] .channel-row-wrap .channel-row.active, html[data-theme='
    shadcn utility shadow attached to individual Card instances. */
 :where(.metric-card, .workspace-card, .workspace-side-card,
   .calendar-week, .project-card, .planner-column, .report-panel, .report-stat,
-  .activity-history, .settings-panel, .team-member-card, .team-access-panel,
-  .my-task-group, .task-list-view, .follow-up-list, .chat-panel,
+  .activity-history, .settings-panel, .team-member-card, .team-access-panel, .task-list-view, .follow-up-list, .chat-panel,
   .chat-conversation-list, .chat-feed, .checkin-grid > [data-slot='card'], .help-welcome, .help-topic, .help-contact,
   .legal-document, .legal-acceptance, .team-board-metrics button) {
   box-shadow: 0 8px 24px rgb(7 26 46 / 6%) !important;
 }
 html[data-theme='dark'] :where(.metric-card, .workspace-card, .workspace-side-card,
   .calendar-week, .project-card, .planner-column, .report-panel, .report-stat,
-  .activity-history, .settings-panel, .team-member-card, .team-access-panel,
-  .my-task-group, .task-list-view, .follow-up-list, .chat-panel,
+  .activity-history, .settings-panel, .team-member-card, .team-access-panel, .task-list-view, .follow-up-list, .chat-panel,
   .chat-conversation-list, .chat-feed, .checkin-grid > [data-slot='card'], .help-welcome, .help-topic, .help-contact,
   .legal-document, .legal-acceptance, .team-board-metrics button) {
   box-shadow: 0 10px 28px rgb(2 5 31 / 25%) !important;
@@ -2312,8 +2274,6 @@ html[data-theme='dark'] .team-board-metrics > button { box-shadow: 9px 10px 24px
 .follow-up-row > .follow-up-actions { flex:0 0 auto; flex-direction:row; flex-wrap:wrap; justify-content:flex-end; }
 .compact-row > div { min-width:0; flex:1; }
 @media (max-width: 620px) { .follow-up-row { align-items:flex-start; flex-wrap:wrap; }.follow-up-row > .follow-up-actions { width:100%; padding-left:21px; justify-content:flex-start; } }
-@media (max-width: 820px) { .my-task-row { grid-template-columns:20px minmax(0,1fr) auto auto; }.my-task-row > .my-task-priority { display:none; }.my-task-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.my-task-filters input { grid-column:1 / -1; min-width:0; }.my-task-filters [data-slot='select-trigger'] { width:100%; min-width:0; } }
-@media (max-width: 520px) { .my-task-row { grid-template-columns:20px minmax(0,1fr) auto; grid-template-areas:"check copy delete" ". status status"; }.my-task-row > .check { grid-area:check; }.my-task-row-copy { grid-area:copy; }.my-task-row > button:last-child { grid-area:delete; }.my-task-filters { grid-template-columns:1fr; }.my-task-filters input { grid-column:auto; } }
 .priority-select, .task-status-select { border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text); box-shadow: inset 2px 2px 5px rgb(7 26 46 / 8%), 2px 2px 6px rgb(255 255 255 / 65%); font-weight: 700; }
 .priority-select:focus, .task-status-select:focus { outline: 2px solid rgb(10 158 135 / 28%); outline-offset: 1px; }
 .priority-urgent { --priority-color: #b42318; color: var(--priority-color); }
@@ -2595,7 +2555,6 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .activity-toolbar,
 .follow-up-toolbar,
 .project-toolbar,
-.my-task-toolbar,
 .checkin-toolbar,
 .planner-add-bucket,
 .operations-workstream-create {
@@ -3393,7 +3352,6 @@ html[data-theme='light'] .planner-scope-switch button:not(.active) span { color:
   .team-member-card,
   .team-board-column,
   .team-access-panel,
-  .my-task-group,
   .help-welcome,
   .help-topic,
   .help-contact,
@@ -3424,7 +3382,6 @@ html[data-theme='dark'] :where(
   .team-member-card,
   .team-board-column,
   .team-access-panel,
-  .my-task-group,
   .help-welcome,
   .help-topic,
   .help-contact,
@@ -3455,7 +3412,6 @@ html[data-theme='dark'] :where(
   .team-member-card,
   .team-board-column,
   .team-access-panel,
-  .my-task-group,
   .help-welcome,
   .help-topic,
   .help-contact,
@@ -3471,7 +3427,6 @@ html[data-theme='dark'] :where(
   .planner-scope-switch,
   .checkin-toolbar,
   .team-board-toolbar,
-  .my-task-toolbar,
   .operations-workstream-create,
   .planner-add-bucket,
   .calendar-toolbar,
@@ -5133,7 +5088,6 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
    rows it sits in - the row grids above reserve the space, so it only needs to
    stop growing past its own label. */
 .team-task-row [data-slot='select-trigger'].app-select-trigger,
-.my-task-row [data-slot='select-trigger'].app-select-trigger,
 .planner-card-meta [data-slot='select-trigger'].app-select-trigger {
   width: auto;
   min-width: 0;
@@ -5145,7 +5099,6 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
   line-height: 1;
 }
 .team-task-row [data-slot='select-trigger'].app-select-trigger svg,
-.my-task-row [data-slot='select-trigger'].app-select-trigger svg,
 .planner-card-meta [data-slot='select-trigger'].app-select-trigger svg {
   width: 12px;
   height: 12px;
@@ -5161,11 +5114,6 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
   line-height: 1;
 }
 .planner-task-table td [data-slot='select-trigger'].app-select-trigger svg { width: 12px; height: 12px; }
-
-@media (max-width: 520px) {
-  /* The row restacks here and the status spans the full width beneath the title. */
-  .my-task-row > [data-slot='select-trigger'].app-select-trigger { grid-area: status; width: 100%; }
-}
 
 .chat-shared-card { display:flex; align-items:center; gap:.65rem; width:100%; margin:.55rem 0; padding:.7rem .8rem; border:1px solid var(--color-border); border-radius:.75rem; background:var(--surface-secondary); text-align:left; color:inherit; }
 .chat-shared-card:hover { border-color:var(--accent); }
@@ -5230,13 +5178,13 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
 
 /* Quieter surface hierarchy: spacing and tone separate nested content while
    borders remain reserved for inputs, focus states, tables and true dividers. */
-:where(.project-summary > div, .my-task-summary button, .team-board-metrics button, .time-clock-totals div) {
+:where(.project-summary > div, .team-board-metrics button, .time-clock-totals div) {
   border: 0 !important;
   background: var(--workspace-surface, var(--color-surface));
   box-shadow: 0 5px 18px rgb(7 26 46 / 5%);
 }
 
-:where(.my-task-toolbar, .team-board-toolbar, .planner-commandbar, .planner-bulk-bar, .chat-share-picker) {
+:where(.team-board-toolbar, .planner-commandbar, .planner-bulk-bar, .chat-share-picker) {
   border: 0 !important;
   background: var(--workspace-surface-soft, var(--color-surface-secondary));
   box-shadow: none;
@@ -5263,7 +5211,7 @@ html[data-theme='light'] .secondary-button {
   color: #067f72;
 }
 
-html[data-theme='dark'] :where(.project-summary > div, .my-task-summary button, .team-board-metrics button, .time-clock-totals div) {
+html[data-theme='dark'] :where(.project-summary > div, .team-board-metrics button, .time-clock-totals div) {
   box-shadow: 0 8px 22px rgb(0 0 0 / 14%);
 }
 
@@ -5686,7 +5634,6 @@ html[data-theme='dark'] .report-progress-track {
   .team-access-panel,
   .team-member-card,
   .time-clock-panel,
-  .my-task-group,
   .task-list-view,
   .chat-panel,
   .chat-conversation-list,
@@ -5706,7 +5653,6 @@ html[data-theme='dark'] .report-progress-track {
 }
 
 .workspace-view :is(
-  .my-task-toolbar,
   .team-board-toolbar,
   .planner-commandbar,
   .planner-bulk-bar,
@@ -5728,7 +5674,6 @@ html[data-theme='dark'] .report-progress-track {
 }
 
 .workspace-view :is(
-  .my-task-summary,
   .team-board-metrics,
   .report-metrics,
   .project-summary
@@ -5738,7 +5683,6 @@ html[data-theme='dark'] .report-progress-track {
 }
 
 .workspace-view :is(
-  .my-task-summary,
   .team-board-metrics,
   .report-metrics,
   .project-summary
@@ -5752,7 +5696,7 @@ html[data-theme='dark'] .report-progress-track {
   color: var(--dashboard-muted);
 }
 
-.workspace-view :is(.my-task-summary, .team-board-metrics) > button {
+.workspace-view :is(.team-board-metrics) > button {
   display: grid !important;
   min-height: 88px;
   align-content: center;
@@ -5762,15 +5706,14 @@ html[data-theme='dark'] .report-progress-track {
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
-.workspace-view :is(.my-task-summary, .team-board-metrics) > button:hover,
-.workspace-view :is(.my-task-summary, .team-board-metrics) > button.active {
+.workspace-view :is(.team-board-metrics) > button:hover,
+.workspace-view :is(.team-board-metrics) > button.active {
   border-color: color-mix(in srgb, var(--color-info, #2563EB) 48%, transparent) !important;
   box-shadow: var(--dashboard-shadow-hover) !important;
   transform: translateY(-2px);
 }
 
 .workspace-view :is(
-  .my-task-summary,
   .team-board-metrics,
   .project-summary
 ) strong {
@@ -5779,7 +5722,7 @@ html[data-theme='dark'] .report-progress-track {
   font-variant-numeric: tabular-nums;
 }
 
-.workspace-view :is(.my-task-summary, .team-board-metrics, .project-summary) span {
+.workspace-view :is(.team-board-metrics, .project-summary) span {
   color: var(--dashboard-muted);
   font-size: 10px;
   font-weight: 700;
@@ -5801,7 +5744,6 @@ html[data-theme='dark'] .report-progress-track {
 }
 
 .workspace-view :is(
-  .my-task-group-heading h2,
   .team-member-heading h2,
   .team-column-heading h2,
   .drawer-section-heading h3,
@@ -5818,7 +5760,6 @@ html[data-theme='dark'] .report-progress-track {
 }
 
 .workspace-view :is(
-  .my-task-row,
   .team-task-row,
   .follow-up-row,
   .directory-row,
@@ -5843,7 +5784,6 @@ html[data-theme='dark'] .report-progress-track {
 }
 
 .workspace-view :is(
-  .my-task-row,
   .team-task-row,
   .follow-up-row,
   .directory-row,
@@ -5865,7 +5805,6 @@ html[data-theme='dark'] .report-progress-track {
 }
 
 .workspace-view :is(
-  .my-task-row,
   .team-task-row,
   .follow-up-row,
   .directory-row,
@@ -5882,7 +5821,6 @@ html[data-theme='dark'] .report-progress-track {
   .settings-row,
   .time-clock-row
 ) + :is(
-  .my-task-row,
   .team-task-row,
   .follow-up-row,
   .directory-row,
@@ -5900,11 +5838,6 @@ html[data-theme='dark'] .report-progress-track {
   .time-clock-row
 ) {
   margin-top: 7px;
-}
-
-.workspace-view .my-task-row {
-  min-height: 62px;
-  padding: 10px 12px;
 }
 
 .workspace-view .team-task-row {
@@ -6225,7 +6158,7 @@ html[data-theme='dark'] .workspace-view :is(
 }
 
 @media (max-width: 1060px) {
-  .workspace-view :is(.my-task-summary, .team-board-metrics, .report-metrics) {
+  .workspace-view :is(.team-board-metrics, .report-metrics) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -6277,11 +6210,11 @@ html[data-theme='dark'] .workspace-view :is(
     align-self: flex-start;
   }
 
-  .workspace-view :is(.my-task-toolbar, .team-board-toolbar, .planner-commandbar, .project-toolbar, .activity-toolbar, .report-toolbar, .follow-up-toolbar, .planner-bulk-bar) {
+  .workspace-view :is(.team-board-toolbar, .planner-commandbar, .project-toolbar, .activity-toolbar, .report-toolbar, .follow-up-toolbar, .planner-bulk-bar) {
     border-radius: 16px !important;
   }
 
-  .workspace-view :is(.my-task-summary, .team-board-metrics, .report-metrics, .project-summary) {
+  .workspace-view :is(.team-board-metrics, .report-metrics, .project-summary) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -6289,7 +6222,7 @@ html[data-theme='dark'] .workspace-view :is(
     grid-template-columns: 1fr;
   }
 
-  .workspace-view :is(.workspace-card, .workspace-side-card, .calendar-week, .project-card, .planner-column, .planner-gantt, .planner-table-scroll, .report-panel, .report-stat, .activity-history, .follow-up-list, .team-board-column, .team-access-panel, .team-member-card, .time-clock-panel, .my-task-group, .task-list-view, .chat-panel, .chat-conversation-list, .chat-feed) {
+  .workspace-view :is(.workspace-card, .workspace-side-card, .calendar-week, .project-card, .planner-column, .planner-gantt, .planner-table-scroll, .report-panel, .report-stat, .activity-history, .follow-up-list, .team-board-column, .team-access-panel, .team-member-card, .time-clock-panel, .task-list-view, .chat-panel, .chat-conversation-list, .chat-feed) {
     border-radius: 18px !important;
   }
 
@@ -6314,18 +6247,18 @@ html[data-theme='dark'] .workspace-view :is(
     width: 100%;
   }
 
-  .workspace-view :is(.my-task-summary, .team-board-metrics, .report-metrics, .project-summary) {
+  .workspace-view :is(.team-board-metrics, .report-metrics, .project-summary) {
     gap: 9px;
   }
 
-  .workspace-view :is(.my-task-summary, .team-board-metrics) > button,
-  .workspace-view .report-stat {
+  .workspace-view :is(.team-board-metrics) > button,
+.workspace-view .report-stat {
     min-height: 80px;
     padding: 14px;
   }
 
-  .workspace-view :is(.my-task-summary, .team-board-metrics, .project-summary) strong,
-  .workspace-view .report-stat strong {
+  .workspace-view :is(.team-board-metrics, .project-summary) strong,
+.workspace-view .report-stat strong {
     font-size: 21px;
   }
 
@@ -7199,7 +7132,6 @@ html[data-theme='dark'] .workspace-view :is(
    darker still and the muted colour clears the ratio there. */
 html[data-theme='light'] :is(
   .chat-workspace-view .chat-filter-tabs button:not(.active) span,
-  .workspace-view .my-task-tabs button:not(.active) span,
   .workspace-view .checkin-range-filter button:not(.active) > span
 ) {
   color: #5f687c;
@@ -8876,7 +8808,7 @@ html[data-theme='dark'] .planner-bucket-menu {
   scrollbar-gutter: stable;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) {
   display: inline-flex;
   max-width: 100%;
   align-items: center;
@@ -8889,11 +8821,11 @@ html[data-theme='dark'] .planner-bucket-menu {
   scrollbar-width: none;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs)::-webkit-scrollbar {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs)::-webkit-scrollbar {
   display: none;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]) {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]) {
   min-height: 28px;
   padding: 5px 10px;
   border: 0;
@@ -8905,13 +8837,13 @@ html[data-theme='dark'] .planner-bucket-menu {
   white-space: nowrap;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):is(.active, [aria-selected="true"], [aria-pressed="true"]) {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):is(.active, [aria-selected="true"], [aria-pressed="true"]) {
   background: var(--color-info, #2563eb);
   color: #fff;
   box-shadow: 0 4px 12px color-mix(in srgb, var(--color-info, #2563eb) 24%, transparent);
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):focus-visible {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-info, #2563eb) 75%, transparent);
   outline-offset: 2px;
 }
@@ -9093,7 +9025,7 @@ html[data-theme="dark"] .auth-error {
 @media (max-width: 640px) {
   .workspace-skeleton-heading { width: 58%; }
 
-  .workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .my-task-tabs, .project-register-tabs, .spreadsheet-tabs) {
+  .workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) {
     width: 100%;
   }
 
