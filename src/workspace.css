@@ -1711,51 +1711,6 @@ html[data-theme='dark'] .nav-item.active {
   transform: translateY(-1px);
 }
 
-.sidebar-edge-toggle {
-  position: fixed;
-  top: 50%;
-  left: var(--sidebar-edge-left, 16rem);
-  z-index: 50;
-  display: none;
-  width: 28px;
-  height: 56px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-top: 1px solid var(--color-border);
-  border-right: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-  border-left: 0;
-  border-radius: 0 10px 10px 0;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  box-shadow: var(--elevation-floating);
-  cursor: pointer;
-  transform: translateY(-50%);
-  transition: left .2s ease, background-color .16s ease, color .16s ease, transform .16s ease;
-}
-
-.sidebar-edge-toggle:hover {
-  background: var(--color-surface-secondary);
-  color: var(--color-text-primary);
-  transform: translate(2px, -50%);
-}
-
-.sidebar-edge-toggle:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-@media (min-width: 1024px) {
-  .sidebar-edge-toggle { display: flex; }
-}
-
-.sidebar-edge-toggle.is-hidden { display: none !important; }
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar-edge-toggle { transition: none; }
-}
-
 .top-search {
   width: 220px;
   min-height: 40px;
@@ -3563,10 +3518,6 @@ html[data-theme='dark'] .chat-workspace-view .chat-member-tone-4 p { background:
   .calendar-filter-row [data-slot='select-trigger'] { flex:1; }
 }
 
-/* Zuri is a floating button on desktop and a pill in the bottom nav below
-   1024px, so only the desktop form is declared here. */
-.ai-desktop-launcher { display:none; }
-.ai-desktop-launcher:focus-visible { outline:3px solid var(--focus-ring); outline-offset:3px; }
 .ai-chat-window[data-slot='dialog-content'] { display:flex; flex-direction:column; gap:0; position:fixed; inset:0; width:100%; height:100dvh; max-width:none; transform:none; translate:none; animation:none; border:0; border-radius:0; padding:0; overflow:hidden; background:var(--workspace-surface); color:var(--workspace-text); }
 .ai-chat-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:calc(8px + env(safe-area-inset-top)) 12px 8px; background:var(--navy); color:#fff; }
 .ai-chat-title { display:flex; align-items:center; gap:9px; color:#fff; font-size:16px; }
@@ -3613,21 +3564,12 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 .ai-chat-attach:focus-within { outline:2px solid var(--focus-ring) !important; outline-offset:2px; }
 .ai-chat-doc-note { padding:9px 13px; border:1px solid var(--workspace-border); border-radius:12px; background:var(--workspace-surface-soft); color:var(--workspace-text-soft); font-size:11px; line-height:1.45; }
 @media (min-width:1024px) {
-  .ai-desktop-launcher { position:fixed; bottom:28px; right:28px; z-index:30; display:grid; place-items:center; width:56px; height:56px; border:0; border-radius:999px; background:var(--brand-accent); color:var(--workspace-on-accent); box-shadow:0 8px 24px rgb(0 0 0 / 20%); cursor:pointer; }
-  .ai-desktop-launcher:hover { background:#FFFFFF; }
   .ai-chat-window[data-slot='dialog-content'] { inset:auto 24px 24px auto; width:380px; height:min(560px,calc(100dvh - 48px)); border:1px solid var(--workspace-border); border-radius:18px; }
   .ai-chat-heading { padding:8px 12px; }
 }
 
 .ai-chat-actions button:focus-visible, .ai-chat-send:focus-visible, .ai-chat-composer .ai-chat-input:focus-visible { outline:2px solid var(--focus-ring) !important; outline-offset:2px; }
 
-/* Keep the AI entry white in both themes; only the surrounding ring pulses. */
-.ai-desktop-launcher {
-  background:#FFFFFF;
-  color:#90673F;
-  border:1px solid #C49A6C;
-  animation:ai-launcher-pulse 3s ease-out infinite, ai-launcher-reveal .2s ease-out;
-}
 .ai-restore-tab {
   position:fixed; top:50%; right:env(safe-area-inset-right, 0px); z-index:30;
   display:grid; place-items:center; width:32px; height:48px; padding:0;
@@ -3654,15 +3596,6 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 .ai-minimized-toast > button { min-height:32px; padding:0 11px; border:0; border-radius:999px; background:transparent; color:var(--blue); cursor:pointer; font:700 11px 'Roboto', sans-serif; white-space:nowrap; }
 .ai-minimized-toast > button:hover { background:var(--workspace-surface-soft); }
 .ai-minimized-toast > button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
-@keyframes ai-launcher-pulse {
-  0%, 100% { box-shadow:0 0 0 0 rgb(196 154 108 / 0%); }
-  35% { box-shadow:0 0 0 3px rgb(196 154 108 / 28%); }
-  75% { box-shadow:0 0 0 8px rgb(196 154 108 / 0%); }
-}
-@keyframes ai-launcher-reveal {
-  from { opacity:0; transform:translateX(12px); }
-  to { opacity:1; transform:translateX(0); }
-}
 @keyframes ai-minimized-reveal {
   from { opacity:0; transform:translateY(8px) scale(.98); }
   to { opacity:1; transform:translateY(0) scale(1); }
@@ -3671,7 +3604,6 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   .ai-minimized-toast { right:28px; bottom:28px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-desktop-launcher { animation:none; box-shadow:0 0 0 2px rgb(196 154 108 / 20%); }
   .ai-minimized-toast { animation:none; }
 }
 
@@ -4600,6 +4532,15 @@ html[data-theme='dark'] {
   --color-warning-fill: var(--semantic-warning);
   --color-warning-soft: var(--semantic-warning-bg);
 
+  /* The Assistant button the shell header carries on every page. Its fill and
+     stroke are the info alert's exactly; its icon and label are a deeper blue
+     than --semantic-info, which would measure 3.1:1 on that fill where this one
+     measures 5.9:1. Named for the component rather than folded into the info
+     ramp, because the ramp's --alert-info-text is darker still. */
+  --color-alert-info-fill: var(--alert-info-fill);
+  --color-alert-info-stroke: var(--alert-info-stroke);
+  --color-assistant-accent: #1447E6;
+
   --color-danger: var(--semantic-error);
   --color-danger-soft: var(--semantic-error-bg);
   --color-danger-bg: var(--semantic-error-bg);
@@ -4669,6 +4610,9 @@ html[data-theme='dark'] {
   --color-border: #2a2a5c;
   --color-border-light: #20204a;
   --color-selected: #23234F;
+  --color-alert-info-fill: #14224A;
+  --color-alert-info-stroke: #1E3A8A;
+  --color-assistant-accent: #93B4FF;
   --shadow-elevated: 0 12px 40px -12px rgb(0 0 0 / 0.6);
 }
 

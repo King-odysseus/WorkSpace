@@ -20,6 +20,7 @@ import React, {
 } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  Activity as ActivityIcon,
   AlertCircle,
   Archive,
   ArrowUpRight,
@@ -32,20 +33,25 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronsLeft,
   ClipboardList,
   Clock3,
   Copy,
   Download,
+  File,
   Filter,
+  Flag,
+  Folder,
   Hash,
-  LayoutDashboard,
+  Home,
+  Info,
   LayoutGrid,
   Link2,
+  List,
   LogOut,
   Megaphone,
   MessageSquare,
   MoreHorizontal,
-  NotebookPen,
   ChevronLeft,
   ChevronRight,
   EyeOff,
@@ -61,6 +67,7 @@ import {
   Sparkles,
   Square,
   Target,
+  Upload,
   Users,
   Webhook,
   X,
@@ -217,48 +224,6 @@ import {
 const isConversationNotification = (notification) =>
   ["chat_channel", "direct_conversation"].includes(notification?.target_type);
 
-function SidebarUpgradeCard({ userId }) {
-  const storageKey = `workspace-sidebar-upgrade-card-dismissed-${userId}`;
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return localStorage.getItem(storageKey) === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  if (dismissed) return null;
-
-  const dismiss = () => {
-    setDismissed(true);
-    try {
-      localStorage.setItem(storageKey, "true");
-    } catch (error) {
-      console.warn("Sidebar upgrade card preference could not be saved.", error);
-    }
-  };
-
-  return (
-    <div className="relative mx-4 mb-3 rounded-container border border-border bg-background p-3.5 pr-10">
-      <button
-        type="button"
-        onClick={dismiss}
-        className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-badge text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        aria-label="Dismiss weekly priorities card"
-        title="Dismiss"
-      >
-        <X size={14} />
-      </button>
-      <p className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
-        <Sparkles size={14} /> Make your week flow
-      </p>
-      <p className="mt-0.5 text-[11px] leading-snug text-text-muted">
-        Set your priorities and stay ahead of what's due.
-      </p>
-    </div>
-  );
-}
-
 function App() {
   const today = toDateKey(new Date());
   const todayLabel = formatLongDate(today);
@@ -302,6 +267,10 @@ function App() {
   const [messagesOrigin, setMessagesOrigin] = useState("header");
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  // The design gives the account menu two triggers - the header avatar and the
+  // sidebar's overflow button - and both are mounted at once on desktop, so
+  // they cannot share one open flag without drawing the menu twice.
+  const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   // Held in state rather than read on each render so opening the page clears the
   // sidebar marker without needing a reload.
@@ -342,7 +311,9 @@ function App() {
     };
   }, [showModal]);
   const searchRef = useRef(null);
+  const searchInputRef = useRef(null);
   const profileMenuRef = useRef(null);
+  const sidebarProfileRef = useRef(null);
   const workspaceMenuRef = useRef(null);
   const workspaceMenuRefMobile = useRef(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -676,6 +647,11 @@ function App() {
         !profileMenuRef.current.contains(event.target)
       )
         setProfileMenuOpen(false);
+      if (
+        sidebarProfileRef.current &&
+        !sidebarProfileRef.current.contains(event.target)
+      )
+        setSidebarProfileOpen(false);
       // The switcher renders in the sidebar and again in the mobile drawer, and
       // both stay mounted (the drawer is only translated off-screen), so a click
       // counts as "outside" only when it misses both.
@@ -689,6 +665,29 @@ function App() {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // The header prints a "/" key hint in the search field, so "/" has to do what
+  // it says. Ignored while the caret is already in a field, or while a modifier
+  // is held, so it never eats a character someone meant to type.
+  useEffect(() => {
+    const focusSearch = (event) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey)
+        return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      )
+        return;
+      if (!searchInputRef.current) return;
+      event.preventDefault();
+      searchInputRef.current.focus();
+      searchInputRef.current.select();
+    };
+    document.addEventListener("keydown", focusSearch);
+    return () => document.removeEventListener("keydown", focusSearch);
   }, []);
 
   useEffect(() => {
@@ -1974,6 +1973,84 @@ function App() {
       .slice(0, 2)
       .toUpperCase() || session.user.email.slice(0, 2).toUpperCase();
   const currentUserAvatarUrl = session.user.avatar_url || "";
+  // The design tiles both the header breadcrumb and the sidebar switcher with
+  // the workspace's own initial rather than a generic mark.
+  const workspaceInitial = (currentWorkspace?.name || "W")
+    .trim()
+    .slice(0, 1)
+    .toUpperCase();
+
+  const closeProfileMenu = () => {
+    setProfileMenuOpen(false);
+    setSidebarProfileOpen(false);
+  };
+
+  // One account menu, two triggers that the design draws - the header avatar
+  // and the sidebar's overflow button. Both call sites wrap this body in their
+  // own positioned container, so every action closes whichever one opened it.
+  const profileMenuBody = (
+    <>
+      <div className="border-b border-border-light px-3 py-2.5">
+        <p className="truncate text-sm font-semibold text-text-primary">
+          {currentUserName}
+        </p>
+        <p className="truncate text-xs text-text-muted">{session.user.email}</p>
+      </div>
+      {currentWorkspace && (
+        <div className="border-b border-border-light px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+            Workspace
+          </p>
+          <p className="truncate text-sm font-semibold text-text-primary">
+            {currentWorkspace.name}
+          </p>
+          <p className="truncate text-xs text-text-muted">
+            {currentWorkspace.role || "Member"}
+          </p>
+        </div>
+      )}
+      {session.user.workspaces.length > 1 && (
+        <button
+          type="button"
+          onClick={() => {
+            setMobileOpen(true);
+            closeProfileMenu();
+          }}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary sm:hidden"
+        >
+          <Building2 size={16} /> Switch workspace
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          setAiLauncherVisibility(!aiLauncherHidden);
+          closeProfileMenu();
+        }}
+        className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary"
+      >
+        {aiLauncherHidden ? <Sparkles size={16} /> : <EyeOff size={16} />}
+        {aiLauncherHidden ? "Show Zuri button" : "Hide Zuri button"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setActive("Settings");
+          closeProfileMenu();
+        }}
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary"
+      >
+        <Settings size={16} /> Settings
+      </button>
+      <button
+        type="button"
+        onClick={logout}
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-danger hover:bg-danger-bg"
+      >
+        <LogOut size={16} /> Sign out
+      </button>
+    </>
+  );
   const currentUserPresence = session.user.presence || "available";
   const updateSessionUser = (patch) =>
     setSession((current) => ({
@@ -2074,10 +2151,10 @@ function App() {
     {
       heading: "Overview",
       items: [
-        { label: "Today", icon: LayoutDashboard },
-        { label: "My tasks", icon: CheckCircle2 },
-        { label: "My planner", icon: NotebookPen },
-        { label: "Daily operations", icon: ClipboardList },
+        { label: "Today", icon: Home },
+        { label: "My tasks", icon: ClipboardList },
+        { label: "My planner", icon: List },
+        { label: "Daily operations", icon: RefreshCw },
         { label: "Team", icon: Users },
       ],
     },
@@ -2098,27 +2175,30 @@ function App() {
         },
         {
           label: "Follow-up",
-          icon: Bell,
+          icon: Flag,
           badge: workspaceData.followUps.filter(
             (item) => item.status !== "completed",
           ).length,
+          badgeTone: "warning",
         },
-        { label: "Check-ins", icon: Hash },
+        { label: "Check-ins", icon: Check },
       ],
     },
     {
       heading: "Work",
       items: [
         { label: "Planner", icon: LayoutGrid },
-        { label: "Projects", icon: Target },
+        { label: "Projects", icon: Folder },
         { label: "Calendar", icon: CalendarDays },
+        { label: "Files", icon: File },
+        { label: "Import data", icon: Upload },
       ],
     },
     {
       heading: "Insights",
       items: [
         { label: "Reports", icon: BarChart3 },
-        { label: "Activity", icon: Clock3 },
+        { label: "Activity", icon: ActivityIcon },
       ],
     },
     {
@@ -2354,10 +2434,10 @@ function App() {
             Collapsed to the rail the logo alone is the trigger. */}
         <div
           className={cn(
-            "hidden flex-col border-b border-border lg:flex",
+            "hidden flex-col lg:flex",
             railCollapsed
               ? "items-center justify-center gap-4 px-0 py-5"
-              : "items-stretch gap-3 px-4 pb-4 pt-6",
+              : "items-stretch gap-3 px-5 pt-5",
           )}
         >
           {railCollapsed ? (
@@ -2385,7 +2465,7 @@ function App() {
                   on the next, the way the design's sidebar stacks them. Sharing
                   one row squeezed the switcher to half the rail and left the
                   workspace name as the only thing naming the product. */}
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <img
                   src="/tijha-logo.png"
                   alt="TijhaBooks"
@@ -2394,28 +2474,45 @@ function App() {
                 <span className="truncate text-[15px] font-bold tracking-[-0.2px] text-text-primary">
                   WorkSpace
                 </span>
+                {/* The design puts the collapse control on the brand row rather
+                    than on a pill floating over the sidebar's edge. */}
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed((current) => !current)}
+                  aria-expanded={!sidebarCollapsed}
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                  className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-chip text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                >
+                  <ChevronsLeft size={16} />
+                </button>
               </div>
 
               <div className="relative" ref={workspaceMenuRef}>
                 <button
                   type="button"
                   onClick={() => setWorkspaceMenuOpen((current) => !current)}
-                  className="flex w-full items-center gap-2 rounded-control border border-border bg-background px-2.5 py-1.5 text-left transition-colors hover:bg-surface-secondary"
+                  className="flex h-[42px] w-full items-center gap-2 rounded-[10px] border border-border bg-background pl-2 pr-2 text-left transition-colors hover:bg-surface-secondary"
                   aria-haspopup="true"
                   aria-expanded={workspaceMenuOpen}
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold leading-tight text-text-primary">
-                      {currentWorkspace?.name || "Workspace"}
-                    </span>
-                    <span className="block truncate text-[10px] uppercase leading-tight tracking-[1.6px] text-text-muted">
-                      Team Manager
-                    </span>
+                  <span
+                    aria-hidden="true"
+                    className="flex size-6 shrink-0 items-center justify-center rounded-badge bg-primary text-[12px] font-bold text-primary-foreground"
+                  >
+                    {workspaceInitial}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text-primary">
+                    {currentWorkspace?.name || "Workspace"}
                   </span>
                   <ChevronDown size={16} className="shrink-0 text-text-muted" />
                 </button>
                 {workspaceMenuOpen && workspaceMenu}
               </div>
+
+              {/* Inset rather than a border on the block, so it spans the same
+                  232px as the nav rows beneath it. */}
+              <div className="-mx-1 h-px bg-border" />
             </>
           )}
         </div>
@@ -2450,15 +2547,19 @@ function App() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-4 py-4">
+        <nav className="flex-1 overflow-y-auto px-4 pb-2 pt-4">
           {navGroups.map((group) => (
-            <div className="mb-6 last:mb-0" key={group.heading}>
+            <div className="mb-5 last:mb-0" key={group.heading}>
+              {/* The design stores these labels in title case and renders them
+                  upper at 1.6px tracking, which is what text-overline carries -
+                  reading the node's raw text rather than its textCase would get
+                  the case wrong. */}
               {!railCollapsed && (
                 <p className="mb-1.5 px-3 text-overline uppercase text-text-muted">
                   {group.heading}
                 </p>
               )}
-              <ul className="space-y-1">
+              <ul className="space-y-0.5">
                 {group.items.map(({ label, icon: Icon, badge, badgeTone }) => (
                   <li key={label}>
                     <button
@@ -2470,9 +2571,9 @@ function App() {
                       title={railCollapsed ? label : undefined}
                       aria-current={active === label ? "page" : undefined}
                       className={cn(
-                        "group relative flex h-[34px] w-full items-center gap-3 rounded-icon px-3 text-sm transition-colors",
+                        "group relative flex h-[34px] w-full items-center gap-2.5 rounded-icon px-3 text-sm transition-colors",
                         active === label
-                          ? "bg-selected font-semibold text-text-primary"
+                          ? "bg-selected font-semibold text-primary"
                           : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary",
                         railCollapsed && "justify-center px-0",
                       )}
@@ -2494,10 +2595,12 @@ function App() {
                       {!railCollapsed && badge > 0 && (
                         <span
                           className={cn(
-                            "ml-auto flex h-[18px] min-w-6 items-center justify-center rounded-[9px] px-1.5 text-[11px] font-bold",
+                            "ml-auto flex h-[18px] min-w-6 items-center justify-center rounded-[9px] px-1.5 text-[11px] font-bold text-white",
                             badgeTone === "info"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-danger text-white",
+                              ? "bg-primary"
+                              : badgeTone === "warning"
+                                ? "bg-warning-fill"
+                                : "bg-danger",
                           )}
                         >
                           {badge > 9 ? "9+" : badge}
@@ -2511,73 +2614,83 @@ function App() {
           ))}
         </nav>
 
-        {/* Upgrade nudge - mirrors TijhaBooks' plan-upsell card */}
-        {!railCollapsed && (
-          <SidebarUpgradeCard key={session.user.id} userId={session.user.id} />
-        )}
-
-        <div className="border-t border-border px-4 py-2.5">
-          <button
-            type="button"
-            onClick={() => {
-              setActive("Settings");
-              setMobileOpen(false);
-            }}
-            title={railCollapsed ? "Settings" : undefined}
-            aria-current={active === "Settings" ? "page" : undefined}
-            className={cn(
-              "relative flex h-[34px] w-full items-center gap-3 rounded-icon px-3 text-sm transition-colors",
-              active === "Settings"
-                ? "bg-selected font-semibold text-text-primary"
-                : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary",
-              railCollapsed && "justify-center px-0",
+        {/* Account block - the design ends the sidebar on the signed-in user
+            rather than on a Settings row. Settings is the first item in this
+            menu, so the destination the old row carried is still one click
+            away, and the collapse control has moved up to the brand row. */}
+        <div className="px-4 pb-3 pt-3">
+          <div className="h-px bg-border" />
+          <div className="relative mt-3 flex items-center gap-2.5" ref={sidebarProfileRef}>
+            {railCollapsed ? (
+              <button
+                type="button"
+                onClick={() => setSidebarProfileOpen((current) => !current)}
+                className="flex w-full items-center justify-center"
+                aria-haspopup="true"
+                aria-expanded={sidebarProfileOpen}
+                aria-label={`More account options for ${currentUserName}`}
+              >
+                <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
+                  {currentUserAvatarUrl ? (
+                    <img src={currentUserAvatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    currentUserInitials
+                  )}
+                </span>
+              </button>
+            ) : (
+              <>
+                <span className="relative inline-flex size-8 shrink-0">
+                  <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
+                    {currentUserAvatarUrl ? (
+                      <img src={currentUserAvatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      currentUserInitials
+                    )}
+                  </span>
+                  <span
+                    className={`presence-dot presence-${currentUserPresence}`}
+                    title={PRESENCE_LABEL[currentUserPresence] || currentUserPresence}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-text-primary">
+                    {currentUserName}
+                  </span>
+                  <span className="block truncate text-caption text-text-muted">
+                    {currentWorkspace?.role || "Member"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSidebarProfileOpen((current) => !current)}
+                  aria-haspopup="true"
+                  aria-expanded={sidebarProfileOpen}
+                  aria-label={`More account options for ${currentUserName}`}
+                  className="flex size-6 shrink-0 items-center justify-center rounded-chip text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                >
+                  <MoreHorizontal size={20} />
+                </button>
+              </>
             )}
-          >
-            {active === "Settings" && (
-              <span
-                aria-hidden="true"
-                className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-chip bg-primary"
-              />
+            {sidebarProfileOpen && (
+              <div className="absolute bottom-full right-0 z-[60] mb-2 max-h-[calc(100dvh-5rem)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
+                {profileMenuBody}
+              </div>
             )}
-            <Settings size={20} className="shrink-0" />
-            {!railCollapsed && <span className="truncate">Settings</span>}
-          </button>
+          </div>
         </div>
       </aside>
 
-      {/* ── Desktop collapse edge pill - sits on the right edge of the sidebar ── */}
-      <button
-        type="button"
-        onClick={() => setSidebarCollapsed((current) => !current)}
-        className={cn(
-          "sidebar-edge-toggle",
-          (workspaceLoading || Boolean(workspaceError)) && "is-hidden",
-        )}
-        style={{
-          "--sidebar-edge-left": sidebarCollapsed ? "4.5rem" : "264px",
-        }}
-        aria-expanded={!sidebarCollapsed}
-        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {sidebarCollapsed ? (
-          <ChevronRight size={14} />
-        ) : (
-          <ChevronLeft size={14} />
-        )}
-      </button>
-
       {/* ── Main ── */}
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="relative z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 lg:px-6">
-          {/* The shell carries no page title of its own: every view opens with its
-              own page header, so a second copy here would only compete with it.
-              On phones this column holds the app mark instead, which the sidebar's
-              brand block cannot show while it is off-canvas.
-              The mark and the utility cluster are both flex-1, so they always hold
-              the same width and the search between them lands on the header's true
-              centre instead of the midpoint of whatever space was left over. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <header className="relative z-30 flex h-16 shrink-0 items-center border-b border-border bg-surface px-4 lg:gap-6 lg:px-6">
+          {/* Breadcrumb - on phones this column holds the app mark instead, which
+              the sidebar's brand block cannot show while it is off-canvas. The
+              column is a fixed 272px on desktop so the search after it starts on
+              the design's 320px, and the utility cluster is pushed right by
+              ml-auto rather than by a matching flex-1 on this side. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-[272px] lg:flex-none">
             <img
               src="/tijha-logo.png"
               alt="TijhaBooks"
@@ -2586,16 +2699,35 @@ function App() {
             <span className="truncate text-[15px] font-bold tracking-[-0.2px] text-text-primary lg:hidden">
               WorkSpace
             </span>
+
+            <span
+              aria-hidden="true"
+              className="hidden size-7 shrink-0 items-center justify-center rounded-badge bg-primary text-body-compact font-bold text-primary-foreground lg:flex"
+            >
+              {workspaceInitial}
+            </span>
+            <span className="hidden min-w-0 truncate text-label text-text-primary lg:block">
+              {currentWorkspace?.name || "Workspace"}
+            </span>
+            <ChevronRight
+              size={14}
+              aria-hidden="true"
+              className="hidden shrink-0 text-text-muted lg:block"
+            />
+            <span className="hidden truncate text-label font-semibold text-text-primary lg:block">
+              {active}
+            </span>
           </div>
 
-          <div className="hidden w-full max-w-[280px] md:block" ref={searchRef}>
+          <div className="relative ml-3 min-w-0 flex-1 lg:ml-0 lg:w-[400px] lg:flex-none" ref={searchRef}>
             {/* The field surface sits on the wrapper, not the input. Every plain
                 input in this app is repainted by an !important soft-field rule
                 further down the stylesheet, so an input styled here would look
                 right in the markup and wrong on screen. */}
-            <div className="relative flex h-10 w-full items-center rounded-[10px] border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
+            <div className="relative flex h-10 w-full items-center rounded-control border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-muted" />
               <input
+                ref={searchInputRef}
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
@@ -2604,8 +2736,17 @@ function App() {
                 }}
                 placeholder="Search Workspace"
                 aria-label="Search workspace"
-                className="shell-search h-full w-full bg-transparent pl-10 pr-4 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                className="shell-search h-full w-full bg-transparent pl-[42px] pr-12 text-sm text-text-primary outline-none placeholder:text-text-muted"
               />
+              {/* The design marks up a "/" key hint. It is a real shortcut, so
+                  the hint is drawn from the handler below rather than pasted in
+                  as decoration that does nothing. */}
+              <kbd
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 hidden h-5 w-7 items-center justify-center rounded-badge border border-border bg-card text-[11px] font-medium text-text-muted md:flex"
+              >
+                /
+              </kbd>
               {globalSearchOpen && searchQuery.trim().length >= 2 && (
                 <div
                   className="absolute left-0 right-0 top-full z-[60] mt-2 max-h-96 overflow-y-auto rounded-xl border border-border bg-surface shadow-elevated"
@@ -2646,22 +2787,53 @@ function App() {
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-end gap-0.5 sm:gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
+            {/* The design's Assistant lives in the header rather than on a
+                launcher floating over the page, and opens the same flyout. */}
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="flex size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
-              aria-label="Refresh app"
-              title="Refresh app"
+              onClick={() => {
+                setAiMinimized(false);
+                setAiLauncherVisibility(false);
+                setAiFlyoutOpen(true);
+              }}
+              className="hidden h-9 items-center gap-2 rounded-[10px] border border-alert-info-stroke bg-alert-info-fill pl-3 pr-3 text-body-compact font-medium text-assistant-accent transition-colors hover:bg-alert-info-stroke/40 lg:flex"
+              aria-haspopup="dialog"
+              aria-label="Open Zuri"
+              title="Ask Zuri"
             >
-              <RefreshCw size={20} />
+              <Sparkles size={18} />
+              Assistant
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setTheme((currentTheme) =>
+                  currentTheme === "dark" ? "light" : "dark",
+                )
+              }
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              className="flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+            >
+              {theme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActive("Help")}
+              className="hidden size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
+              aria-label="Help"
+              title="Help"
+            >
+              <Info size={20} />
             </button>
 
             <div className="relative" ref={messagesRef}>
               <button
                 type="button"
                 onClick={() => toggleMessages("header")}
-                className="relative hidden size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
+                className="relative hidden size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
                 aria-label="Open messages"
                 title="Open chats and channels"
               >
@@ -2683,7 +2855,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => setNotificationOpen((current) => !current)}
-                className="relative flex size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                className="relative flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
                 aria-label="Open workspace activity notifications"
               >
                 <Bell size={20} />
@@ -2750,27 +2922,21 @@ function App() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                setTheme((currentTheme) =>
-                  currentTheme === "dark" ? "light" : "dark",
-                )
-              }
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              className="flex size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
-            >
-              {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
+            {/* The design leaves 12px before this rule and 23px after it, so
+                the avatar lands on 1096 rather than on the cluster's own gap. */}
+            <span
+              aria-hidden="true"
+              className="hidden h-7 w-px shrink-0 bg-border lg:mr-[7px] lg:block"
+            />
 
-            <div className="relative ml-1" ref={profileMenuRef}>
+            <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((current) => !current)}
                 aria-haspopup="true"
                 aria-expanded={profileMenuOpen}
                 aria-label={`Account menu for ${currentUserName}`}
-                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-1 transition-colors hover:bg-surface-secondary sm:pr-2.5"
+                className="flex items-center gap-2 rounded-control py-1 pl-1 transition-colors hover:bg-surface-secondary"
               >
                 <span className="relative inline-flex size-8 shrink-0">
                   <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
@@ -2791,83 +2957,16 @@ function App() {
                     }
                   />
                 </span>
-                <span className="hidden text-left sm:block">
-                  <span className="block max-w-[140px] truncate text-sm font-semibold text-text-primary">
-                    {currentUserName}
-                  </span>
-                  <span className="block max-w-[140px] truncate text-xs text-text-muted">
-                    {currentWorkspace?.role || "Member"}
-                  </span>
-                </span>
+                <ChevronDown
+                  size={16}
+                  aria-hidden="true"
+                  className="hidden shrink-0 text-text-muted sm:block"
+                />
               </button>
 
               {profileMenuOpen && (
                 <div className="absolute right-0 top-full z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
-                  <div className="border-b border-border-light px-3 py-2.5">
-                    <p className="truncate text-sm font-semibold text-text-primary">
-                      {currentUserName}
-                    </p>
-                    <p className="truncate text-xs text-text-muted">
-                      {session.user.email}
-                    </p>
-                  </div>
-                  {currentWorkspace && (
-                    <div className="border-b border-border-light px-3 py-2.5">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                        Workspace
-                      </p>
-                      <p className="truncate text-sm font-semibold text-text-primary">
-                        {currentWorkspace.name}
-                      </p>
-                      <p className="truncate text-xs text-text-muted">
-                        {currentWorkspace.role || "Member"}
-                      </p>
-                    </div>
-                  )}
-                  {session.user.workspaces.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileOpen(true);
-                        setProfileMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary sm:hidden"
-                    >
-                      <Building2 size={16} /> Switch workspace
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAiLauncherVisibility(!aiLauncherHidden);
-                      setProfileMenuOpen(false);
-                    }}
-                    className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary"
-                  >
-                    {aiLauncherHidden ? (
-                      <Sparkles size={16} />
-                    ) : (
-                      <EyeOff size={16} />
-                    )}
-                    {aiLauncherHidden ? "Show Zuri button" : "Hide Zuri button"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActive("Settings");
-                      setProfileMenuOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary"
-                  >
-                    <Settings size={16} /> Settings
-                  </button>
-                  <button
-                    type="button"
-                    onClick={logout}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-danger hover:bg-danger-bg"
-                  >
-                    <LogOut size={16} /> Sign out
-                  </button>
+                  {profileMenuBody}
                 </div>
               )}
             </div>
@@ -3101,22 +3200,6 @@ function App() {
           </button>
         </div>
       )}
-      {!aiLauncherHidden && !aiMinimized && !aiFlyoutOpen && activeWorkspaceId && (
-        <button
-          type="button"
-          onClick={() => {
-            setAiMinimized(false);
-            setAiFlyoutOpen(true);
-          }}
-          className="ai-desktop-launcher"
-          aria-label="Open Zuri"
-          aria-haspopup="dialog"
-          title="Open Zuri"
-        >
-          <Sparkles size={26} />
-        </button>
-      )}
-
       {/* ── Mobile bottom pill nav - four primary destinations plus "More",
         which opens the same drawer as the header hamburger so the full
         navigation stays reachable, with Zuri's circular launcher held on the
