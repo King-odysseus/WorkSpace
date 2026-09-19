@@ -8767,6 +8767,7 @@ html[data-theme='dark'] .planner-card:hover { box-shadow: 0 5px 14px rgb(0 0 0 /
   font-size: 15px;
   font-weight: 700;
 }
+.auth-brand-mark img { width: 24px; height: 28px; object-fit: contain; }
 .auth-brand-copy { margin-top: 108px; max-width: 390px; }
 .auth-brand-copy h2 {
   margin: 0 0 44px;
