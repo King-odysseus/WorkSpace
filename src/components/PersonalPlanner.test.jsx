@@ -69,8 +69,11 @@ it('adds a task to the open planner', async () => {
   fireEvent.change(composer, { target: { value: 'Ring the dentist' } })
   fireEvent.submit(composer.closest('form'))
 
-  expect(await screen.findByDisplayValue('Ring the dentist')).toBeInTheDocument()
-  expect(composer).toHaveValue('')
+  // Wait on the row, not on the value: the composer holds the same string until
+  // the save lands, so a value query matches the composer and then races the
+  // clear. The row only exists once the POST has come back.
+  expect(await screen.findByLabelText('Title for Ring the dentist')).toBeInTheDocument()
+  await waitFor(() => expect(composer).toHaveValue(''))
 
   const [, init] = expectRequest(fetchMock, '/personal/tasks/', 'POST')
   expect(JSON.parse(init.body)).toEqual({ title: 'Ring the dentist', planner_id: 3 })
