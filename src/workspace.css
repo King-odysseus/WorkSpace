@@ -28,7 +28,7 @@
 
 .main-content { flex: 1; min-width: 0; background: #0b1f3a; color: #e8f0f7; }
 
-.page-content { padding: 35px 42px 80px; max-width: 1500px; margin: 0 auto; }
+.page-content { padding: 32px 32px 80px; max-width: 1500px; margin: 0 auto; }
 
 .eyebrow { text-transform: uppercase; letter-spacing: 1.15px; color: #8090a3; font-size: 10px; font-weight: 700; margin: 0 0 9px; }
 .eyebrow { color: #8ea3b8; }
@@ -87,8 +87,8 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
 .modal h2 { font: 800 20px 'Montserrat'; color: var(--navy); margin: 0; }
 .modal label { display: flex; flex-direction: column; gap: 7px; color: #58677a; font-size: 11px; font-weight: 700; margin-bottom: 15px; }
 /* The default combo-box skin. It must sit above every per-surface trigger rule in
-   this file, because those rules tie with it on specificity (.modal, .planner-toolbar
-   and the rest are one class plus one attribute, exactly like this) and the later
+   this file, because those rules tie with it on specificity (.modal and the rest
+   are one class plus one attribute, exactly like this) and the later
    declaration wins. Each surface sets its own height, padding and type so the control
    matches the fields beside it, and the status and priority chips layer their own
    colours on top; the pill corner is shared, so a surface that wants a corner of its
@@ -126,6 +126,36 @@ html[data-theme='dark'] .task-check.checked, html[data-theme='dark'] .check.chec
    a utility on the element: this stylesheet is unlayered, so its rules beat
    Tailwind's layered ones no matter how specific the utility is. */
 .avatar.row-avatar { height: 28px; width: 28px; font-size: 9px; }
+/* The planner card's avatar is 24px, the smallest circle the design draws. */
+.avatar.card-avatar { height: 24px; width: 24px; font-size: 9px; }
+
+
+/* The planner card's own controls. The card, the lane and the toolbar are
+   Tailwind utilities, but these three are either a native control the design
+   draws by hand or a size that has to beat an existing rule here.
+
+   The status pill is 84x22 on a planner card where the task row's is 96x24, so
+   it needs its own geometry. It carries .task-status-pill as well, which is what
+   supplies the per-status --status-color / --status-bg pair; this rule only
+   restates the box, and sits later in the file so it wins the tie. */
+[data-slot='select-trigger'].app-select-trigger.planner-status-pill { width:84px; min-height:22px; height:22px; padding:0 8px; font-size:11px; }
+span.planner-status-pill { display:inline-flex; align-items:center; justify-content:center; width:84px; height:22px; border-radius:var(--radius-badge); background:var(--status-bg); color:var(--status-color); font-size:11px; font-weight:500; }
+
+.planner-card-check { appearance:none; -webkit-appearance:none; margin:0; padding:0; display:grid; place-items:center; height:18px; width:18px; border:1px solid var(--neutral-border-strong); border-radius:5px; background:var(--color-card); cursor:pointer; }
+.planner-card-check:checked { border-color:var(--color-primary); background:var(--color-primary); }
+.planner-card-check:checked::after {
+  content:''; width:14px; height:14px;
+  background:no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+.planner-card-check:disabled { cursor:default; opacity:.6; }
+.planner-card-check:focus-visible { outline:2px solid var(--color-ring); outline-offset:2px; }
+
+/* Both card menus open over content, so they carry the card's own surface
+   rather than the lane's. */
+.planner-card-menu, .planner-column-menu { display:grid; place-items:center; border:0; background:transparent; color:var(--color-text-muted); cursor:pointer; }
+.planner-card-menu { height:24px; width:24px; border-radius:var(--radius-badge); background:var(--color-card); }
+.planner-column-menu { height:28px; width:28px; border-radius:var(--radius-icon); }
+.planner-card-menu:hover, .planner-column-menu:hover { background:var(--color-surface-hover); color:var(--color-text-primary); }
 .modal input { border: 1px solid #dce2e9; border-radius: 7px; padding: 11px; color: #263248; background: #fff; font: 500 12px 'Roboto'; outline: none; }
 .modal input:focus, .modal [data-slot='select-trigger']:focus { border-color: #4d7da8; box-shadow: 0 0 0 3px #0b1f3a12; }
 .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -796,50 +826,6 @@ html[data-theme='dark'] .calendar-day.is-today .calendar-day-heading strong { co
   .event-pill { gap: 4px; padding: 5px 6px; font-size: 9px; }
   .event-pill span { font-size: 8px; }
 }
-.planner-toolbar { display: flex; justify-content: space-between; align-items: center; color: #6B7280; font-size: 12px; }
-.planner-view-toggle { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid #E2E2E6; border-radius: 999px; background: #F7F9FC; }
-.planner-view-toggle button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0; border-radius: 999px; background: transparent; color: #6B7280; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.planner-view-toggle button.active { background: #071A2E; color: #FFFFFF; }
-.planner-gantt { min-width: 900px; overflow: auto; border: 1px solid #E2E2E6; border-radius: 12px; background: #FFFFFF; }
-.planner-gantt-header, .planner-gantt-row { display: grid; grid-template-columns: 220px minmax(680px, 1fr); }
-.planner-gantt-header { position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #E2E2E6; background: #F7F9FC; }
-.planner-gantt-task-label { display: grid; align-content: center; gap: 3px; min-width: 0; padding: 9px 12px; border-right: 1px solid #E2E2E6; }
-.planner-gantt-task-label span { overflow: hidden; color: #8A93A3; font-size: 9px; font-weight: 700; letter-spacing: .35px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.planner-gantt-task-label button { overflow: hidden; padding: 0; border: 0; background: transparent; color: #071A2E; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-.planner-gantt-task-label button:hover { color: #1D4ED8; }
-.planner-gantt-timeline, .planner-gantt-track { display: grid; grid-template-columns: repeat(var(--gantt-days), minmax(25px, 1fr)); position: relative; }
-.planner-gantt-timeline span { padding: 10px 2px; border-right: 1px solid #EEF0F3; color: #8A93A3; font-size: 9px; text-align: center; }
-.planner-gantt-timeline span.is-today { color: #1D4ED8; font-weight: 800; }
-.planner-gantt-row { min-height: 48px; border-bottom: 1px solid #EEF0F3; }
-.planner-gantt-row:last-child { border-bottom: 0; }
-.planner-gantt-track { min-height: 48px; }
-.planner-gantt-track i { border-right: 1px solid #F0F1F4; }
-.planner-gantt-track i.is-today { background: #FFF8ED; }
-.planner-gantt-bar { position: absolute; top: 12px; min-width: 12px; height: 24px; overflow: hidden; padding: 0 8px; border: 0; border-radius: 6px; background: #64748B; color: #FFFFFF; cursor: pointer; font: inherit; font-size: 10px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-.planner-gantt-bar.urgent { background: #B42318; }
-.planner-gantt-bar.high { background: #C2410C; }
-.planner-gantt-bar.normal { background: #2563EB; }
-.planner-gantt-bar.low { background: #64748B; }
-.planner-gantt-bar.done { background: #15803D; }
-html[data-theme='dark'] .planner-view-toggle, html[data-theme='dark'] .planner-gantt-header { border-color: #28516F; background: #0E2A46; }
-html[data-theme='dark'] .planner-view-toggle button { color: #B9CCDD; }
-html[data-theme='dark'] .planner-view-toggle button.active { background: var(--blue); color: #FFFFFF; }
-html[data-theme='dark'] .planner-gantt { border-color: #28516F; background: #0B223A; }
-html[data-theme='dark'] .planner-gantt-header, html[data-theme='dark'] .planner-gantt-row { border-color: #28516F; }
-html[data-theme='dark'] .planner-gantt-task-label { border-color: #28516F; }
-html[data-theme='dark'] .planner-gantt-task-label button { color: #FFFFFF; }
-html[data-theme='dark'] .planner-gantt-timeline span, html[data-theme='dark'] .planner-gantt-track i { border-color: #204563; }
-html[data-theme='dark'] .planner-gantt-track i.is-today { background: #173150; }
-.planner-board { display: grid; grid-template-columns: repeat(5, minmax(230px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; }
-.planner-column { min-height: 420px; padding: 12px; border-radius: 12px; background: #F7F9FC; }
-.planner-column-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: #071A2E; font-size: 13px; }
-.planner-column-heading span { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; border-radius: 7px; background: #E9EAF1; color: #626976; font-size: 11px; }
-.planner-column-tasks { display: grid; gap: 10px; }
-.planner-column .task-card { grid-template-columns: 20px minmax(0, 1fr) auto; padding: 12px; border-radius: 10px; box-shadow: 0 4px 12px #071A2E10; }
-html[data-theme='dark'] .planner-column { border-color: #28516F; background: #0B223A; }
-html[data-theme='dark'] .planner-column-heading { color: #FFFFFF; }
-html[data-theme='dark'] .planner-column-heading span { background: #123A5B; color: #B9CCDD; }
-@media (max-width: 900px) { .planner-board { grid-template-columns: repeat(5, 260px); } .planner-toolbar { align-items: flex-start; flex-direction: column; gap: 8px; } }
 .task-title-button { padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; font-weight: 700; text-align: left; }
 .task-title-button:hover { color: #1D4ED8; }
 .drawer-backdrop { position: fixed; inset: 0; z-index: 30; display: flex; justify-content: flex-end; background: #02051f88; }
@@ -1007,12 +993,7 @@ html[data-theme='dark'] .reply-context { background: #0E2A46; color: #B9CCDD; }
 .bucket-create-form { display: flex; gap: 8px; align-items: center; }
 .bucket-create-form input { width: 150px; padding: 8px 10px; border: 1px solid #E2E2E6; border-radius: 9px; background: #FFFFFF; color: #374151; font: 500 11px 'Roboto'; }
 .bucket-create-form .secondary-button { width: auto; padding: 8px 11px; }
-.planner-filter-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-.planner-filter-controls > [data-slot='select-trigger'] { min-width: 110px; padding: 8px 10px; border: 1px solid #E2E2E6; background: #FFFFFF; color: #374151; font: 600 11px 'Roboto'; }
-.planner-column .task-card[draggable='true'] { cursor: grab; }
-.planner-column .task-card[draggable='true']:active { cursor: grabbing; }
 html[data-theme='dark'] .bucket-create-form input { border-color: #28516F; background: #0E2A46; color: #FFFFFF; }
-html[data-theme='dark'] .planner-filter-controls > [data-slot='select-trigger'] { border-color: #28516F; background: #0E2A46; color: #FFFFFF; }
 @media (max-width: 600px) { .bucket-create-form { width: 100%; } .bucket-create-form input { flex: 1; } }
 .sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; width: 28px; height: 28px; border: 1px solid #28516F; border-radius: 999px; background: transparent; color: #B9CCDD; cursor: pointer; }
 .sidebar-collapsed .sidebar { width: 78px; padding-inline: 10px; }
@@ -1053,18 +1034,14 @@ html[data-theme='dark'] .notification-panel,
 html[data-theme='dark'] .settings-row,
 html[data-theme='dark'] .attachment-row,
 html[data-theme='dark'] .chat-reply,
-html[data-theme='dark'] .planner-filter-controls > [data-slot='select-trigger'],
 html[data-theme='dark'] .bucket-create-form input { border-color: #294461; }
 html[data-theme='dark'] .calendar-view-switcher,
 html[data-theme='dark'] .reply-context,
-html[data-theme='dark'] .bucket-create-form input,
-html[data-theme='dark'] .planner-filter-controls > [data-slot='select-trigger'] { background: #102A46; }
-html[data-theme='dark'] .planner-column,
+html[data-theme='dark'] .bucket-create-form input { background: #102A46; }
 html[data-theme='dark'] .task-drawer,
 html[data-theme='dark'] .notification-panel,
 html[data-theme='dark'] .mobile-pill-nav,
 html[data-theme='dark'] .error-boundary > div { background: #0D2945; }
-html[data-theme='dark'] .planner-column-heading span,
 html[data-theme='dark'] .report-bar-row > div,
 html[data-theme='dark'] .report-member-row,
 html[data-theme='dark'] .tab.active { background-color: #173150; }
@@ -1159,7 +1136,6 @@ html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .workspace-side-card,
 .calendar-toolbar,
 .calendar-view-switcher,
-.planner-column,
 .project-status,
 .channel-row,
 .report-bar-row > div {
@@ -1173,7 +1149,6 @@ html[data-theme='dark'] .modal-backdrop { background: #02051fcc; }
 .channel-row,
 .project-status,
 .member-role-select,
-.planner-filter-controls > [data-slot='select-trigger'],
 .bucket-create-form input {
   color: var(--workspace-text-soft);
   border-color: var(--workspace-border);
@@ -1199,7 +1174,6 @@ html[data-theme='dark'] .event-pill,
 html[data-theme='dark'] .project-status,
 html[data-theme='dark'] .member-role-select,
 html[data-theme='dark'] .calendar-view-switcher,
-html[data-theme='dark'] .planner-column,
 html[data-theme='dark'] .channel-row.active,
 html[data-theme='dark'] .report-bar-row > div {
   background: var(--workspace-surface-soft);
@@ -1345,7 +1319,7 @@ html[data-theme='dark'] .auth-divider::after {
   border-radius: 999px;
 }
 
-:where(.workspace-card, .workspace-side-card, .project-card, .planner-column, .calendar-panel, .chat-panel, .follow-up-panel, .settings-panel, .report-card, .task-drawer, .metric-card) {
+:where(.workspace-card, .workspace-side-card, .project-card, .calendar-panel, .chat-panel, .follow-up-panel, .settings-panel, .report-card, .task-drawer, .metric-card) {
   border-radius: 16px;
   box-shadow: 0 8px 24px rgb(7 26 46 / 6%);
 }
@@ -1374,7 +1348,7 @@ html[data-theme='dark'] .auth-divider::after {
   border-radius: 999px;
 }
 
-html[data-theme='dark'] :where(.workspace-card, .workspace-side-card, .project-card, .planner-column, .calendar-panel, .chat-panel, .follow-up-panel, .settings-panel, .report-card, .task-drawer) {
+html[data-theme='dark'] :where(.workspace-card, .workspace-side-card, .project-card, .calendar-panel, .chat-panel, .follow-up-panel, .settings-panel, .report-card, .task-drawer) {
   box-shadow: 0 16px 36px rgb(0 0 0 / 18%);
 }
 
@@ -1829,8 +1803,6 @@ html[data-theme='dark'] .sidebar-toggle:hover {
 }
 .progress-ring { background: radial-gradient(var(--workspace-surface, #FFFFFF) 57%, transparent 59%), conic-gradient(var(--teal, #0A9E87) var(--focus-progress, 0%), var(--workspace-border, #DCECE9) 0); }
 html[data-theme='dark'] .progress-ring { background: radial-gradient(var(--workspace-surface) 57%, transparent 59%), conic-gradient(var(--teal) var(--focus-progress, 0%), #123A5B 0); }
-.planner-column-heading[draggable='true'] { cursor: grab; }
-.planner-column-heading[draggable='true']:active { cursor: grabbing; }
 .planner-view { min-width: 0; }
 .today-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .today-panel-heading h2 { margin: 0; color: var(--workspace-text); font: 700 14px 'Montserrat'; }
@@ -2020,23 +1992,6 @@ html[data-theme='dark'] .team-workload-stats .is-danger strong,
 html[data-theme='dark'] .member-profile-stats .is-danger strong { color:#FDA29B; }
 html[data-theme='dark'] .team-workload-stats .is-info strong { color:#B9CCDD; }
 .planner-view-wrapper { gap: 10px; }
-.planner-saved-views-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.planner-saved-views-bar > [data-slot='select-trigger'] { min-width: 150px; padding: 8px 10px; border: 1px solid var(--workspace-border); background: var(--workspace-surface-soft); color: var(--workspace-text); font: 600 11px 'Roboto'; }
-.planner-commandbar { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; padding: 14px; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface); }
-.planner-commandbar label { display: grid; gap: 5px; color: var(--workspace-text-soft); font-size: 10px; font-weight: 700; }
-.planner-commandbar [data-slot='select-trigger'], .planner-search { min-height: 38px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text); }
-.planner-commandbar [data-slot='select-trigger'] { min-width: 130px; padding: 0 10px; font: 600 11px 'Roboto'; }
-.planner-commandbar [data-slot='select-trigger'] { max-width: 150px; }
-.planner-clear-filters { min-height: 38px; padding: 0 10px; border: 0; background: transparent; color: var(--teal); font: 700 10px 'Roboto'; cursor: pointer; }
-.planner-search { display: flex !important; flex: 0 1 280px; width: 280px; max-width: 100%; align-items: center; gap: 8px; padding: 0 11px; }
-.planner-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--workspace-text); font: 500 12px 'Roboto'; }
-.planner-result-count { margin-left: auto; padding: 10px 4px; color: var(--workspace-text-soft); font-size: 11px; }
-
-.planner-table-shell { display: grid; gap: 10px; }
-.planner-bulk-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border: 1px solid var(--workspace-border); border-radius: 10px; background: var(--workspace-surface-soft); color: var(--workspace-text); }
-.planner-bulk-bar strong { font-size: 11px; }
-.planner-bulk-bar [data-slot='select-trigger'].app-select-trigger { min-height: 34px; padding: 0 9px; border: 1px solid var(--workspace-border); background: var(--workspace-surface); color: var(--workspace-text); font-size: 10px; }
-.planner-table-scroll { overflow-x: auto; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface); }
 .planner-task-table { width: 100%; min-width: 980px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 11px; }
 .planner-task-table th, .planner-task-table td { padding: 10px 12px; border-bottom: 1px solid var(--workspace-border); color: var(--workspace-text); text-align: left; vertical-align: middle; }
 .planner-task-table th { background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
@@ -2050,14 +2005,9 @@ html[data-theme='dark'] .team-workload-stats .is-info strong { color:#B9CCDD; }
 .planner-task-table th:nth-child(8) { width: 158px; }
 .planner-task-table tr:last-child td { border-bottom: 0; }
 .planner-task-table td > input[type='checkbox'] { width: 15px; height: 15px; accent-color: var(--teal); cursor: pointer; }
-.planner-table-task { display: grid; gap: 3px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.planner-table-task small { overflow: hidden; color: var(--workspace-text-soft); font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.planner-table-task strong { overflow: hidden; color: var(--workspace-text); font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.planner-table-task span { overflow: hidden; color: var(--workspace-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .scope-badge { display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; padding: 5px 8px; border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .scope-badge.operations { background: color-mix(in srgb, var(--teal) 12%, transparent); color: var(--teal); }
 .scope-badge.project { background: color-mix(in srgb, var(--navy) 12%, transparent); color: var(--navy); }
-.planner-priority { text-transform: capitalize; }
 .table-muted { color: var(--workspace-text-soft); font-size: 10px; }
 .table-progress { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--workspace-text); font-size: 10px; font-weight: 700; }
 .table-progress i { position: relative; display: block; height: 6px; min-width: 48px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--workspace-border); }
@@ -2070,43 +2020,8 @@ html[data-theme='dark'] .team-workload-stats .is-info strong { color:#B9CCDD; }
 .planner-pagination button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface); color: var(--workspace-text); cursor: pointer; }
 .activity-pagination button:disabled,
 .planner-pagination button:disabled { cursor: default; opacity: .4; }
-.planner-table-empty { padding: 34px 16px; color: var(--workspace-text-soft); text-align: center; }
-html[data-theme='dark'] .planner-bulk-bar [data-slot='select-trigger'] { border-color: #28516F; background: #123A5B; color: #FFFFFF; }
 html[data-theme='dark'] .scope-badge.project { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
-.planner-add-bucket { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
-.planner-add-bucket input { width: 190px; padding: 9px 11px; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface); color: var(--workspace-text); }
-.planner-add-bucket .secondary-button { width: auto; }
-.planner-view .planner-board { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 268px; justify-content: start; align-items: start; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
-.planner-view .planner-column { width: 268px; min-height: 250px; padding: 8px; transition: border-color .15s ease, opacity .15s ease, transform .15s ease; }
-.planner-view .planner-column.is-drop-target { border-color: var(--teal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--teal) 18%, transparent); }
-.planner-view .planner-column.is-dragging { opacity: .48; transform: scale(.985); }
-@media (max-width: 980px) { .planner-commandbar label:not(.planner-search) { flex:1 1 135px; }.planner-commandbar label:not(.planner-search) [data-slot='select-trigger'] { width:100%; max-width:none; }.planner-search { flex-basis:100%; }.planner-result-count { margin-left:0; } }
-@media (max-width: 620px) { .planner-commandbar label:not(.planner-search) { flex-basis:calc(50% - 6px); }.planner-commandbar [data-slot='select-trigger'] { min-width:0; }.planner-clear-filters { width:auto; } }
-.planner-view .planner-column-heading { display: flex; align-items: center; gap: 7px; padding: 4px 3px 12px; color: var(--workspace-text); }
-.planner-view .planner-column-heading strong { flex: 1; font-size: 12px; }
-.planner-bucket-move { display: flex; gap: 3px; }
-.planner-bucket-move button { display: grid; place-items: center; width: 23px; height: 23px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface); color: var(--workspace-text-soft); cursor: pointer; }
-.planner-bucket-move button:disabled { cursor: default; opacity: .3; }
-.planner-task-card { padding: 9px; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface); box-shadow: 0 3px 10px #071A2E0A; transition: opacity .15s ease, transform .15s ease; }
-.planner-task-card[draggable='true'] { cursor: grab; }
-.planner-task-card.is-dragging { opacity: .42; transform: scale(.98); }
-.planner-task-card.is-drop-target { border-color: var(--teal); box-shadow: 0 -3px 0 -1px var(--teal); }
-.planner-task-card.blocked { border-color: #E36B43; }
-.planner-card-heading { display: flex; align-items: flex-start; gap: 5px; }
-.planner-drag-handle, .planner-card-menu { display: grid; place-items: center; padding: 2px; border: 0; background: transparent; color: var(--workspace-text-soft); }
-.planner-drag-handle { cursor: grab; }
-.planner-drag-handle.is-inactive { opacity: .25; cursor: default; }
-.planner-card-title { flex: 1; border: 0; background: transparent; color: var(--workspace-text); font: 700 12px/1.35 'Roboto'; text-align: left; cursor: pointer; }
-.planner-card-meta, .planner-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; color: var(--workspace-text-soft); font-size: 9px; }
-.planner-priority { padding: 3px 6px; border-radius: 999px; background: var(--workspace-surface-soft); text-transform: capitalize; }
-.planner-priority.urgent, .planner-priority.high, .planner-card-footer .overdue { color: #E36B43; }
-.planner-card-move { display: flex; gap: 4px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--workspace-border); }
-.planner-card-move button { display: grid; place-items: center; width: 27px; height: 25px; border: 1px solid var(--workspace-border); border-radius: 999px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); cursor: pointer; }
-.planner-card-move button:disabled { cursor: default; opacity: .35; }
 .planner-empty { display: grid; min-height: 82px; place-items: center; border: 1px dashed var(--workspace-border); border-radius: 9px; color: var(--workspace-text-soft); font-size: 10px; }
-.planner-column-add { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 8px; border: 0; border-radius: 999px; background: transparent; color: var(--workspace-text-soft); cursor: pointer; font: 700 10px 'Roboto'; }
-.planner-column-add:hover { background: var(--workspace-surface-soft); color: var(--workspace-text); }
-@media (max-width: 750px) { .planner-view .planner-board { grid-template-columns: none; grid-auto-columns: min(268px, 82vw); overflow-x: auto; scroll-snap-type: x proximity; } .planner-view .planner-column { width: min(268px, 82vw); scroll-snap-align: start; } .planner-commandbar { align-items: stretch; } .planner-commandbar label, .planner-commandbar [data-slot='select-trigger'] { width: 100%; } .planner-result-count { margin-left: 0; } }
 @media (max-width: 700px) { .my-task-priority { display: none; } }
 @media (max-width: 1050px) { .team-overview-grid { grid-template-columns: 1fr; } .team-overview-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .team-board-toolbar { grid-template-columns: 1fr; } .team-board-toolbar-main { flex-wrap: wrap; } .team-board-tabs { flex: 1 1 100%; } }
@@ -2248,14 +2163,14 @@ html[data-theme='dark'] .channel-row-wrap .channel-row.active, html[data-theme='
 /* Consistent page-by-page card elevation. The important flag wins over the
    shadcn utility shadow attached to individual Card instances. */
 :where(.metric-card, .workspace-card, .workspace-side-card,
-  .calendar-week, .project-card, .planner-column, .report-panel, .report-stat,
+  .calendar-week, .project-card, .report-panel, .report-stat,
   .activity-history, .settings-panel, .team-member-card, .team-access-panel, .task-list-view, .follow-up-list, .chat-panel,
   .chat-conversation-list, .chat-feed, .checkin-grid > [data-slot='card'], .help-welcome, .help-topic, .help-contact,
   .legal-document, .legal-acceptance, .team-board-metrics button) {
   box-shadow: 0 8px 24px rgb(7 26 46 / 6%) !important;
 }
 html[data-theme='dark'] :where(.metric-card, .workspace-card, .workspace-side-card,
-  .calendar-week, .project-card, .planner-column, .report-panel, .report-stat,
+  .calendar-week, .project-card, .report-panel, .report-stat,
   .activity-history, .settings-panel, .team-member-card, .team-access-panel, .task-list-view, .follow-up-list, .chat-panel,
   .chat-conversation-list, .chat-feed, .checkin-grid > [data-slot='card'], .help-welcome, .help-topic, .help-contact,
   .legal-document, .legal-acceptance, .team-board-metrics button) {
@@ -2287,16 +2202,10 @@ option[value='low'] { color: #64748b; }
 .inline-delete, .task-more-button { color: #c2410c; border-radius: 999px; }
 .inline-delete:hover, .task-more-button:hover { background: #fff0e9; color: #9f2f10; box-shadow: 2px 3px 8px rgb(194 65 12 / 18%); }
 html[data-theme='dark'] .inline-delete:hover, html[data-theme='dark'] .task-more-button:hover { background: #3a211c; color: #ffb08f; }
-.planner-saved-views-bar > .secondary-button,
 .report-toolbar > .secondary-button { width: auto; min-height: 34px; padding: 7px 13px; white-space: nowrap; }
-.planner-saved-views-bar > .secondary-button { border-color: #f2c5b7; background: #fff5f1; color: #c2410c; }
-.planner-saved-views-bar > .secondary-button:hover { border-color: #e36b43; background: #ffe9e1; color: #9f2f10; }
 .report-toolbar > .secondary-button { border-color: #bce7e1; background: #f0fbf9; color: #087f73; }
-html[data-theme='dark'] .planner-saved-views-bar > .secondary-button { border-color: #704033; background: #3a211c; color: #ffb08f; }
 html[data-theme='dark'] .report-toolbar > .secondary-button { border-color: #28516f; background: #123a5b; color: #7dd3c7; }
-.planner-saved-views-bar > .secondary-button,
 .report-toolbar > .secondary-button { box-shadow: 5px 6px 12px rgb(7 26 46 / 13%), -4px -4px 10px rgb(255 255 255 / 72%), inset 0 1px 0 rgb(255 255 255 / 75%); }
-html[data-theme='dark'] .planner-saved-views-bar > .secondary-button,
 html[data-theme='dark'] .report-toolbar > .secondary-button { box-shadow: 5px 6px 13px rgb(2 5 31 / 38%), -3px -3px 8px rgb(255 255 255 / 4%), inset 0 1px 0 rgb(255 255 255 / 5%); }
 .settings-shell { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 24px; align-items: start; }
 .settings-nav { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface); }
@@ -2549,33 +2458,24 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .workspace-view-heading > button {
   flex-shrink: 0;
 }
-.planner-commandbar,
-.planner-saved-views-bar,
 .report-toolbar,
 .activity-toolbar,
 .follow-up-toolbar,
 .project-toolbar,
-.checkin-toolbar,
-.planner-add-bucket,
-.operations-workstream-create {
+.checkin-toolbar {
   align-items: center;
 }
-.planner-commandbar label:not(.planner-search),
 .report-toolbar label,
 .activity-toolbar label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.planner-commandbar [data-slot='select-trigger'],
-.planner-saved-views-bar > [data-slot='select-trigger'],
 .report-toolbar [data-slot='select-trigger'],
 .activity-toolbar [data-slot='select-trigger'],
 .follow-up-toolbar [data-slot='select-trigger'],
 .project-toolbar [data-slot='select-trigger'],
-.checkin-toolbar [data-slot='select-trigger'],
-.planner-add-bucket input,
-.operations-workstream-create input {
+.checkin-toolbar [data-slot='select-trigger'] {
   min-height: var(--workspace-control-height);
   height: var(--workspace-control-height);
   padding-top: 0;
@@ -2597,31 +2497,6 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .report-toolbar label [data-slot='select-trigger'].app-select-trigger,
 .activity-toolbar label [data-slot='select-trigger'].app-select-trigger {
   width: auto;
-}
-.planner-commandbar .planner-search {
-  min-height: var(--workspace-control-height);
-  height: var(--workspace-control-height);
-  border-radius: 999px;
-}
-.planner-view-toggle {
-  min-height: var(--workspace-control-height);
-  align-items: center;
-}
-.planner-view-toggle button {
-  min-height: calc(var(--workspace-control-height) - 6px);
-  padding-top: 0;
-  padding-bottom: 0;
-}
-.planner-commandbar > button,
-.planner-commandbar .planner-clear-filters {
-  min-height: var(--workspace-control-height);
-  border-radius: 999px;
-}
-.planner-add-bucket .secondary-button,
-.operations-workstream-create .secondary-button {
-  height: var(--workspace-control-height);
-  padding-top: 0;
-  padding-bottom: 0;
 }
 .screen-sharing-policy-form > .primary-button,
 .screen-sharing-request-card form > .primary-button {
@@ -2812,55 +2687,6 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .text-button {
   border-radius: 999px;
 }
-/* Planner expanded filters: separate row instead of colliding inline controls. */
-.planner-more-filters {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--workspace-control-height);
-  padding: 0 12px;
-  border: 1px solid var(--workspace-border);
-  border-radius: 999px;
-  background: var(--workspace-surface-soft);
-  color: var(--workspace-text);
-  font: 700 10px 'Roboto';
-  cursor: pointer;
-}
-.planner-more-filters.active {
-  border-color: var(--navy);
-  background: var(--navy);
-  color: #FFFFFF;
-}
-.planner-secondary-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  width: 100%;
-  padding-top: 12px;
-  border-top: 1px solid var(--workspace-border);
-}
-.planner-secondary-filters label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: var(--workspace-text-soft);
-  font-size: 10px;
-  font-weight: 700;
-}
-.planner-secondary-filters [data-slot='select-trigger'],
-.planner-secondary-filters .date-field-trigger {
-  min-height: var(--workspace-control-height);
-  height: var(--workspace-control-height);
-  min-width: 130px;
-  padding-top: 0;
-  padding-bottom: 0;
-  border: 1px solid var(--workspace-border);
-  border-radius: 999px;
-  background: var(--workspace-surface-soft);
-  color: var(--workspace-text);
-  font-size: 10px;
-}
 /* Final cross-page alignment additions. */
 .project-risk-issues-heading {
   align-items: center;
@@ -2878,26 +2704,6 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 .planner-view .workspace-view-heading {
   gap: 28px;
   margin-bottom: 22px;
-}
-.planner-commandbar {
-  gap: 14px;
-  padding: 16px;
-}
-.planner-commandbar label:not(.planner-search),
-.planner-secondary-filters label {
-  gap: 9px;
-}
-.planner-secondary-filters {
-  gap: 12px;
-  padding-top: 14px;
-  margin-top: 2px;
-}
-.planner-commandbar .planner-view-toggle {
-  gap: 4px;
-}
-.planner-commandbar [data-slot='select-trigger'] {
-  min-width: 150px;
-  max-width: 190px;
 }
 /* Modal consistency: centered shell, stacked full-width fields, uniform controls. */
 .modal-backdrop {
@@ -3044,75 +2850,6 @@ html[data-theme='dark'] .settings-nav button.active { background: #0E2A46; color
 @media (max-width: 640px) {
   .checkin-detail-content { grid-template-columns: 1fr; }
 }
-/* Planner scope switch: spaced segmented control instead of inline collision. */
-.planner-scope-switch {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 10px 12px;
-  border: 1px solid var(--workspace-border);
-  border-radius: 12px;
-  background: var(--workspace-surface);
-}
-.planner-scope-switch button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--workspace-border);
-  border-radius: 999px;
-  background: var(--workspace-surface-soft);
-  color: var(--workspace-text);
-  font: 700 11px 'Roboto';
-  cursor: pointer;
-}
-.planner-scope-switch button.active {
-  border-color: var(--navy);
-  background: var(--navy);
-  color: #FFFFFF;
-}
-.planner-scope-switch button span {
-  display: grid;
-  min-width: 20px;
-  height: 20px;
-  place-items: center;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--workspace-border);
-  color: var(--workspace-text-soft);
-  font-size: 9px;
-}
-/* The count pill sits on --workspace-border, which is darker than the surface
-   the muted token was chosen against, so the shared token misses 4.5:1 by a
-   hair here. Dark theme keeps the token: its border is darker still and the
-   muted colour clears the ratio there. */
-html[data-theme='light'] .planner-scope-switch button:not(.active) span { color: #5f687c; }
-.planner-scope-switch button.active span {
-  background: rgb(255 255 255 / 14%);
-  color: #FFFFFF;
-}
-.planner-scope-switch label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  color: var(--workspace-text-soft);
-  font-size: 10px;
-  font-weight: 700;
-}
-.planner-scope-switch [data-slot='select-trigger'] {
-  min-height: 38px;
-  min-width: 180px;
-  padding: 0 12px;
-  border: 1px solid var(--workspace-border);
-  border-radius: 999px;
-  background: var(--workspace-surface-soft);
-  color: var(--workspace-text);
-  font: 600 11px 'Roboto';
-}
 /* Shared work scope selector: same spaced control as planner scope switch. */
 .work-scope-selector {
   display: inline-flex;
@@ -3146,42 +2883,6 @@ html[data-theme='light'] .planner-scope-switch button:not(.active) span { color:
 .work-scope-selector > small {
   color: var(--workspace-text-soft);
   font-size: 9px;
-}
-/* Daily operations workstream row: spaced like the rest of the planner actions. */
-.operations-workstream-create {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--workspace-border);
-  border-radius: 12px;
-  background: var(--workspace-surface);
-}
-.operations-workstream-create > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-}
-.operations-workstream-create strong {
-  color: var(--workspace-text);
-  font-size: 11px;
-}
-.operations-workstream-create span {
-  color: var(--workspace-text-soft);
-  font-size: 9px;
-}
-.operations-workstream-create input {
-  width: min(280px, 100%);
-  min-height: var(--workspace-control-height, 38px);
-  padding: 0 12px;
-  border: 1px solid var(--workspace-border);
-  border-radius: 10px;
-  background: var(--workspace-surface-soft);
-  color: var(--workspace-text);
-  font: 500 11px 'Roboto';
 }
 /* Check-ins page: spaced toolbar and readable cards. */
 .checkin-toolbar {
@@ -3218,52 +2919,41 @@ html[data-theme='light'] .planner-scope-switch button:not(.active) span { color:
     align-self: flex-start;
     max-width: 100%;
   }
-  .planner-commandbar,
-  .planner-saved-views-bar,
   .report-toolbar,
-  .activity-toolbar,
-  .project-toolbar,
-  .follow-up-toolbar,
-  .checkin-toolbar,
-  .team-board-toolbar,
-  .chat-toolbar {
+.activity-toolbar,
+.project-toolbar,
+.follow-up-toolbar,
+.checkin-toolbar,
+.team-board-toolbar,
+.chat-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
-  .planner-commandbar label:not(.planner-search),
-  .planner-secondary-filters label,
   .report-toolbar label,
-  .activity-toolbar label,
-  .project-toolbar > label,
-  .follow-up-toolbar label,
-  .checkin-toolbar label,
-  .team-board-toolbar > label {
+.activity-toolbar label,
+.project-toolbar > label,
+.follow-up-toolbar label,
+.checkin-toolbar label,
+.team-board-toolbar > label {
     width: 100%;
     justify-content: space-between;
   }
-  .planner-commandbar [data-slot='select-trigger'],
-  .planner-secondary-filters [data-slot='select-trigger'],
   .report-toolbar [data-slot='select-trigger'],
-  .activity-toolbar [data-slot='select-trigger'],
-  .project-toolbar [data-slot='select-trigger'],
-  .follow-up-toolbar [data-slot='select-trigger'],
-  .checkin-toolbar [data-slot='select-trigger'],
-  .team-board-toolbar [data-slot='select-trigger'],
-  .planner-commandbar .planner-search,
-  .project-search,
-  .activity-search,
-  .chat-search,
-  .team-board-toolbar input {
+.activity-toolbar [data-slot='select-trigger'],
+.project-toolbar [data-slot='select-trigger'],
+.follow-up-toolbar [data-slot='select-trigger'],
+.checkin-toolbar [data-slot='select-trigger'],
+.team-board-toolbar [data-slot='select-trigger'],
+.project-search,
+.activity-search,
+.chat-search,
+.team-board-toolbar input {
     width: 100%;
     max-width: none;
     flex-basis: 100%;
   }
   .checkin-toolbar > span {
     text-align: left;
-  }
-  .planner-view-toggle {
-    width: 100%;
-    justify-content: space-between;
   }
 }
 /* Check-ins toolbar: keep the View date label and trigger on one line. */
@@ -3340,7 +3030,6 @@ html[data-theme='light'] .planner-scope-switch button:not(.active) span { color:
   .workspace-card,
   .workspace-side-card,
   .project-card,
-  .planner-column,
   .calendar-panel,
   .chat-panel,
   .follow-up-panel,
@@ -3370,7 +3059,6 @@ html[data-theme='dark'] :where(
   .workspace-card,
   .workspace-side-card,
   .project-card,
-  .planner-column,
   .calendar-panel,
   .chat-panel,
   .follow-up-panel,
@@ -3400,7 +3088,6 @@ html[data-theme='dark'] :where(
   .workspace-card,
   .workspace-side-card,
   .project-card,
-  .planner-column,
   .calendar-panel,
   .chat-panel,
   .follow-up-panel,
@@ -3422,13 +3109,8 @@ html[data-theme='dark'] :where(
   .project-register-card,
   .project-record-card,
   .project-detail-links button,
-  .planner-commandbar,
-  .planner-saved-views-bar,
-  .planner-scope-switch,
   .checkin-toolbar,
   .team-board-toolbar,
-  .operations-workstream-create,
-  .planner-add-bucket,
   .calendar-toolbar,
   .chat-toolbar,
   .report-toolbar,
@@ -3437,13 +3119,6 @@ html[data-theme='dark'] :where(
   .follow-up-toolbar
 ) {
   border-color: var(--workspace-surface);
-}
-/* Planner manage chips for active workstreams and buckets. */
-.planner-manage-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 10px 0 14px;
 }
 .planner-manage-chip {
   display: inline-flex;
@@ -3486,7 +3161,6 @@ html[data-theme='dark'] :where(
   textarea,
   .member-role-select,
   .inline-edit,
-  .planner-search,
   .activity-search,
   .chat-search,
   .project-search,
@@ -4127,7 +3801,6 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
 }
 .personal-planner-new { align-self: flex-start; color: var(--workspace-text-soft); }
 .personal-planner-main { min-width: 0; }
-.personal-planner-card { padding: 20px; }
 .personal-planner-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .personal-planner-header h2 { margin: 0; color: var(--workspace-text); font-size: 17px; }
 .personal-planner-header svg { flex-shrink: 0; color: var(--workspace-text-soft); }
@@ -5087,8 +4760,7 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
    rest of the app. These keep the combo box down to the scale of the compact
    rows it sits in - the row grids above reserve the space, so it only needs to
    stop growing past its own label. */
-.team-task-row [data-slot='select-trigger'].app-select-trigger,
-.planner-card-meta [data-slot='select-trigger'].app-select-trigger {
+.team-task-row [data-slot='select-trigger'].app-select-trigger {
   width: auto;
   min-width: 0;
   min-height: 26px;
@@ -5098,8 +4770,7 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
   font-size: 10px;
   line-height: 1;
 }
-.team-task-row [data-slot='select-trigger'].app-select-trigger svg,
-.planner-card-meta [data-slot='select-trigger'].app-select-trigger svg {
+.team-task-row [data-slot='select-trigger'].app-select-trigger svg {
   width: 12px;
   height: 12px;
 }
@@ -5184,7 +4855,7 @@ input[type='checkbox'], input[type='radio'], input[type='range'] {
   box-shadow: 0 5px 18px rgb(7 26 46 / 5%);
 }
 
-:where(.team-board-toolbar, .planner-commandbar, .planner-bulk-bar, .chat-share-picker) {
+:where(.team-board-toolbar, .chat-share-picker) {
   border: 0 !important;
   background: var(--workspace-surface-soft, var(--color-surface-secondary));
   box-shadow: none;
@@ -5251,8 +4922,8 @@ html[data-theme='dark'] :where(.project-summary > div, .team-board-metrics butto
    border and grey fill belong on the wrapper, where the design puts them, and a
    focus ring drawn around the bare input inside that wrapper would land in the
    wrong place. */
-:where(.top-search input, .planner-search input, .ai-chat-input, .shell-search),
-:where(.top-search input, .planner-search input, .ai-chat-input, .shell-search):focus {
+:where(.top-search input, .ai-chat-input, .shell-search),
+:where(.top-search input, .ai-chat-input, .shell-search):focus {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -5275,7 +4946,7 @@ html[data-theme='dark'] :where(
   background-color: #262653 !important;
 }
 
-html[data-theme='dark'] :where(.top-search input, .planner-search input, .ai-chat-input, .shell-search) {
+html[data-theme='dark'] :where(.top-search input, .ai-chat-input, .shell-search) {
   background: transparent !important;
 }
 
@@ -5623,9 +5294,6 @@ html[data-theme='dark'] .report-progress-track {
   .workspace-side-card,
   .calendar-week,
   .project-card,
-  .planner-column,
-  .planner-gantt,
-  .planner-table-scroll,
   .report-panel,
   .report-stat,
   .activity-history,
@@ -5654,15 +5322,11 @@ html[data-theme='dark'] .report-progress-track {
 
 .workspace-view :is(
   .team-board-toolbar,
-  .planner-commandbar,
-  .planner-bulk-bar,
   .project-toolbar,
   .activity-toolbar,
   .report-toolbar,
   .checkin-toolbar,
-  .follow-up-toolbar,
-  .planner-saved-views-bar
-) {
+  .follow-up-toolbar) {
   gap: 10px;
   margin: 0;
   padding: 12px;
@@ -5767,7 +5431,6 @@ html[data-theme='dark'] .report-progress-track {
   .activity-item,
   .notification-row,
   .chat-message,
-  .planner-task-card,
   .agenda-event-row,
   .calendar-task-deadline,
   .compact-row,
@@ -5791,7 +5454,6 @@ html[data-theme='dark'] .report-progress-track {
   .activity-item,
   .notification-row,
   .chat-message,
-  .planner-task-card,
   .agenda-event-row,
   .calendar-task-deadline,
   .compact-row,
@@ -5812,7 +5474,6 @@ html[data-theme='dark'] .report-progress-track {
   .activity-item,
   .notification-row,
   .chat-message,
-  .planner-task-card,
   .agenda-event-row,
   .calendar-task-deadline,
   .compact-row,
@@ -5828,7 +5489,6 @@ html[data-theme='dark'] .report-progress-track {
   .activity-item,
   .notification-row,
   .chat-message,
-  .planner-task-card,
   .agenda-event-row,
   .calendar-task-deadline,
   .compact-row,
@@ -5863,10 +5523,6 @@ html[data-theme='dark'] .report-progress-track {
   padding: 5px 0;
 }
 
-.workspace-view .planner-task-card {
-  padding: 12px;
-}
-
 .workspace-view .agenda-event-row,
 .workspace-view .calendar-task-deadline {
   padding: 12px 14px;
@@ -5896,19 +5552,6 @@ html[data-theme='dark'] .report-progress-track {
   outline: 0 !important;
 }
 
-/* The planner search field sits inside a pill that already draws the outline,
-   so the field treatment above - which reaches every input in a workspace view -
-   left two borders around the same control. The pill is the outline, so its
-   input stays bare, focused or not. */
-.workspace-view .planner-search :is(input:not([type='checkbox']):not([type='radio']):not([type='file'])),
-.workspace-view .planner-search :is(input:not([type='checkbox']):not([type='radio']):not([type='file'])):focus {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
-
 .workspace-view :is(input, textarea)::placeholder {
   color: #98A2B3;
 }
@@ -5933,8 +5576,6 @@ html[data-theme='dark'] .report-progress-track {
   .calendar-summary-badge,
   .invitation-status-badge,
   .my-task-priority,
-  .planner-priority,
-  .planner-column-heading span,
   .project-task-stats span
 ) {
   border-radius: 999px !important;
@@ -6001,21 +5642,20 @@ html[data-theme='dark'] .report-progress-track {
   box-shadow: none !important;
 }
 
-.workspace-view .calendar-view-switcher,
-.workspace-view .planner-view-toggle {
+.workspace-view .calendar-view-switcher {
   padding: 4px;
   border: 1px solid var(--dashboard-border) !important;
   border-radius: 999px !important;
   background: var(--dashboard-surface-soft) !important;
 }
 
-.workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button {
+.workspace-view :is(.calendar-view-switcher) button {
   border-radius: 999px !important;
   color: var(--dashboard-muted);
 }
 
-.workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button[data-state='active'],
-.workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button.active {
+.workspace-view :is(.calendar-view-switcher) button[data-state='active'],
+.workspace-view :is(.calendar-view-switcher) button.active {
   background: #0B0B45 !important;
   color: #FFFFFF !important;
 }
@@ -6050,27 +5690,9 @@ html[data-theme='dark'] .report-progress-track {
   gap: 16px;
 }
 
-.workspace-view .planner-view .planner-board {
-  gap: 12px;
-}
-
-.workspace-view .planner-column {
-  background: var(--dashboard-surface-soft) !important;
-}
-
-.workspace-view .planner-task-card {
-  background: var(--dashboard-surface) !important;
-  box-shadow: 0 4px 14px rgb(16 24 40 / 6%) !important;
-}
-
-.workspace-view .planner-gantt-header,
 .workspace-view .planner-task-table th {
   background: var(--dashboard-surface-soft) !important;
   color: var(--dashboard-muted) !important;
-}
-
-.workspace-view :is(.planner-gantt, .planner-table-scroll) {
-  border-radius: 18px !important;
 }
 
 .workspace-view .report-risk-list button,
@@ -6128,7 +5750,7 @@ html[data-theme='dark'] .workspace-view .event-pill:hover:not(:disabled) {
   background: #252653 !important;
 }
 
-html[data-theme='dark'] .workspace-view :is(.calendar-view-switcher, .planner-view-toggle) button.active {
+html[data-theme='dark'] .workspace-view :is(.calendar-view-switcher) button.active {
   background: var(--color-info, #2563EB) !important;
   color: #FFFFFF !important;
 }
@@ -6210,7 +5832,7 @@ html[data-theme='dark'] .workspace-view :is(
     align-self: flex-start;
   }
 
-  .workspace-view :is(.team-board-toolbar, .planner-commandbar, .project-toolbar, .activity-toolbar, .report-toolbar, .follow-up-toolbar, .planner-bulk-bar) {
+  .workspace-view :is(.team-board-toolbar, .project-toolbar, .activity-toolbar, .report-toolbar, .follow-up-toolbar) {
     border-radius: 16px !important;
   }
 
@@ -6222,7 +5844,7 @@ html[data-theme='dark'] .workspace-view :is(
     grid-template-columns: 1fr;
   }
 
-  .workspace-view :is(.workspace-card, .workspace-side-card, .calendar-week, .project-card, .planner-column, .planner-gantt, .planner-table-scroll, .report-panel, .report-stat, .activity-history, .follow-up-list, .team-board-column, .team-access-panel, .team-member-card, .time-clock-panel, .task-list-view, .chat-panel, .chat-conversation-list, .chat-feed) {
+  .workspace-view :is(.workspace-card, .workspace-side-card, .calendar-week, .project-card, .report-panel, .report-stat, .activity-history, .follow-up-list, .team-board-column, .team-access-panel, .team-member-card, .time-clock-panel, .task-list-view, .chat-panel, .chat-conversation-list, .chat-feed) {
     border-radius: 18px !important;
   }
 
@@ -6236,16 +5858,6 @@ html[data-theme='dark'] .workspace-view :is(
 }
 
 @media (max-width: 480px) {
-  .workspace-view .operations-workstream-create {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .workspace-view .operations-workstream-create > div,
-  .workspace-view .operations-workstream-create input,
-  .workspace-view .operations-workstream-create .secondary-button {
-    width: 100%;
-  }
 
   .workspace-view :is(.team-board-metrics, .report-metrics, .project-summary) {
     gap: 9px;
@@ -7379,27 +6991,6 @@ html[data-theme='dark'] .workspace-view .checkin-summary-card:hover {
   color: var(--workspace-primary);
 }
 
-.workspace-view .planner-bucket-edit {
-  gap: 4px;
-  padding: 4px 5px;
-}
-
-.workspace-view .planner-bucket-edit input {
-  width: 132px;
-  min-width: 0;
-  height: 24px;
-  padding: 0 7px;
-  border: 1px solid var(--workspace-border);
-  border-radius: 999px;
-  background: var(--workspace-surface);
-  color: var(--workspace-text);
-  font: 700 10px 'Roboto', sans-serif;
-}
-
-.workspace-view .planner-bucket-menu-trigger {
-  flex: 0 0 auto;
-}
-
 .planner-bucket-menu {
   z-index: 60;
   min-width: 150px;
@@ -7634,11 +7225,6 @@ html[data-theme='dark'] .planner-bucket-menu {
   .workspace-view .planner-archive-grid {
     grid-template-columns: 1fr;
   }
-
-  .workspace-view .planner-bucket-edit input {
-    flex: 1 1 auto;
-    width: 100%;
-  }
 }
 
 /* Projects and Daily Operations containment.
@@ -7651,9 +7237,15 @@ html[data-theme='dark'] .planner-bucket-menu {
   margin: 0;
 }
 
-.workspace-view.projects-view,
-.workspace-view.planner-view {
+.workspace-view.projects-view {
   gap: 14px;
+}
+
+/* The planner spaces its own rows: the design gives each one its own offset
+   from the row above (9 / 16 / 17px), so a flex gap on top of those margins
+   would double every one of them. */
+.workspace-view.planner-view {
+  gap: 0;
 }
 
 .workspace-view.projects-view .project-grid {
@@ -7789,113 +7381,9 @@ html[data-theme='dark'] .planner-bucket-menu {
   }
 }
 
-.workspace-view.planner-view .planner-scope-switch,
-.workspace-view.planner-view .planner-commandbar,
-.workspace-view.planner-view .operations-workstream-create,
-.workspace-view.planner-view .planner-add-bucket,
-.workspace-view.planner-view .planner-manage-row {
-  min-width: 0;
-  max-width: 100%;
-}
-
 .workspace-view.planner-view .workspace-view-heading {
   gap: 14px;
   margin-bottom: 0;
-}
-
-.workspace-view.planner-view .planner-scope-switch {
-  gap: 8px;
-  margin-bottom: 0;
-  padding: 8px 10px;
-}
-
-.workspace-view.planner-view .planner-commandbar {
-  display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) repeat(2, minmax(170px, 200px)) auto auto auto;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-  padding: 10px 12px;
-}
-
-.workspace-view.planner-view .planner-commandbar .planner-view-toggle {
-  width: max-content;
-}
-
-.workspace-view.planner-view .planner-commandbar .planner-view-toggle button {
-  gap: 4px;
-  padding-right: 8px;
-  padding-left: 8px;
-}
-
-.workspace-view.planner-view .planner-commandbar label:not(.planner-search) {
-  min-width: 0;
-  gap: 6px;
-}
-
-.workspace-view.planner-view .planner-commandbar label:not(.planner-search) [data-slot='select-trigger'] {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-}
-
-.workspace-view.planner-view .planner-commandbar .planner-search {
-  width: 100%;
-  min-width: 0;
-  flex: none;
-}
-
-.workspace-view.planner-view .planner-commandbar .planner-more-filters,
-.workspace-view.planner-view .planner-commandbar .planner-clear-filters {
-  padding-right: 10px;
-  padding-left: 10px;
-  white-space: nowrap;
-}
-
-.workspace-view.planner-view .planner-commandbar .planner-result-count {
-  justify-self: end;
-  margin: 0;
-  padding: 0;
-  white-space: nowrap;
-}
-
-.workspace-view.planner-view .planner-secondary-filters {
-  grid-column: 1 / -1;
-  width: 100%;
-  margin: 2px 0 0;
-  padding-top: 10px;
-}
-
-.workspace-view.planner-view .planner-scope-switch label,
-.workspace-view.planner-view .planner-scope-switch [data-slot='select-trigger'] {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.workspace-view.planner-view .operations-workstream-create > div {
-  min-width: 0;
-  flex: 1 1 240px;
-}
-
-.workspace-view.planner-view .operations-workstream-create {
-  margin-bottom: 0;
-  padding: 10px 12px;
-}
-
-.workspace-view.planner-view .operations-workstream-create input {
-  min-width: 0;
-  flex: 1 1 220px;
-  width: auto;
-}
-
-.workspace-view.planner-view .operations-workstream-create .secondary-button {
-  flex: 0 0 auto;
-}
-
-.workspace-view.planner-view .planner-manage-row {
-  align-items: center;
-  gap: 6px;
-  margin: 0;
 }
 
 .workspace-view.planner-view .planner-manage-chip {
@@ -7909,117 +7397,13 @@ html[data-theme='dark'] .planner-bucket-menu {
   flex: 0 0 auto;
 }
 
-.workspace-view.planner-view .planner-add-bucket {
-  display: grid;
-  grid-template-columns: minmax(0, 220px) auto;
-  justify-content: start;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-}
-
-.workspace-view.planner-view .planner-add-bucket input {
-  width: 100%;
-  min-width: 0;
-}
-
-.workspace-view.planner-view .planner-add-bucket .secondary-button {
-  flex: 0 0 auto;
-}
-
-.workspace-view.planner-view .planner-add-bucket > span {
-  grid-column: 1 / -1;
-  min-width: 0;
-  color: var(--dashboard-muted);
-  font-size: 10px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.workspace-view.planner-view .planner-column,
-.workspace-view.planner-view .planner-column-heading,
-.workspace-view.planner-view .planner-card-heading,
-.workspace-view.planner-view .planner-card-meta,
-.workspace-view.planner-view .planner-card-footer {
-  min-width: 0;
-}
-
-.workspace-view.planner-view .planner-column {
-  overflow: hidden;
-}
-
-.workspace-view.planner-view .planner-column-heading strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-view.planner-view .planner-card-title {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.workspace-view.planner-view .planner-card-meta,
-.workspace-view.planner-view .planner-card-footer {
-  flex-wrap: wrap;
-}
-
-.workspace-view.planner-view :is(.planner-card-meta, .planner-card-footer) > * {
-  min-width: 0;
-  max-width: 100%;
-}
-
 @media (max-width: 700px) {
   .workspace-view.projects-view .project-toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .workspace-view.planner-view .operations-workstream-create {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: stretch;
-  }
-
-  .workspace-view.planner-view .operations-workstream-create > div {
-    grid-column: 1 / -1;
-    width: 100%;
-    flex: none;
-  }
-
-  .workspace-view.planner-view .operations-workstream-create > div span {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .workspace-view.planner-view .operations-workstream-create input {
-    grid-column: 1;
-    width: 100%;
-    min-width: 0;
-    flex: none;
-  }
-
-  .workspace-view.planner-view .operations-workstream-create .secondary-button {
-    grid-column: 2;
-    width: auto;
-    flex: none;
-  }
-
-  .workspace-view.planner-view .planner-manage-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 3px;
-    scrollbar-width: thin;
-  }
-
   .workspace-view.planner-view .planner-manage-chip {
     flex: 0 0 auto;
-  }
-
-  .workspace-view.planner-view .planner-add-bucket {
-    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
 
@@ -8027,44 +7411,11 @@ html[data-theme='dark'] .planner-bucket-menu {
   .workspace-view.planner-view {
     --workspace-control-height: 34px;
   }
-
-  .workspace-view.planner-view .planner-commandbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workspace-view.planner-view .planner-commandbar .planner-view-toggle,
-  .workspace-view.planner-view .planner-commandbar .planner-search {
-    grid-column: 1 / -1;
-  }
-
-  .workspace-view.planner-view .planner-commandbar .planner-view-toggle {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .workspace-view.planner-view .planner-commandbar .planner-result-count {
-    justify-self: start;
-    text-align: left;
-  }
-}
-
-@media (max-width: 1250px) {
-  .workspace-view.planner-view .planner-commandbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 440px) {
   .workspace-view.projects-view .project-toolbar {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .workspace-view.planner-view .planner-add-bucket {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .workspace-view.planner-view .planner-add-bucket .secondary-button {
-    width: 100%;
   }
 }
 
@@ -8804,11 +8155,11 @@ html[data-theme='dark'] .planner-bucket-menu {
   outline-offset: -2px;
 }
 
-.workspace-view :is(.files-table-wrap, .planner-table-scroll, .project-register-table-wrap) {
+.workspace-view :is(.files-table-wrap, .project-register-table-wrap) {
   scrollbar-gutter: stable;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) {
   display: inline-flex;
   max-width: 100%;
   align-items: center;
@@ -8821,11 +8172,11 @@ html[data-theme='dark'] .planner-bucket-menu {
   scrollbar-width: none;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs)::-webkit-scrollbar {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs)::-webkit-scrollbar {
   display: none;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]) {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]) {
   min-height: 28px;
   padding: 5px 10px;
   border: 0;
@@ -8837,13 +8188,13 @@ html[data-theme='dark'] .planner-bucket-menu {
   white-space: nowrap;
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):is(.active, [aria-selected="true"], [aria-pressed="true"]) {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):is(.active, [aria-selected="true"], [aria-pressed="true"]) {
   background: var(--color-info, #2563eb);
   color: #fff;
   box-shadow: 0 4px 12px color-mix(in srgb, var(--color-info, #2563eb) 24%, transparent);
 }
 
-.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):focus-visible {
+.workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) :is(button, [role="tab"]):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-info, #2563eb) 75%, transparent);
   outline-offset: 2px;
 }
@@ -8928,7 +8279,7 @@ html[data-theme='dark'] .planner-bucket-menu {
   background: linear-gradient(90deg, var(--color-info, #2563eb), var(--color-success, #3d8b6e));
 }
 
-.workspace-view :is(.task-status, .planner-priority, .scope-badge, .invitation-status-badge) {
+.workspace-view :is(.task-status, .scope-badge, .invitation-status-badge) {
   border: 1px solid color-mix(in srgb, var(--status-color, currentColor) 22%, transparent);
   line-height: 1.15;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
@@ -9025,7 +8376,7 @@ html[data-theme="dark"] .auth-error {
 @media (max-width: 640px) {
   .workspace-skeleton-heading { width: 58%; }
 
-  .workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .planner-view-toggle, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) {
+  .workspace-view :is(.files-categories, .chat-filter-tabs, .settings-segmented, .calendar-view-switcher, .team-board-tabs, .project-register-tabs, .spreadsheet-tabs) {
     width: 100%;
   }
 

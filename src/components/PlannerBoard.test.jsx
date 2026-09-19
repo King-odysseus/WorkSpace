@@ -30,13 +30,13 @@ const renderPlanner = (props = {}) => render(
 const columnNames = container =>
   [...container.querySelectorAll('.planner-column-heading strong')].map(node => node.textContent)
 
-it('exposes accessible names and pressed state for planner controls', () => {
+it('exposes accessible names for the planner toolbar', () => {
   renderPlanner()
 
-  expect(screen.getByRole('textbox', { name: 'Search tasks' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /board/i })).toHaveAttribute('aria-pressed', 'true')
-  expect(screen.getByRole('button', { name: /table/i })).toHaveAttribute('aria-pressed', 'false')
-  expect(screen.getByText('0 of 0 tasks')).toHaveAttribute('aria-live', 'polite')
+  expect(screen.getByRole('searchbox', { name: 'Search tasks' })).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Work scope' })).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Workstream' })).toBeInTheDocument()
+  expect(screen.getByText(/Showing operations only . 1 bucket/)).toBeInTheDocument()
 })
 
 const workspaceBuckets = [
@@ -172,9 +172,10 @@ it('shows a project task when the project owns no lanes at all', () => {
   expect(columnNames(container)).toEqual(['Backlog'])
 })
 
-it('leaves a borrowed lane out of the reorder controls', () => {
+it('leaves a borrowed lane out of the reorder controls', async () => {
   // The lane belongs to another scope, so it is drawn here but must not be nudged
   // around as though it were this project's own.
+  const user = userEvent.setup()
   const { container } = renderPlanner({
     buckets: [{ id: 19, name: 'Design', project_id: 2 }],
     scopeMode: 'projects',
@@ -184,7 +185,9 @@ it('leaves a borrowed lane out of the reorder controls', () => {
   })
 
   expect(columnNames(container)).toEqual(['Design'])
-  expect(container.querySelectorAll('.planner-bucket-move')).toHaveLength(0)
+  await user.click(screen.getByRole('button', { name: 'Open actions for Design' }))
+  expect(screen.getByRole('menuitem', { name: 'Rename Design' })).toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: 'Move Design left' })).not.toBeInTheDocument()
 })
 
 it('offers lifecycle actions for custom buckets through an overflow menu and protects the default Backlog', async () => {

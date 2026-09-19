@@ -1,24 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, GanttChartSquare, GripVertical, LayoutGrid, List, Archive, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, Check, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { Button } from './ui/button.jsx'
-import { PageHeader } from './ui/page-header.jsx'
-import { SelectField, DateField } from './workspace-ui.jsx'
-import { formatDay, formatDayMonth, taskAssigneeLabel, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
+import { SearchInput } from './ui/search-input.jsx'
+import Avatar from './Avatar.jsx'
+import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
 const statusLabel = { todo: 'To do', 'in progress': 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
 const STALE_DAYS = 14
 
+// The design's card: a 242x76 tile holding a completion checkbox, the title
+// beside it, then an assignee circle, a "workstream - estimate" line and the
+// status pill on the same baseline. Status moves between lanes by dragging the
+// card; the overflow menu carries the moves a drag cannot express.
 function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, onDropBefore, draggedTaskId, setDraggedTaskId, dropTaskId, setDropTaskId }) {
-  const bucketIndex = buckets.findIndex(bucket => bucket.name === task.bucket)
-  const moveTo = direction => {
-    const target = buckets[bucketIndex + direction]
-    if (target) onMove(task, target.name, 'end')
-  }
+  const isDone = task.status === 'done'
+  const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
+  const meta = [task.workstream, formatEstimateMinutes(task.estimate_minutes)].filter(Boolean).join(' · ')
+  const assignee = task.assignee || {}
   return <article
-    className={`planner-task-card ${task.status} ${draggedTaskId === task.id ? 'is-dragging' : ''} ${dropTaskId === task.id && draggedTaskId !== task.id ? 'is-drop-target' : ''}`}
+    className={`planner-card group/card relative flex h-[76px] shrink-0 flex-col justify-between rounded-card border border-border bg-card px-[11px] pt-[11px] pb-[17px] text-left transition-colors ${draggedTaskId === task.id ? 'opacity-50' : ''} ${dropTaskId === task.id && draggedTaskId !== task.id ? 'border-navy' : ''}`}
     draggable={canReorder}
     onDragStart={event => {
       event.stopPropagation()
@@ -37,27 +40,64 @@ function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOp
       setDropTaskId(null)
     }}
   >
-    <div className="planner-card-heading">
-      <span className={`planner-drag-handle${canReorder ? '' : ' is-inactive'}`} aria-hidden="true"><GripVertical size={15} /></span>
-      <button type="button" className="planner-card-title" onClick={() => onOpen(task)}>{task.title}</button>
-      <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="planner-card-menu" aria-label={`Actions for ${task.title}`} title={`Actions for ${task.title}`}><MoreHorizontal size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="planner-bucket-menu"><DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Open ${task.title}`} onSelect={() => onOpen(task)}><Pencil size={13} /><span>Open task</span></DropdownMenuItem>{canReorder && <><DropdownMenuSeparator className="planner-bucket-menu-separator" /><DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Archive ${task.title}`} onSelect={() => onDelete(task.id)}><Archive size={13} /><span>Archive</span></DropdownMenuItem>{canDeletePermanently && <><DropdownMenuSeparator className="planner-bucket-menu-separator" /><DropdownMenuItem variant="destructive" className="planner-bucket-menu-item" aria-label={`Delete ${task.title} permanently`} onSelect={() => onDeletePermanently(task)}><Trash2 size={13} /><span>Delete permanently</span></DropdownMenuItem></>}</>}</DropdownMenuContent></DropdownMenu>
+    <div className="flex items-start gap-2">
+      <input
+        type="checkbox"
+        className="planner-card-check mt-0.5"
+        checked={isDone}
+        disabled={!onStatusChange}
+        onChange={() => onStatusChange?.(task.id, isDone ? 'todo' : 'done')}
+        aria-label={isDone ? `Reopen ${task.title}` : `Complete ${task.title}`}
+      />
+      <button
+        type="button"
+        className={`min-w-0 flex-1 truncate text-body-compact font-medium text-left ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}
+        onClick={() => onOpen(task)}
+      >
+        {task.title}
+      </button>
     </div>
-    <div className="planner-card-meta">
-      <span className={`planner-priority ${task.priority}`}>{task.priority}</span>
-      <span>{task.tag || 'General'}</span>
-      {onStatusChange && <AppSelect className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></AppSelect>}
+    <div className="flex items-center gap-2">
+      <Avatar name={taskAssigneeLabel(task)} avatarUrl={assignee.avatar_url} className="card-avatar" />
+      <span className={`min-w-0 flex-1 truncate text-[11px] leading-[13px] ${isDone ? 'text-text-subtle' : 'text-text-muted'}`}>{meta}</span>
+      {onStatusChange
+        ? <AppSelect
+            className={`task-status-pill planner-status-pill ${task.status}`}
+            value={task.status}
+            onChange={event => onStatusChange(task.id, event.target.value)}
+            aria-label={`Change status for ${task.title}`}
+          >
+            {Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </AppSelect>
+        : <span className={`task-status-pill planner-status-pill ${task.status}`}>{statusLabel[task.status] || task.status}</span>}
     </div>
-    <div className="planner-card-footer">
-      <span>{taskAssigneeLabel(task) || 'Unassigned'}</span>
-      <span className={task.due === 'Overdue' ? 'overdue' : ''}>{task.due}</span>
+    {/* The design's card shows no overflow control at rest, so it only appears
+        once the card is hovered or the button itself takes focus. */}
+    <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="planner-card-menu" aria-label={`Actions for ${task.title}`} title={`Actions for ${task.title}`}><MoreHorizontal size={16} /></button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="planner-bucket-menu">
+          <DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Open ${task.title}`} onSelect={() => onOpen(task)}><Pencil size={13} /><span>Open task</span></DropdownMenuItem>
+          {canReorder && otherBuckets.length > 0 && <>
+            <DropdownMenuSeparator className="planner-bucket-menu-separator" />
+            {otherBuckets.map(bucket => <DropdownMenuItem key={bucket.id} className="planner-bucket-menu-item" aria-label={`Move ${task.title} to ${bucket.name}`} onSelect={() => onMove(task, bucket.name)}><ArrowRight size={13} /><span>Move to {bucket.name}</span></DropdownMenuItem>)}
+          </>}
+          {canReorder && <>
+            <DropdownMenuSeparator className="planner-bucket-menu-separator" />
+            <DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Archive ${task.title}`} onSelect={() => onDelete(task.id)}><Archive size={13} /><span>Archive</span></DropdownMenuItem>
+            {canDeletePermanently && <><DropdownMenuSeparator className="planner-bucket-menu-separator" /><DropdownMenuItem variant="destructive" className="planner-bucket-menu-item" aria-label={`Delete ${task.title} permanently`} onSelect={() => onDeletePermanently(task)}><Trash2 size={13} /><span>Delete permanently</span></DropdownMenuItem></>}
+          </>}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
-    {canReorder && <div className="planner-card-move" aria-label={`Move ${task.title}`}>
-      <button type="button" onClick={() => onMove(task, task.bucket, 'up')} aria-label="Move up"><ArrowUp size={13} /></button>
-      <button type="button" onClick={() => onMove(task, task.bucket, 'down')} aria-label="Move down"><ArrowDown size={13} /></button>
-      <button type="button" onClick={() => moveTo(-1)} disabled={bucketIndex <= 0} aria-label="Move to previous bucket"><ArrowLeft size={13} /></button>
-      <button type="button" onClick={() => moveTo(1)} disabled={bucketIndex < 0 || bucketIndex >= buckets.length - 1} aria-label="Move to next bucket"><ArrowRight size={13} /></button>
-    </div>}
   </article>
+}
+
+function taskAssigneeLabel(task) {
+  const assignee = task.assignee || {}
+  return task.member || [assignee.first_name, assignee.last_name].filter(Boolean).join(' ') || assignee.email || ''
 }
 
 export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all' }) {
@@ -77,11 +117,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [draggedBucketId, setDraggedBucketId] = useState(null)
   const [dropBucketId, setDropBucketId] = useState(null)
   const [dropTaskId, setDropTaskId] = useState(null)
-  const [view, setView] = useState('board')
-  const [page, setPage] = useState(1)
-  const [selectedIds, setSelectedIds] = useState([])
-  const [bulkStatus, setBulkStatus] = useState('')
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [editingBucketId, setEditingBucketId] = useState(null)
   const [bucketNameDraft, setBucketNameDraft] = useState('')
 
@@ -181,21 +217,6 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       && (!staleOnly || (task.status !== 'done' && task.status !== 'cancelled' && task.updated_at && Date.now() - new Date(task.updated_at).getTime() > STALE_DAYS * 86400000))
   }), [tasks, searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, today, projectByBucketName, staleOnly])
 
-  const pageSize = 20
-  const totalPages = Math.max(1, Math.ceil(visibleTasks.length / pageSize))
-  const tableTasks = visibleTasks.slice((page - 1) * pageSize, page * pageSize)
-  useEffect(() => { setPage(1); setSelectedIds([]) }, [searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, view, staleOnly])
-  useEffect(() => { if (page > totalPages) setPage(totalPages) }, [page, totalPages])
-  const toggleSelected = id => setSelectedIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
-  const pageIsSelected = tableTasks.length > 0 && tableTasks.every(task => selectedIds.includes(task.id))
-  const togglePage = () => setSelectedIds(current => pageIsSelected ? current.filter(id => !tableTasks.some(task => task.id === id)) : [...new Set([...current, ...tableTasks.map(task => task.id)])])
-  const applyBulkStatus = async () => {
-    if (!bulkStatus || !selectedIds.length) return
-    await Promise.all(selectedIds.map(id => onStatusChange(id, bulkStatus)))
-    setSelectedIds([])
-    setBulkStatus('')
-  }
-
   const orderedFor = bucket => visibleTasks.filter(task => task.bucket === bucket).sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
   const allOrderedFor = bucket => tasks.filter(task => task.bucket === bucket).sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
   const persistMove = (taskId, targetBucket, targetIndex) => {
@@ -206,12 +227,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     const columns = buckets.map(bucket => ({ bucket: bucket.name, task_ids: next[bucket.name].map(task => task.id) }))
     onTaskMove(canManageTasks ? columns : columns.map(column => ({ ...column, task_ids: column.task_ids.filter(id => { const item = tasks.find(task => task.id === id); return item && taskIsAssignedTo(item, currentUserId) }) })).filter(column => column.task_ids.length))
   }
-  const moveTask = (task, targetBucket, placement) => {
-    const target = allOrderedFor(targetBucket).filter(item => item.id !== task.id)
-    const currentIndex = allOrderedFor(task.bucket).findIndex(item => item.id === task.id)
-    const targetIndex = placement === 'up' ? Math.max(0, currentIndex - 1) : placement === 'down' ? currentIndex + 1 : target.length
-    persistMove(task.id, targetBucket, targetIndex)
-  }
+  const moveTask = (task, targetBucket) => persistMove(task.id, targetBucket, allOrderedFor(targetBucket).filter(item => item.id !== task.id).length)
   const dropBefore = (taskId, targetTask) => {
     const target = allOrderedFor(targetTask.bucket).filter(task => task.id !== taskId)
     persistMove(taskId, targetTask.bucket, target.findIndex(task => task.id === targetTask.id))
@@ -265,32 +281,25 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     return 'Workspace'
   }
   const isDefaultBacklog = bucket => !bucket.project_id && !bucket.workstream_id && bucket.name === 'Backlog'
-  const ganttSource = visibleTasks.filter(task => task.status !== 'done' || task.due_date)
-  const toDay = value => { const date = new Date(value); date.setHours(0, 0, 0, 0); return date }
-  const ganttStart = ganttSource.length ? new Date(Math.min(...ganttSource.map(task => toDay(task.start_date || task.created_at || task.due_date || today).getTime()))) : toDay(today)
-  const ganttEnd = ganttSource.length ? new Date(Math.max(...ganttSource.map(task => toDay(task.due_date || task.start_date || task.created_at || today).getTime()))) : new Date(ganttStart)
-  if (ganttEnd <= ganttStart) ganttEnd.setDate(ganttStart.getDate() + 7)
-  else ganttEnd.setDate(ganttEnd.getDate() + 1)
-  const ganttSpan = Math.max(1, Math.round((ganttEnd - ganttStart) / 86400000))
-  // One column per day only holds for short ranges. Capping the axis at 90 columns
-  // used to leave every later task pinned against the right edge, so step the axis
-  // in whole days and size the bars against the range actually drawn.
-  const ganttStep = Math.max(1, Math.ceil(ganttSpan / 90))
-  const ganttDays = Array.from({ length: Math.max(1, Math.ceil(ganttSpan / ganttStep)) }, (_, index) => { const day = new Date(ganttStart); day.setDate(day.getDate() + index * ganttStep); return day })
-  const ganttScale = ganttDays.length * ganttStep
-  const ganttToday = toDay(today).getTime()
-  const isTodayColumn = day => { const start = day.getTime(); return ganttToday >= start && ganttToday < start + ganttStep * 86400000 }
-  const ganttContent = <div className="planner-gantt" style={{ '--gantt-days': ganttDays.length }}><div className="planner-gantt-header"><div className="planner-gantt-task-label">Task</div><div className="planner-gantt-timeline">{ganttDays.map(day => <span key={day.toISOString()} className={isTodayColumn(day) ? 'is-today' : ''}>{ganttStep > 1 || day.getDate() === 1 || day.getTime() === ganttStart.getTime() ? formatDayMonth(day) : day.getDate()}</span>)}</div></div>{buckets.flatMap(bucket => ganttSource.filter(task => task.bucket === bucket.name).map(task => { const taskStart = toDay(task.start_date || task.created_at || task.due_date || today); const taskEnd = toDay(task.due_date || task.start_date || task.created_at || today); const left = Math.max(0, Math.min(100, ((taskStart - ganttStart) / 86400000 / ganttScale) * 100)); const width = Math.max(1.5, Math.min(100 - left, (((taskEnd - taskStart) / 86400000) + 1) / ganttScale * 100)); return <div className="planner-gantt-row" key={task.id}><div className="planner-gantt-task-label"><span>{bucket.name}</span><button type="button" onClick={() => onOpenTask(task)}>{task.title}</button></div><div className="planner-gantt-track">{ganttDays.map(day => <i key={day.toISOString()} className={isTodayColumn(day) ? 'is-today' : ''} />)}<button type="button" className={`planner-gantt-bar ${task.status} ${task.priority}`} style={{ left: `${left}%`, width: `${width}%` }} onClick={() => onOpenTask(task)} title={`${task.title}${task.due_date ? ` - Due ${formatDay(task.due_date)}` : ''}`}>{task.title}</button></div></div> }))}{!ganttSource.length && <div className="planner-empty">No scheduled tasks to display.</div>}</div>
-
-  const tableContent = <div className="planner-table-shell">
-    {selectedIds.length > 0 && <div className="planner-bulk-bar" role="region" aria-label="Bulk task actions"><strong>{selectedIds.length} selected</strong><AppSelect value={bulkStatus} onChange={event => setBulkStatus(event.target.value)} aria-label="Bulk status"><option value="">Choose status…</option>{Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</AppSelect><button type="button" className="secondary-button" disabled={!bulkStatus} onClick={applyBulkStatus}>Apply</button><button type="button" className="text-button" onClick={() => setSelectedIds([])}>Clear</button></div>}
-    <div className="planner-table-scroll"><table className="planner-task-table"><thead><tr><th><input type="checkbox" checked={pageIsSelected} onChange={togglePage} aria-label="Select all tasks on this page" /></th><th>Task</th><th>Scope</th><th>Owner</th><th>Priority</th><th>Progress</th><th>Target date</th><th>Status</th></tr></thead><tbody>{tableTasks.length ? tableTasks.map(task => { const progress = Number.isFinite(Number(task.progress_percent)) ? Number(task.progress_percent) : task.status === 'done' ? 100 : null; return <tr key={task.id}><td><input type="checkbox" checked={selectedIds.includes(task.id)} onChange={() => toggleSelected(task.id)} aria-label={`Select ${task.title}`} /></td><td><button type="button" className="planner-table-task" onClick={() => onOpenTask(task)}><small>{task.task_code || `#${task.id}`}</small><strong>{task.title}</strong><span>{[task.workstream, task.phase || task.quarter].filter(Boolean).join(' · ') || task.bucket || 'Backlog'}</span></button></td><td><span className={`scope-badge ${task.project_id ? 'project' : 'operations'}`}>{task.project_id ? task.tag || 'Project' : 'Operations'}</span></td><td>{task.member || 'Unassigned'}</td><td><span className={`planner-priority ${task.priority}`}>{task.priority}</span></td><td>{progress === null ? <span className="table-muted">Not tracked</span> : <span className="table-progress"><i><b style={{ width: `${progress}%` }} /></i>{progress}%</span>}</td><td><span className={task.due === 'Overdue' ? 'overdue' : ''}>{formatDay(task.due_date) || 'No date'}</span></td><td><AppSelect className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}>{Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</AppSelect></td></tr> }) : <tr><td colSpan="8" className="planner-table-empty">No tasks match the current scope and filters.</td></tr>}</tbody></table></div>
-    <div className="planner-pagination"><span>{visibleTasks.length ? `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, visibleTasks.length)} of ${visibleTasks.length}` : '0 tasks'}</span><div><button type="button" disabled={page === 1} onClick={() => setPage(current => current - 1)} aria-label="Previous page"><ChevronLeft size={15} /></button><span>Page {page} of {totalPages}</span><button type="button" disabled={page === totalPages} onClick={() => setPage(current => current + 1)} aria-label="Next page"><ChevronRight size={15} /></button></div></div>
-  </div>
+  const laneSummary = name => {
+    const items = orderedFor(name)
+    const minutes = items.reduce((total, task) => total + (Number(task.estimate_minutes) || 0), 0)
+    return `${items.length} ${items.length === 1 ? 'task' : 'tasks'}${minutes ? ` · ${formatEstimateMinutes(minutes)}` : ''}`
+  }
+  const filtersHiding = status !== 'all' || priority !== 'all' || assignee !== 'all' || supporter !== 'all' || phase !== 'all' || bucketFilter !== 'all' || dueFilter !== 'all' || Boolean(dateFrom) || Boolean(dateTo) || staleOnly
+  const clearHiddenFilters = () => { setStatus('all'); setPriority('all'); setAssignee('all'); setSupporter('all'); setPhase('all'); setBucketFilter('all'); setDueFilter('all'); setDateFrom(''); setDateTo(''); setStaleOnly(false) }
+  // The design's scope line names the scope, the lane count and what the board
+  // does with them. A drill-through from Reports sets filters this toolbar has no
+  // control for, so when one is in force the line says so and offers the way out.
+  const scopeLine = [
+    isOperations ? (workstream === 'all' ? 'Showing operations only' : `Showing ${workstream}`) : (workstream === 'all' ? 'Showing all workstreams' : `Showing ${workstream}`),
+    `${buckets.length} ${buckets.length === 1 ? 'bucket' : 'buckets'}`,
+    isOperations ? 'non-project work across all squads' : 'drag a card, or use its bucket selector to move it',
+  ].filter(Boolean).join(' · ')
 
   const archiveContent = <section className="planner-bucket-archive" aria-labelledby="bucket-archive-title">
     <header className="planner-archive-heading">
-      <div><p className="eyebrow">Planner storage</p><h2 id="bucket-archive-title">Bucket archive</h2><p>Restore a bucket to reuse it, or delete it permanently.</p></div>
+      <div><p className="text-overline uppercase text-navy">Planner storage</p><h2 id="bucket-archive-title">Bucket archive</h2><p>Restore a bucket to reuse it, or delete it permanently.</p></div>
       <button type="button" className="planner-archive-close" onClick={onToggleBucketArchive} aria-label="Close bucket archive" title="Close bucket archive"><X size={16} /></button>
     </header>
     {bucketArchiveError && <p className="auth-error" role="alert">{bucketArchiveError}</p>}
@@ -302,55 +311,86 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     </div> : <div className="planner-archive-empty"><Archive size={22} /><strong>No archived buckets</strong><p>Buckets you archive will appear here.</p></div>}
   </section>
 
+  const createPanel = canManageBuckets && creating && <div className="mt-3 flex flex-wrap items-end gap-3 rounded-control border border-border bg-card p-3">
+    <label className="grid flex-1 gap-1.5">
+      <span className="text-caption font-medium text-text-secondary">{isOperations ? 'Workstream' : 'Project'}</span>
+      {isOperations
+        ? <AppSelect className="chip-select" value={workstream} onChange={event => setWorkstream(event.target.value)} aria-label="Workstream for the new bucket"><option value="all">Unassigned</option>{workstreams.map(value => <option key={value} value={value}>{value}</option>)}</AppSelect>
+        : <AppSelect className="chip-select" value={projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Project for the new bucket"><option value="all">All projects</option>{projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}</AppSelect>}
+    </label>
+    <form className="grid flex-1 gap-1.5" onSubmit={event => onCreateBucket(event, bucketScope)}>
+      <span className="text-caption font-medium text-text-secondary">Bucket name</span>
+      <div className="flex gap-2">
+        <input className="h-[42px] min-w-0 flex-1 rounded-control border border-border bg-card px-3 text-body-small text-text-primary outline-none placeholder:text-text-muted" value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket name" maxLength="80" required />
+        <Button type="submit" disabled={bucketSubmitting || !bucketScope}>{bucketSubmitting ? 'Adding…' : 'Add bucket'}</Button>
+        <Button type="button" variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
+      </div>
+    </form>
+    {!bucketScope && <p className="w-full text-caption text-text-muted">Choose a {isOperations ? 'workstream' : 'project'} before adding buckets.</p>}
+    {isOperations && <form className="grid flex-1 gap-1.5" onSubmit={onCreateWorkstream}>
+      <span className="text-caption font-medium text-text-secondary">New workstream</span>
+      <div className="flex gap-2">
+        <input className="h-[42px] min-w-0 flex-1 rounded-control border border-border bg-card px-3 text-body-small text-text-primary outline-none placeholder:text-text-muted" value={newWorkstreamName} onChange={event => setNewWorkstreamName(event.target.value)} placeholder="e.g. Finance" maxLength="120" required />
+        <Button type="submit" disabled={workstreamSubmitting}>{workstreamSubmitting ? 'Creating…' : 'Create'}</Button>
+      </div>
+    </form>}
+    {isOperations && activeWorkstreams.length > 0 && <div className="flex w-full flex-wrap items-center gap-2">{activeWorkstreams.map(value => <span className="planner-manage-chip" key={value.id}>{value.name}<button type="button" onClick={() => onArchiveWorkstream?.(value)} aria-label={`Archive ${value.name}`}><Archive size={12} /></button></span>)}</div>}
+  </div>
+
   return <section className="workspace-view planner-view">
-    <PageHeader
-      eyebrow={isOperations ? 'Daily operations' : 'Projects'}
-      title={isOperations ? 'Operations planner' : 'Project planner'}
-      description={isOperations ? 'Manage recurring and day-to-day work outside projects.' : 'Plan and track delivery work within projects.'}
-    >
-      {canManageBuckets && <button type="button" className={`planner-archive-trigger${bucketArchiveOpen ? ' active' : ''}`} onClick={onToggleBucketArchive} aria-label="Bucket archive" aria-pressed={bucketArchiveOpen} title="Bucket archive"><Archive size={16} /></button>}
-      <Button size="page" onClick={onAddTask}><Plus size={20} strokeWidth={1.75} /> Add {isOperations ? 'operation' : 'project task'}</Button>
-    </PageHeader>
+    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
+      <div className="min-w-0">
+        <p className={`text-overline uppercase ${isOperations ? 'text-text-muted' : 'text-navy'}`}>Work planning</p>
+        <h1 className="mt-1 text-page-heading text-text-primary">{isOperations ? 'Daily operations' : 'Planner'}</h1>
+        <p className="mt-1.5 text-body-small text-text-muted">{isOperations
+          ? 'Recurring and non-project work - the operational running of the team.'
+          : `${buckets.length} ${buckets.length === 1 ? 'bucket' : 'buckets'} · ${visibleTasks.length} ${visibleTasks.length === 1 ? 'task' : 'tasks'} · drag between buckets, or use the bucket selector on a card to move it`}</p>
+      </div>
+      {isOperations
+        ? canManageBuckets && <Button size="page" type="button" onClick={() => setCreating(current => !current)} aria-expanded={creating}><Plus size={20} strokeWidth={1.75} /> New bucket</Button>
+        : <Button size="page" type="button" onClick={onAddTask}><Plus size={20} strokeWidth={1.75} /> Create task</Button>}
+    </header>
+
     {bucketArchiveOpen ? archiveContent : <>
-    {scopeMode === 'switch' && <div className="planner-scope-switch" role="group" aria-label="Planner workspace">
-      <button type="button" className={isOperations ? 'active' : ''} aria-pressed={isOperations} onClick={() => onProjectFilterChange?.('operations')}>Daily Operations <span>{tasks.filter(task => !task.project_id).length}</span></button>
-      <button type="button" className={!isOperations ? 'active' : ''} aria-pressed={!isOperations} onClick={() => onProjectFilterChange?.('all')}>Projects <span>{tasks.filter(task => task.project_id).length}</span></button>
-      {!isOperations && <SelectField label="Project" value={projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)} options={[['all', 'All projects'], ...projects.map(project => [String(project.id), project.name])]} />}
-    </div>}
-    {scopeMode === 'projects' && <div className="planner-scope-switch" role="group" aria-label="Project planner scope">
-      <button type="button" className="active">Projects <span>{tasks.filter(task => task.project_id).length}</span></button>
-      <SelectField label="Project" value={projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)} options={[['all', 'All projects'], ...projects.map(project => [String(project.id), project.name])]} />
-    </div>}
-    <div className="planner-commandbar">
-      <div className="planner-view-toggle" role="group" aria-label="Planner view"><button type="button" className={view === 'board' ? 'active' : ''} aria-pressed={view === 'board'} onClick={() => setView('board')}><LayoutGrid size={13} /> Board</button><button type="button" className={view === 'table' ? 'active' : ''} aria-pressed={view === 'table'} onClick={() => setView('table')}><List size={13} /> Table</button><button type="button" className={view === 'gantt' ? 'active' : ''} aria-pressed={view === 'gantt'} onClick={() => setView('gantt')}><GanttChartSquare size={13} /> Gantt</button></div>
-      <label className="planner-search"><Search size={15} /><input aria-label="Search tasks" value={searchQuery} onChange={event => onSearchChange(event.target.value)} placeholder="Search tasks" /></label>
-      <SelectField label="Status" value={status} onChange={event => setStatus(event.target.value)} options={[['all', 'All statuses'], ...Object.entries(statusLabel)]} />
-      <SelectField label="Workstream" value={workstream} onChange={event => setWorkstream(event.target.value)} options={[['all', 'All workstreams'], ...workstreams.map(value => [value, value])]} />
-      <button type="button" className={`planner-more-filters ${filtersOpen ? 'active' : ''}`} onClick={() => setFiltersOpen(current => !current)}>More filters <ChevronDown size={14} /></button>
-      {filtersOpen && <div className="planner-secondary-filters">
-      <label>Priority<AppSelect className={`priority-select priority-${priority}`} value={priority} onChange={event => setPriority(event.target.value)}><option value="all">All priorities</option>{['urgent', 'high', 'normal', 'low'].map(value => <option key={value} value={value}>{value}</option>)}</AppSelect></label>
-      <label>Assignee<AppSelect value={assignee} onChange={event => setAssignee(event.target.value)}><option value="all">All assignees</option><option value="">Unassigned</option>{members.map(member => <option key={member.id} value={String(member.id)}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</AppSelect></label>
-      <SelectField label="Supporter" value={supporter} onChange={event => setSupporter(event.target.value)} options={[['all', 'All supporters'], ...members.map(member => [String(member.id), [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email])]} />
-      <SelectField label="Phase" value={phase} onChange={event => setPhase(event.target.value)} options={[['all', 'All phases'], ...phases.map(value => [value, value])]} />
-      <SelectField label="Bucket" value={bucketFilter} onChange={event => setBucketFilter(event.target.value)} options={[['all', 'All buckets'], ...buckets.map(bucket => [bucket.name, bucket.name])]} />
-      <SelectField label="Due" value={dueFilter} onChange={event => setDueFilter(event.target.value)} options={[['all', 'Any due date'], ['today', 'Due today'], ['overdue', 'Overdue'], ['none', 'No due date']]} />
-      <DateField label="From" value={dateFrom} onChange={event => setDateFrom(event.target.value)} />
-      <DateField label="To" value={dateTo} onChange={event => setDateTo(event.target.value)} />
-      </div>}
-      {(status !== 'all' || priority !== 'all' || assignee !== 'all' || supporter !== 'all' || workstream !== 'all' || phase !== 'all' || bucketFilter !== 'all' || dueFilter !== 'all' || dateFrom || dateTo || searchQuery || staleOnly) && <button type="button" className="planner-clear-filters" onClick={() => { setStatus('all'); setPriority('all'); setAssignee('all'); setSupporter('all'); setWorkstream('all'); setPhase('all'); setBucketFilter('all'); setDueFilter('all'); setDateFrom(''); setDateTo(''); setStaleOnly(false); onSearchChange('') }}>Clear filters</button>}
-      <span className="planner-result-count" aria-live="polite">{visibleTasks.length} of {tasks.length} tasks</span>
+    <div className="mt-[9px] flex flex-wrap items-center gap-3">
+      <SearchInput
+        className="w-full min-w-0 sm:max-w-[280px] sm:flex-1"
+        label="Search tasks"
+        placeholder="Search tasks"
+        value={searchQuery}
+        onChange={event => onSearchChange(event.target.value)}
+      />
+      <AppSelect className="chip-select w-full sm:w-[170px]" value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Work scope" disabled={scopeMode === 'projects'}>
+        <option value="all">All work</option>
+        <option value="operations">Daily operations</option>
+      </AppSelect>
+      {!isOperations && <AppSelect className="chip-select w-full sm:w-[170px]" value={projectFilter === 'operations' ? 'all' : projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Project">
+        <option value="all">All projects</option>
+        {projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}
+      </AppSelect>}
+      <AppSelect className="chip-select w-full sm:w-[170px]" value={workstream} onChange={event => setWorkstream(event.target.value)} aria-label="Workstream">
+        <option value="all">{isOperations ? 'All workstreams' : 'All workstreams'}</option>
+        {workstreams.map(value => <option key={value} value={value}>{value}</option>)}
+      </AppSelect>
+      {canManageBuckets && <Button type="button" variant="outline" className={`gap-2.5 ${bucketArchiveOpen ? 'border-navy' : ''}`} onClick={onToggleBucketArchive} aria-pressed={bucketArchiveOpen}>
+        <Archive size={20} aria-hidden="true" /> Archived
+      </Button>}
+      {canManageBuckets && !isOperations && <Button size="page" type="button" onClick={() => setCreating(current => !current)} aria-expanded={creating}><Plus size={20} strokeWidth={1.75} /> New bucket</Button>}
     </div>
-    {isOperations && canManageBuckets && <form className="operations-workstream-create" onSubmit={onCreateWorkstream}><div><strong>Operations workstreams</strong><span>Create reusable lanes such as Finance, Customer Support, or People.</span></div><input value={newWorkstreamName} onChange={event => setNewWorkstreamName(event.target.value)} placeholder="New operations workstream" maxLength="120" required /><button type="submit" className="secondary-button" disabled={workstreamSubmitting}>{workstreamSubmitting ? 'Creating…' : 'Create workstream'}</button></form>}
-    {canManageBuckets && activeWorkstreams.length > 0 && <div className="planner-manage-row">{activeWorkstreams.map(value => <span className="planner-manage-chip" key={value.id}>{value.name}<button type="button" onClick={() => onArchiveWorkstream?.(value)} aria-label={`Archive ${value.name}`}><Archive size={12} /></button></span>)}</div>}
-    {workstreamError && <p className="auth-error" role="alert">{workstreamError}</p>}
-    {canManageBuckets && <form className="planner-add-bucket" onSubmit={event => onCreateBucket(event, bucketScope)}><input value={newBucketName} onChange={event => setNewBucketName(event.target.value)} placeholder="New bucket name" maxLength="80" required disabled={!bucketScope} /><button type="submit" className="secondary-button" disabled={bucketSubmitting || !bucketScope}>{bucketSubmitting ? 'Adding…' : 'Add bucket'}</button>{!bucketScope && <span>Select a workstream or project before adding buckets.</span>}</form>}
-    {canManageBuckets && persistedBuckets.length > 0 && <div className="planner-manage-row planner-bucket-manage-row">{persistedBuckets.map(bucket => editingBucketId === bucket.id ? <form className="planner-manage-chip planner-bucket-edit" key={bucket.id} onSubmit={event => submitBucketRename(event, bucket)}><input value={bucketNameDraft} onChange={event => setBucketNameDraft(event.target.value)} aria-label={`Rename ${bucket.name}`} maxLength="80" autoFocus /><button type="submit" aria-label={`Save ${bucket.name} name`} title="Save name"><Check size={12} /></button><button type="button" onClick={() => setEditingBucketId(null)} aria-label="Cancel rename" title="Cancel"><X size={12} /></button></form> : <span className="planner-manage-chip" key={bucket.id}><span className="planner-manage-chip-name">{bucket.name}</span>{!isDefaultBacklog(bucket) && <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="planner-bucket-menu-trigger" aria-label={`Open actions for ${bucket.name}`} title={`Actions for ${bucket.name}`}><MoreHorizontal size={14} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="planner-bucket-menu"><DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Rename ${bucket.name}`} onSelect={() => startBucketRename(bucket)}><Pencil size={13} /><span>Rename</span></DropdownMenuItem><DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Archive ${bucket.name}`} onSelect={() => onArchiveBucket?.(bucket)}><Archive size={13} /><span>Archive</span></DropdownMenuItem><DropdownMenuSeparator className="planner-bucket-menu-separator" /><DropdownMenuItem variant="destructive" className="planner-bucket-menu-item" aria-label={`Delete ${bucket.name}`} onSelect={() => onDeleteBucket?.(bucket)}><Trash2 size={13} /><span>Delete</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>}</span>)}</div>}
-    {bucketError && <p className="auth-error" role="alert">{bucketError}</p>}
-    {view === 'gantt' ? ganttContent : view === 'table' ? tableContent : <div className="planner-board" aria-label="Planner board">
+
+    <div className="mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">
+      <span>{scopeLine}</span>
+      {filtersHiding && <button type="button" className="text-caption font-medium text-navy underline underline-offset-2" onClick={clearHiddenFilters}>Clear filters</button>}
+    </div>
+
+    {createPanel}
+    {(bucketError || workstreamError) && <p className="auth-error" role="alert">{bucketError || workstreamError}</p>}
+
+    <div className="mt-[17px] flex gap-4 overflow-x-auto pb-2" aria-label="Planner board">
       {buckets.map(bucket => {
         const persistedIndex = persistedBuckets.findIndex(item => item.id === bucket.id)
         const bucketDraggable = canManageBuckets && Boolean(bucketScope) && typeof bucket.id === 'number' && bucket.name !== 'Backlog'
-        return <section className={`planner-column ${dropBucketId === bucket.id ? 'is-drop-target' : ''} ${draggedBucketId === bucket.id ? 'is-dragging' : ''}`} key={bucket.id}
+        return <section className={`planner-column flex h-[744px] w-[266px] shrink-0 flex-col rounded-card bg-surface-secondary ${dropBucketId === bucket.id ? 'ring-1 ring-navy' : ''} ${draggedBucketId === bucket.id ? 'opacity-60' : ''}`} key={bucket.id}
           onDragEnter={event => { if (draggedTaskId || (draggedBucketId && bucket.name !== 'Backlog')) { event.preventDefault(); setDropBucketId(bucket.id) } }}
           onDragOver={event => { if (draggedTaskId || (draggedBucketId && bucket.name !== 'Backlog')) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
           onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) setDropBucketId(null) }}
@@ -365,16 +405,48 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
             }
             setDraggedTaskId(null); setDraggedBucketId(null); setDropBucketId(null)
           }}>
-        <header className="planner-column-heading" draggable={bucketDraggable}
-          onDragStart={event => { if (!bucketDraggable) return; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', `bucket:${bucket.id}`); setDraggedBucketId(bucket.id) }}
-          onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null) }}>
-          <GripVertical size={15} aria-hidden="true" /><strong>{bucket.name}</strong><span>{orderedFor(bucket.name).length}</span>{bucketDraggable && <div className="planner-bucket-move"><button type="button" disabled={persistedIndex <= 1} onClick={() => nudgeBucket(bucket.id, -1)} aria-label={`Move ${bucket.name} left`}><ArrowLeft size={12} /></button><button type="button" disabled={persistedIndex < 0 || persistedIndex >= persistedBuckets.length - 1} onClick={() => nudgeBucket(bucket.id, 1)} aria-label={`Move ${bucket.name} right`}><ArrowRight size={12} /></button></div>}
-        </header>
-        <div className="planner-column-tasks">{orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}{!orderedFor(bucket.name).length && <div className="planner-empty">Drop tasks here</div>}</div>
-        <button type="button" className="planner-column-add" onClick={() => addToBucket(bucket.name)}><Plus size={14} /> Add task</button>
-      </section>})}
+          <header className="planner-column-heading relative px-4 pt-3.5 pb-3" draggable={bucketDraggable}
+            onDragStart={event => { if (!bucketDraggable) return; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', `bucket:${bucket.id}`); setDraggedBucketId(bucket.id) }}
+            onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null) }}>
+            {editingBucketId === bucket.id
+              ? <form className="flex items-center gap-1" onSubmit={event => submitBucketRename(event, bucket)}>
+                  <input autoFocus value={bucketNameDraft} onChange={event => setBucketNameDraft(event.target.value)} aria-label={`Rename ${bucket.name}`} maxLength="80" className="h-7 min-w-0 flex-1 rounded-badge border border-border bg-card px-2 text-body-small text-text-primary outline-none" />
+                  <button type="submit" aria-label={`Save ${bucket.name} name`} title="Save name"><Check size={14} /></button>
+                  <button type="button" onClick={() => setEditingBucketId(null)} aria-label="Cancel rename" title="Cancel"><X size={14} /></button>
+                </form>
+              : <><strong className="block truncate text-body-small font-semibold text-text-primary">{bucket.name}</strong>
+                  <span className="mt-0.5 block text-caption text-text-muted">{laneSummary(bucket.name)}</span></>}
+            {!isDefaultBacklog(bucket) && canManageBuckets && <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="planner-column-menu absolute right-2 top-4" aria-label={`Open actions for ${bucket.name}`} title={`Actions for ${bucket.name}`}><MoreHorizontal size={20} /></button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="planner-bucket-menu">
+                <DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Rename ${bucket.name}`} onSelect={() => startBucketRename(bucket)}><Pencil size={13} /><span>Rename</span></DropdownMenuItem>
+                {bucketDraggable && <>
+                  <DropdownMenuSeparator className="planner-bucket-menu-separator" />
+                  <DropdownMenuItem className="planner-bucket-menu-item" disabled={persistedIndex <= 1} aria-label={`Move ${bucket.name} left`} onSelect={() => nudgeBucket(bucket.id, -1)}><ArrowLeft size={13} /><span>Move left</span></DropdownMenuItem>
+                  <DropdownMenuItem className="planner-bucket-menu-item" disabled={persistedIndex < 0 || persistedIndex >= persistedBuckets.length - 1} aria-label={`Move ${bucket.name} right`} onSelect={() => nudgeBucket(bucket.id, 1)}><ArrowRight size={13} /><span>Move right</span></DropdownMenuItem>
+                </>}
+                <DropdownMenuSeparator className="planner-bucket-menu-separator" />
+                <DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Archive ${bucket.name}`} onSelect={() => onArchiveBucket?.(bucket)}><Archive size={13} /><span>Archive</span></DropdownMenuItem>
+                <DropdownMenuSeparator className="planner-bucket-menu-separator" />
+                <DropdownMenuItem variant="destructive" className="planner-bucket-menu-item" aria-label={`Delete ${bucket.name}`} onSelect={() => onDeleteBucket?.(bucket)}><Trash2 size={13} /><span>Delete</span></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>}
+          </header>
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
+            {orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}
+            <div className="planner-dropzone mt-3 flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-icon bg-border">
+              <ArrowDownToLine size={18} className="text-text-muted" aria-hidden="true" />
+              <span className="text-caption font-medium text-text-muted">Drop task here</span>
+            </div>
+          </div>
+          <div className="px-3 pb-3">
+            <button type="button" className="flex h-10 w-full items-center justify-center gap-2.5 rounded-icon border border-border bg-card text-body-compact font-medium text-text-primary transition-colors hover:border-text-muted" onClick={() => addToBucket(bucket.name)}><Plus size={20} className="text-text-secondary" aria-hidden="true" /> Add task</button>
+          </div>
+        </section>})}
       {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}
-    </div>}
+    </div>
     </>}
   </section>
 }
