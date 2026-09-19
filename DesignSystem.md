@@ -72,6 +72,25 @@ one existing primitive still loses to an unlayered rule, scope an opt-out to its
 attribute (`[data-slot='search-input'] input { ... }`) instead of escalating
 with `!important`; `!important` on a `:where()` selector will beat class
 utilities, which is worse than the problem it solves.
+
+The soft-field rule is the fourth, and it is the widest:
+
+```css
+:where(input:not([type='checkbox']):not([type='radio']):not([type='file']),
+       textarea, select) {
+  border-color: transparent !important;
+  background-color: #f2f4f7 !important;
+}
+```
+
+It repaints every field in the app, so any `bg-*` or `border-*` class on an
+`<input>` is decoration. A field that carries its own surface must put it on a
+**wrapper** and register the inner input in the `.shell-search`-style opt-out
+list below the rule, which already existed for `.top-search`, `.planner-search`
+and `.ai-chat-input`. The shell's top-bar search does exactly this. Note also
+that the rule's `:focus` sibling adds a 3px `box-shadow`, so the opt-out has to
+clear the ring as well as the fill, or the ring draws around the bare input
+inside its wrapper instead of around the wrapper.
 #### tailwind-merge And Custom Type-Scale Names
 
 `cn()` runs `tailwind-merge`, which reads a `text-*` class as either a font size
@@ -292,6 +311,7 @@ app CSS.
 | `--color-border` | `#E5E7EB` | `#2a2a5c` | Standard border |
 | `--color-border-strong` | `#D1D5DC` | `#3A3A6E` | Emphasis border, selected field |
 | `--color-border-light` | `#F0F1F3` | `#20204a` | Subtle divider |
+| `--color-selected` | `#E7EEF6` | `#23234F` | Fill behind the active navigation item |
 
 #### Status And Priority
 
@@ -629,6 +649,54 @@ new class, and extend the surface's own rules in `Shared workspace views`.
 | Drawers and modals | `drawer-*`, `modal-*` | Shared shell language |
 
 ## Page Patterns
+
+### App Shell
+
+The shell is the sidebar plus the top bar, both in `src/main.jsx`. Values come
+from the design's shell frame; the numbers below are what renders, measured
+from computed style rather than read off the frame.
+
+- The rail is `264px` expanded and `72px` collapsed, `bg-surface` with a `1px`
+  `border-border` right edge. The collapsed width and the flyout behaviour are
+  the two things kept from the previous shell: the collapsed state persists in
+  `localStorage` under `workspace-sidebar-collapsed`, the edge pill toggles it,
+  and the mobile drawer slides the same rail in over a scrim.
+- The brand block stacks two rows: a `32px` logo tile with the product wordmark
+  (`15/700`, `-0.2px` tracking), then the workspace switcher. They do not share a
+  row - side by side the switcher lost half the rail and the workspace name was
+  the only thing naming the product.
+- The switcher is a `bg-background` control on the `--radius-control` corner
+  with a `1px` border: the workspace name at `13/600` over a `10px` uppercase
+  role overline at `1.6px` tracking, and a chevron. It opens the workspace menu.
+- Group labels are `text-overline` (`11/600`, `1.6px` tracking, uppercase) in
+  `text-text-muted`, one per group, with `24px` between groups and `4px`
+  between items.
+- A nav item is `34px` tall on an `8px` radius with a `20px` icon, a `12px`
+  icon-to-label gap and `16px` side padding, so a row fills the rail's full
+  `232px` inset. The open item takes `bg-selected` (`#E7EEF6` light) with a
+  `600` label in `text-text-primary`; every other item is `text-text-secondary`
+  at `400` and hovers to `bg-surface-secondary`.
+- The open item also carries a `3x20` bar at its left edge in `bg-primary`.
+  Navy in light, the theme's accent in dark, where brand navy would disappear
+  into the selected fill. The bar is `aria-hidden`; `aria-current="page"` on the
+  button is what actually announces the state, so the second marker is for
+  sighted users who cannot separate the two greys.
+- An unread badge is `24x18` on a `9px` radius, `bg-primary` with
+  `text-primary-foreground` at `11/700`. The `danger` tone is the same shape in
+  `bg-danger`.
+- The top bar is `64px` of `bg-surface` with a `1px` bottom edge, and carries no
+  page title: every view titles itself through `PageHeader`, so a second copy
+  here only competed with it. Below `lg` it shows the app mark instead, because
+  the sidebar is off-canvas at that width.
+- The search field is `280x40` on a `10px` radius, `bg-background` with a `1px`
+  border, a `20px` leading glyph and a `14px` placeholder. Its surface is on a
+  wrapper, not the input - see the soft-field rule above.
+- The utility cluster is `40px` icon buttons on the `8px` radius in
+  `text-text-secondary`, and a `32px` avatar.
+
+The design frames disagree on the rail's width: the foundations preview draws
+`240px`, the shell frame draws `264px`. The shell frame wins, because it is the
+one that lays out the nav items at their real `232px` inset.
 
 ### Page Header
 

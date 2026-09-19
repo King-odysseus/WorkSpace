@@ -102,7 +102,9 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   expect(nav.textContent).not.toContain('Planner')
 
   fireEvent.click(await screen.findByRole('button', { name: 'Nate Foster created task Check-In Reminder.' }))
-  expect(await screen.findAllByRole('heading', { name: 'Activity' })).toHaveLength(2)
+  // One heading, not two: the shell no longer repeats the page name in the top
+  // bar, so the page header is the only place the view titles itself.
+  expect(await screen.findAllByRole('heading', { name: 'Activity' })).toHaveLength(1)
   await waitFor(() => {
     const activityCall = fetchMock.mock.calls.find(([url]) => {
       const text = String(url)

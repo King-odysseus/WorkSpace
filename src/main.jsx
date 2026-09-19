@@ -239,20 +239,20 @@ function SidebarUpgradeCard({ userId }) {
   };
 
   return (
-    <div className="sidebar-upgrade-card relative mx-3 mb-3 rounded-xl bg-gradient-to-br from-primary/30 to-accent/10 p-3.5 pr-10">
+    <div className="relative mx-4 mb-3 rounded-container border border-border bg-background p-3.5 pr-10">
       <button
         type="button"
         onClick={dismiss}
-        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
+        className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-badge text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         aria-label="Dismiss weekly priorities card"
         title="Dismiss"
       >
         <X size={14} />
       </button>
-      <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
         <Sparkles size={14} /> Make your week flow
       </p>
-      <p className="mt-0.5 text-[11px] leading-snug text-white/55">
+      <p className="mt-0.5 text-[11px] leading-snug text-text-muted">
         Set your priorities and stay ahead of what's due.
       </p>
     </div>
@@ -2352,8 +2352,8 @@ function App() {
       {/* ── Sidebar ── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col bg-navy text-text-on-navy transition-all duration-200 lg:relative",
-          "w-64",
+          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-border bg-surface text-text-primary transition-all duration-200 lg:relative",
+          "w-[264px]",
           railCollapsed && "lg:w-[4.5rem]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
@@ -2363,10 +2363,10 @@ function App() {
             Collapsed to the rail the logo alone is the trigger. */}
         <div
           className={cn(
-            "hidden lg:flex items-center border-b border-white/10 pb-4",
+            "hidden flex-col border-b border-border lg:flex",
             railCollapsed
-              ? "flex-col justify-center gap-4 px-0 py-5"
-              : "gap-3 px-4 pt-8 pb-4",
+              ? "items-center justify-center gap-4 px-0 py-5"
+              : "items-stretch gap-3 px-4 pb-4 pt-6",
           )}
         >
           {railCollapsed ? (
@@ -2374,7 +2374,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => setWorkspaceMenuOpen((current) => !current)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+                className="flex size-9 items-center justify-center rounded-icon transition-colors hover:bg-surface-secondary"
                 aria-haspopup="true"
                 aria-expanded={workspaceMenuOpen}
                 aria-label={`Workspace: ${currentWorkspace?.name || "Workspace"}`}
@@ -2383,38 +2383,45 @@ function App() {
                 <img
                   src="/tijha-logo.png"
                   alt=""
-                  className="h-7 w-7 shrink-0 rounded-lg object-contain"
+                  className="size-8 shrink-0 rounded-icon object-contain"
                 />
               </button>
               {workspaceMenuOpen && workspaceMenu}
             </div>
           ) : (
             <>
-              <img
-                src="/tijha-logo.png"
-                alt="TijhaBooks"
-                className="h-7 w-7 shrink-0 rounded-lg object-contain"
-              />
-              <div className="relative min-w-0 flex-1" ref={workspaceMenuRef}>
+              {/* The product mark sits on its own row and the workspace switcher
+                  on the next, the way the design's sidebar stacks them. Sharing
+                  one row squeezed the switcher to half the rail and left the
+                  workspace name as the only thing naming the product. */}
+              <div className="flex items-center gap-2.5">
+                <img
+                  src="/tijha-logo.png"
+                  alt="TijhaBooks"
+                  className="size-8 shrink-0 rounded-icon object-contain"
+                />
+                <span className="truncate text-[15px] font-bold tracking-[-0.2px] text-text-primary">
+                  WorkSpace
+                </span>
+              </div>
+
+              <div className="relative" ref={workspaceMenuRef}>
                 <button
                   type="button"
                   onClick={() => setWorkspaceMenuOpen((current) => !current)}
-                  className="flex w-full items-center gap-1.5 rounded-lg text-left transition-colors hover:opacity-80"
+                  className="flex w-full items-center gap-2 rounded-control border border-border bg-background px-2.5 py-1.5 text-left transition-colors hover:bg-surface-secondary"
                   aria-haspopup="true"
                   aria-expanded={workspaceMenuOpen}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-bold tracking-tight">
+                    <span className="block truncate text-[13px] font-semibold leading-tight text-text-primary">
                       {currentWorkspace?.name || "Workspace"}
                     </span>
-                    <span className="block truncate text-[11px] uppercase tracking-wider text-white/40">
+                    <span className="block truncate text-[10px] uppercase leading-tight tracking-[1.6px] text-text-muted">
                       Team Manager
                     </span>
                   </span>
-                  <ChevronDown
-                    size={14}
-                    className="shrink-0 text-white/40"
-                  />
+                  <ChevronDown size={16} className="shrink-0 text-text-muted" />
                 </button>
                 {workspaceMenuOpen && workspaceMenu}
               </div>
@@ -2425,12 +2432,12 @@ function App() {
         {/* Mobile drawer header - carries the workspace switcher, since the
             header no longer does and the sidebar brand block is desktop only.
             Close button sits outside the switcher so it survives on phones. */}
-        <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3 lg:hidden">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 lg:hidden">
           <div className="relative min-w-0" ref={workspaceMenuRefMobile}>
             <button
               type="button"
               onClick={() => setWorkspaceMenuOpen((current) => !current)}
-              className="flex min-w-0 items-center gap-1.5 rounded-lg py-1 text-sm font-bold text-white/70 transition-colors hover:text-white"
+              className="flex min-w-0 items-center gap-1.5 rounded-control py-1 text-sm font-semibold text-text-primary transition-colors hover:text-text-muted"
               aria-haspopup="true"
               aria-expanded={workspaceMenuOpen}
             >
@@ -2444,7 +2451,7 @@ function App() {
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
-            className="-mr-2 flex h-11 w-11 items-center justify-center rounded-lg text-white/50 hover:bg-white/10 hover:text-white"
+            className="-mr-2 flex size-11 items-center justify-center rounded-control text-text-muted hover:bg-surface-secondary hover:text-text-primary"
             aria-label="Close sidebar"
           >
             <X size={20} />
@@ -2452,11 +2459,11 @@ function App() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-2.5 py-4">
+        <nav className="flex-1 overflow-y-auto px-4 py-4">
           {navGroups.map((group) => (
-            <div className="mb-7 last:mb-0" key={group.heading}>
+            <div className="mb-6 last:mb-0" key={group.heading}>
               {!railCollapsed && (
-                <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-white/30">
+                <p className="mb-1.5 px-3 text-overline uppercase text-text-muted">
                   {group.heading}
                 </p>
               )}
@@ -2472,23 +2479,33 @@ function App() {
                       title={railCollapsed ? label : undefined}
                       aria-current={active === label ? "page" : undefined}
                       className={cn(
-                        "group flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-[15px] font-medium transition-all",
+                        "group relative flex h-[34px] w-full items-center gap-3 rounded-icon px-3 text-sm transition-colors",
                         active === label
-                          ? "bg-white/10 text-white"
-                          : "text-white/60 hover:bg-white/5 hover:text-white",
-                        railCollapsed && "justify-center py-3",
+                          ? "bg-selected font-semibold text-text-primary"
+                          : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary",
+                        railCollapsed && "justify-center px-0",
                       )}
                     >
-                      <Icon size={22} className="shrink-0" />
+                      {/* The design marks the open item with a bar as well as a
+                          fill, so the state survives for anyone who cannot pick
+                          the two greys apart. Navy in light, the theme's own
+                          accent in dark, where navy would vanish into the fill. */}
+                      {active === label && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-chip bg-primary"
+                        />
+                      )}
+                      <Icon size={20} className="shrink-0" />
                       {!railCollapsed && (
                         <span className="truncate">{label}</span>
                       )}
                       {!railCollapsed && badge > 0 && (
                         <span
                           className={cn(
-                            "ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
+                            "ml-auto flex h-[18px] min-w-6 items-center justify-center rounded-[9px] px-1.5 text-[11px] font-bold",
                             badgeTone === "info"
-                              ? "bg-info text-white"
+                              ? "bg-primary text-primary-foreground"
                               : "bg-danger text-white",
                           )}
                         >
@@ -2508,7 +2525,7 @@ function App() {
           <SidebarUpgradeCard key={session.user.id} userId={session.user.id} />
         )}
 
-        <div className="border-t border-white/10 px-2.5 py-2.5">
+        <div className="border-t border-border px-4 py-2.5">
           <button
             type="button"
             onClick={() => {
@@ -2518,14 +2535,20 @@ function App() {
             title={railCollapsed ? "Settings" : undefined}
             aria-current={active === "Settings" ? "page" : undefined}
             className={cn(
-              "flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-[15px] font-medium transition-all",
+              "relative flex h-[34px] w-full items-center gap-3 rounded-icon px-3 text-sm transition-colors",
               active === "Settings"
-                ? "bg-white/10 text-white"
-                : "text-white/60 hover:bg-white/5 hover:text-white",
-              railCollapsed && "justify-center py-3",
+                ? "bg-selected font-semibold text-text-primary"
+                : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary",
+              railCollapsed && "justify-center px-0",
             )}
           >
-            <Settings size={22} className="shrink-0" />
+            {active === "Settings" && (
+              <span
+                aria-hidden="true"
+                className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-chip bg-primary"
+              />
+            )}
+            <Settings size={20} className="shrink-0" />
             {!railCollapsed && <span className="truncate">Settings</span>}
           </button>
         </div>
@@ -2540,7 +2563,7 @@ function App() {
           (workspaceLoading || Boolean(workspaceError)) && "is-hidden",
         )}
         style={{
-          "--sidebar-edge-left": sidebarCollapsed ? "4.5rem" : "16rem",
+          "--sidebar-edge-left": sidebarCollapsed ? "4.5rem" : "264px",
         }}
         aria-expanded={!sidebarCollapsed}
         aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -2555,27 +2578,32 @@ function App() {
 
       {/* ── Main ── */}
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="relative z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface/95 px-4 backdrop-blur lg:px-6">
-          {/* The title and the utility cluster are both flex-1, so they always hold
+        <header className="relative z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 lg:px-6">
+          {/* The shell carries no page title of its own: every view opens with its
+              own page header, so a second copy here would only compete with it.
+              On phones this column holds the app mark instead, which the sidebar's
+              brand block cannot show while it is off-canvas.
+              The mark and the utility cluster are both flex-1, so they always hold
               the same width and the search between them lands on the header's true
               centre instead of the midpoint of whatever space was left over. */}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <img
               src="/tijha-logo.png"
               alt="TijhaBooks"
-              className="h-6 w-6 shrink-0 rounded-md object-contain lg:hidden"
+              className="size-8 shrink-0 rounded-icon object-contain lg:hidden"
             />
-            <span className="hidden truncate text-sm font-bold tracking-tight text-text-primary sm:inline lg:hidden">
+            <span className="truncate text-[15px] font-bold tracking-[-0.2px] text-text-primary lg:hidden">
               WorkSpace
             </span>
-            <h1 className="hidden truncate text-base font-bold tracking-tight text-text-primary lg:block">
-              {active}
-            </h1>
           </div>
 
-          <div className="hidden w-full max-w-md md:block" ref={searchRef}>
-            <div className="relative w-full">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+          <div className="hidden w-full max-w-[280px] md:block" ref={searchRef}>
+            {/* The field surface sits on the wrapper, not the input. Every plain
+                input in this app is repainted by an !important soft-field rule
+                further down the stylesheet, so an input styled here would look
+                right in the markup and wrong on screen. */}
+            <div className="relative flex h-10 w-full items-center rounded-[10px] border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-muted" />
               <input
                 type="search"
                 value={searchQuery}
@@ -2583,9 +2611,9 @@ function App() {
                 onFocus={() => {
                   if (globalSearchResults.length) setGlobalSearchOpen(true);
                 }}
-                placeholder="Search work, chats, check-ins..."
+                placeholder="Search Workspace"
                 aria-label="Search workspace"
-                className="h-9 w-full rounded-full border border-border bg-surface-secondary pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+                className="shell-search h-full w-full bg-transparent pl-10 pr-4 text-sm text-text-primary outline-none placeholder:text-text-muted"
               />
               {globalSearchOpen && searchQuery.trim().length >= 2 && (
                 <div
@@ -2631,18 +2659,18 @@ function App() {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:bg-surface-secondary hover:text-text-primary transition-colors"
+              className="flex size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
               aria-label="Refresh app"
               title="Refresh app"
             >
-              <RefreshCw size={18} />
+              <RefreshCw size={20} />
             </button>
 
             <div className="relative" ref={messagesRef}>
               <button
                 type="button"
                 onClick={() => toggleMessages("header")}
-                className="relative hidden h-11 w-11 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
+                className="relative hidden size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
                 aria-label="Open messages"
                 title="Open chats and channels"
               >
@@ -2664,7 +2692,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => setNotificationOpen((current) => !current)}
-                className="relative flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:bg-surface-secondary hover:text-text-primary transition-colors"
+                className="relative flex size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
                 aria-label="Open workspace activity notifications"
               >
                 <Bell size={20} />
@@ -2739,9 +2767,9 @@ function App() {
                 )
               }
               aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-text-muted hover:bg-surface-secondary hover:text-text-primary transition-colors"
+              className="flex size-10 items-center justify-center rounded-icon text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
             >
-              {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
+              {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
             <div className="relative ml-1" ref={profileMenuRef}>
@@ -2753,8 +2781,8 @@ function App() {
                 aria-label={`Account menu for ${currentUserName}`}
                 className="flex items-center gap-2 rounded-full py-1 pl-1 pr-1 transition-colors hover:bg-surface-secondary sm:pr-2.5"
               >
-                <span className="relative inline-flex h-9 w-9 shrink-0">
-                  <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
+                <span className="relative inline-flex size-8 shrink-0">
+                  <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
                     {currentUserAvatarUrl ? (
                       <img
                         src={currentUserAvatarUrl}

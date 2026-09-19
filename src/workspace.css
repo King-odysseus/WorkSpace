@@ -1717,22 +1717,22 @@ html[data-theme='dark'] .nav-item.active {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border-top: 1px solid rgb(255 255 255 / 10%);
-  border-right: 1px solid rgb(255 255 255 / 10%);
-  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  border-top: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   border-left: 0;
   border-radius: 0 10px 10px 0;
-  background: var(--navy);
-  color: rgb(255 255 255 / 65%);
-  box-shadow: 0 6px 18px rgb(2 5 31 / 16%), inset 0 1px 0 rgb(255 255 255 / 8%);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  box-shadow: var(--elevation-floating);
   cursor: pointer;
   transform: translateY(-50%);
   transition: left .2s ease, background-color .16s ease, color .16s ease, transform .16s ease;
 }
 
 .sidebar-edge-toggle:hover {
-  background: var(--brand-navy-soft);
-  color: #FFFFFF;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
   transform: translate(2px, -50%);
 }
 
@@ -2321,12 +2321,11 @@ html[data-theme='dark'] :where(.metric-card, .today-panel, .workspace-card, .wor
 html[data-theme='dark'] .today-metrics > button {
   box-shadow: 0 10px 28px rgb(2 5 31 / 25%) !important;
 }
-.sidebar-upgrade-card { box-shadow: 7px 8px 18px rgb(2 5 31 / 28%), inset 0 1px 0 rgb(255 255 255 / 12%); }
 
 /* Every shared Card receives the same page-level neumorphic treatment. */
 [data-slot='card'] { border-radius: var(--radius-control) !important; background: var(--workspace-surface) !important; border-color: var(--workspace-border) !important; box-shadow: 12px 15px 32px rgb(7 26 46 / 20%), -10px -10px 25px rgb(255 255 255 / 92%), inset 0 1px 0 rgb(255 255 255 / 95%) !important; }
 html[data-theme='dark'] [data-slot='card'] { box-shadow: 12px 15px 34px rgb(2 5 31 / 55%), -8px -8px 20px rgb(255 255 255 / 6%), inset 0 1px 0 rgb(255 255 255 / 7%) !important; }
-.workspace-view .today-panel, .workspace-view .today-metrics > button, .workspace-view .team-board-metrics > button, .workspace-view .sidebar-upgrade-card { box-shadow: 12px 15px 30px rgb(7 26 46 / 20%), -9px -9px 22px rgb(255 255 255 / 90%), inset 0 1px 0 rgb(255 255 255 / 92%) !important; }
+.workspace-view .today-panel, .workspace-view .today-metrics > button, .workspace-view .team-board-metrics > button { box-shadow: 12px 15px 30px rgb(7 26 46 / 20%), -9px -9px 22px rgb(255 255 255 / 90%), inset 0 1px 0 rgb(255 255 255 / 92%) !important; }
 html[data-theme='dark'] .workspace-view .today-panel, html[data-theme='dark'] .workspace-view .today-metrics > button, html[data-theme='dark'] .workspace-view .team-board-metrics > button { box-shadow: 12px 15px 32px rgb(2 5 31 / 55%), -7px -7px 18px rgb(255 255 255 / 6%), inset 0 1px 0 rgb(255 255 255 / 7%) !important; }
 .team-board-metrics > button { appearance: none; -webkit-appearance: none; border-radius: 16px !important; background: var(--workspace-surface) !important; border-color: var(--workspace-border) !important; box-shadow: 9px 10px 22px rgb(7 26 46 / 14%), -7px -7px 16px rgb(255 255 255 / 80%), inset 0 1px 0 rgb(255 255 255 / 85%) !important; }
 html[data-theme='dark'] .team-board-metrics > button { box-shadow: 9px 10px 24px rgb(2 5 31 / 48%), -6px -6px 15px rgb(255 255 255 / 5%), inset 0 1px 0 rgb(255 255 255 / 6%) !important; }
@@ -4618,6 +4617,10 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --neutral-text-primary: #101828;
   --neutral-text-secondary: #4A5565;
   --neutral-text-muted: #6A7282;
+  /* The surface behind the active navigation item. A pale navy, one step
+     stronger than the hover grey, so a selected row reads as chosen rather
+     than merely pointed at. */
+  --neutral-selected: #E7EEF6;
 
   /* Semantic - always paired with an icon or a word, never colour alone. */
   --semantic-success: #007A55;
@@ -4917,6 +4920,7 @@ html[data-theme='dark'] {
   --color-border: var(--neutral-border);
   --color-border-strong: var(--neutral-border-strong);
   --color-border-light: var(--neutral-border-light);
+  --color-selected: var(--neutral-selected);
 
   --color-info: var(--semantic-info);
   --color-info-hover: #1D4ED8;
@@ -4992,6 +4996,7 @@ html[data-theme='dark'] {
   --color-text-muted: #8C8CAE;
   --color-border: #2a2a5c;
   --color-border-light: #20204a;
+  --color-selected: #23234F;
   --shadow-elevated: 0 12px 40px -12px rgb(0 0 0 / 0.6);
 }
 
@@ -5251,8 +5256,17 @@ html[data-theme='dark'] :where(.project-summary > div, .today-metrics button, .m
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info, #2563EB) 14%, transparent) !important;
 }
 
-:where(.top-search input, .planner-search input, .ai-chat-input) {
+/* A field that draws its own surface on a wrapper rather than on the input
+   itself opts out of the soft-field treatment above, which is the reason these
+   three existed. The shell's search joins them on the same grounds: its 1px
+   border and grey fill belong on the wrapper, where the design puts them, and a
+   focus ring drawn around the bare input inside that wrapper would land in the
+   wrong place. */
+:where(.top-search input, .planner-search input, .ai-chat-input, .shell-search),
+:where(.top-search input, .planner-search input, .ai-chat-input, .shell-search):focus {
   background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 html[data-theme='dark'] :where(
@@ -5272,7 +5286,7 @@ html[data-theme='dark'] :where(
   background-color: #262653 !important;
 }
 
-html[data-theme='dark'] :where(.top-search input, .planner-search input, .ai-chat-input) {
+html[data-theme='dark'] :where(.top-search input, .planner-search input, .ai-chat-input, .shell-search) {
   background: transparent !important;
 }
 
