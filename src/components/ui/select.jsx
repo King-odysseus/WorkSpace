@@ -17,7 +17,7 @@ function SelectValue(props) {
 // onCloseAutoFocus is forwarded so callers embedded in a focus-sensitive surface
 // (the rich-text toolbar, where the caret must stay in the editor) can stop the
 // trigger claiming focus back when the menu closes.
-function AppSelect({ children, value, onChange, name, disabled, required, className, onCloseAutoFocus, ...props }) {
+function AppSelect({ children, value, onChange, name, disabled, required, className, onCloseAutoFocus, renderValue, ...props }) {
   const flatten = nodes => React.Children.toArray(nodes).flatMap(child => {
     if (!React.isValidElement(child)) return []
     if (child.type === React.Fragment) return flatten(child.props.children)
@@ -30,7 +30,16 @@ function AppSelect({ children, value, onChange, name, disabled, required, classN
   const item = option => <SelectItem key={option.key ?? String(option.props.value)} value={String(option.props.value ?? '') || '__empty_option__'} disabled={option.props.disabled}>{option.props.children}</SelectItem>
   return <Select name={name} value={String(value ?? '')} disabled={disabled} required={required}
     onValueChange={next => { const target = { name, value: next === '__empty_option__' ? '' : next }; onChange?.({ target, currentTarget: target }) }}>
-    <SelectTrigger {...props} className={cn('app-select-trigger', className)}><SelectValue placeholder={emptyLabel || 'Select an option'} /></SelectTrigger>
+    <SelectTrigger {...props} className={cn('app-select-trigger', className)}>
+      {/* `renderValue` replaces the selected option's own text in the trigger.
+          The design's sort chip is 60px wide and reads "Sort" whatever is
+          chosen, because the line under the page heading is what says which
+          order is in force; the trigger still carries the value for anything
+          reading the control rather than looking at it. */}
+      {renderValue
+        ? typeof renderValue === 'function' ? renderValue(String(value ?? '')) : renderValue
+        : <SelectValue placeholder={emptyLabel || 'Select an option'} />}
+    </SelectTrigger>
     <SelectContent onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onCloseAutoFocus={onCloseAutoFocus}>
       {entries.map((entry, index) => entry.group
         ? <SelectPrimitive.Group key={`group-${index}`}><SelectGroupLabel>{entry.group}</SelectGroupLabel>{entry.options.map(item)}</SelectPrimitive.Group>
