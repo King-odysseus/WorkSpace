@@ -121,6 +121,24 @@ function formatLongDate(value) {
   return `${WEEKDAY_NAMES[date.getDay()]} ${MONTH_NAMES[date.getMonth()]} ${date.getDate()} ${date.getFullYear()}`
 }
 
+// The Today eyebrow - 'FRIDAY · 3 OCTOBER'. The design sets it in caps over a
+// two-line day/month, so the month is spelled rather than numbered; the same
+// fixed names as formatLongDate keep it from moving with the machine locale.
+function formatTodayEyebrow(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  if (!match) return ''
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return `${WEEKDAY_NAMES[date.getDay()].toUpperCase()} · ${date.getDate()} ${MONTH_NAMES[date.getMonth()].toUpperCase()}`
+}
+
+// '3 Oct' - the row-sized date on the Today card, where formatDay's numeric
+// DD-MM-YY reads as a code and the full month name crowds the status column.
+function formatDayMonthName(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  if (!match) return ''
+  return `${Number(match[3])} ${MONTH_NAMES[Number(match[2]) - 1].slice(0, 3)}`
+}
+
 function taskSearchText(task) {
   return [task.title, task.description, task.member, task.tag, task.bucket, ...(task.labels || [])].filter(Boolean).join(' ').toLowerCase()
 }
@@ -360,6 +378,8 @@ export {
   formatDateTime,
   formatDayMonth,
   formatLongDate,
+  formatTodayEyebrow,
+  formatDayMonthName,
   taskSearchText,
   mapTaskFromApi,
   taskAssigneeLabel,

@@ -101,19 +101,10 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   expect(halves[1].textContent).toContain('More')
   expect(nav.textContent).not.toContain('Planner')
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Nate Foster created task Check-In Reminder.' }))
-  // One heading, not two: the shell no longer repeats the page name in the top
-  // bar, so the page header is the only place the view titles itself.
+  // The Today page's activity strip is gone, so Activity is reached from the
+  // nav. What is still worth pinning here is that it titles itself once.
+  fireEvent.click(screen.getByRole('button', { name: 'Activity' }))
   expect(await screen.findAllByRole('heading', { name: 'Activity' })).toHaveLength(1)
-  await waitFor(() => {
-    const activityCall = fetchMock.mock.calls.find(([url]) => {
-      const text = String(url)
-      return text.includes('/api/workspaces/1/activity/?') && text.includes('search=')
-    })
-    expect(activityCall).toBeTruthy()
-    expect(String(activityCall[0])).toContain('actor_id=7')
-    expect(String(activityCall[0])).toContain('kind=task_created')
-  })
 
   fireEvent.click(screen.getByRole('button', { name: 'Channels' }))
   await waitFor(
@@ -123,8 +114,8 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   expect(document.body.innerText).not.toContain('could not render this view')
   fireEvent.click(screen.getAllByRole('button', { name: 'Today' })[0])
 
-  const myDay = screen.getByRole('heading', { name: 'My day' }).closest('.today-panel')
-  const opener = await within(myDay).findByText('Desingn UI', {}, { timeout: 20000 })
+  const todayTasks = document.querySelector('[data-panel="tasks"]')
+  const opener = await within(todayTasks).findByText('Desingn UI', {}, { timeout: 20000 })
   fireEvent.click(opener)
 
   await waitFor(

@@ -6,16 +6,13 @@ import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
-  AlarmClock,
   Archive,
   ArrowUpRight,
   Brush,
   CalendarCheck2,
-  CalendarClock,
   CalendarDays,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -36,7 +33,6 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
-import { PageHeader } from "./ui/page-header.jsx";
 import { AppSelect } from "./ui/select.jsx";
 import { Card } from "./ui/card.jsx";
 import Avatar from "./Avatar.jsx";
@@ -55,7 +51,9 @@ import {
   effectivePresence,
   formatDate,
   formatDay,
+  formatDayMonthName,
   formatLastSeen,
+  formatTodayEyebrow,
   formatShiftClock,
   formatShiftDuration,
   getCsrfToken,
@@ -66,6 +64,7 @@ import {
   taskIsAssignedTo,
   toDateKey,
 } from "../lib/workspace-format.js";
+import { cn } from "../lib/utils.js";
 import { requestDirectMessage } from "../lib/chat-navigation.js";
 
 const isTerminalTask = (task) =>
@@ -130,6 +129,36 @@ const BOARD_FOCUS_LABEL = {
   blocked: "Blocked",
   unassigned: "Unassigned",
   completed: "Completed today",
+};
+
+// Status wording and skin for the Today card's badges. The fills come from the
+// status ramp in workspace.css, so a badge, a board card and a drawer cannot
+// drift apart on the same status.
+const STATUS_LABEL = {
+  todo: "To do",
+  "in progress": "In progress",
+  review: "Review",
+  blocked: "Blocked",
+  on_hold: "On hold",
+  cancelled: "Cancelled",
+  done: "Done",
+};
+const STATUS_PILL = {
+  todo: "bg-status-todo-bg text-status-todo",
+  "in progress": "bg-status-progress-bg text-status-progress",
+  review: "bg-status-review-bg text-status-review",
+  blocked: "bg-status-blocked-bg text-status-blocked",
+  on_hold: "bg-status-hold-bg text-status-hold",
+  cancelled: "bg-status-cancelled-bg text-status-cancelled",
+  done: "bg-status-done-bg text-status-done",
+};
+// The colour bar down the left of an upcoming event, keyed off the event types
+// the composer offers.
+const EVENT_BAR_TONE = {
+  meeting: "bg-navy",
+  focus: "bg-info",
+  deadline: "bg-danger",
+  reminder: "bg-bronze",
 };
 
 function MemberProfilePopup({
@@ -2473,36 +2502,26 @@ function ClockInCard({
       ? `Last shift ended ${formatShiftClock(closedToday[0].ended_at)}`
       : "Not started yet";
   return (
-    <div className="today-panel today-clock-panel">
-      <div className="today-panel-heading">
-        <div>
-          <h2>Time clock</h2>
-          <p>{headline}</p>
-        </div>
-        <span
-          className={`clock-state clock-state-${openShift ? (onBreak ? "break" : "active") : "idle"}`}
-        >
-          <Clock3 size={14} /> {stateLabel}
-        </span>
-      </div>
+    <div className="rounded-container bg-navy p-5 text-text-on-navy">
+      <p className="text-caption opacity-70">{headline}</p>
       <strong
-        className="today-clock-timer"
+        className="mt-1 block text-[32px] font-bold leading-tight tabular-nums"
         role="timer"
         aria-live="off"
         aria-label={`Current shift ${formatShiftDuration(shiftSeconds)}`}
       >
         {formatShiftDuration(shiftSeconds)}
       </strong>
-      <span className="today-muted">
+      <p className="mt-1 text-caption opacity-70">
         {dayTotalSeconds
           ? `Today ${formatShiftDuration(dayTotalSeconds)}`
           : "Nothing logged today"}
         {shiftBreakSeconds
           ? ` · Breaks ${formatShiftDuration(shiftBreakSeconds)}`
           : ""}
-      </span>
+      </p>
       {onBreak && (
-        <p className={`clock-break-timer${breakOverrun ? " is-over" : ""}`}>
+        <p className={`mt-1 text-caption ${breakOverrun ? "font-medium" : "opacity-70"}`}>
           {breakPlanSeconds
             ? breakOverrun
               ? `${BREAK_PRESET_LABEL[openShift.break_plan_minutes]} break is over by ${formatShiftDuration(-breakRemaining)}`
@@ -2510,66 +2529,67 @@ function ClockInCard({
             : `Break running ${formatShiftDuration(runningBreakSeconds)}`}
         </p>
       )}
-      <div className="today-clock-actions">
+      <div className="mt-4 flex flex-wrap gap-2">
         {!openShift && (
-          <Button
-            size="sm"
+          <button
+            type="button"
             disabled={Boolean(pending)}
             onClick={() => run("clock_in")}
+            className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
           >
-            <Play size={15} /> Clock in
-          </Button>
+            <Play size={14} aria-hidden="true" /> Clock in
+          </button>
         )}
         {openShift && onBreak && (
-          <Button
-            size="sm"
+          <button
+            type="button"
             disabled={Boolean(pending)}
             onClick={() => run("end_break")}
+            className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
           >
-            <Play size={15} /> Resume
-          </Button>
+            <Play size={14} aria-hidden="true" /> Continue
+          </button>
         )}
         {openShift &&
           !onBreak &&
           BREAK_PRESETS.map((minutes) => (
-            <Button
+            <button
               key={minutes}
-              variant="outline"
-              size="sm"
+              type="button"
               disabled={Boolean(pending)}
               onClick={() => run("start_break", minutes)}
+              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
             >
-              <Pause size={15} /> {BREAK_PRESET_LABEL[minutes]} break
-            </Button>
+              <Pause size={14} aria-hidden="true" /> {BREAK_PRESET_LABEL[minutes]}
+            </button>
           ))}
-        {openShift && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={Boolean(pending)}
-            onClick={() => run("clock_out")}
-          >
-            <Square size={15} /> Clock out
-          </Button>
-        )}
       </div>
-      <label className="today-status-select">
-        <span>Status</span>
-        <span className="presence-select">
-          <span className={`presence-dot presence-${presence}`} />
-          <AppSelect
-            value={presence}
-            onChange={(event) => onChangePresence(event.target.value)}
-            aria-label="Set your status"
-          >
-            {PRESENCE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {PRESENCE_LABEL[option]}
-              </option>
-            ))}
-          </AppSelect>
-        </span>
-      </label>
+      {openShift && (
+        <button
+          type="button"
+          disabled={Boolean(pending)}
+          onClick={() => run("clock_out")}
+          className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-control bg-white text-label font-medium text-navy transition-colors hover:bg-white/90 disabled:opacity-50"
+        >
+          <Square size={15} aria-hidden="true" /> Clock out
+        </button>
+      )}
+      <div className="mt-2 flex items-center gap-2">
+        <span className={`presence-dot presence-${presence}`} aria-hidden="true" />
+        <span className="text-caption opacity-70">Status</span>
+        <AppSelect
+          className="clock-status-select"
+          value={presence}
+          onChange={(event) => onChangePresence(event.target.value)}
+          aria-label="Set your status"
+        >
+          {PRESENCE_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {PRESENCE_LABEL[option]}
+            </option>
+          ))}
+        </AppSelect>
+      </div>
     </div>
   );
 }
@@ -3433,68 +3453,6 @@ function ProjectCostBudgetPanel({
     </section>
   );
 }
-function TodayPanel({
-  panelKey,
-  title,
-  description,
-  open,
-  onToggle,
-  action,
-  className = "",
-  children,
-}) {
-  return (
-    <section className={`today-panel ${className}`.trim()}>
-      <div className="today-panel-heading">
-        <div>
-          <h2>{title}</h2>
-          <p>{description}</p>
-        </div>
-        <div className="today-panel-controls">
-          {action}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={onToggle}
-            aria-expanded={open}
-            aria-controls={`today-panel-${panelKey}`}
-            aria-label={`${open ? "Collapse" : "Expand"} ${title}`}
-            title={`${open ? "Collapse" : "Expand"} ${title}`}
-          >
-            <ChevronDown
-              size={15}
-              className={open ? "today-panel-chevron is-open" : "today-panel-chevron"}
-            />
-          </Button>
-        </div>
-      </div>
-      {open && <div id={`today-panel-${panelKey}`} className="today-panel-body">{children}</div>}
-    </section>
-  );
-}
-
-const todayChangeParts = (event) => {
-  const actor = String(event.actor_name || "System");
-  const message = String(event.message || "");
-  const actorPrefix = `${actor} `;
-  const detail = message.toLowerCase().startsWith(actorPrefix.toLowerCase())
-    ? message.slice(actorPrefix.length)
-    : message;
-  return { actor, detail, label: [actor, detail].filter(Boolean).join(" ") };
-};
-
-function TodayChangeContent({ event }) {
-  const { actor, detail } = todayChangeParts(event);
-
-  return (
-    <>
-      <b>{actor}</b>
-      {detail && <span>{detail}</span>}
-    </>
-  );
-}
-
 function TodayDashboard({
   today,
   todayLabel,
@@ -3526,21 +3484,6 @@ function TodayDashboard({
   onChangePresence,
 }) {
   const [profileMember, setProfileMember] = useState(null);
-  const [collapsedPanels, setCollapsedPanels] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("workspace-today-panels") || "{}");
-    } catch {
-      return {};
-    }
-  });
-  const panelOpen = (key) => collapsedPanels[key] !== false;
-  const togglePanel = (key) => {
-    setCollapsedPanels((current) => {
-      const next = { ...current, [key]: current[key] === false };
-      localStorage.setItem("workspace-today-panels", JSON.stringify(next));
-      return next;
-    });
-  };
   const isOpen = (task) => task.status !== "done";
   // Counted through BOARD_FOCUS so each headline number is the same question the
   // Team answers when the card opens it.
@@ -3700,227 +3643,351 @@ function TodayDashboard({
     requestDirectMessage(member.id);
     onNavigate("Chats");
   };
-  const greetingHour = new Date().getHours();
-  const greeting =
-    greetingHour < 12
-      ? "Good morning"
-      : greetingHour < 18
-        ? "Good afternoon"
-        : "Good evening";
-  const taskLabel = (task) =>
-    task.due === "Overdue"
-      ? "Overdue"
-      : task.due_date === today
-        ? "Due today"
-        : task.status === "in progress"
-          ? "In progress"
-          : task.priority;
+  // Everything the headline, the tiles and the side rail read is counted from
+  // the same lists the panels below render, so a number cannot disagree with
+  // the thing it opens.
+  const weekAgoKey = addDaysToDateKey(today, -6);
+  const completedThisWeek = tasks.filter(
+    (task) =>
+      task.status === "done" &&
+      Boolean(task.completed_at) &&
+      toDateKey(task.completed_at) >= weekAgoKey,
+  );
+  const rowRank = (task) =>
+    task.status === "done"
+      ? 4
+      : task.due === "Overdue"
+        ? 0
+        : task.due_date === today
+          ? 1
+          : task.status === "in progress"
+            ? 2
+            : 3;
+  const todayTaskRows = [...myTasks]
+    .sort(
+      (a, b) =>
+        rowRank(a) - rowRank(b) ||
+        (a.due_date || "9999").localeCompare(b.due_date || "9999"),
+    )
+    .slice(0, 6);
+  const checkedInCount = checkedInMemberIds.size;
+  const memberCount = members.length;
+  const pendingCheckIns = missingCheckInMembers.length;
+  const checkInPercent = memberCount
+    ? Math.round((checkedInCount / memberCount) * 100)
+    : 0;
+  const checkInPendingLine = pendingCheckIns
+    ? `${pendingCheckIns} ${pendingCheckIns === 1 ? "member is" : "members are"} still pending`
+    : "Everyone has checked in today.";
+  const summaryLine = [
+    `${dueToday.length} ${dueToday.length === 1 ? "task" : "tasks"} due today`,
+    `${overdue.length} overdue`,
+    `${pendingCheckIns} team ${pendingCheckIns === 1 ? "check-in" : "check-ins"} still pending`,
+  ].join(" · ");
+  const metrics = [
+    {
+      key: "due-today",
+      label: "Due today",
+      value: dueToday.length,
+      sub: `${overdue.length} overdue`,
+      onOpen: () => onOpenBoard("due-today"),
+    },
+    {
+      key: "completed",
+      label: "Completed",
+      value: completedThisWeek.length,
+      sub: "this week",
+      onOpen: () => onOpenBoard("completed"),
+    },
+    {
+      key: "blocked",
+      label: "Blocked",
+      value: blocked.length,
+      sub: "needs attention",
+      onOpen: () => onOpenBoard("blocked"),
+    },
+    {
+      key: "check-ins",
+      label: "Check-ins",
+      value: `${checkedInCount} of ${memberCount}`,
+      sub: `${pendingCheckIns} pending`,
+      onOpen: () => onNavigate("Check-ins"),
+    },
+  ];
+  const assigneeFor = (task) =>
+    members.find(
+      (member) => String(member.id) === String(task.assignee_id),
+    ) || null;
+  const taskRowMeta = (task) => {
+    const owner = assigneeFor(task);
+    return [task.tag, owner ? memberName(owner) : "Unassigned"]
+      .filter(Boolean)
+      .join(" · ");
+  };
+  const taskRowDate = (task) => {
+    if (task.status === "done") return "Done";
+    if (task.due === "Overdue") return "Overdue";
+    if (task.due_date === today) return "Today";
+    return task.due_date ? formatDayMonthName(task.due_date) : "";
+  };
+  const eventTimeRange = (event) => {
+    const times = [event.start_at, event.end_at || event.start_at]
+      .map((value) => formatShiftClock(value))
+      .join(" - ");
+    const startKey = String(event.start_at || "").slice(0, 10);
+    // A time range alone reads as if it started today, so an event carried in
+    // from an earlier day keeps the day it began in front of the range.
+    return startKey && startKey !== today
+      ? `${formatDayMonthName(startKey)} ${times}`
+      : times;
+  };
+  // The design's event pill is the one thing the API does not carry, so it is
+  // derived from the clock: a clash with another event today, then a running
+  // event, then one starting inside the hour. No pill rather than a wrong one.
+  const eventPill = (event) => {
+    const start = new Date(event.start_at).getTime();
+    const end = new Date(event.end_at || event.start_at).getTime();
+    const clashing = todaysEvents.some((other) => {
+      if (other.id === event.id) return false;
+      const otherStart = new Date(other.start_at).getTime();
+      const otherEnd = new Date(other.end_at || other.start_at).getTime();
+      return otherStart < end && otherEnd > start;
+    });
+    if (clashing) {
+      return { label: "Overlaps", className: "bg-warning-soft text-warning" };
+    }
+    const now = Date.now();
+    if (start <= now && end >= now) {
+      return { label: "Live", className: "bg-success-soft text-success" };
+    }
+    const minutes = Math.round((start - now) / 60000);
+    if (minutes > 0 && minutes <= 90) {
+      return { label: `In ${minutes} min`, className: "bg-info-soft text-info" };
+    }
+    return null;
+  };
+  const unassignedOpenCount = tasks.filter(
+    (task) => !task.assignee_id && isOpen(task),
+  ).length;
+  const exceptionRows = [
+    {
+      key: "overdue",
+      label: "Overdue tasks",
+      count: overdue.length,
+      dot: "bg-danger",
+      onOpen: () => onOpenBoard("overdue"),
+    },
+    {
+      key: "blocked",
+      label: "Blocked tasks",
+      count: blocked.length,
+      dot: "bg-danger",
+      onOpen: () => onOpenBoard("blocked"),
+    },
+    {
+      key: "unassigned",
+      label: "Unassigned work",
+      count: unassignedOpenCount,
+      dot: "bg-warning-fill",
+      onOpen: () => onOpenBoard("unassigned"),
+    },
+  ];
+  const eyebrow = formatTodayEyebrow(today) || todayLabel;
   return (
-    <section className="today-dashboard">
-      <PageHeader
-        eyebrow={todayLabel}
-        title={`${greeting}, ${currentUserName.split(" ")[0]}`}
-        description={`Here is what needs your attention in ${workspaceName}.`}
-      >
+    <section className="pb-10">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-6">
+        <div className="min-w-0">
+          <p className="text-overline uppercase text-text-muted">{eyebrow}</p>
+          <h1 className="mt-1.5 text-page-heading text-text-primary">Today</h1>
+          <p className="mt-1.5 text-body-small text-text-secondary">{summaryLine}</p>
+        </div>
         <Button type="button" size="page" onClick={onAddTask}>
-          <Plus size={20} strokeWidth={1.75} /> Add task
+          <Plus size={18} strokeWidth={2} aria-hidden="true" /> New task
         </Button>
-        <Button type="button" variant="secondary" size="page" onClick={onAddEvent}>
-          <CalendarDays size={20} strokeWidth={1.75} /> Add event
-        </Button>
-        <Button type="button" variant="outline" size="page" onClick={onCheckIn}>
-          <MessageSquare size={20} strokeWidth={1.75} /> Check in
-        </Button>
-        {canManageMembers && (
-          <Button type="button" variant="outline" size="page" onClick={onInvite}>
-            <Plus size={20} strokeWidth={1.75} /> Invite
-          </Button>
-        )}
-      </PageHeader>
-      <section className="today-overview">
-        <div className="today-overview-heading">
-          <div>
-            <h2>Workspace overview</h2>
-            <p>Across all work in {workspaceName}</p>
-          </div>
-          <span>My day is separated below</span>
-        </div>
-        <div className="today-metrics">
-        <button
-          className="today-metric today-metric-due"
-          onClick={() => onOpenBoard("due-today")}
-        >
-          <span className="today-metric-icon" aria-hidden="true">
-            <CalendarClock size={19} />
-          </span>
-          <span className="today-metric-copy">
-            <strong>{dueToday.length}</strong>
-            <span>Due today</span>
-          </span>
-        </button>
-        <button
-          className={`today-metric today-metric-overdue${overdue.length ? " attention" : ""}`}
-          onClick={() => onOpenBoard("overdue")}
-        >
-          <span className="today-metric-icon" aria-hidden="true">
-            <AlarmClock size={19} />
-          </span>
-          <span className="today-metric-copy">
-            <strong>{overdue.length}</strong>
-            <span>Overdue</span>
-          </span>
-        </button>
-        <button
-          className={`today-metric today-metric-blocked${blocked.length ? " attention" : ""}`}
-          onClick={() => onOpenBoard("blocked")}
-        >
-          <span className="today-metric-icon" aria-hidden="true">
-            <CircleSlash size={19} />
-          </span>
-          <span className="today-metric-copy">
-            <strong>{blocked.length}</strong>
-            <span>Blocked</span>
-          </span>
-        </button>
-        <button
-          className="today-metric today-metric-completed"
-          onClick={() => onOpenBoard("completed")}
-        >
-          <span className="today-metric-icon" aria-hidden="true">
-            <CheckCircle2 size={19} />
-          </span>
-          <span className="today-metric-copy">
-            <strong>{completedToday.length}</strong>
-            <span>Completed today</span>
-          </span>
-        </button>
-        </div>
-      </section>
-      {todaysChanges.length > 0 && (
-        <section className="today-change-strip">
-          <div>
-            <strong>Changed today</strong>
-            <span>Latest workspace updates</span>
-          </div>
-          <div className="today-change-viewport">
-            <div
-              className="today-change-track"
-              style={{ '--today-ticker-duration': `${Math.max(28, todaysChanges.length * 7)}s` }}
-            >
-              {[false, true].map((isDuplicate) => (
-                <div
-                  className="today-change-list"
-                  key={isDuplicate ? 'duplicate' : 'primary'}
-                  aria-hidden={isDuplicate ? 'true' : undefined}
-                >
-                  {todaysChanges.map((event) =>
-                    isDuplicate ? (
-                      <span className="today-change-item" key={`duplicate-${event.id}`}>
-                        <TodayChangeContent event={event} />
-                      </span>
-                    ) : (
-                      <button
-                        className="today-change-item"
-                        type="button"
-                        key={event.id}
-                        onClick={() => onOpenActivity?.(event)}
-                        title="View this activity"
-                        aria-label={todayChangeParts(event).label}
-                      >
-                        <TodayChangeContent event={event} />
-                      </button>
-                    ),
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          <Button
+      </header>
+
+      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <button
+            key={metric.key}
             type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onNavigate("Activity")}
+            data-metric={metric.key}
+            onClick={metric.onOpen}
+            className="rounded-container border border-border bg-card p-4 text-left transition-colors hover:border-border-strong"
           >
-            Activity <ArrowUpRight size={14} />
-          </Button>
-        </section>
-      )}
-      <div className="today-grid">
-        <TodayPanel
-          panelKey="my-day"
-          title="My day"
-          description="Prioritized work assigned to you"
-          open={panelOpen("my-day")}
-          onToggle={() => togglePanel("my-day")}
-          className="my-day-panel"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onNavigate("My tasks")}
-            >
-              View all <ArrowUpRight size={14} />
-            </Button>
-          }
-        >
-          {myQueue.length ? (
-            <div className="today-task-list">
-              {myQueue.map((task) => (
-                <article
-                  className={`today-task-row ${task.status}`}
-                  key={task.id}
-                >
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={task.status === "done"}
-                    className={`check ${task.status === "done" ? "checked" : ""}`}
-                    onClick={() => onComplete(task.id)}
-                    aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`}
-                    title={task.status === "done" ? "Reopen task" : "Mark task complete"}
-                  >
-                    <Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" />
-                  </button>
-                  <div className="today-task-copy">
-                    <button onClick={() => onOpenTask(task)}>
-                      {task.title}
-                    </button>
-                    <span>
-                      {taskLabel(task)}
-                      {task.tag && ` · ${task.tag}`}
-                    </span>
-                  </div>
-                  <AppSelect
-                    className={`task-status task-status-select ${task.status}`}
-                    value={task.status}
-                    onChange={(event) =>
-                      onStatusChange(task.id, event.target.value)
-                    }
-                    aria-label={`Change status for ${task.title}`}
-                  >
-                    <option value="todo">To do</option>
-                    <option value="in progress">In progress</option>
-                    <option value="review">Review</option>
-                    <option value="blocked">Blocked</option>
-                    <option value="on_hold">On hold</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="done">Done</option>
-                  </AppSelect>
-                </article>
-              ))}
+            <span className="block text-body-small text-text-secondary">{metric.label}</span>
+            <strong className="mt-2 block text-metric text-text-primary">{metric.value}</strong>
+            <span className="mt-1.5 block text-caption text-text-muted">{metric.sub}</span>
+          </button>
+        ))}
+      </section>
+
+      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_330px]">
+        <div className="grid content-start gap-8">
+          <section data-panel="tasks">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-card-heading text-text-primary">Today's tasks</h2>
+              <button
+                type="button"
+                onClick={() => onNavigate("My tasks")}
+                className="text-label text-text-secondary transition-colors hover:text-text-primary"
+              >
+                See all tasks
+              </button>
             </div>
-          ) : (
-            <div className="today-empty">
-              <CheckCircle2 size={20} />
-              <p>Your day is clear.</p>
-              <Button variant="ghost" size="sm" onClick={onAddTask}>
-                Plan a task <ArrowUpRight size={14} />
-              </Button>
+            <div className="mt-3 overflow-hidden rounded-container border border-border bg-card">
+              {todayTaskRows.length ? (
+                todayTaskRows.map((task) => {
+                  const assignee = assigneeFor(task);
+                  const done = task.status === "done";
+                  return (
+                    <article
+                      key={task.id}
+                      className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0"
+                    >
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={done}
+                        onClick={() => onComplete(task.id)}
+                        aria-label={`${done ? "Reopen" : "Complete"} ${task.title}`}
+                        title={done ? "Reopen task" : "Mark task complete"}
+                        className={cn(
+                          "flex size-[18px] shrink-0 items-center justify-center rounded-full border transition-colors",
+                          done
+                            ? "border-navy bg-navy text-text-on-navy"
+                            : "border-border-strong text-transparent hover:border-navy",
+                        )}
+                      >
+                        <Check size={11} strokeWidth={3} aria-hidden="true" />
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => onOpenTask(task)}
+                          className={cn(
+                            "block max-w-full truncate text-left text-body-small font-semibold text-text-primary hover:underline",
+                            done && "text-text-muted line-through",
+                          )}
+                        >
+                          {task.title}
+                        </button>
+                        <span className="mt-0.5 block truncate text-caption text-text-muted">
+                          {taskRowMeta(task)}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "hidden shrink-0 rounded-badge px-2 py-0.5 text-caption font-medium sm:inline-block",
+                          STATUS_PILL[task.status] || STATUS_PILL.todo,
+                        )}
+                      >
+                        {STATUS_LABEL[task.status] || task.status}
+                      </span>
+                      <span className="w-16 shrink-0 text-right text-caption text-text-secondary">
+                        {taskRowDate(task)}
+                      </span>
+                      <Avatar
+                        name={assignee ? memberName(assignee) : "Unassigned"}
+                        avatarUrl={assignee?.avatar_url}
+                        presence={assignee ? effectivePresence(assignee) : null}
+                        small
+                      />
+                    </article>
+                  );
+                })
+              ) : (
+                <div className="grid justify-items-center gap-2 px-4 py-10 text-center">
+                  <CheckCircle2 size={22} className="text-text-muted" aria-hidden="true" />
+                  <p className="text-body-small text-text-secondary">
+                    Nothing is assigned to you today.
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" onClick={onAddTask}>
+                    Plan a task <ArrowUpRight size={14} aria-hidden="true" />
+                  </Button>
+                </div>
+              )}
             </div>
-          )}
-        </TodayPanel>
-        <aside className="today-side-stack">
+          </section>
+
+          <section data-panel="check-ins">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-card-heading text-text-primary">Team check-ins</h2>
+              <button
+                type="button"
+                onClick={() => onNavigate("Check-ins")}
+                className="text-label text-text-secondary transition-colors hover:text-text-primary"
+              >
+                View all
+              </button>
+            </div>
+            <div className="mt-3 rounded-container border border-border bg-card p-5">
+              <p className="text-body-small font-semibold text-text-primary">
+                Daily check-in progress
+              </p>
+              <p className="mt-1 text-section-heading text-text-primary">
+                <strong>
+                  {checkedInCount} of {memberCount}
+                </strong>{" "}
+                received
+              </p>
+              <p className="mt-1 text-caption text-text-muted">{checkInPendingLine}</p>
+              <div
+                role="progressbar"
+                aria-label="Team check-ins received today"
+                aria-valuemin={0}
+                aria-valuemax={memberCount}
+                aria-valuenow={checkedInCount}
+                className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary"
+              >
+                <div
+                  className="h-full rounded-full bg-navy"
+                  style={{ width: `${checkInPercent}%` }}
+                />
+              </div>
+              <div className="mt-2 grid">
+                {members.slice(0, 4).map((member) => {
+                  const submitted = checkedInMemberIds.has(String(member.id));
+                  return (
+                    <div key={member.id} className="flex items-center gap-3 py-2.5">
+                      <Avatar
+                        name={memberName(member)}
+                        avatarUrl={member.avatar_url}
+                        presence={effectivePresence(member)}
+                        small
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProfileMember(member)}
+                        aria-label={`Open ${memberName(member)} profile`}
+                        className="min-w-0 flex-1 truncate text-left text-body-small text-text-primary hover:underline"
+                      >
+                        {memberName(member)}
+                      </button>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-badge px-2 py-0.5 text-caption font-medium",
+                          submitted
+                            ? "bg-success-soft text-success"
+                            : "bg-warning-soft text-warning",
+                        )}
+                      >
+                        {submitted ? "Submitted" : "Pending"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {memberCount > 4 && (
+                <p className="mt-1 text-caption text-text-muted">
+                  and {memberCount - 4} more
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <aside className="grid content-start gap-4">
           <ClockInCard
             shifts={workShifts}
             currentUserId={currentUserId}
@@ -3928,244 +3995,117 @@ function TodayDashboard({
             onSubmitShift={onSubmitShift}
             onChangePresence={onChangePresence}
           />
-          <TodayPanel
-            panelKey="agenda"
-            title="Today agenda"
-            description="Tasks, events and follow-ups in chronological order"
-            open={panelOpen("agenda")}
-            onToggle={() => togglePanel("agenda")}
-            className="today-agenda-panel"
-            action={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onNavigate("Calendar")}
-                aria-label="Open calendar"
-                title="Open calendar"
-              >
-                <ArrowUpRight size={15} />
-              </Button>
-            }
-          >
-            {agendaItems.length ? (
-              <div className="today-agenda-list">
-                {agendaItems.map((item) => (
-                  <button
-                    type="button"
-                    className={`today-agenda-row is-${item.kind}`}
-                    key={item.key}
-                    onClick={item.onOpen}
-                  >
-                    <span className="today-agenda-time">{item.label}</span>
-                    <span className="today-agenda-dot" aria-hidden="true" />
-                    <span className="today-agenda-copy">
-                      <strong>{item.title}</strong>
-                      <small>{item.meta}</small>
-                    </span>
-                    <ArrowUpRight size={14} aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="today-empty">
-                <CalendarCheck2 size={20} />
-                <p>No events or deadlines left today.</p>
-                <Button type="button" variant="ghost" size="sm" onClick={onAddEvent}>
-                  Add an event <ArrowUpRight size={14} />
-                </Button>
-              </div>
-            )}
-          </TodayPanel>
-          <TodayPanel
-            panelKey="team-presence"
-            title="Team presence"
-            description="Online now, then recently active teammates"
-            open={panelOpen("team-presence")}
-            onToggle={() => togglePanel("team-presence")}
-            className="team-online-panel"
-            action={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onNavigate("Team")}
-                aria-label="Open team board"
-                title="Open team board"
-              >
-                <ArrowUpRight size={15} />
-              </Button>
-            }
-          >
-            <div className="today-presence-group">
-              <h3>Online now <span>{onlineMembers.length}</span></h3>
-              {onlineMembers.length ? (
-                onlineMembers.map((member) => (
-                  <button
-                    type="button"
-                    className="team-access-row"
-                    key={member.id}
-                    onClick={() => setProfileMember(member)}
-                    aria-label={`Open ${memberName(member)} profile`}
-                    title={`${member.job_role || member.role || "Member"}${member.company ? ` at ${member.company}` : ""}`}
-                  >
-                    <Avatar
-                      name={memberName(member)}
-                      avatarUrl={member.avatar_url}
-                      presence={effectivePresence(member)}
-                      small
-                    />
-                    <div>
-                      <strong>{memberName(member)}</strong>
-                      <span>
-                        {formatLastSeen(member.last_seen_at)}
-                        {canManageMembers &&
-                          (member.on_break
-                            ? " - On break"
-                            : member.clocked_in
-                              ? ` - Clocked in ${formatShiftClock(member.clock_in_at)}`
-                              : "")}
+
+          {todaysEvents.length > 0 && (
+            <section className="rounded-container border border-border bg-card p-5">
+              <h2 className="text-body-small font-semibold text-text-primary">
+                Upcoming events
+              </h2>
+              <div className="mt-3 grid gap-3">
+                {todaysEvents.slice(0, 3).map((event) => {
+                  const pill = eventPill(event);
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => onOpenEvent?.(event)}
+                      className="flex items-start gap-2.5 text-left"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "mt-0.5 h-9 w-[3px] shrink-0 rounded-chip",
+                          EVENT_BAR_TONE[event.event_type] || "bg-navy",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-label text-text-primary">
+                          {event.title}
+                        </span>
+                        <span className="block text-caption text-text-muted">
+                          {eventTimeRange(event)}
+                        </span>
                       </span>
-                    </div>
-                    <ArrowUpRight size={15} />
-                  </button>
-                ))
-              ) : (
-                <p className="today-muted">No teammates are online right now.</p>
-              )}
+                      {pill && (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-badge px-2 py-0.5 text-caption font-medium",
+                            pill.className,
+                          )}
+                        >
+                          {pill.label}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          <section className="rounded-container border border-border bg-card p-5">
+            <h2 className="text-body-small font-semibold text-text-primary">
+              Team exceptions
+            </h2>
+            <div className="mt-3 grid gap-2.5">
+              {exceptionRows.map((row) => (
+                <button
+                  key={row.key}
+                  type="button"
+                  onClick={row.onOpen}
+                  className="flex items-center gap-2.5 text-left"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn("size-2 shrink-0 rounded-full", row.dot)}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-label text-text-primary">
+                    {row.label}
+                  </span>
+                  <span className="shrink-0 text-label font-semibold text-text-primary">
+                    {row.count}
+                  </span>
+                </button>
+              ))}
             </div>
-            <div className="today-presence-group">
-              <h3>Recently active <span>{recentMembers.length}</span></h3>
-              {recentMembers.length ? (
-                recentMembers.map((member) => (
-                  <button
-                    type="button"
-                    className="team-access-row"
-                    key={member.id}
-                    onClick={() => setProfileMember(member)}
-                    aria-label={`Open ${memberName(member)} profile`}
-                  >
-                    <Avatar
-                      name={memberName(member)}
-                      avatarUrl={member.avatar_url}
-                      presence={effectivePresence(member)}
-                      small
-                    />
-                    <div>
-                      <strong>{memberName(member)}</strong>
-                      <span>{formatLastSeen(member.last_seen_at)}</span>
-                    </div>
-                    <ArrowUpRight size={15} />
-                  </button>
-                ))
-              ) : (
-                <p className="today-muted">No recent activity to show.</p>
-              )}
+          </section>
+
+          <section className="rounded-container border border-border bg-card p-5">
+            <h2 className="text-body-small font-semibold text-text-primary">
+              Quick actions
+            </h2>
+            <div className="mt-3 grid gap-2">
+              <button
+                type="button"
+                onClick={onAddEvent}
+                className="flex h-11 items-center gap-2.5 rounded-control bg-navy px-4 text-label font-medium text-text-on-navy transition-colors hover:bg-navy-hover"
+              >
+                <Clock3 size={17} aria-hidden="true" /> Log work today
+              </button>
+              <button
+                type="button"
+                onClick={onAddTask}
+                className="flex h-11 items-center gap-2.5 rounded-control border border-border px-4 text-label text-text-primary transition-colors hover:bg-surface-hover"
+              >
+                <Plus size={17} aria-hidden="true" /> New task
+              </button>
+              <button
+                type="button"
+                onClick={onCheckIn}
+                className="flex h-11 items-center gap-2.5 rounded-control border border-border px-4 text-label text-text-primary transition-colors hover:bg-surface-hover"
+              >
+                <Check size={17} aria-hidden="true" /> Start team check-in
+              </button>
             </div>
-          </TodayPanel>
+          </section>
         </aside>
       </div>
-      <div className="today-lower-grid">
-        <TodayPanel
-          panelKey="team-attention"
-          title="Team attention"
-          description={
-            canManageMembers
-              ? "Exceptions worth acting on"
-              : "Work that may need help"
-          }
-          open={panelOpen("team-attention")}
-          onToggle={() => togglePanel("team-attention")}
-          className="today-attention-panel"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onNavigate("Team")}
-            >
-              Open board <ArrowUpRight size={14} />
-            </Button>
-          }
-        >
-          {openExceptions.length ? (
-            <div className="today-exception-list">
-              {openExceptions.map((task) => (
-                <article className="today-exception-row" key={task.id}>
-                  <button
-                    type="button"
-                    className="today-exception-main"
-                    onClick={() => onOpenTask(task)}
-                  >
-                    <span className={`status-dot ${task.status}`} />
-                    <span className="today-exception-copy">
-                      <strong>{task.title}</strong>
-                      <small>
-                        {task.assignee_id ? taskAssigneeLabel(task) : "Unassigned"}
-                        {" - "}
-                        {exceptionReason(task)}
-                      </small>
-                    </span>
-                  </button>
-                  <span className={`today-exception-priority ${task.priority || "normal"}`}>
-                    {task.priority || "normal"}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => onComplete(task.id)}
-                    aria-label={`Complete ${task.title}`}
-                    title={`Complete ${task.title}`}
-                  >
-                    <Check size={14} />
-                  </Button>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="today-muted">No team exceptions right now.</p>
-          )}
-        </TodayPanel>
-        <TodayPanel
-          panelKey="check-ins"
-          title="Check-ins"
-          description="Keep the team aligned"
-          open={panelOpen("check-ins")}
-          onToggle={() => togglePanel("check-ins")}
-          className="today-checkin-panel"
-        >
-          <strong className="today-checkin-count">
-            {checkedInMemberIds.size} of {members.length}
-          </strong>
-          <span className="today-muted">check-ins received today</span>
-          {missingCheckInMembers.length ? (
-            <div className="today-checkin-members">
-              <span>Waiting on</span>
-              {missingCheckInMembers.slice(0, 4).map((member) => (
-                <b key={member.id}>{memberName(member)}</b>
-              ))}
-              {missingCheckInMembers.length > 4 && (
-                <b>+{missingCheckInMembers.length - 4} more</b>
-              )}
-            </div>
-          ) : (
-            <p className="today-muted">Everyone has checked in today.</p>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigate("Check-ins")}
-          >
-            {checkedInMemberIds.size ? "View check-ins" : "Start check-in"}
-          </Button>
-        </TodayPanel>
-      </div>
+
       <MemberProfilePopup member={profileMember} onClose={() => setProfileMember(null)} onMessage={messageOnlineMember} />
     </section>
   );
 }
+
 
 export {
   TeamBoardView,

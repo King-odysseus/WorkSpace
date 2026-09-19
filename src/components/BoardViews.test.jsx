@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { MyTasksView, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
 import { takePendingDirectMessage } from '../lib/chat-navigation.js'
@@ -128,50 +128,19 @@ it('loads Team tasks one page at a time with server summary counts', async () =>
   expect(metrics[1].textContent).toContain('3')
 })
 
-const myDayPanel = () =>
-  screen.getByRole('heading', { name: 'My day' }).closest('.today-panel')
+const todayPanel = name => document.querySelector(`[data-panel="${name}"]`)
 
-afterEach(() => {
-  localStorage.removeItem('workspace-today-panels')
-})
-
-it('shows only tasks assigned to the current user in My day', () => {
+it('shows only tasks assigned to the current user today', () => {
   renderDashboard([
     { id: 1, title: 'Mine to do', status: 'todo', assignee_id: 7, member: 'Nate Foster', priority: 'high', tag: 'Ops' },
     { id: 2, title: 'Nobody owns this', status: 'todo', assignee_id: null, member: 'Unassigned', priority: 'high', tag: 'Ops' },
     { id: 3, title: 'Someone else owns this', status: 'todo', assignee_id: 9, member: 'Dana Reed', priority: 'high', tag: 'Ops' },
   ])
 
-  const panel = within(myDayPanel())
+  const panel = within(todayPanel('tasks'))
   expect(panel.getByText('Mine to do')).toBeInTheDocument()
   expect(panel.queryByText('Nobody owns this')).not.toBeInTheDocument()
   expect(panel.queryByText('Someone else owns this')).not.toBeInTheDocument()
-})
-
-it('renders today changes as an accessible ticker that opens the selected event', () => {
-  const onOpenActivity = vi.fn()
-  const { container } = renderDashboard([], noop, [], {
-    activity: [
-      {
-        id: 31,
-        actor_id: 7,
-        actor_name: 'Nate Foster',
-        kind: 'task_created',
-        message: 'created task Check-In Reminder.',
-        created_at: new Date().toISOString(),
-      },
-    ],
-    onOpenActivity,
-  })
-
-  const copies = container.querySelectorAll('.today-change-list')
-  expect(copies).toHaveLength(2)
-  expect(copies[1]).toHaveAttribute('aria-hidden', 'true')
-
-  const activityButton = screen.getByRole('button', { name: 'Nate Foster created task Check-In Reminder.' })
-  expect(activityButton.textContent.match(/Nate Foster/g)).toHaveLength(1)
-  fireEvent.click(activityButton)
-  expect(onOpenActivity).toHaveBeenCalledWith(expect.objectContaining({ id: 31 }))
 })
 
 it('does not treat an unassigned task as yours when the name lookup fails', () => {
@@ -182,16 +151,9 @@ it('does not treat an unassigned task as yours when the name lookup fails', () =
     { id: 1, title: 'Nobody owns this', status: 'todo', assignee_id: null, member: 'Unassigned', priority: 'high', tag: 'Ops' },
   ])
 
-  expect(within(myDayPanel()).getByText('Your day is clear.')).toBeInTheDocument()
-})
-
-it('formats dashboard follow-up dates in the app date format', () => {
-  renderDashboard([], noop, [
-    { id: 1, note: 'Confirm launch approval', status: 'open', due_date: '2026-09-05' },
-  ])
-
-  expect(screen.getByText('05-09-26')).toBeInTheDocument()
-  expect(screen.queryByText('2026-09-05')).not.toBeInTheDocument()
+  const panel = within(todayPanel('tasks'))
+  expect(panel.getByText('Nothing is assigned to you today.')).toBeInTheDocument()
+  expect(panel.queryByText('Nobody owns this')).not.toBeInTheDocument()
 })
 
 it('shows the real check-in denominator instead of inventing one for an empty workspace', () => {
@@ -200,23 +162,6 @@ it('shows the real check-in denominator instead of inventing one for an empty wo
   renderDashboard([])
 
   expect(screen.queryByText('0 of 1')).not.toBeInTheDocument()
-})
-
-it('keeps overdue follow-ups visible when an undated one is in the list', () => {
-  // The list slices to four in source order, so an undated item sitting first
-  // used to take a slot from a genuinely overdue follow-up.
-  renderDashboard([], noop, [
-    { id: 1, note: 'Undated ask', status: 'open', due_date: null },
-    { id: 2, note: 'Overdue one', status: 'open', due_date: '2026-09-01' },
-    { id: 3, note: 'Overdue two', status: 'open', due_date: '2026-09-02' },
-    { id: 4, note: 'Overdue three', status: 'open', due_date: '2026-09-03' },
-    { id: 5, note: 'Overdue four', status: 'open', due_date: '2026-09-04' },
-  ])
-
-  expect(screen.getByText('Overdue one')).toBeInTheDocument()
-  expect(screen.getByText('Overdue two')).toBeInTheDocument()
-  expect(screen.getByText('Overdue three')).toBeInTheDocument()
-  expect(screen.getByText('Overdue four')).toBeInTheDocument()
 })
 
 it('lists an event that started earlier but runs into today', () => {
@@ -233,7 +178,7 @@ it('lists an event that started earlier but runs into today', () => {
   expect(screen.queryByText('Future thing')).not.toBeInTheDocument()
   // A carried-over event shows the day it began, not a bare time that reads as
   // if it started today.
-  expect(screen.getByText('11-09-26')).toBeInTheDocument()
+  expect(screen.getByText(/^11 Sep /)).toBeInTheDocument()
 })
 
 it('opens an agenda event through the supplied action', () => {
@@ -250,7 +195,7 @@ it('opens an agenda event through the supplied action', () => {
   expect(onOpenEvent).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
 })
 
-it('separates online teammates from recent activity and names missing check-ins', () => {
+it('shows who has checked in and who is still pending', () => {
   renderDashboard([], noop, [], {
     checkIns: [{ id: 1, user_id: 1, date: '2026-09-12' }],
     members: [
@@ -259,21 +204,14 @@ it('separates online teammates from recent activity and names missing check-ins'
     ],
   })
 
-  const presencePanel = screen.getByRole('heading', { name: 'Team presence' }).closest('.today-panel')
-  const presence = within(presencePanel)
-  const online = within(presence.getByRole('heading', { name: /Online now/ }).closest('.today-presence-group'))
-  const recent = within(presence.getByRole('heading', { name: /Recently active/ }).closest('.today-presence-group'))
-  expect(online.getByText('Ada Online')).toBeInTheDocument()
-  expect(online.queryByText('Dana Offline')).not.toBeInTheDocument()
-  expect(recent.getByText('Dana Offline')).toBeInTheDocument()
-
-  const checkInPanel = screen.getByRole('heading', { name: 'Check-ins' }).closest('.today-panel')
-  expect(within(checkInPanel).getByText('1 of 2')).toBeInTheDocument()
-  expect(within(checkInPanel).getByText('Dana Offline')).toBeInTheDocument()
-
-  fireEvent.click(within(checkInPanel).getByRole('button', { name: 'Collapse Check-ins' }))
-  expect(within(checkInPanel).queryByText('1 of 2')).not.toBeInTheDocument()
-  expect(within(checkInPanel).getByRole('button', { name: 'Expand Check-ins' })).toBeInTheDocument()
+  const panel = within(todayPanel('check-ins'))
+  expect(panel.getByText('1 of 2')).toBeInTheDocument()
+  expect(panel.getByText('Ada Online')).toBeInTheDocument()
+  expect(panel.getByText('Dana Offline')).toBeInTheDocument()
+  // Who is in and who is not, on the row itself rather than in a separate list.
+  expect(panel.getByText('Submitted')).toBeInTheDocument()
+  expect(panel.getByText('Pending')).toBeInTheDocument()
+  expect(panel.getByText('1 member is still pending')).toBeInTheDocument()
 })
 
 it('hands a messaging target to Chats instead of racing a window event', () => {
@@ -364,7 +302,7 @@ it('presents task completion as a labelled checkbox with the correct next action
   expect(completed).toHaveAttribute('title', 'Reopen task')
 })
 
-it('opens the board on the tasks its headline number counted, not the personal queue', () => {
+it('opens the board on the tasks its tile counted, not the personal queue', () => {
   // The overdue count covered the whole workspace but the card opened My tasks,
   // which only ever holds work assigned to you. A task nobody had picked up was
   // counted, then not shown - the count and the view behind it disagreed.
@@ -381,13 +319,28 @@ it('opens the board on the tasks its headline number counted, not the personal q
         tag: 'Ops',
         due_date: '2026-09-04',
       },
+      {
+        id: 2,
+        title: 'Due today',
+        status: 'todo',
+        assignee_id: 7,
+        member: 'Nate Foster',
+        priority: 'high',
+        tag: 'Ops',
+        due_date: '2026-09-12',
+      },
     ],
     onOpenBoard,
   )
 
-  expect(container.querySelector('.today-metric-overdue strong').textContent).toBe('1')
-  fireEvent.click(container.querySelector('.today-metric-overdue'))
-  expect(onOpenBoard).toHaveBeenCalledWith('overdue')
+  const tile = container.querySelector('[data-metric="due-today"]')
+  expect(tile).not.toBeNull()
+  // One task falls due today and one is already late, and both read off the
+  // same filter set the tile opens.
+  expect(tile.textContent).toContain('1 overdue')
+
+  fireEvent.click(tile)
+  expect(onOpenBoard).toHaveBeenCalledWith('due-today')
 })
 
 it('lists exactly the tasks a focus counts, including ones nobody owns', () => {
