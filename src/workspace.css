@@ -8,6 +8,8 @@
    ========================================================================== */
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Roboto:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+@import "flowbite-react/plugin/tailwindcss";
+@source "../.flowbite-react/class-list.json";
 @import "tw-animate-css";
 /* ==========================================================================
    Legacy base layer (formerly styles.css) - the handful of rules from the

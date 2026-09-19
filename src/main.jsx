@@ -69,6 +69,9 @@ import {
 } from "lucide-react";
 import "flowbite/dist/flowbite.css";
 import "./workspace.css";
+import { ThemeInit } from "../.flowbite-react/init.jsx";
+import { ThemeProvider } from "flowbite-react";
+import { flowbiteTheme } from "./lib/flowbite-theme.js";
 import { Button } from "./components/ui/button.jsx";
 import { Badge } from "./components/ui/badge.jsx";
 import { Alert } from "./components/ui/alert.jsx";
@@ -7462,10 +7465,13 @@ function BrandedStatusScreen({ loading = false, error = "" }) {
 startInstallPromptCapture();
 createRoot(document.getElementById("root")).render(
   <>
-    <AppUpdateBanner />
-    <AppErrorBoundary>
-      <App />
-    </AppErrorBoundary>
+    <ThemeInit />
+    <ThemeProvider theme={flowbiteTheme}>
+      <AppUpdateBanner />
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
+    </ThemeProvider>
   </>,
 );
 
