@@ -5312,8 +5312,8 @@ function WorkspaceView({
           .join(", ")})`
       : "conic-gradient(#e2e8f0 0 100%)";
     return (
-      <section className="workspace-view" aria-busy={reportDetailLoading}>
-        <WorkspaceViewHeading title="Reports" subtitle={subtitle} />
+      <section className="workspace-view pencil-reports-view" aria-busy={reportDetailLoading}>
+        <WorkspaceViewHeading eyebrow="Insights" title="Reports" subtitle={subtitle} />
         <div className="report-toolbar">
           <WorkScopeSelector
             compact
