@@ -5806,6 +5806,7 @@ function WorkspaceView({
           title="Workspace activity"
           subtitle="Notifications outside chats and channels."
           action="Mark all read"
+          icon={CheckCircle2}
           onAction={async () => {
             await onMarkNotificationsRead();
             setNotificationHistory((current) =>
@@ -6098,6 +6099,7 @@ function WorkspaceView({
           title={title}
           subtitle="Plan meetings, focus time, deadlines, and reminders in one place."
           action="Add event"
+          icon={CalendarDays}
           onAction={() => openComposer("calendar")}
         />
         <div
@@ -6536,6 +6538,7 @@ function WorkspaceView({
           title={title}
           subtitle={subtitle}
           action="Start check-in"
+          icon={MessageSquare}
           onAction={() => openComposer("checkin")}
         />
         <div className="checkin-toolbar">

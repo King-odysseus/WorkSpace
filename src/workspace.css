@@ -5281,23 +5281,31 @@ html[data-theme='dark'] :where(.top-search input, .planner-search input, .ai-cha
    A final, dashboard-scoped layer that replaces the older neumorphic cascade
    with quieter white/gray surfaces, larger card radii, and clearer hierarchy.
    ============================================================================= */
-body,
-button,
-input,
-select,
-textarea,
-[data-slot='button'] {
-  font-family: 'Roboto', sans-serif !important;
-}
+/* The two font defaults the rest of the app rests on, and the second entry in
+   the unlayered-beats-layered trap this stylesheet keeps falling into. An
+   !important declaration outranks every utility regardless of layer, so
+   `letter-spacing: 0` here was quietly flattening the tracking that the type
+   scale declares for each heading size. Both rules now sit in @layer base with
+   no !important, which leaves them as genuine fallbacks: a bare heading still
+   gets Montserrat, and a font-display or tracking-* utility on it wins. */
+@layer base {
+  body,
+  button,
+  input,
+  select,
+  textarea,
+  [data-slot='button'] {
+    font-family: 'Roboto', sans-serif;
+  }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: 'Montserrat', sans-serif !important;
-  letter-spacing: 0 !important;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Montserrat', sans-serif;
+  }
 }
 
 .workspace-view,

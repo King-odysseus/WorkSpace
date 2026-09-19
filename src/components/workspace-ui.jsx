@@ -3,6 +3,7 @@
 // placeholder, and the app's replacement for window.confirm().
 
 import { Button } from './ui/button.jsx'
+import { PageHeader } from './ui/page-header.jsx'
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover.jsx'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, AppSelect } from './ui/select.jsx'
 import { Calendar as DatePicker } from './ui/calendar.jsx'
@@ -12,8 +13,16 @@ import {
 import { Brush, CalendarDays, Plus } from 'lucide-react'
 import { formatDay, toDateKey } from '../lib/workspace-format.js'
 
-function WorkspaceViewHeading({ title, subtitle, action, onAction }) {
-  return <div className="workspace-view-heading"><div><h1>{title}</h1><p className="subtitle">{subtitle}</p></div>{action && <Button onClick={onAction}><Plus size={17} /> {action}</Button>}</div>
+// Every view's page header. This stays a thin wrapper over the design
+// system's PageHeader so the twenty-odd call sites did not have to change
+// when the header itself moved onto the new design. It no longer carries the
+// old `workspace-view-heading` class: the stylesheet had eleven separate
+// blocks overriding that class's h1 and subtitle, and leaving the class on
+// would have kept every one of them in play.
+function WorkspaceViewHeading({ title, subtitle, eyebrow, action, onAction, actions, icon: ActionIcon = Plus }) {
+  return <PageHeader eyebrow={eyebrow} title={title} description={subtitle} actions={actions}>
+    {action && <Button size="page" onClick={onAction}><ActionIcon size={20} strokeWidth={1.75} /> {action}</Button>}
+  </PageHeader>
 }
 
 function SelectField({ label, name, value, onChange, options }) {

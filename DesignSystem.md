@@ -60,12 +60,39 @@ Two rules were doing that, and both now sit in `@layer base`:
 - `:where(button, input, textarea) { font: inherit }` duplicated the same
   normalisation that already ships in preflight. Unlayered, it reset `font-size`
   on every button and input, so no `text-*` utility could size a control.
+- `h1`-`h6 { font-family: 'Montserrat' !important; letter-spacing: 0 !important }`
+  was the third, and the one that proves layers alone are not enough. An
+  `!important` declaration outranks every utility whichever layer it sits in, so
+  moving this rule into `@layer base` would not have helped. The
+  `letter-spacing: 0` was flattening the tracking each heading size declares.
+  Both declarations are now plain, in `@layer base`.
 
 Put any new global element fallback in `@layer base` for the same reason. When
 one existing primitive still loses to an unlayered rule, scope an opt-out to its
 attribute (`[data-slot='search-input'] input { ... }`) instead of escalating
 with `!important`; `!important` on a `:where()` selector will beat class
 utilities, which is worse than the problem it solves.
+#### tailwind-merge And Custom Type-Scale Names
+
+`cn()` runs `tailwind-merge`, which reads a `text-*` class as either a font size
+or a text colour. It knows only the font sizes Tailwind ships with, so every
+name this project added to the type scale reached `cn()` classified as a colour.
+The failure is silent and does not look like a class-name problem: given
+`text-overline text-primary`, tailwind-merge saw two competing colours, kept the
+last, and deleted the font size. Nothing errored and nothing logged; the element
+simply inherited its parent's size and padding looked inexplicably wrong.
+
+`src/lib/utils.js` now declares the scale's names in the `font-size` group via
+`extendTailwindMerge`. A new `--text-*` name must be added to that list in the
+same commit that declares the token, or it will be dropped the first time it
+shares an element with a colour.
+
+Radius has the same shape of problem. tailwind-merge does not recognise
+`rounded-control` or `rounded-badge` as `border-radius` values, so it never sees
+them conflict with `rounded-full` and cannot be trusted to arbitrate. This is
+why `buttonVariants` keeps one radius per size variant instead of a
+`rounded-full` base that a size has to out-merge.
+
 ### Mockups And Retired Stylesheets
 
 Build a mockup as a React page that uses the shared primitives and the tokens in
@@ -602,6 +629,22 @@ new class, and extend the surface's own rules in `Shared workspace views`.
 | Drawers and modals | `drawer-*`, `modal-*` | Shared shell language |
 
 ## Page Patterns
+
+### Page Header
+
+- Every view opens with `PageHeader` (`src/components/ui/page-header.jsx`), which
+  the app reaches through `WorkspaceViewHeading` in `workspace-ui.jsx`.
+- Three stacked slots, left aligned: an uppercase overline eyebrow (11/600,
+  1.6px tracking, brand navy), the page title (30/700/36, -0.4px tracking,
+  Montserrat), and a one-line support sentence (14/400/20, muted). The eyebrow
+  and the support line are optional; the title is not.
+- The page's primary action sits at the right, bottom aligned with the support
+  line, as a 42px control with a 12px radius and a 14px/500 label
+  (`Button size="page"`). Secondary actions use the same height and a quieter
+  variant, so the header still reads as one primary plus support.
+- A hairline rule in the border colour closes the header. Pass `divider={false}`
+  when the page draws its own separation.
+- Below 640px the action drops beneath the text rather than squeezing the title.
 
 ### What's New
 

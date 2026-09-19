@@ -4,7 +4,7 @@ import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 outline-none focus-visible:ring-[3px] focus-visible:ring-info/35 focus-visible:border-info",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 outline-none focus-visible:ring-[3px] focus-visible:ring-info/35 focus-visible:border-info",
   {
     variants: {
       variant: {
@@ -21,10 +21,21 @@ const buttonVariants = cva(
           'bg-destructive text-destructive-foreground hover:opacity-90',
         link: 'text-blue-600 underline-offset-4 hover:underline rounded-none',
       },
+      // Radius lives on the size rather than the base. It used to sit on the
+      // base as `rounded-full`, which meant a size that wanted a different
+      // radius had to out-merge it - and tailwind-merge only recognises the
+      // radius names it ships with, so `rounded-control` was not seen as a
+      // conflict and the pill silently won. Keeping one radius per size removes
+      // the contest entirely; a caller passing `rounded-lg` still overrides it.
       size: {
-        default: 'h-9 px-4 py-2 has-[>svg]:px-3.5',
-        sm: 'h-8 px-3 text-[11px] has-[>svg]:px-2.5',
-        lg: 'h-11 px-6 has-[>svg]:px-5',
+        default: 'h-9 rounded-full px-4 py-2 has-[>svg]:px-3.5',
+        sm: 'h-8 rounded-full px-3 text-[11px] has-[>svg]:px-2.5',
+        lg: 'h-11 rounded-full px-6 has-[>svg]:px-5',
+        // The 42px control the design's page-header Primary Action uses. It
+        // takes a 12px radius, not the base pill, and a 14px/500 label, so it
+        // overrides those two base classes through tailwind-merge instead of
+        // restating the whole variant.
+        page: 'h-[42px] gap-2.5 rounded-control px-5 text-label font-medium [&_svg]:size-5',
         icon: 'size-9 rounded-full',
         'icon-sm': 'size-8 rounded-full',
       },

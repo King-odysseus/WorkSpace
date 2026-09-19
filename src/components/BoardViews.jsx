@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
+import { PageHeader } from "./ui/page-header.jsx";
 import { AppSelect } from "./ui/select.jsx";
 import { Card } from "./ui/card.jsx";
 import Avatar from "./Avatar.jsx";
@@ -837,6 +838,7 @@ function TeamBoardView({
         title="Team"
         subtitle="See workload, availability, and the work that needs attention."
         action={canManageMembers ? "Invite team member" : undefined}
+        icon={Users}
         onAction={onInvite}
       />
       <div className="team-board-metrics">
@@ -3715,33 +3717,26 @@ function TodayDashboard({
           : task.priority;
   return (
     <section className="today-dashboard">
-      <section className="today-hero">
-        <div>
-          <p className="eyebrow">{todayLabel}</p>
-          <h1>
-            {greeting}, {currentUserName.split(" ")[0]}
-          </h1>
-          <p className="subtitle">
-            Here is what needs your attention in {workspaceName}.
-          </p>
-        </div>
-        <div className="today-actions">
-          <Button type="button" onClick={onAddTask}>
-            <Plus size={16} /> Add task
+      <PageHeader
+        eyebrow={todayLabel}
+        title={`${greeting}, ${currentUserName.split(" ")[0]}`}
+        description={`Here is what needs your attention in ${workspaceName}.`}
+      >
+        <Button type="button" size="page" onClick={onAddTask}>
+          <Plus size={20} strokeWidth={1.75} /> Add task
+        </Button>
+        <Button type="button" variant="secondary" size="page" onClick={onAddEvent}>
+          <CalendarDays size={20} strokeWidth={1.75} /> Add event
+        </Button>
+        <Button type="button" variant="outline" size="page" onClick={onCheckIn}>
+          <MessageSquare size={20} strokeWidth={1.75} /> Check in
+        </Button>
+        {canManageMembers && (
+          <Button type="button" variant="outline" size="page" onClick={onInvite}>
+            <Plus size={20} strokeWidth={1.75} /> Invite
           </Button>
-          <Button type="button" variant="secondary" onClick={onAddEvent}>
-            <CalendarDays size={16} /> Add event
-          </Button>
-          <Button type="button" variant="outline" onClick={onCheckIn}>
-            <MessageSquare size={16} /> Check in
-          </Button>
-          {canManageMembers && (
-            <Button type="button" variant="ghost" onClick={onInvite}>
-              <Plus size={16} /> Invite
-            </Button>
-          )}
-        </div>
-      </section>
+        )}
+      </PageHeader>
       <section className="today-overview">
         <div className="today-overview-heading">
           <div>

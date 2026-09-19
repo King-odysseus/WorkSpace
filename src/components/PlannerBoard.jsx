@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, GanttChartSquare, GripVertical, LayoutGrid, List, Archive, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
+import { Button } from './ui/button.jsx'
+import { PageHeader } from './ui/page-header.jsx'
 import { SelectField, DateField } from './workspace-ui.jsx'
 import { formatDay, formatDayMonth, taskAssigneeLabel, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
@@ -301,7 +303,14 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   </section>
 
   return <section className="workspace-view planner-view">
-    <div className="workspace-view-heading"><div><h1>{isOperations ? 'Operations planner' : 'Project planner'}</h1><p className="subtitle">{isOperations ? 'Manage recurring and day-to-day work outside projects.' : 'Plan and track delivery work within projects.'}</p></div><div className="planner-heading-actions">{canManageBuckets && <button type="button" className={`planner-archive-trigger${bucketArchiveOpen ? ' active' : ''}`} onClick={onToggleBucketArchive} aria-label="Bucket archive" aria-pressed={bucketArchiveOpen} title="Bucket archive"><Archive size={16} /></button>}<button className="primary-button" onClick={onAddTask}><Plus size={17} /> Add {isOperations ? 'operation' : 'project task'}</button></div></div>
+    <PageHeader
+      eyebrow={isOperations ? 'Daily operations' : 'Projects'}
+      title={isOperations ? 'Operations planner' : 'Project planner'}
+      description={isOperations ? 'Manage recurring and day-to-day work outside projects.' : 'Plan and track delivery work within projects.'}
+    >
+      {canManageBuckets && <button type="button" className={`planner-archive-trigger${bucketArchiveOpen ? ' active' : ''}`} onClick={onToggleBucketArchive} aria-label="Bucket archive" aria-pressed={bucketArchiveOpen} title="Bucket archive"><Archive size={16} /></button>}
+      <Button size="page" onClick={onAddTask}><Plus size={20} strokeWidth={1.75} /> Add {isOperations ? 'operation' : 'project task'}</Button>
+    </PageHeader>
     {bucketArchiveOpen ? archiveContent : <>
     {scopeMode === 'switch' && <div className="planner-scope-switch" role="group" aria-label="Planner workspace">
       <button type="button" className={isOperations ? 'active' : ''} aria-pressed={isOperations} onClick={() => onProjectFilterChange?.('operations')}>Daily Operations <span>{tasks.filter(task => !task.project_id).length}</span></button>
