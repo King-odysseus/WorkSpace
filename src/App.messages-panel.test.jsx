@@ -86,8 +86,8 @@ it('reports real unread totals and opens the messages panel from either end of t
   await within(messageButton).findByLabelText('25 unread messages', {}, { timeout: 20000 })
 
   const mobileNav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
-  const chatsPill = within(mobileNav).getByRole('button', { name: /Chats/ })
-  await within(chatsPill).findByText('9+', {}, { timeout: 20000 })
+  const chatsTab = within(mobileNav).getByRole('button', { name: /Chats/ })
+  await within(chatsTab).findByText('9+', {}, { timeout: 20000 })
 
   const bellButton = screen.getByRole('button', { name: 'Open workspace activity notifications' })
   await within(bellButton).findByLabelText('5 unread workspace notifications', {}, { timeout: 20000 })
@@ -99,7 +99,7 @@ it('reports real unread totals and opens the messages panel from either end of t
   fireEvent.click(messageButton)
   const panelUnderHeader = (await screen.findByRole('button', { name: /^Open Chats/ })).parentElement.parentElement
   expect(panelUnderHeader.className).toContain('sm:top-full')
-  expect(panelUnderHeader.className).not.toContain('bottom-[82px]')
+  expect(panelUnderHeader.className).not.toContain('bottom-[72px]')
   expect(header.contains(panelUnderHeader)).toBe(true)
   // The panel's own count has to come from the same totals as the badge. Read
   // off the page it would say 3, because only 3 conversation rows fit in the
@@ -111,13 +111,13 @@ it('reports real unread totals and opens the messages panel from either end of t
   expect(within(panelUnderHeader).getByRole('button', { name: 'Open Chats (3)' })).toBeTruthy()
   fireEvent.click(messageButton)
 
-  // The pill sits at the bottom, so the panel has to rise from the nav. That
+  // The TabBar sits at the bottom, so the panel has to rise from the nav. That
   // only works if it is rendered outside both the header and the nav, since
   // either one's backdrop-filter would make it the offset's containing block
   // and drag the panel up to the top of the screen.
-  fireEvent.click(chatsPill)
+  fireEvent.click(chatsTab)
   const panelAboveNav = (await screen.findByRole('button', { name: /^Open Chats/ })).parentElement.parentElement
-  expect(panelAboveNav.className).toContain('bottom-[82px]')
+  expect(panelAboveNav.className).toContain('bottom-[72px]')
   expect(panelAboveNav.className).not.toContain('top-16')
   expect(panelAboveNav.className).not.toContain('sm:top-full')
   expect(header.contains(panelAboveNav)).toBe(false)

@@ -49,6 +49,7 @@ import {
   Link2,
   List,
   LogOut,
+  Menu,
   Megaphone,
   MessageSquare,
   MoreHorizontal,
@@ -259,6 +260,10 @@ function App() {
   const [pendingComposer, setPendingComposer] = useState(null);
   const taskModalRef = useRef(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  // The activity panel and the account menu each have a home in both bars,
+  // and both bars stay mounted, so the origin says which one raised it. Without
+  // it a single click would leave the same panel in the DOM twice.
+  const [notificationOrigin, setNotificationOrigin] = useState("header");
   const [messagesOpen, setMessagesOpen] = useState(false);
   // Which control opened the messages panel. The header button and the mobile
   // bottom-nav pill share this panel, but they sit at opposite ends of the
@@ -267,6 +272,7 @@ function App() {
   const [messagesOrigin, setMessagesOrigin] = useState("header");
   const [screenShareNotificationId, setScreenShareNotificationId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileMenuOrigin, setProfileMenuOrigin] = useState("header");
   // The design gives the account menu two triggers - the header avatar and the
   // sidebar's overflow button - and both are mounted at once on desktop, so
   // they cannot share one open flag without drawing the menu twice.
@@ -320,6 +326,7 @@ function App() {
     () => localStorage.getItem("workspace-sidebar-collapsed") === "true",
   );
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const railCollapsed = sidebarCollapsed && !mobileOpen;
   const [newTask, setNewTask] = useState("");
   const [newTaskTemplate, setNewTaskTemplate] = useState("");
@@ -2216,31 +2223,36 @@ function App() {
     },
   ];
 
-  // ── Mobile bottom pill nav - two destinations to either side of Zuri, with
-  //    the rest of the app behind "More" (the drawer). Most items are looked up
-  //    in navGroups so labels, icons and unread badges stay in one place.
-  const mobilePillLabels = ["Today", "My tasks"];
+  // ── Mobile TabBar - the design's four destinations along the bottom edge,
+  //    with "More" as the fifth. The pages are looked up in navGroups so labels
+  //    and icons stay in one place; "More" slides the sidebar in, which is how
+  //    the rest of the nav stays reachable on a phone.
   const navItemsByLabel = new Map(
     navGroups.flatMap((group) => group.items).map((item) => [item.label, item]),
   );
-  const mobilePillItems = [
-    ...mobilePillLabels.map((label) => navItemsByLabel.get(label)),
-    {
-      label: "Chats",
-      icon: MessageSquare,
-      badge: unreadConversationCount,
-      badgeTone: "info",
-      active: ["Chats", "Channels"].includes(active),
-      onSelect: () => toggleMessages("nav"),
-    },
-  ].filter(Boolean);
-  // Zuri holds the bar's exact centre, so the tiles are split into two halves
-  // that each take the same half of the bar; a single run of five tiles would
-  // always leave the middle tile half a tile off centre. "More" is rendered
-  // with the right-hand half, which is why three labels are enough here.
-  const mobileNavLeft = mobilePillItems.slice(0, 2);
-  const mobileNavRight = mobilePillItems.slice(2);
-  const renderMobileNavItem = ({ label, icon: Icon, badge, badgeTone, active: itemActive, onSelect }) => {
+  const mobileTabItems = [
+    ["Today", "Today"],
+    // The design labels this tab "Tasks"; the page it opens is "My tasks".
+    ["Tasks", "My tasks"],
+    ["Planner", "Planner"],
+    ["Chats", "Chats"],
+  ]
+    .map(([label, page]) => {
+      const item = navItemsByLabel.get(page);
+      if (!item) return null;
+      // Chats opens the chat panel rather than the Chats page, which is what the
+      // bottom bar did before the design; the page is reachable from "More".
+      return label === "Chats"
+        ? {
+            ...item,
+            label,
+            badge: unreadConversationCount,
+            onSelect: () => toggleMessages("nav"),
+          }
+        : { ...item, label };
+    })
+    .filter(Boolean);
+  const renderMobileTab = ({ label, icon: Icon, badge, active: itemActive, onSelect }) => {
     const isItemActive = itemActive ?? active === label;
     return (
       <button
@@ -2249,30 +2261,144 @@ function App() {
         onClick={onSelect || (() => setActive(label))}
         aria-current={isItemActive ? "page" : undefined}
         className={cn(
-          "mobile-nav-item relative flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+          "flex min-w-0 flex-1 flex-col items-center gap-1 pb-4 pt-3 transition-colors",
           isItemActive
-            ? "is-active"
-            : "text-white/60 hover:bg-white/5 hover:text-white",
+            ? "font-semibold text-primary"
+            : "font-medium text-text-muted hover:text-text-primary",
         )}
       >
-        <Icon size={18} className="shrink-0" />
-        <span className="max-w-full truncate px-0.5 text-[10px] font-semibold leading-none">
+        <span className="relative flex shrink-0 items-center justify-center">
+          <Icon size={20} aria-hidden="true" />
+          {/* The design's TabBar draws no badge, but the unread count was the
+              only one on this bar before the redesign, so it keeps the badge
+              the design already uses on the AppBar bell. */}
+          {badge > 0 && (
+            <span
+              aria-label={`${badge} unread messages`}
+              className="absolute -right-2 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface"
+            >
+              {badge > 9 ? "9+" : badge}
+            </span>
+          )}
+        </span>
+        <span className="max-w-full truncate text-[10px] leading-none">
           {label}
         </span>
-        {badge > 0 && (
-          <span
-            className={cn(
-              "absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
-              badgeTone === "info" ? "bg-info text-white" : "bg-danger text-white",
-              isItemActive && "bg-navy text-white",
-            )}
-          >
-            {badge > 9 ? "9+" : badge}
-          </span>
-        )}
       </button>
     );
   };
+
+  // The search results list is one piece of markup with two homes - the desktop
+  // header field and the mobile AppBar's search row - so it is written once.
+  // Both are gated on the same state and each sits inside a container that is
+  // display:none at the other's width, so only one is ever on screen.
+  const renderSearchResults = () => (
+    <div
+      className="absolute left-0 right-0 top-full z-[60] mt-2 max-h-96 overflow-y-auto rounded-xl border border-border bg-surface shadow-elevated"
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      {globalSearchLoading && (
+        <p className="px-4 py-3 text-xs text-text-muted">Searching…</p>
+      )}
+      {!globalSearchLoading && !globalSearchResults.length && (
+        <p className="px-4 py-3 text-xs text-text-muted">
+          No matches for "{searchQuery.trim()}".
+        </p>
+      )}
+      {globalSearchResults.map((result) => (
+        <button
+          key={`${result.kind}-${result.id}`}
+          type="button"
+          onClick={() => openSearchResult(result)}
+          className="flex w-full flex-col items-start gap-1 border-b border-border-light px-4 py-2.5 text-left last:border-0 hover:bg-surface-secondary"
+        >
+          <span className="flex items-center gap-2 text-xs font-semibold text-text-primary">
+            <Badge variant="outline">
+              {searchResultLabels[result.kind] || result.kind}
+            </Badge>
+            {result.title}
+          </span>
+          {result.snippet && (
+            <span className="truncate text-xs text-text-muted">
+              {result.snippet}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
+  // Same again for the activity list: the desktop header anchors it under the
+  // bell, the mobile AppBar pins it under the bar, and only the position
+  // differs. Each caller supplies its own offset.
+  const renderNotificationsPanel = (positionClass) => (
+    <div
+      className={cn(
+        "z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated",
+        positionClass,
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
+        <p className="text-xs font-bold text-text-primary">
+          Workspace activity
+        </p>
+        <button
+          type="button"
+          onClick={markNotificationsRead}
+          className="text-[11px] font-medium text-primary hover:underline"
+        >
+          Mark all read
+        </button>
+      </div>
+      <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
+        {activityNotifications.length ? (
+          activityNotifications.slice(0, 5).map((notification) => (
+            <button
+              type="button"
+              key={notification.id}
+              onClick={() => openNotification(notification)}
+              aria-label={`Open ${notification.title}`}
+              className={`group flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
+            >
+              <span
+                className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`}
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
+                  {notification.title}
+                </span>
+                <span className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-text-muted">
+                  {notification.body || "Workspace update"}
+                </span>
+                <time
+                  className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted"
+                  dateTime={notification.created_at}
+                >
+                  <Clock3 size={10} aria-hidden="true" />
+                  {formatDateTime(notification.created_at)}
+                </time>
+              </span>
+            </button>
+          ))
+        ) : (
+          <EmptyState text="No workspace activity yet." />
+        )}
+      </div>
+      <div className="border-t border-border-light px-3.5 py-2">
+        <button
+          type="button"
+          onClick={() => {
+            setNotificationOpen(false);
+            setActive("Notifications");
+          }}
+          className="text-[11px] font-semibold text-primary hover:underline"
+        >
+          View all workspace activity
+        </button>
+      </div>
+    </div>
+  );
 
   // One panel, two places to stand it. The header owns a backdrop-filter, which
   // makes it the containing block for its fixed descendants, so a panel rendered
@@ -2684,37 +2810,168 @@ function App() {
 
       {/* ── Main ── */}
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="relative z-30 flex h-16 shrink-0 items-center border-b border-border bg-surface px-4 lg:gap-6 lg:px-6">
-          {/* Breadcrumb - on phones this column holds the app mark instead, which
-              the sidebar's brand block cannot show while it is off-canvas. The
-              column is a fixed 272px on desktop so the search after it starts on
-              the design's 320px, and the utility cluster is pushed right by
-              ml-auto rather than by a matching flex-1 on this side. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-[272px] lg:flex-none">
-            <img
-              src="/tijha-logo.png"
-              alt="TijhaBooks"
-              className="size-8 shrink-0 rounded-icon object-contain lg:hidden"
-            />
-            <span className="truncate text-[15px] font-bold tracking-[-0.2px] text-text-primary lg:hidden">
-              WorkSpace
-            </span>
+        {/* ── Mobile AppBar - the design's phone bar. It is one 56px row: a menu
+            button at 16, the page title at 48, and four 28px controls whose
+            right edge lands on 374, which is the 390 frame less its 16 margin.
+            The menu button carries -ml-2 so its 20px glyph sits on 16 while the
+            button itself keeps a 36px hit area, and the title then follows 8px
+            later on 48. Hidden at lg, where the header below takes over. ── */}
+        <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-surface px-4 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            aria-expanded={mobileOpen}
+            aria-haspopup="menu"
+            aria-label="Open navigation"
+            className="-ml-2 flex size-9 shrink-0 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+          >
+            <Menu size={20} />
+          </button>
+          <span className="min-w-0 flex-1 truncate text-[16px] font-semibold text-text-primary">
+            {active}
+          </span>
 
+          <div className="flex shrink-0 items-center gap-2">
+            {/* The design draws the search as an icon rather than a field, so
+                tapping it reveals the field in a row under the bar. It is the
+                same query as the desktop header's - one state, two fields, and
+                never both on screen. */}
+            <button
+              type="button"
+              onClick={() => setMobileSearchOpen((current) => !current)}
+              aria-expanded={mobileSearchOpen}
+              aria-label="Open search"
+              className="flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+            >
+              <Search size={20} />
+            </button>
+
+            {/* The AppBar's assistant is not the header's Assistant button. The
+                design strokes this one with its navy on the navy tint, where the
+                header button uses the info pair. bg-selected is the app's name
+                for that tint and it has a dark counterpart, which a hardcoded
+                #E7EEF6 would not. */}
+            {!aiLauncherHidden && !aiMinimized && activeWorkspaceId && (
+              <button
+                type="button"
+                onClick={() => setAiFlyoutOpen(true)}
+                className="mobile-nav-zuri flex size-7 shrink-0 items-center justify-center rounded-badge bg-selected text-primary transition-colors hover:bg-alert-info-stroke/40"
+                aria-label="Ask Zuri"
+                aria-haspopup="dialog"
+                title="Ask Zuri"
+              >
+                <Sparkles size={20} />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationOrigin("appbar");
+                setNotificationOpen((current) => !current);
+              }}
+              className="relative flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+              aria-label="Open workspace activity"
+            >
+              <Bell size={20} />
+              {/* The design puts the count on the bell's own 28px box rather
+                  than on the bar, a 14px roundel against that box's top-right
+                  corner, and draws no ring around it. */}
+              {unreadActivityNotificationCount > 0 && (
+                <span
+                  aria-label={`${unreadActivityNotificationCount} unread workspace notifications`}
+                  className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[9px] font-bold leading-none text-white"
+                >
+                  {unreadActivityNotificationCount > 9
+                    ? "9+"
+                    : unreadActivityNotificationCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setProfileMenuOrigin("appbar");
+                setProfileMenuOpen((current) => !current);
+              }}
+              aria-haspopup="true"
+              aria-expanded={profileMenuOpen}
+              aria-label={`Open account menu for ${currentUserName}`}
+              className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-[10px] font-bold text-white"
+            >
+              {currentUserAvatarUrl ? (
+                <img src={currentUserAvatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                currentUserInitials
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* The revealed search field. Rendered under the bar rather than in it,
+            because the design's bar holds an icon at that slot and nothing else
+            - a field dropped in beside it would push all four controls off the
+            right edge. */}
+        {mobileSearchOpen && (
+          <div
+            className="relative z-30 border-b border-border bg-surface px-4 pb-3 lg:hidden"
+            ref={searchRef}
+          >
+            <div className="relative flex h-10 w-full items-center rounded-control border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-muted" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onFocus={() => {
+                  if (globalSearchResults.length) setGlobalSearchOpen(true);
+                }}
+                placeholder="Search Workspace"
+                aria-label="Search workspace"
+                autoFocus
+                className="shell-search h-full w-full bg-transparent pl-[42px] pr-4 text-sm text-text-primary outline-none placeholder:text-text-muted"
+              />
+              {globalSearchOpen &&
+                searchQuery.trim().length >= 2 &&
+                renderSearchResults()}
+            </div>
+          </div>
+        )}
+
+        {notificationOpen &&
+          notificationOrigin === "appbar" &&
+          renderNotificationsPanel("fixed left-4 right-4 top-[60px]")}
+
+        {profileMenuOpen && profileMenuOrigin === "appbar" && (
+          <div className="fixed left-4 right-4 top-[60px] z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-auto max-w-[calc(100vw-2rem)] animate-fade-in overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-elevated lg:hidden">
+            {profileMenuBody}
+          </div>
+        )}
+
+        {/* The design gives phones their own bar - a menu button, the page title,
+            and four controls - so this header is desktop only and the AppBar
+            above carries the small screens. */}
+        <header className="relative z-30 hidden h-16 shrink-0 items-center border-b border-border bg-surface px-4 lg:flex lg:gap-6 lg:px-6">
+          {/* The column is a fixed 272px so the search after it starts on the
+              design's 320px, and the utility cluster is pushed right by ml-auto
+              rather than by a matching flex-1 on this side. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-[272px] lg:flex-none">
             <span
               aria-hidden="true"
-              className="hidden size-7 shrink-0 items-center justify-center rounded-badge bg-primary text-body-compact font-bold text-primary-foreground lg:flex"
+              className="flex size-7 shrink-0 items-center justify-center rounded-badge bg-primary text-body-compact font-bold text-primary-foreground"
             >
               {workspaceInitial}
             </span>
-            <span className="hidden min-w-0 truncate text-label text-text-primary lg:block">
+            <span className="min-w-0 truncate text-label text-text-primary">
               {currentWorkspace?.name || "Workspace"}
             </span>
             <ChevronRight
               size={14}
               aria-hidden="true"
-              className="hidden shrink-0 text-text-muted lg:block"
+              className="shrink-0 text-text-muted"
             />
-            <span className="hidden truncate text-label font-semibold text-text-primary lg:block">
+            <span className="truncate text-label font-semibold text-text-primary">
               {active}
             </span>
           </div>
@@ -2747,43 +3004,9 @@ function App() {
               >
                 /
               </kbd>
-              {globalSearchOpen && searchQuery.trim().length >= 2 && (
-                <div
-                  className="absolute left-0 right-0 top-full z-[60] mt-2 max-h-96 overflow-y-auto rounded-xl border border-border bg-surface shadow-elevated"
-                  onMouseDown={(event) => event.preventDefault()}
-                >
-                  {globalSearchLoading && (
-                    <p className="px-4 py-3 text-xs text-text-muted">
-                      Searching…
-                    </p>
-                  )}
-                  {!globalSearchLoading && !globalSearchResults.length && (
-                    <p className="px-4 py-3 text-xs text-text-muted">
-                      No matches for "{searchQuery.trim()}".
-                    </p>
-                  )}
-                  {globalSearchResults.map((result) => (
-                    <button
-                      key={`${result.kind}-${result.id}`}
-                      type="button"
-                      onClick={() => openSearchResult(result)}
-                      className="flex w-full flex-col items-start gap-1 border-b border-border-light px-4 py-2.5 text-left last:border-0 hover:bg-surface-secondary"
-                    >
-                      <span className="flex items-center gap-2 text-xs font-semibold text-text-primary">
-                        <Badge variant="outline">
-                          {searchResultLabels[result.kind] || result.kind}
-                        </Badge>
-                        {result.title}
-                      </span>
-                      {result.snippet && (
-                        <span className="truncate text-xs text-text-muted">
-                          {result.snippet}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {globalSearchOpen &&
+                searchQuery.trim().length >= 2 &&
+                renderSearchResults()}
             </div>
           </div>
 
@@ -2854,7 +3077,10 @@ function App() {
             <div className="relative" ref={notifRef}>
               <button
                 type="button"
-                onClick={() => setNotificationOpen((current) => !current)}
+                onClick={() => {
+                  setNotificationOrigin("header");
+                  setNotificationOpen((current) => !current);
+                }}
                 className="relative flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
                 aria-label="Open workspace activity notifications"
               >
@@ -2863,63 +3089,11 @@ function App() {
                   <span aria-label={`${unreadActivityNotificationCount} unread workspace notifications`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface">{unreadActivityNotificationCount}</span>
                 )}
               </button>
-              {notificationOpen && (
-                <div className="fixed left-4 right-4 top-16 z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80">
-                  <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
-                    <p className="text-xs font-bold text-text-primary">Workspace activity</p>
-                    <button
-                      type="button"
-                      onClick={markNotificationsRead}
-                      className="text-[11px] font-medium text-primary hover:underline"
-                    >
-                      Mark all read
-                    </button>
-                  </div>
-                  <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
-                    {activityNotifications.length ? (
-                      activityNotifications
-                        .slice(0, 5)
-                        .map((notification) => (
-                          <button
-                            type="button"
-                            key={notification.id}
-                            onClick={() => openNotification(notification)}
-                            aria-label={`Open ${notification.title}`}
-                            className={`group flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
-                          >
-                            <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`} aria-hidden="true" />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
-                                {notification.title}
-                              </span>
-                              <span className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-text-muted">
-                                {notification.body || "Workspace update"}
-                              </span>
-                              <time className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
-                                <Clock3 size={10} aria-hidden="true" />
-                                {formatDateTime(notification.created_at)}
-                              </time>
-                            </span>
-                          </button>
-                        ))
-                    ) : (
-                      <EmptyState text="No workspace activity yet." />
-                    )}
-                  </div>
-                  <div className="border-t border-border-light px-3.5 py-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationOpen(false);
-                        setActive("Notifications");
-                      }}
-                      className="text-[11px] font-semibold text-primary hover:underline"
-                    >
-                      View all workspace activity
-                    </button>
-                  </div>
-                </div>
-              )}
+              {notificationOpen &&
+                notificationOrigin === "header" &&
+                renderNotificationsPanel(
+                  "fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80",
+                )}
             </div>
 
             {/* The design leaves 12px before this rule and 23px after it, so
@@ -2932,7 +3106,10 @@ function App() {
             <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
-                onClick={() => setProfileMenuOpen((current) => !current)}
+                onClick={() => {
+                  setProfileMenuOrigin("header");
+                  setProfileMenuOpen((current) => !current);
+                }}
                 aria-haspopup="true"
                 aria-expanded={profileMenuOpen}
                 aria-label={`Account menu for ${currentUserName}`}
@@ -2964,7 +3141,7 @@ function App() {
                 />
               </button>
 
-              {profileMenuOpen && (
+              {profileMenuOpen && profileMenuOrigin === "header" && (
                 <div className="absolute right-0 top-full z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
                   {profileMenuBody}
                 </div>
@@ -2977,8 +3154,8 @@ function App() {
           className="main-content flex-1 overflow-y-auto min-w-0"
           tabIndex="-1"
         >
-          {/* Bottom padding clears the fixed mobile pill nav; desktop has none. */}
-          <div className="page-content pb-28 lg:pb-0">
+          {/* Bottom padding clears the fixed mobile TabBar; desktop has none. */}
+          <div className="page-content pb-24 lg:pb-0">
             {session.user.pending_invitations?.map((invitation) => (
               <div className="workspace-status" key={invitation.id}>
                 <span>
@@ -3200,58 +3377,41 @@ function App() {
           </button>
         </div>
       )}
-      {/* ── Mobile bottom pill nav - four primary destinations plus "More",
-        which opens the same drawer as the header hamburger so the full
-        navigation stays reachable, with Zuri's circular launcher held on the
-        bar's centre line between them. Hidden while that drawer is open so the
-        pill doesn't sit dimmed under the overlay. ── */}
+      {/* ── Mobile TabBar - the design's five destinations along the bottom
+        edge, each a fifth of the width, with "More" opening the same drawer as
+        the AppBar menu button so the rest of the navigation stays reachable.
+        Hidden while that drawer is open so the bar doesn't sit under the
+        overlay. ── */}
       <nav
         ref={mobileNavRef}
         className={cn(
-          "fixed bottom-4 left-1/2 z-30 flex w-[min(calc(100vw-1rem),360px)] -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-navy/95 p-1 shadow-lg backdrop-blur transition-opacity duration-200 lg:hidden",
+          "fixed inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-surface transition-opacity duration-200 lg:hidden",
           mobileOpen && "pointer-events-none opacity-0",
         )}
         aria-label="Primary"
       >
-        <div className="flex flex-1 items-center gap-0.5">
-          {mobileNavLeft.map(renderMobileNavItem)}
-        </div>
-
-        {!aiLauncherHidden && !aiMinimized && activeWorkspaceId && (
-          <button
-            type="button"
-            onClick={() => setAiFlyoutOpen(true)}
-            className="mobile-nav-zuri"
-            aria-label="Open Zuri"
-            aria-haspopup="dialog"
-            title="Ask Zuri"
-          >
-            <Sparkles size={19} />
-          </button>
-        )}
-
-        <div className="flex flex-1 items-center gap-0.5">
-          {mobileNavRight.map(renderMobileNavItem)}
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            aria-expanded={mobileOpen}
-            aria-haspopup="menu"
-            className="mobile-nav-item flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-white/60 transition-colors hover:bg-white/5 hover:text-white"
-          >
-            <MoreHorizontal size={18} className="shrink-0" />
-            <span className="text-[10px] font-semibold leading-none">More</span>
-          </button>
-        </div>
+        {mobileTabItems.map(renderMobileTab)}
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-expanded={mobileOpen}
+          aria-haspopup="menu"
+          className="flex h-full min-w-0 flex-1 flex-col items-center gap-1 pt-3 font-medium text-text-muted transition-colors hover:text-text-primary"
+        >
+          <Menu size={20} className="shrink-0" aria-hidden="true" />
+          <span className="max-w-full truncate text-[10px] leading-none">
+            More
+          </span>
+        </button>
       </nav>
 
-      {/* The pill sits at bottom-4 and stands about 58px tall, so 82px clears it
-        with a gap. Rendered here, beside the nav rather than inside it, because
-        the nav carries a backdrop-filter of its own. */}
+      {/* The TabBar stands 64px tall, so 72px clears it with a gap. Rendered
+        here, beside the nav rather than inside it, because the nav carries a
+        backdrop-filter of its own. */}
       {messagesOpen &&
         messagesOrigin === "nav" &&
         <div ref={messagesNavPanelRef}>
-          {renderMessagesPanel("fixed bottom-[82px] left-1/2 w-[min(calc(100vw-1rem),360px)] -translate-x-1/2")}
+          {renderMessagesPanel("fixed bottom-[72px] left-1/2 w-[min(calc(100vw-1rem),360px)] -translate-x-1/2")}
         </div>}
 
       {showModal && (

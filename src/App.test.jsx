@@ -83,23 +83,21 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   // The shell is up once it has rendered its own navigation.
   await waitFor(() => expect(document.querySelectorAll('button').length).toBeGreaterThan(5), { timeout: 20000 })
 
-  // The mobile bar is a pill, and the only way its AI button can hold the bar's
-  // true centre is for the tiles to sit in two halves that each take the same
-  // share of the bar. Five tiles in one run would leave the middle one off centre.
+  // The mobile bar is the design's TabBar: five equal fifths along the bottom
+  // edge. Four are pages and the fifth opens the drawer. Zuri has moved up into
+  // the AppBar, so this bar no longer carries it.
   const nav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
-  const zuri = within(nav).getByRole('button', { name: 'Open Zuri' })
-  const halves = [...nav.children].filter(child => child.tagName === 'DIV')
+  const tabs = [...nav.children]
 
-  expect(nav.className).toContain('rounded-full')
-  expect(nav.children[1]).toBe(zuri)
-  expect(halves).toHaveLength(2)
-  expect(halves.every(half => half.className.includes('flex-1'))).toBe(true)
-  expect(halves[0].textContent).toContain('Today')
-  expect(halves[0].textContent).toContain('My tasks')
-  expect(halves[0].textContent).not.toContain('Planner')
-  expect(halves[1].textContent).toContain('Chats')
-  expect(halves[1].textContent).toContain('More')
-  expect(nav.textContent).not.toContain('Planner')
+  expect(nav.className).toContain('border-t')
+  expect(tabs).toHaveLength(5)
+  expect(tabs.every(tab => tab.className.includes('flex-1'))).toBe(true)
+  expect(tabs[0]).toHaveTextContent('Today')
+  expect(tabs[1]).toHaveTextContent('Tasks')
+  expect(tabs[2]).toHaveTextContent('Planner')
+  expect(tabs[3]).toHaveTextContent('Chats')
+  expect(tabs[4]).toHaveTextContent('More')
+  expect(within(nav).queryByRole('button', { name: 'Open Zuri' })).toBeNull()
 
   // The Today page's activity strip is gone, so Activity is reached from the
   // nav. What is still worth pinning here is that it titles itself once.

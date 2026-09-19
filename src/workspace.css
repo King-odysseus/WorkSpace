@@ -1002,8 +1002,7 @@ html[data-theme='dark'] .bucket-create-form input { border-color: #28516F; backg
 .sidebar-collapsed .brand .sidebar-toggle { margin-left: 0; }
 .sidebar-collapsed .nav-item { justify-content: center; padding-inline: 0; }
 .sidebar-collapsed .profile { justify-content: center; padding-inline: 0; }
-.mobile-pill-nav { display: none; }
-@media (max-width: 750px) { .sidebar, .sidebar-collapsed .sidebar { display: none; } .mobile-pill-nav { position: fixed; left: 50%; bottom: 16px; z-index: 25; display: flex; max-width: calc(100vw - 24px); overflow-x: auto; transform: translateX(-50%); gap: 4px; padding: 5px; border: 1px solid #28516F; border-radius: 18px; background: #0B223AEE; box-shadow: 0 12px 28px #02051f40; scrollbar-width: none; } .mobile-pill-nav::-webkit-scrollbar { display: none; } .mobile-pill-nav button { flex: 0 0 40px; display: grid; place-items: center; width: 40px; height: 36px; border: 0; border-radius: 999px; background: transparent; color: #B9CCDD; cursor: pointer; } .mobile-pill-nav button.active { background: var(--blue); color: #FFFFFF; } .page-content { padding-bottom: 92px; } }
+@media (max-width: 750px) { .sidebar, .sidebar-collapsed .sidebar { display: none; } }
 
 /* Keep shared surfaces and controls aligned with the selected theme. */
 :root { --workspace-surface: var(--color-surface); --workspace-surface-soft: var(--color-surface-secondary); --workspace-text: var(--color-text-primary); --workspace-text-soft: var(--color-text-secondary); --workspace-border: var(--color-border); --workspace-on-accent: var(--color-accent-foreground); }
@@ -1040,13 +1039,11 @@ html[data-theme='dark'] .reply-context,
 html[data-theme='dark'] .bucket-create-form input { background: #102A46; }
 html[data-theme='dark'] .task-drawer,
 html[data-theme='dark'] .notification-panel,
-html[data-theme='dark'] .mobile-pill-nav,
 html[data-theme='dark'] .error-boundary > div { background: #0D2945; }
 html[data-theme='dark'] .report-bar-row > div,
 html[data-theme='dark'] .report-member-row,
 html[data-theme='dark'] .tab.active { background-color: #173150; }
 html[data-theme='dark'] .calendar-view-switcher button.active,
-html[data-theme='dark'] .mobile-pill-nav button.active { background: var(--blue); color: #FFFFFF; }
 html[data-theme='dark'] .notification-panel-heading,
 html[data-theme='dark'] .notification-row { border-color: #294461; }
 html[data-theme='dark'] .notification-row:hover { background: #173150; }
@@ -1498,49 +1495,9 @@ html[data-theme='light'] .theme-toggle {
   color: var(--navy);
 }
 
-html[data-theme='light'] .mobile-pill-nav {
-  background: rgb(11 11 69 / 96%);
-  border-color: rgb(255 255 255 / 12%);
-}
-
-/* The live mobile nav is rendered from main.jsx with Tailwind classes, so its
-   selected item is the one piece it cannot express: --brand-accent has no
-   Tailwind token (see the note above :root). The bar itself is already a pill,
-   so the selection is a soft rounded box with a gold rule under it rather than
-   the filled pill it used to be. */
-.mobile-nav-item { border-radius: 12px; }
-.mobile-nav-item.is-active {
-  background: rgb(255 255 255 / 8%);
-  color: #FFFFFF;
-}
-.mobile-nav-item.is-active svg { color: var(--brand-accent); }
-.mobile-nav-item.is-active::after {
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  width: 16px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--brand-accent);
-  content: "";
-  transform: translateX(-50%);
-}
-
-/* Zuri sits in the bar itself, on the bar's centre line between the two halves
-   of the nav. It keeps the desktop launcher's white/gold treatment so the AI
-   reads the same in both places. */
-.mobile-nav-zuri {
-  display: grid;
-  flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border: 1px solid #C49A6C;
-  border-radius: 50%;
-  background: #FFFFFF;
-  color: #90673F;
-  box-shadow: 0 6px 16px rgb(2 5 31 / 32%);
-}
+/* The AppBar's Zuri button carries Tailwind classes for its size, shape and
+   colour, but the focus ring is not something Tailwind can express here without
+   reaching for an arbitrary value, so it stays a rule. */
 .mobile-nav-zuri:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 
 /* Use one WorkSpace popup treatment for dialogs, drawers, notifications, and menus. */

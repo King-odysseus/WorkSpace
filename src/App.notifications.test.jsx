@@ -79,7 +79,7 @@ it('separates message alerts from workspace activity across the header and mobil
 
   const mobileNav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   expect(within(mobileNav).getByRole('button', { name: /Chats/ })).toBeInTheDocument()
-  expect(within(mobileNav).queryByRole('button', { name: /Planner/ })).not.toBeInTheDocument()
+  expect(within(mobileNav).getByRole('button', { name: /Planner/ })).toBeInTheDocument()
 
   const messageButton = await screen.findByRole('button', { name: 'Open messages' }, { timeout: 20000 })
   expect(await within(messageButton).findByLabelText('2 unread messages')).toBeInTheDocument()
@@ -101,12 +101,12 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(screen.queryByText('Deployment finished')).not.toBeInTheDocument()
   fireEvent.click(messageButton)
 
-  // The mobile pill opens that same panel, so tapping it lists the alerts
+  // The mobile TabBar opens that same panel, so tapping it lists the alerts
   // instead of dropping straight into the newest unread thread.
-  const chatsPill = within(mobileNav).getByRole('button', { name: /Chats/ })
-  fireEvent.click(chatsPill)
+  const chatsTab = within(mobileNav).getByRole('button', { name: /Chats/ })
+  fireEvent.click(chatsTab)
   expect(await screen.findByRole('button', { name: 'Open New direct message' })).toBeInTheDocument()
-  fireEvent.click(chatsPill)
+  fireEvent.click(chatsTab)
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Open New direct message' })).not.toBeInTheDocument())
 
   const bellButton = screen.getByRole('button', { name: 'Open workspace activity notifications' })
