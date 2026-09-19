@@ -7362,6 +7362,7 @@ function WorkspaceView({
         currentUserName={currentUserName}
         projects={localData.projects}
         buckets={localData.buckets}
+        members={localData.members}
         onAddTask={onAddTask}
         onOpenTask={onOpenTask}
         onComplete={onComplete}

@@ -296,7 +296,9 @@ it('presents task completion as a labelled checkbox with the correct next action
     />,
   )
 
-  fireEvent.click(screen.getByRole('button', { name: /Completed 1/ }))
+  // Completed work moved behind the rail's "Recently completed" card, which
+  // swaps the list for the completed one rather than adding a tab beside it.
+  fireEvent.click(screen.getByRole('button', { name: 'View all completed' }))
   const completed = screen.getByRole('checkbox', { name: 'Reopen Review copy' })
   expect(completed).toHaveAttribute('aria-checked', 'true')
   expect(completed).toHaveAttribute('title', 'Reopen task')
