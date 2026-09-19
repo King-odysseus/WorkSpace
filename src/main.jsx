@@ -7050,7 +7050,7 @@ function WorkspaceView({
           <div className="project-detail-tabs" role="tablist" aria-label="Project sections">
             <button type="button" className={!projectOperation ? "active" : ""} role="tab" aria-selected={!projectOperation} onClick={() => setProjectOperation("")}>Overview</button>
             <button type="button" className={projectOperation === "kanban" ? "active" : ""} role="tab" aria-selected={projectOperation === "kanban"} onClick={() => openOperation("kanban")}>Kanban</button>
-            <button type="button" className={projectOperation === "tasks" ? "active" : ""} role="tab" aria-selected={projectOperation === "tasks"} onClick={() => { window.dispatchEvent(new CustomEvent("planner:project", { detail: String(selectedProjectWorkspace.id) })); onNavigate("Planner"); }}>Tasks</button>
+            <button type="button" className={projectOperation === "tasks" ? "active" : ""} role="tab" aria-selected={projectOperation === "tasks"} onClick={() => openOperation("tasks")}>Tasks</button>
             <button type="button" className={projectOperation === "risks" ? "active" : ""} role="tab" aria-selected={projectOperation === "risks"} onClick={() => openOperation("risks")}>Risks</button>
             <button type="button" className={projectOperation === "issues" ? "active" : ""} role="tab" aria-selected={projectOperation === "issues"} onClick={() => openOperation("issues")}>Issues</button>
             <button type="button" className={projectOperation === "resources" ? "active" : ""} role="tab" aria-selected={projectOperation === "resources"} onClick={() => openOperation("resources")}>Resources</button>
@@ -7097,6 +7097,35 @@ function WorkspaceView({
               canManage={canManageMembers}
             />
           )}
+          {projectOperation === "kanban" && (
+            <section className="project-operation-surface project-kanban-surface">
+              <div className="project-operation-toolbar"><span className="eyebrow">Project flow</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All owners <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">All priorities <ChevronDown size={14} /></button></div>
+              <div className="project-kanban-columns">
+                {["Backlog", "Planned", "In progress", "In review", "Blocked", "Done", "Archived"].map((bucket) => {
+                  const bucketTasks = projectTasks.filter((task) => {
+                    const status = String(task.status || "").toLowerCase().replaceAll("_", "-");
+                    if (bucket === "Done") return status === "done" || status === "completed";
+                    if (bucket === "Blocked") return status === "blocked";
+                    if (bucket === "In progress") return status === "in-progress" || status === "doing";
+                    if (bucket === "In review") return status === "review" || status === "in-review";
+                    if (bucket === "Archived") return status === "archived";
+                    if (bucket === "Planned") return status === "planned" || status === "todo";
+                    return status === "backlog" || !status;
+                  });
+                  return <div className="project-kanban-column" key={bucket}><div className="project-kanban-column-heading"><span>{bucket}</span><strong>{bucketTasks.length}</strong></div>{bucketTasks.map((task) => <button type="button" className="project-kanban-task" key={task.id} onClick={() => onOpenTask(task)}><strong>{task.title}</strong><span>{task.priority || "Normal"}</span></button>)}</div>;
+                })}
+              </div>
+            </section>
+          )}
+          {projectOperation === "tasks" && (
+            <section className="project-operation-surface project-task-table-surface">
+              <div className="project-operation-toolbar"><span className="eyebrow">Project tasks</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All statuses <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">Sort by due date <ChevronDown size={14} /></button></div>
+              <div className="project-task-table" role="table" aria-label="Project tasks"><div className="project-task-table-row project-task-table-head" role="row"><span>Task</span><span>Status</span><span>Priority</span><span>Due date</span><span>Owner</span></div>{projectTasks.slice(0, 8).map((task) => <button type="button" className="project-task-table-row" role="row" key={task.id} onClick={() => onOpenTask(task)}><strong>{task.title}</strong><span>{task.status || "Planned"}</span><span>{task.priority || "Normal"}</span><span>{task.due_date ? formatDay(task.due_date) : "—"}</span><span>{task.assignee_name || task.owner_name || "Unassigned"}</span></button>)}{!projectTasks.length && <p className="project-detail-empty">No tasks are linked to this project.</p>}</div>
+            </section>
+          )}
+          {projectOperation === "issues" && (
+            <ProjectRiskIssuePanel projects={[selectedProjectWorkspace]} workspaceId={workspaceId} tasks={tasks} canManage={canManageMembers} />
+          )}
           {projectOperation === "resources" && (
             <ProjectStakeholderResourcePanel
               project={selectedProjectWorkspace}
@@ -7121,6 +7150,9 @@ function WorkspaceView({
                 onRefresh();
               }}
             />
+          )}
+          {projectOperation === "activity" && (
+            <section className="project-operation-surface project-activity-surface"><div className="project-operation-toolbar"><span className="eyebrow">Project activity</span><strong>Recent updates</strong><button type="button" className="project-operation-filter">All activity <ChevronDown size={14} /></button></div><div className="project-activity-list">{(localData.activity || []).filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)).map((item) => <div className="project-activity-row" key={item.id}><RefreshCw size={16} /><div><strong>{item.description || item.message || "Project activity updated"}</strong><small>{formatRelativeActivityTime(item.created_at || item.updated_at)}</small></div></div>)}{!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && <p className="project-detail-empty">No activity has been recorded for this project.</p>}</div></section>
           )}
           {selectedProject && (
             <ProjectEditDrawer
