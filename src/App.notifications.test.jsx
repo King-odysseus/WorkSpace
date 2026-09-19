@@ -82,7 +82,7 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(within(mobileNav).queryByRole('button', { name: /Planner/ })).not.toBeInTheDocument()
 
   const messageButton = await screen.findByRole('button', { name: 'Open messages' }, { timeout: 20000 })
-  expect(within(messageButton).getByLabelText('2 unread messages')).toBeInTheDocument()
+  expect(await within(messageButton).findByLabelText('2 unread messages')).toBeInTheDocument()
 
   // The panel lists channel and direct alerts together, newest first, and leaves
   // workspace activity to the bell.
