@@ -139,6 +139,16 @@ function formatDayMonthName(value) {
   return `${Number(match[3])} ${MONTH_NAMES[Number(match[2]) - 1].slice(0, 3)}`
 }
 
+// '3h' / '45m' - a duration short enough to sit inside a row's meta line and
+// beside a bucket heading. It rounds to one decimal, so 3h45m reads as 3.8h
+// rather than pretending to a precision the estimate never had.
+function formatEstimateMinutes(minutes) {
+  const value = Number(minutes)
+  if (!value) return ''
+  if (value < 60) return `${Math.round(value)}m`
+  return `${Number((value / 60).toFixed(1))}h`
+}
+
 function taskSearchText(task) {
   return [task.title, task.description, task.member, task.tag, task.bucket, ...(task.labels || [])].filter(Boolean).join(' ').toLowerCase()
 }
@@ -160,7 +170,10 @@ function mapTaskFromApi(apiTask, { today, workspaceRole, currentUserId } = {}) {
     completed_at: apiTask.completed_at || '',
     created_at: apiTask.created_at || '',
     updated_at: apiTask.updated_at || '',
-    estimate: 'n/a',
+    // Minutes, or null when nobody has estimated the work. `estimate` is the
+    // same fact pre-rendered for the older task card, which prints it as-is.
+    estimate_minutes: apiTask.estimate_minutes ?? null,
+    estimate: apiTask.estimate_minutes ? formatEstimateMinutes(apiTask.estimate_minutes) : 'n/a',
     can_edit: ['owner', 'manager'].includes(workspaceRole) || (apiTask.assignee_ids || []).includes(currentUserId) || apiTask.assignee_id === currentUserId,
     recurrence: apiTask.recurrence || 'none',
     assignee_id: apiTask.assignee_id || '',
@@ -213,6 +226,24 @@ function formatRelativeActivityTime(value) {
   if (minutes < 60) return `${minutes}m ago`
   if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+// Recently completed work reads as elapsed time while it is fresh and as a
+// date once it is not. This is deliberately not formatRelativeActivityTime:
+// past a day that one falls back to a bare clock time, which would date a
+// three-week-old task as today.
+function formatCompletedAgo(value, today = toDateKey(new Date())) {
+  if (!value) return ''
+  const key = toDateKey(value)
+  if (!key) return ''
+  if (key === today) {
+    const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000))
+    if (minutes < 1) return 'Just now'
+    if (minutes < 60) return `${minutes}m ago`
+    return `${Math.floor(minutes / 60)}h ago`
+  }
+  if (key === shiftDateKey(today, -1)) return 'Yesterday'
+  return formatDayMonthName(key)
 }
 
 // Deliberately not formatRelativeActivityTime: that one degrades to a bare
@@ -380,6 +411,8 @@ export {
   formatLongDate,
   formatTodayEyebrow,
   formatDayMonthName,
+  formatCompletedAgo,
+  formatEstimateMinutes,
   taskSearchText,
   mapTaskFromApi,
   taskAssigneeLabel,
