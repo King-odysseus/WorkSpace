@@ -2119,9 +2119,9 @@ html[data-theme='dark'] .inline-delete:hover, html[data-theme='dark'] .task-more
 html[data-theme='dark'] .report-toolbar > .secondary-button { border-color: #28516f; background: #123a5b; color: #7dd3c7; }
 .report-toolbar > .secondary-button { box-shadow: 5px 6px 12px rgb(7 26 46 / 13%), -4px -4px 10px rgb(255 255 255 / 72%), inset 0 1px 0 rgb(255 255 255 / 75%); }
 html[data-theme='dark'] .report-toolbar > .secondary-button { box-shadow: 5px 6px 13px rgb(2 5 31 / 38%), -3px -3px 8px rgb(255 255 255 / 4%), inset 0 1px 0 rgb(255 255 255 / 5%); }
-.settings-shell { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 24px; align-items: start; }
-.settings-nav { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface); }
-.settings-nav button { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--workspace-text-soft); text-align: left; font: 600 11px 'Roboto'; cursor: pointer; }
+.settings-shell { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 32px; align-items: start; }
+.settings-nav { display: grid; gap: 0; padding: 12px 8px; border: 1px solid var(--workspace-border); border-radius: 12px; background: var(--workspace-surface); }
+.settings-nav button { display: flex; min-height: 36px; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--workspace-text-soft); text-align: left; font: 400 14px 'Roboto'; cursor: pointer; }
 .settings-nav button:hover { background: var(--workspace-surface-soft); color: var(--workspace-text); }
 .settings-nav button.active { background: #EAF0FF; color: #1D4ED8; font-weight: 700; }
 .settings-content { min-width: 0; }
@@ -8290,7 +8290,7 @@ html[data-theme="dark"] .auth-error {
 
 /* Settings on phones behaves as an index first and one section second.
    Desktop keeps the existing always-visible sidebar and active panel. */
-.settings-nav-group { display:grid; gap:4px; }
+.settings-nav-group { display:grid; gap:0; }
 .settings-nav-label { display:none; }
 .settings-nav .settings-nav-link { min-width:0; }
 .settings-nav-icon { display:grid; flex:0 0 18px; place-items:center; }
