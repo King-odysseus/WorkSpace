@@ -4609,6 +4609,10 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --neutral-surface-hover: #F3F4F6;
   --neutral-border: #E5E7EB;
   --neutral-border-strong: #D1D5DC;
+  /* The design lists only border and border-strong. border-light is kept for
+     the quieter in-card dividers the app already draws, derived by lightening
+     --neutral-border on the same hue. */
+  --neutral-border-light: #F0F1F3;
   --neutral-text-primary: #101828;
   --neutral-text-secondary: #4A5565;
   --neutral-text-muted: #6A7282;
@@ -4618,6 +4622,11 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --semantic-success-bg: #ECFDF5;
   --semantic-warning: #FF6900;
   --semantic-warning-bg: #FFF7ED;
+  /* The design uses orange #FF6900 as a fill paired with warning-bg, where it
+     reads fine. Every existing foreground use in the app paints it on white,
+     where it measures about 2.6:1, so warning-text carries the darker amber
+     the app already shipped for text, icons and accents. */
+  --semantic-warning-text: #B45309;
   --semantic-error: #C70036;
   --semantic-error-bg: #FFF1F2;
   --semantic-info: #2563EB;
@@ -4731,27 +4740,29 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --radius-container: 16px;
 }
 
-/* Light values: shared WorkSpace tokens for the shadcn primitives. */
+/* Light values: shared WorkSpace tokens for the shadcn primitives. Every value
+   now points at the foundation layer above, so a change to the design system
+   reaches the primitives without editing this block. */
 :root {
-  --sc-background: #FFFFFF;
-  --sc-foreground: #1F2937;
-  --sc-card: #FFFFFF;
-  --sc-card-foreground: #1F2937;
-  --sc-popover: #FFFFFF;
-  --sc-popover-foreground: #1F2937;
-  --sc-primary: #0B0B45;
-  --sc-primary-foreground: #FFFFFF;
-  --sc-secondary: #EEF2F7;
-  --sc-secondary-foreground: #1F2937;
-  --sc-muted: #F1F3F5;
-  --sc-muted-foreground: #6B7280;
-  --sc-accent: #C49A6C;
-  --sc-accent-foreground: #071A2E;
-  --sc-destructive: #C43D4B;
+  --sc-background: var(--neutral-background);
+  --sc-foreground: var(--neutral-text-primary);
+  --sc-card: var(--neutral-surface);
+  --sc-card-foreground: var(--neutral-text-primary);
+  --sc-popover: var(--neutral-surface);
+  --sc-popover-foreground: var(--neutral-text-primary);
+  --sc-primary: var(--brand-navy);
+  --sc-primary-foreground: var(--brand-navy-foreground);
+  --sc-secondary: var(--neutral-surface-hover);
+  --sc-secondary-foreground: var(--neutral-text-primary);
+  --sc-muted: var(--neutral-surface-hover);
+  --sc-muted-foreground: var(--neutral-text-muted);
+  --sc-accent: var(--brand-bronze);
+  --sc-accent-foreground: var(--brand-navy);
+  --sc-destructive: var(--semantic-error);
   --sc-destructive-foreground: #FFFFFF;
-  --sc-border: #E2E2E6;
-  --sc-input: #E2E2E6;
-  --sc-ring: #2563EB;
+  --sc-border: var(--neutral-border);
+  --sc-input: var(--neutral-border);
+  --sc-ring: var(--brand-navy-focus);
   --sc-radius: 0.75rem;
 }
 
@@ -4777,6 +4788,76 @@ html[data-theme='dark'] {
   --sc-ring: #60A5FA;
 }
 
+/* Dark counterparts for the foundation layer. The design source specifies no
+   dark theme, so these are derived from the same hues against the existing
+   navy-black surfaces: neutrals lift as they come forward, and the semantic
+   foregrounds lighten because the light-mode values fall under 4.5:1 against a
+   dark surface (warning in particular measured 3.5:1). Values match what the
+   dark @theme block below already used, so existing surfaces do not shift.
+
+   --brand-navy is deliberately NOT overridden here. The dark @theme block
+   already repoints --color-navy at the page background and --sc-primary at a
+   blue, so overriding the brand token itself would move the dark primary
+   buttons and the navy tint with it. */
+html[data-theme='dark'] {
+  --brand-navy-dark: #080820;
+  --brand-navy-hover: #1E1E4C;
+  --brand-navy-active: #12123A;
+  --brand-navy-tint: #1E1E4C;
+  --brand-navy-disabled: #4A4A72;
+
+  --neutral-background: #0C0C28;
+  --neutral-surface: #15153A;
+  --neutral-surface-hover: #20204A;
+  --neutral-border: #2A2A5C;
+  --neutral-border-strong: #3A3A6E;
+  --neutral-border-light: #20204A;
+  --neutral-text-primary: #ECECF7;
+  --neutral-text-secondary: #C2C2DC;
+  --neutral-text-muted: #8C8CAE;
+
+  --semantic-success: #4ADE80;
+  --semantic-success-bg: #153A31;
+  --semantic-warning-text: #FBBF24;
+  --semantic-warning-bg: #3D2A12;
+  --semantic-error: #FB7185;
+  --semantic-error-bg: #3D1C23;
+  --semantic-info: #93C5FD;
+  --semantic-info-bg: #132C52;
+
+  --chart-series-1: #93C5FD;
+  --chart-series-2: #60A5FA;
+  --chart-series-3: #3B82F6;
+  --chart-comparison: #94A3B8;
+  --chart-completed: #4ADE80;
+  --chart-in-progress: #FBBF24;
+  --chart-delayed: #FB7185;
+
+  --status-todo-fg: #C2C2DC;
+  --status-todo-bg: #26263F;
+  --status-progress-fg: #93C5FD;
+  --status-progress-bg: #182A4D;
+  --status-review-fg: #FDBA74;
+  --status-review-bg: #3A2415;
+  --status-blocked-fg: #FDA4AF;
+  --status-blocked-bg: #3D1620;
+  --status-hold-fg: #FDE68A;
+  --status-hold-bg: #3A3413;
+  --status-cancelled-fg: #8C8CAE;
+  --status-cancelled-bg: #23233F;
+  --status-done-fg: #6EE7B7;
+  --status-done-bg: #0E3830;
+
+  --priority-low-fg: #C2C2DC;
+  --priority-low-bg: #26263F;
+  --priority-medium-fg: #93C5FD;
+  --priority-medium-bg: #182A4D;
+  --priority-high-fg: #FDE68A;
+  --priority-high-bg: #3A3413;
+  --priority-urgent-fg: #FDA4AF;
+  --priority-urgent-bg: #3D1620;
+}
+
 /* =============================================================================
    Workspace utility tokens - lets JSX use shared WorkSpace Tailwind class
    names instead of hand-rolled CSS classes (bg-navy, text-text-on-navy, bg-surface-secondary,
@@ -4784,41 +4865,99 @@ html[data-theme='dark'] {
    tokens above so primitives (Button, Dialog, ...) are unaffected.
    ============================================================================= */
 @theme {
-  --color-navy: #0B0B45;
-  --color-navy-soft: #1c1c6e;
-  --color-navy-light: #07072e;
-  --color-text-on-navy: #FFFFFF;
+  --color-navy: var(--brand-navy);
+  --color-navy-dark: var(--brand-navy-dark);
+  --color-navy-hover: var(--brand-navy-hover);
+  --color-navy-active: var(--brand-navy-active);
+  --color-navy-tint: var(--brand-navy-tint);
+  --color-navy-focus: var(--brand-navy-focus);
+  --color-navy-disabled: var(--brand-navy-disabled);
+  /* navy-soft and navy-light are the names the shell and screen-share rules
+     were written against before the foundation layer existed. */
+  --color-navy-soft: var(--brand-navy-hover);
+  --color-navy-light: var(--brand-navy-dark);
+  --color-text-on-navy: var(--brand-navy-foreground);
 
-  --color-accent: #C49A6C;
-  --color-accent-hover: #b0895a;
-  --color-accent-soft: #F1E4D0;
+  --color-bronze: var(--brand-bronze);
+  --color-bronze-hover: var(--brand-bronze-hover);
+  --color-bronze-active: var(--brand-bronze-active);
+  --color-bronze-muted: var(--brand-bronze-muted);
+  --color-bronze-soft: var(--brand-bronze-soft);
+  --color-bronze-text: var(--brand-bronze-text);
+  /* --color-accent itself stays owned by the "@theme inline" block above;
+     accent-hover and accent-soft are new names, so they live here. */
+  --color-accent-hover: var(--brand-bronze-hover);
+  --color-accent-soft: var(--brand-bronze-soft);
 
-  --color-surface: #FFFFFF;
-  --color-surface-secondary: #F8F9FA;
-  --color-surface-elevated: #FFFFFF;
+  /* background, foreground, card, primary, secondary, muted, accent, border,
+     input and ring stay owned by the "@theme inline" block above, which maps
+     them onto the --sc-* names. Do not redefine them here. */
+  --color-surface: var(--neutral-surface);
+  --color-surface-secondary: var(--neutral-surface-hover);
+  --color-surface-hover: var(--neutral-surface-hover);
+  --color-surface-elevated: var(--neutral-surface);
 
-  --color-text-primary: #1f2937;
-  --color-text-secondary: #4b5563;
-  --color-text-muted: #6b7280;
+  --color-text-primary: var(--neutral-text-primary);
+  --color-text-secondary: var(--neutral-text-secondary);
+  --color-text-muted: var(--neutral-text-muted);
 
-  --color-border: #E2E2E6;
-  --color-border-light: #EFEFF2;
+  --color-border: var(--neutral-border);
+  --color-border-strong: var(--neutral-border-strong);
+  --color-border-light: var(--neutral-border-light);
 
-  --color-info: #2563EB;
+  --color-info: var(--semantic-info);
   --color-info-hover: #1D4ED8;
-  --color-info-soft: #EAF2FF;
+  --color-info-soft: var(--semantic-info-bg);
 
-  --color-success: #3D8B6E;
-  --color-success-soft: #E8F5EF;
+  --color-success: var(--semantic-success);
+  --color-success-soft: var(--semantic-success-bg);
 
-  --color-warning: #B45309;
-  --color-warning-soft: #FFF4E5;
+  /* warning is the readable amber the app paints on white; warning-fill is the
+     design's orange, for fills that sit on warning-soft. */
+  --color-warning: var(--semantic-warning-text);
+  --color-warning-fill: var(--semantic-warning);
+  --color-warning-soft: var(--semantic-warning-bg);
 
-  --color-danger: #C43D4B;
-  --color-danger-soft: #FDECEE;
-  --color-danger-bg: #FEF2F2;
+  --color-danger: var(--semantic-error);
+  --color-danger-soft: var(--semantic-error-bg);
+  --color-danger-bg: var(--semantic-error-bg);
 
-  --shadow-elevated: 0 12px 40px -12px rgb(38 34 98 / 0.16);
+  /* Task status and priority pairs. Always render the pair together, with the
+     status word, and an icon for Done, Blocked and Review. */
+  --color-status-todo: var(--status-todo-fg);
+  --color-status-todo-bg: var(--status-todo-bg);
+  --color-status-progress: var(--status-progress-fg);
+  --color-status-progress-bg: var(--status-progress-bg);
+  --color-status-review: var(--status-review-fg);
+  --color-status-review-bg: var(--status-review-bg);
+  --color-status-blocked: var(--status-blocked-fg);
+  --color-status-blocked-bg: var(--status-blocked-bg);
+  --color-status-hold: var(--status-hold-fg);
+  --color-status-hold-bg: var(--status-hold-bg);
+  --color-status-cancelled: var(--status-cancelled-fg);
+  --color-status-cancelled-bg: var(--status-cancelled-bg);
+  --color-status-done: var(--status-done-fg);
+  --color-status-done-bg: var(--status-done-bg);
+
+  --color-priority-low: var(--priority-low-fg);
+  --color-priority-low-bg: var(--priority-low-bg);
+  --color-priority-medium: var(--priority-medium-fg);
+  --color-priority-medium-bg: var(--priority-medium-bg);
+  --color-priority-high: var(--priority-high-fg);
+  --color-priority-high-bg: var(--priority-high-bg);
+  --color-priority-urgent: var(--priority-urgent-fg);
+  --color-priority-urgent-bg: var(--priority-urgent-bg);
+
+  --color-chart-series-1: var(--chart-series-1);
+  --color-chart-series-2: var(--chart-series-2);
+  --color-chart-series-3: var(--chart-series-3);
+  --color-chart-comparison: var(--chart-comparison);
+  --color-chart-completed: var(--chart-completed);
+  --color-chart-in-progress: var(--chart-in-progress);
+  --color-chart-delayed: var(--chart-delayed);
+
+  --shadow-elevated: var(--elevation-modal);
+  --shadow-card: var(--elevation-card);
 }
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-4px); }

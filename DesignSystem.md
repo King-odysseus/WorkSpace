@@ -1,6 +1,6 @@
 # WorkSpace Design System
 
-Last updated: 14 September 2026
+Last updated: 19 September 2026
 
 ## Source Of Truth
 
@@ -86,11 +86,12 @@ WorkSpace should feel calm, focused, and operational:
 
 ## Token Layers
 
-`workspace.css` stacks five token families. Before adding or changing a colour,
+`workspace.css` stacks six token families. Before adding or changing a colour,
 identify which family owns it.
 
 | Family | Declared in | Owns | Dark remap |
 | --- | --- | --- | --- |
+| Foundation (`--brand-*`, `--neutral-*`, `--semantic-*`, `--chart-*`, `--status-*`, `--priority-*`) | The `:root` block immediately before the `--sc-*` light set | The values themselves. Both layers below alias into it, so this is the only place a colour is defined. | Yes, `html[data-theme='dark']` directly after the `--sc-*` dark set |
 | `--sc-*` | `:root` and `html[data-theme='dark']` just before the `Workspace utility tokens` layer | Every `src/components/ui/` primitive, through the `@theme inline` block | Yes, a full second `:root` set |
 | `--color-*` | The `@theme` block in `Workspace utility tokens` | The WorkSpace Tailwind class names (`bg-navy`, `text-accent`, `bg-surface`, `text-text-primary`, and the rest) | Yes, `html[data-theme='dark']` immediately after the block |
 | Legacy aliases | The `:root` block near line 191 | Older rules still in the legacy base layer | Mostly, because most of them alias `--color-*` |
@@ -99,44 +100,112 @@ identify which family owns it.
 
 Two traps live in this stack:
 
-- The `@theme inline` block near line 4293 declares shadcn names that share the
-  `--color-*` prefix with the utility tokens (`--color-background`, `--color-card`,
+- The `@theme inline` block declares shadcn names that share the `--color-*`
+  prefix with the utility tokens (`--color-background`, `--color-card`,
   `--color-primary`, `--color-border`, `--color-accent`, and so on). They map to
-  `--sc-*` and are a different set from the utility tokens. `--color-accent` and
-  `--color-border` appear in both blocks, so read both before changing either.
+  `--sc-*` and are a different set from the utility tokens. `--color-background`,
+  `--color-accent` and `--color-border` are owned there, and the utility
+  `@theme` block deliberately does not restate them, so each name has exactly
+  one owner. Add a new token to the utility block, but extend one of these three
+  in the `@theme inline` block instead.
 - `--workspace-*` and `--dashboard-*` are the same values under two names. The
   `.workspace-view` block defines `--dashboard-*` and then mirrors them into
   `--workspace-*`; older components read the mirror.
+
+### Foundation Layer
+
+The values live here and nowhere else. To change what the product looks like,
+change one of these; do not restate the value in `--sc-*` or `--color-*`, and
+never paste a hex into a component.
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--brand-navy` | `#0B0B45` | `#0B0B45` (not remapped) |
+| `--brand-navy-hover` | `#101065` | `#1E1E4C` |
+| `--brand-navy-dark` | `#080831` | `#080820` |
+| `--brand-navy-active` | `#090939` | `#12123A` |
+| `--brand-navy-tint` | `#EAEAF6` | `#1E1E4C` |
+| `--brand-navy-focus` | `#2E2EB8` | `#2E2EB8` |
+| `--brand-navy-disabled` | `#A9A9C6` | `#4A4A72` |
+| `--brand-bronze` | `#C49A6C` | `#C49A6C` |
+| `--brand-bronze-hover` | `#7C5831` | `#7C5831` |
+| `--brand-bronze-soft` | `#F1E6DA` | `#F1E6DA` |
+| `--brand-bronze-text` | `#593E22` | `#593E22` |
+| `--neutral-background` | `#F9FAFB` | `#0C0C28` |
+| `--neutral-surface` | `#FFFFFF` | `#15153A` |
+| `--neutral-surface-hover` | `#F3F4F6` | `#20204A` |
+| `--neutral-border` | `#E5E7EB` | `#2A2A5C` |
+| `--neutral-border-strong` | `#D1D5DC` | `#3A3A6E` |
+| `--neutral-border-light` | `#F0F1F3` | `#20204A` |
+| `--neutral-text-primary` | `#101828` | `#ECECF7` |
+| `--neutral-text-secondary` | `#4A5565` | `#C2C2DC` |
+| `--neutral-text-muted` | `#6A7282` | `#8C8CAE` |
+| `--semantic-success` | `#007A55` | `#4ADE80` |
+| `--semantic-warning` | `#FF6900` | `#FF6900` |
+| `--semantic-warning-text` | `#B45309` | `#FBBF24` |
+| `--semantic-error` | `#C70036` | `#FB7185` |
+| `--semantic-info` | `#2563EB` | `#93C5FD` |
+
+The status and priority pairs (`--status-*-fg` / `--status-*-bg`,
+`--priority-*-fg` / `--priority-*-bg`) and the `--chart-*` sequence follow the
+same pattern. Always render a pair together, and always with the status word
+next to it.
+
+Two entries carry a deliberate second name because one value does not serve
+both roles. `--semantic-warning` is the design's orange, which measures about
+2.6:1 on white and is only safe as a fill on `--semantic-warning-bg`;
+`--semantic-warning-text` is the darker amber used for text, icons and accents.
+`--neutral-border-light` exists because the design lists only `border` and
+`border-strong`, while the app already drew quieter in-card dividers.
+
+Brand values are fixed by the design source, which marks its own navy
+(`#0E2A47`) and bronze (`#B7791F`) as provisional. WorkSpace ships `#0B0B45`
+and `#C49A6C`, so the navy and bronze ramps are derived on those hues using the
+design's lightness ladder rather than copied from its different hues.
+
+The design source specifies no dark theme. The dark column above is derived
+against the existing navy-black surfaces: neutrals lift as they come forward,
+and the semantic foregrounds lighten because the light values fall under 4.5:1
+on a dark surface. `--brand-navy` is intentionally not remapped, because the
+dark `@theme` block already repoints `--color-navy` at the page background and
+`--sc-primary` at a blue; overriding the brand token itself would drag the dark
+primary buttons with it.
 
 ### Primitives Layer (`--sc-*`)
 
 This is the layer to edit when a `Button`, `Dialog`, `Select`, `Card`, `Badge`,
 `Tabs`, `Popover`, `DropdownMenu`, `Separator`, `Alert`, `Calendar`, or
 `Skeleton` primitive needs new colours, because `@theme inline` resolves each
-`--color-*` utility to the matching `--sc-*` value.
+`--color-*` utility to the matching `--sc-*` value. Every entry now aliases a
+foundation token, so the table shows the resolved light value rather than an
+independent one.
 
-| Token | Light | Dark |
-| --- | --- | --- |
-| `--sc-background` | `#FFFFFF` | `#0C0C28` |
-| `--sc-foreground` | `#1F2937` | `#ECECF7` |
-| `--sc-card` | `#FFFFFF` | `#15153A` |
-| `--sc-card-foreground` | `#1F2937` | `#ECECF7` |
-| `--sc-popover` | `#FFFFFF` | `#15153A` |
-| `--sc-popover-foreground` | `#1F2937` | `#ECECF7` |
-| `--sc-primary` | `#0B0B45` | `#2563EB` |
-| `--sc-primary-foreground` | `#FFFFFF` | `#FFFFFF` |
-| `--sc-secondary` | `#EEF2F7` | `#1E1E4C` |
-| `--sc-secondary-foreground` | `#1F2937` | `#ECECF7` |
-| `--sc-muted` | `#F1F3F5` | `#0C0C28` |
-| `--sc-muted-foreground` | `#6B7280` | `#C2C2DC` |
-| `--sc-accent` | `#C49A6C` | `#C49A6C` |
-| `--sc-accent-foreground` | `#071A2E` | `#071A2E` |
-| `--sc-destructive` | `#C43D4B` | `#E15A67` |
-| `--sc-destructive-foreground` | `#FFFFFF` | `#FFFFFF` |
-| `--sc-border` | `#E2E2E6` | `#2A2A5C` |
-| `--sc-input` | `#E2E2E6` | `#2A2A5C` |
-| `--sc-ring` | `#2563EB` | `#60A5FA` |
-| `--sc-radius` | `0.75rem` | `0.75rem` |
+| Token | Resolves to |
+| --- | --- |
+| `--sc-background` | `--neutral-background` (`#F9FAFB`) |
+| `--sc-foreground` | `--neutral-text-primary` (`#101828`) |
+| `--sc-card` | `--neutral-surface` (`#FFFFFF`) |
+| `--sc-card-foreground` | `--neutral-text-primary` |
+| `--sc-popover` | `--neutral-surface` |
+| `--sc-popover-foreground` | `--neutral-text-primary` |
+| `--sc-primary` | `--brand-navy` (`#0B0B45`) |
+| `--sc-primary-foreground` | `--brand-navy-foreground` |
+| `--sc-secondary` | `--neutral-surface-hover` (`#F3F4F6`) |
+| `--sc-secondary-foreground` | `--neutral-text-primary` |
+| `--sc-muted` | `--neutral-surface-hover` |
+| `--sc-muted-foreground` | `--neutral-text-muted` (`#6A7282`) |
+| `--sc-accent` | `--brand-bronze` (`#C49A6C`) |
+| `--sc-accent-foreground` | `--brand-navy` (`#0B0B45`, 7.1:1 on bronze) |
+| `--sc-destructive` | `--semantic-error` (`#C70036`) |
+| `--sc-destructive-foreground` | `#FFFFFF` |
+| `--sc-border` | `--neutral-border` (`#E5E7EB`) |
+| `--sc-input` | `--neutral-border` |
+| `--sc-ring` | `--brand-navy-focus` (`#2E2EB8`) |
+| `--sc-radius` | `0.75rem` |
+
+Dark remaps `--sc-background`, `--sc-primary`, `--sc-secondary`, `--sc-muted`,
+`--sc-muted-foreground`, `--sc-destructive`, `--sc-border`, `--sc-input` and
+`--sc-ring` directly. The rest follow their foundation token into the dark set.
 
 `--radius-sm`, `--radius-md`, `--radius-lg`, and `--radius-xl` derive from
 `--sc-radius`.
@@ -151,36 +220,73 @@ app CSS.
 | Token | Light | Dark | Purpose |
 | --- | --- | --- | --- |
 | `--color-navy` | `#0B0B45` | `#0c0c28` | App shell and strong brand surface |
-| `--color-navy-soft` | `#1c1c6e` | `#1c1c6e` | Secondary navy surface |
-| `--color-navy-light` | `#07072e` | `#07072e` | Recessed navy |
+| `--color-navy-hover` | `#101065` | `#1E1E4C` | Navy hover |
+| `--color-navy-active` | `#090939` | `#12123A` | Navy pressed |
+| `--color-navy-dark` | `#080831` | `#080820` | Recessed navy |
+| `--color-navy-tint` | `#EAEAF6` | `#1E1E4C` | Faint navy wash |
+| `--color-navy-focus` | `#2E2EB8` | `#2E2EB8` | Navy focus ring |
+| `--color-navy-disabled` | `#A9A9C6` | `#4A4A72` | Disabled navy control |
+| `--color-navy-soft` | `#101065` | `#1E1E4C` | Legacy name for navy hover |
+| `--color-navy-light` | `#080831` | `#080820` | Legacy name for recessed navy |
 | `--color-text-on-navy` | `#FFFFFF` | `#FFFFFF` | Text on navy |
 | `--color-accent` | `#C49A6C` | `#C49A6C` | Gold brand accent, used sparingly |
-| `--color-accent-hover` | `#b0895a` | `#b0895a` | Gold hover |
-| `--color-accent-soft` | `#F1E4D0` | `#F1E4D0` | Soft gold background |
+| `--color-accent-hover` | `#7C5831` | `#7C5831` | Gold hover |
+| `--color-accent-soft` | `#F1E6DA` | `#F1E6DA` | Soft gold background |
 | `--color-surface` | `#FFFFFF` | `#15153a` | Primary card and panel surface |
-| `--color-surface-secondary` | `#F8F9FA` | `#0c0c28` | Secondary and recessed surface |
+| `--color-surface-secondary` | `#F3F4F6` | `#0c0c28` | Secondary and recessed surface |
+| `--color-surface-hover` | `#F3F4F6` | `#20204A` | Row and menu hover surface |
 | `--color-surface-elevated` | `#FFFFFF` | `#1e1e4c` | Raised menus and popovers |
-| `--color-text-primary` | `#1F2937` | `#ECECF7` | Primary text |
-| `--color-text-secondary` | `#4B5563` | `#C2C2DC` | Supporting text |
-| `--color-text-muted` | `#6B7280` | `#8C8CAE` | Metadata and quiet labels |
-| `--color-border` | `#E2E2E6` | `#2a2a5c` | Standard border |
-| `--color-border-light` | `#EFEFF2` | `#20204a` | Subtle divider |
+| `--color-text-primary` | `#101828` | `#ECECF7` | Primary text |
+| `--color-text-secondary` | `#4A5565` | `#C2C2DC` | Supporting text |
+| `--color-text-muted` | `#6A7282` | `#8C8CAE` | Metadata and quiet labels |
+| `--color-border` | `#E5E7EB` | `#2a2a5c` | Standard border |
+| `--color-border-strong` | `#D1D5DC` | `#3A3A6E` | Emphasis border, selected field |
+| `--color-border-light` | `#F0F1F3` | `#20204a` | Subtle divider |
+
+#### Status And Priority
+
+Each status and priority ships a fixed foreground and background pair. Use
+`text-status-<name>` on `bg-status-<name>-bg`, render the pair with its status
+word, and add the icon for Done, Blocked and Review. Never reuse `--color-navy`
+as a status, and never swap on-hold yellow for review orange.
+
+| Pair | Light fg / bg | Dark fg / bg |
+| --- | --- | --- |
+| `--color-status-todo` | `#4A5565` / `#F3F4F6` | `#C2C2DC` / `#26263F` |
+| `--color-status-progress` | `#1C398E` / `#DBEAFE` | `#93C5FD` / `#182A4D` |
+| `--color-status-review` | `#7E2A0C` / `#FFF7ED` | `#FDBA74` / `#3A2415` |
+| `--color-status-blocked` | `#A50036` / `#FFF1F2` | `#FDA4AF` / `#3D1620` |
+| `--color-status-hold` | `#854D0E` / `#FEF9C3` | `#FDE68A` / `#3A3413` |
+| `--color-status-cancelled` | `#6A7282` / `#F3F4F6` | `#8C8CAE` / `#23233F` |
+| `--color-status-done` | `#006045` / `#ECFDF5` | `#6EE7B7` / `#0E3830` |
+
+The four priority pairs reuse the same foreground and background values under
+`--color-priority-low`, `-medium`, `-high` and `-urgent`.
+
+#### Data Visualisation
+
+`--color-chart-series-1` through `-series-3` are an ordered sequence, with
+`--color-chart-comparison`, `--color-chart-completed`, `--color-chart-in-progress`
+and `--color-chart-delayed` for the fixed-meaning series. Never signal a value
+with colour alone; every series needs a label or a legend.
 
 #### Semantic Colours
 
 | Token | Light | Dark | Purpose |
 | --- | --- | --- | --- |
-| `--color-info` | `#2563EB` | `#2563EB` | Primary action, focus, links, selection |
+| `--color-info` | `#2563EB` | `#93C5FD` | Primary action, focus, links, selection |
 | `--color-info-hover` | `#1D4ED8` | `#1D4ED8` | Info hover |
-| `--color-info-soft` | `#EAF2FF` | `#132C52` | Informational background |
-| `--color-success` | `#3D8B6E` | `#3D8B6E` | Complete, active, healthy |
-| `--color-success-soft` | `#E8F5EF` | `#153A31` | Successful background |
-| `--color-warning` | `#B45309` | `#B45309` | Due soon and warning states |
-| `--color-warning-soft` | `#FFF4E5` | `#3D2A12` | Warning background |
-| `--color-danger` | `#C43D4B` | `#C43D4B` | Destructive and blocked states |
-| `--color-danger-soft` | `#FDECEE` | `#3D1C23` | Destructive background |
-| `--color-danger-bg` | `#FEF2F2` | `#3A1A1A` | Destructive page background |
-| `--shadow-elevated` | `0 12px 40px -12px rgb(38 34 98 / 0.16)` | `0 12px 40px -12px rgb(0 0 0 / 0.6)` | Raised surface shadow |
+| `--color-info-soft` | `#EAEAF6` | `#132C52` | Informational background |
+| `--color-success` | `#007A55` | `#4ADE80` | Complete, active, healthy |
+| `--color-success-soft` | `#ECFDF5` | `#153A31` | Successful background |
+| `--color-warning` | `#B45309` | `#FBBF24` | Due soon and warning states, as text |
+| `--color-warning-fill` | `#FF6900` | `#FF6900` | Warning as a fill on `--color-warning-soft` |
+| `--color-warning-soft` | `#FFF7ED` | `#3D2A12` | Warning background |
+| `--color-danger` | `#C70036` | `#FB7185` | Destructive and blocked states |
+| `--color-danger-soft` | `#FFF1F2` | `#3D1C23` | Destructive background |
+| `--color-danger-bg` | `#FFF1F2` | `#3A1A1A` | Destructive page background |
+| `--shadow-elevated` | `0 12px 40px -12px rgb(0 0 0 / 0.18)` | `0 12px 40px -12px rgb(0 0 0 / 0.6)` | Raised surface shadow |
+| `--shadow-card` | `0 1 2 0 rgb(0 0 0 / 0.03)` | `0 1 2 0 rgb(0 0 0 / 0.03)` | The only shadow allowed on a surface |
 
 The dark theme remaps these tokens through `html[data-theme='dark']`. Components
 should read the token rather than branching on a theme class.
@@ -249,6 +355,15 @@ The dashboard block also sets the shared control metrics:
 
 ## Typography
 
+> Migration note. The design system now ships a full type, spacing and radius
+> scale in the foundation layer (`--text-*`, `--spacing-*`, `--radius-*`, all
+> declared `@theme static` so they survive Tailwind's tree-shaking). The sections
+> below still describe what the app actually renders, because the legacy rules
+> hardcode the older values and no view has been migrated yet. Expect the two to
+> disagree until the page-by-page migration finishes. The scale is also a real
+> size change, not a rename: the design's body is `16px` against the app's
+> current `12px` to `13px`, and its page heading is `30px` against `22px`.
+
 - UI text: `Roboto`, with weights `400`, `500`, `600`, `700`, and `800`.
 - Headings and metrics: `Montserrat`, with weights `400`, `600`, `700`, and `800`.
 - `h1` to `h6` are forced to `Montserrat` with `letter-spacing: 0` by a global
@@ -264,6 +379,14 @@ Do not use negative letter spacing. Uppercase labels may use a small positive
 letter spacing when the label is genuinely a label, not body copy.
 
 ## Spacing, Radius, And Depth
+
+> Migration note. The design specifies a `4px` base unit with a named ladder
+> (`--spacing-icon-gap` `4`, `chip-pad` `8`, `label-gap` `12`, `header-gap` `16`,
+> `card-pad` `24`, `page-pad` `32`, `section` `48`, `hero` `64`) and a radius
+> ladder (`--radius-chip` `4`, `badge` `6`, `icon` `8`, `control` `12`,
+> `container` `16`, pill). The values below are still what renders today. One
+> design rule to carry into the migration: inner radius is outer radius minus
+> the inset, so a `12px` card with a `16px` inset takes an `8px` inner radius.
 
 - Page sections use a `20px` gap through `.workspace-view`.
 - Standard card padding is `18px` to `20px`.
