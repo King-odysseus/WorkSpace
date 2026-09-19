@@ -54,7 +54,7 @@ function AssigneePicker({ members = [], value = [], onChange, disabled = false }
           <ChevronDown className="assignee-picker-chevron" size={16} aria-hidden="true" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="assignee-picker-popover" align="start" side="bottom" sideOffset={6} collisionPadding={12}>
+      <PopoverContent className="assignee-picker-popover" align="start" side="bottom" sideOffset={6} collisionPadding={12} aria-label="Choose assignees">
         <div className="assignee-picker-heading">
           <div>
             <strong>Assignees</strong>

@@ -219,12 +219,13 @@ function MemberProfilePopup({
         className="modal member-profile-popup"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="member-profile-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Workspace member</p>
-            <h2>{name}</h2>
+            <h2 id="member-profile-title">{name}</h2>
           </div>
           <button
             type="button"
