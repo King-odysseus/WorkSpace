@@ -171,14 +171,14 @@ describe('AuthScreen Google sign-in', () => {
     expect(container.querySelector('.auth-google-button')).toBeNull()
   })
 
-  it('fits the form and updates the theme and signup label', async () => {
+  it('fits the form and keeps the light Google treatment while switching labels', async () => {
     const id = googleMock()
     const props = { theme: 'light', onToggleTheme: vi.fn(), onAuthenticated: vi.fn() }
     const { rerender } = render(<AuthScreen {...props} />)
     expect(id.renderButton).toHaveBeenLastCalledWith(expect.any(HTMLElement), expect.objectContaining({ width: 358, theme: 'outline', text: 'signin_with' }))
     await userEvent.click(screen.getByRole('button', { name: /create an account/i }))
     rerender(<AuthScreen {...props} theme="dark" />)
-    expect(id.renderButton).toHaveBeenLastCalledWith(expect.any(HTMLElement), expect.objectContaining({ theme: 'filled_black', text: 'signup_with' }))
+    expect(id.renderButton).toHaveBeenLastCalledWith(expect.any(HTMLElement), expect.objectContaining({ theme: 'outline', text: 'signup_with' }))
   })
 
   it('exchanges the Google credential and establishes the app session', async () => {
