@@ -1,61 +1,97 @@
 import * as React from 'react'
-import { Slot } from '@radix-ui/react-slot'
-import { cva } from 'class-variance-authority'
+import { Button as FlowbiteButton } from 'flowbite-react'
 import { cn } from '@/lib/utils'
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 outline-none focus-visible:ring-[3px] focus-visible:ring-info/35 focus-visible:border-info",
-  {
-    variants: {
-      variant: {
-        default:
-          'bg-primary text-primary-foreground border border-primary shadow-[0_8px_18px_rgb(7_26_46_/16%)] hover:bg-secondary hover:text-secondary-foreground hover:-translate-y-px',
-        gold:
-          'bg-accent text-navy shadow-[0_4px_12px_-4px_rgb(196_154_108_/50%)] hover:bg-accent-hover hover:-translate-y-px',
-        secondary:
-          'bg-secondary text-secondary-foreground border border-border hover:-translate-y-px',
-        outline:
-          'border border-border bg-transparent text-foreground hover:bg-muted hover:-translate-y-px',
-        ghost: 'text-foreground hover:bg-muted',
-        destructive:
-          'bg-destructive text-destructive-foreground hover:opacity-90',
-        link: 'text-blue-600 underline-offset-4 hover:underline rounded-none',
-      },
-      // Radius lives on the size rather than the base. It used to sit on the
-      // base as `rounded-full`, which meant a size that wanted a different
-      // radius had to out-merge it - and tailwind-merge only recognises the
-      // radius names it ships with, so `rounded-control` was not seen as a
-      // conflict and the pill silently won. Keeping one radius per size removes
-      // the contest entirely; a caller passing `rounded-lg` still overrides it.
-      size: {
-        default: 'h-9 rounded-full px-4 py-2 has-[>svg]:px-3.5',
-        sm: 'h-8 rounded-full px-3 text-[11px] has-[>svg]:px-2.5',
-        lg: 'h-11 rounded-full px-6 has-[>svg]:px-5',
-        // The 42px control the design's page-header Primary Action uses. It
-        // takes a 12px radius, not the base pill, and a 14px/500 label, so it
-        // overrides those two base classes through tailwind-merge instead of
-        // restating the whole variant.
-        page: 'h-[42px] gap-2.5 rounded-control px-5 text-label font-medium [&_svg]:size-5',
-        icon: 'size-9 rounded-full',
-        'icon-sm': 'size-8 rounded-full',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-      size: 'default',
-    },
-  }
-)
+/**
+ * The app's Button, rendering Flowbite React's Button.
+ *
+ * The public API is unchanged - the same `variant` and `size` names the 78
+ * call sites already pass - so this file is the only one that had to change
+ * when the primitive moved onto Flowbite. `variant` and `size` map onto
+ * Flowbite's `color` and `size`, and everything else passes through.
+ *
+ * The design's control is 42x42 with a 12px radius and a 14px/500 label, so
+ * `default` and `page` both resolve to Flowbite's `md`, which
+ * src/lib/flowbite-theme.js restates to that geometry. `page` differs only in
+ * the icon size it carries, which is why it still has its own entry.
+ */
+const VARIANT_TO_COLOR = {
+  default: 'primary',
+  secondary: 'secondary',
+  outline: 'outline',
+  ghost: 'ghost',
+  destructive: 'danger',
+  /* The brand bronze, kept from the app rather than the design's #B7791F. */
+  gold: 'gold',
+  link: 'link',
+}
+
+const SIZE_TO_FLOWBITE = {
+  default: 'md',
+  sm: 'sm',
+  lg: 'lg',
+  page: 'md',
+  icon: 'icon',
+  'icon-sm': 'icon-sm',
+}
+
+/**
+ * Returns the class string for a variant/size pair.
+ *
+ * Kept because ui/calendar.jsx styles its day cells with it. This is the one
+ * place the app still composes button classes by hand rather than rendering a
+ * Button; if the calendar is ever rebuilt on Flowbite's own controls, this can
+ * go with it.
+ */
+function buttonVariants({ variant = 'default', size = 'default', className } = {}) {
+  const geometry = {
+    default: 'h-[42px] px-5 text-label',
+    sm: 'h-9 px-3.5 text-body-small',
+    lg: 'h-12 px-6 text-subheading',
+    page: 'h-[42px] px-5 text-label gap-2.5 [&_svg]:size-5',
+    icon: 'size-[42px] p-0',
+    'icon-sm': 'size-9 p-0',
+  }[size]
+
+  const skin = {
+    default: 'border border-navy bg-navy text-text-on-navy',
+    secondary: 'bg-surface-hover text-text-primary',
+    outline: 'border border-border bg-transparent text-text-primary',
+    ghost: 'bg-transparent text-text-primary',
+    destructive: 'bg-danger text-white',
+    gold: 'bg-bronze text-navy',
+    link: 'bg-transparent text-info underline-offset-4',
+  }[variant]
+
+  return cn(
+    'relative inline-flex items-center justify-center gap-2 rounded-control font-medium whitespace-nowrap',
+    geometry,
+    skin,
+    className,
+  )
+}
 
 // A `loading` prop swaps the label region for a spinner and disables the
 // control, so callers do not have to juggle disabled and spinner markup at
-// every call site.
-function Button({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }) {
-  const Comp = asChild ? Slot : 'button'
+// every call site. Flowbite has its own processing state; this keeps the
+// app's shape so the call site that uses it did not have to change.
+function Button({
+  className,
+  variant = 'default',
+  size = 'default',
+  loading = false,
+  disabled,
+  children,
+  ...props
+}) {
+  const iconSized = size === 'icon' || size === 'icon-sm'
+
   return (
-    <Comp
+    <FlowbiteButton
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      color={VARIANT_TO_COLOR[variant] ?? 'primary'}
+      size={SIZE_TO_FLOWBITE[size] ?? 'md'}
+      className={cn(iconSized && 'p-0', className)}
       disabled={disabled || loading}
       {...props}
     >
@@ -66,7 +102,7 @@ function Button({ className, variant, size, asChild = false, loading = false, di
         </svg>
       )}
       {children}
-    </Comp>
+    </FlowbiteButton>
   )
 }
 
