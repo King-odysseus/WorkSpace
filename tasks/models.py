@@ -145,6 +145,7 @@ class Membership(models.Model):
             'company': profile.company if profile else '',
             'job_role': profile.job_role if profile else '',
             'presence': profile.presence if profile else 'available',
+            'weekly_capacity_minutes': profile.weekly_capacity_minutes if profile else 2400,
             'last_seen_at': profile.last_seen_at.isoformat() if profile and profile.last_seen_at else '',
         }
 
@@ -866,6 +867,10 @@ class Task(models.Model):
     start_date = models.DateField(null=True, blank=True)
     actual_completion_date = models.DateField(null=True, blank=True)
     progress_percent = models.PositiveSmallIntegerField(default=0)
+    # Planning estimate, in minutes so a task cannot carry a fraction of an
+    # hour. Null means nobody has estimated it, which is not the same as zero:
+    # the workload card counts only what has been estimated and says so.
+    estimate_minutes = models.PositiveIntegerField(null=True, blank=True)
     blocker_details = models.TextField(blank=True)
     state = models.CharField(max_length=20, choices=STATE_CHOICES, default='active')
     archived_at = models.DateTimeField(null=True, blank=True)
@@ -971,6 +976,7 @@ class Task(models.Model):
             'start_date': self.start_date.isoformat() if self.start_date else None,
             'actual_completion_date': self.actual_completion_date.isoformat() if self.actual_completion_date else None,
             'progress_percent': self.progress_percent,
+            'estimate_minutes': self.estimate_minutes,
             'blocker_details': self.blocker_details,
             'state': self.state,
             'archived_at': self.archived_at.isoformat() if self.archived_at else None,
@@ -1306,6 +1312,9 @@ class UserProfile(models.Model):
     # which is whatever the member last chose for themselves and can sit on
     # "available" for days after they stop using the app.
     last_seen_at = models.DateTimeField(null=True, blank=True)
+    # The denominator behind "My workload" on My tasks. Minutes again, and a
+    # default week of 40 hours rather than a magic number in the view.
+    weekly_capacity_minutes = models.PositiveIntegerField(default=2400)
     default_workspace = models.ForeignKey(Workspace, on_delete=models.SET_NULL, null=True, blank=True, related_name='default_for_profiles')
     updated_at = models.DateTimeField(auto_now=True)
 

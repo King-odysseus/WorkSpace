@@ -406,6 +406,24 @@ def parse_iso_date(value, field_name, allow_null=True):
         return None, f'{field_name} must use YYYY-MM-DD format.'
 
 
+def parse_estimate_minutes(value):
+    """An estimate is a positive whole number of minutes, or absent.
+
+    Zero and null both mean "not estimated" - a task that is expected to take no
+    time is not a thing anyone plans for - so they are stored as null rather
+    than as a 0 that would quietly drag every average down.
+    """
+    if value in (None, ''):
+        return None, None
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        return None, 'Estimate must be a whole number of minutes.'
+    if minutes < 0:
+        return None, 'Estimate must be a whole number of minutes.'
+    return (minutes or None), None
+
+
 def parse_int(value, field_name, allow_null=True):
     """Body values arrive as whatever JSON the caller sent, and a bare int()
     around one turns a string like 'abc' into an unhandled 500. Ids from request
@@ -1000,7 +1018,7 @@ def task_list(request, workspace_id=None):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    create_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'assignee_ids', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
+    create_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'estimate_minutes', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'assignee_ids', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
     unknown_fields = set(payload) - create_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -1112,6 +1130,9 @@ def task_list(request, workspace_id=None):
     status = payload.get('status', 'todo')
     if status not in {choice[0] for choice in Task.STATUS_CHOICES}:
         return JsonResponse({'error': 'Invalid task status.'}, status=400)
+    estimate_minutes, estimate_error = parse_estimate_minutes(payload.get('estimate_minutes'))
+    if estimate_error:
+        return JsonResponse({'error': estimate_error}, status=400)
     if status == 'done':
         progress = 100
         actual_date = actual_date or timezone.localdate()
@@ -1124,6 +1145,7 @@ def task_list(request, workspace_id=None):
             assignee_name=str(payload.get('assignee_name', '')).strip(), project=str(payload.get('project', '')).strip(),
             recurrence=recurrence, priority=priority, due_date=due_date, start_date=start_date,
             actual_completion_date=actual_date, progress_percent=progress,
+            estimate_minutes=estimate_minutes,
             blocker_details=str(payload.get('blocker_details', '') or '').strip(), status=status,
             state=payload.get('state', 'active'), bucket=bucket,
             position=(max_position + 1) if max_position is not None else 0, labels=labels or [],
@@ -2025,7 +2047,7 @@ def task_detail(request, task_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
 
-    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'assignee_ids', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state', 'blocked_by_ids'}
+    allowed_fields = {'title', 'description', 'assignee_name', 'project', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'estimate_minutes', 'blocker_details', 'recurrence', 'priority', 'labels', 'assignee_id', 'assignee_ids', 'project_id', 'supporter_ids', 'workstream_id', 'phase_id', 'state', 'blocked_by_ids'}
     unknown_fields = set(payload) - allowed_fields
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
@@ -2035,7 +2057,7 @@ def task_detail(request, task_id):
     if ('assignee_id' in payload or 'assignee_ids' in payload) and not membership.has_permission('assign_tasks'):
         return JsonResponse({'error': 'You do not have permission to assign tasks.'}, status=403)
 
-    material_fields = ['title', 'description', 'assignee_id', 'project_ref_id', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'blocker_details', 'recurrence', 'priority', 'labels', 'workstream_ref_id', 'phase_ref_id', 'state']
+    material_fields = ['title', 'description', 'assignee_id', 'project_ref_id', 'bucket', 'status', 'due_date', 'start_date', 'actual_completion_date', 'progress_percent', 'estimate_minutes', 'blocker_details', 'recurrence', 'priority', 'labels', 'workstream_ref_id', 'phase_ref_id', 'state']
     previous_values = task_snapshot(task, material_fields)
     previous_supporters = list(task.supporters.values_list('id', flat=True))
     previous_assignee_ids = [user.id for user in task.assignee_users()]
@@ -2116,6 +2138,11 @@ def task_detail(request, task_id):
             task.progress_percent = int(payload['progress_percent'])
         except (TypeError, ValueError):
             return JsonResponse({'error': 'Progress must be a whole number between 0 and 100.'}, status=400)
+    if 'estimate_minutes' in payload:
+        estimate_minutes, estimate_error = parse_estimate_minutes(payload['estimate_minutes'])
+        if estimate_error:
+            return JsonResponse({'error': estimate_error}, status=400)
+        task.estimate_minutes = estimate_minutes
     if 'blocker_details' in payload:
         task.blocker_details = str(payload['blocker_details'] or '').strip()
 

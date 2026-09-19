@@ -25,3 +25,7 @@ QWEN.md
 .kimi/
 .kimi-code/
 .agents/
+
+# Scratch files from local agent runs: logs and minted sessions. The session
+# file holds a live cookie and must never be staged.
+.tmp-*
