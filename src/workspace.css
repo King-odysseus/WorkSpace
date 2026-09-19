@@ -7102,12 +7102,13 @@ html[data-theme='dark'] .planner-bucket-menu {
 .workspace-view.projects-view .project-summary small { color: var(--workspace-text-soft); font-size: 12px; line-height: 15px; }
 
 .workspace-view.projects-view .project-card {
-  display: flex;
+  display: grid;
+  grid-template-rows: 26px 20px 28px 1px auto 44px 32px;
+  align-content: start;
   height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  gap: 0;
   min-height: 284px;
   padding: 20px;
   border-radius: 12px;
@@ -7118,66 +7119,54 @@ html[data-theme='dark'] .planner-bucket-menu {
   max-width: 100%;
 }
 
-.workspace-view.projects-view .project-card-top {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+.workspace-view.projects-view .project-card-heading {
+  display: flex;
   align-items: center;
-  min-width: 0;
-  gap: 6px;
-}
-
-.workspace-view.projects-view .project-card-top .project-icon {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-}
-
-.workspace-view.projects-view .project-card-top .project-health {
-  justify-self: start;
-  margin-left: 0;
-}
-
-.workspace-view.projects-view .project-card-top .project-status {
-  min-width: 76px;
-  max-width: 96px;
-  justify-self: end;
-}
-
-.workspace-view.projects-view .project-card-top [data-slot='button'] {
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 0;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .workspace-view.projects-view .project-card h3 {
-  display: -webkit-box;
-  margin: 13px 0 5px;
+  margin: 0;
   overflow-wrap: anywhere;
   overflow: hidden;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  color: var(--workspace-text);
+  font: 700 17px/24px 'Montserrat', sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.workspace-view.projects-view .project-card p {
-  display: -webkit-box;
-  min-height: 2.9em;
+.workspace-view.projects-view .project-card-description {
+  min-height: 20px;
   overflow: hidden;
-  line-height: 1.45;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  color: var(--workspace-text-soft);
+  font-size: 12px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.workspace-view.projects-view .project-card-owner-row { display: flex; align-items: center; min-width: 0; gap: 8px; }
+.workspace-view.projects-view .project-owner-avatar { display: grid; flex: 0 0 auto; width: 28px; height: 28px; place-items: center; border-radius: 50%; background: var(--workspace-surface-soft); color: var(--brand-navy, #0B0B45); font-size: 11px; font-weight: 700; }
+.workspace-view.projects-view .project-owner-name { min-width: 0; overflow: hidden; color: var(--workspace-text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-view.projects-view .project-card-owner-row .project-status { width: 128px; min-width: 128px; height: 24px; min-height: 24px; margin-left: auto; padding: 0 8px; border-radius: 6px; font-size: 11px; }
+.workspace-view.projects-view .project-card-rule { height: 1px; background: var(--workspace-border); }
 
 .workspace-view.projects-view .project-footer small {
   overflow-wrap: anywhere;
 }
 
 .workspace-view.projects-view .project-progress {
-  margin-top: 12px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  margin: 12px 0 0;
 }
+
+.workspace-view.projects-view .project-progress-label { display: flex; justify-content: space-between; gap: 10px; color: var(--workspace-text-soft); font-size: 11px; line-height: 15px; }
+.workspace-view.projects-view .project-progress-label strong { color: var(--workspace-text); font-size: 11px; }
+.workspace-view.projects-view .project-progress-track { height: 8px; background: var(--workspace-surface-soft); }
 
 .workspace-view.projects-view .project-task-stats,
 .workspace-view.projects-view .project-footer {
@@ -7194,8 +7183,21 @@ html[data-theme='dark'] .planner-bucket-menu {
 /* Open Pencil P29 project overview. Keep the project actions/data model from
    the existing detail view while presenting the designed two-column surface. */
 .workspace-view.project-detail-view { gap: 0; }
-.project-detail-view .project-back-button { margin-bottom: 12px; }
-.project-detail-tabs { display: flex; align-items: center; gap: 4px; margin-top: 18px; padding-bottom: 0; border-bottom: 1px solid var(--workspace-border); }
+.project-detail-header { display: grid; gap: 10px; min-height: 88px; }
+.project-detail-back { display: inline-flex; width: fit-content; align-items: center; gap: 5px; border: 0; padding: 0; background: transparent; color: var(--workspace-text-soft); font-size: 12px; cursor: pointer; }
+.project-detail-title-row { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.project-detail-title-row h1 { min-width: 0; margin: 0; overflow: hidden; color: var(--workspace-text); font: 700 24px/29px 'Montserrat', sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.project-detail-title-row .project-health { flex: 0 0 auto; min-width: 104px; }
+.project-status-badge { display: inline-flex; height: 24px; flex: 0 0 auto; align-items: center; justify-content: center; min-width: 120px; border-radius: 6px; padding: 0 10px; background: var(--workspace-surface-soft); color: var(--workspace-text-soft); font-size: 11px; font-weight: 700; text-transform: capitalize; }
+.project-detail-meta-line { min-width: 0; overflow: hidden; color: var(--workspace-text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.project-detail-primary-action { height: 38px; margin-left: auto; flex: 0 0 auto; border: 0; border-radius: 7px; padding: 0 14px; background: var(--brand-navy, #0B0B45); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.project-detail-description { width: min(860px, 100%); margin: 8px 0 12px; overflow: hidden; color: var(--workspace-text-soft); font-size: 12px; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.project-detail-header-meta { min-height: 28px; margin: 0; gap: 8px; }
+.project-detail-header-meta .project-owner-avatar { width: 28px; height: 28px; }
+.project-detail-header-meta svg { margin-left: 12px; }
+.project-detail-header-updated { margin-left: auto; }
+.project-detail-divider { height: 1px; margin-top: 12px; background: var(--workspace-border); }
+.project-detail-tabs { display: flex; align-items: center; gap: 0; margin-top: 21px; padding-bottom: 0; border-bottom: 1px solid var(--workspace-border); }
 .project-detail-tabs button { min-height: 44px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--workspace-text-soft); font: 500 13px 'Roboto'; cursor: pointer; }
 .project-detail-tabs button.active { border-bottom-color: var(--brand-navy, #0B0B45); color: var(--workspace-text); font-weight: 700; }
 .project-detail-overview { display: grid; grid-template-columns: minmax(0, 712px) minmax(320px, 376px); gap: 24px; margin-top: 24px; align-items: start; }
@@ -7228,6 +7230,8 @@ html[data-theme='dark'] .planner-bucket-menu {
 .project-detail-side-column .project-detail-links button + button { border-top: 0; border-radius: 0; }
 .project-detail-meta-row { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; color: var(--workspace-text-soft); font-size: 12px; }
 .project-detail-meta-row svg { flex: 0 0 auto; color: var(--brand-navy, #0B0B45); }
+.project-detail-deadline { margin: 24px 0 6px; color: var(--workspace-text); font: 700 24px/1.1 'Montserrat', sans-serif; }
+.project-detail-recent-activity .project-detail-meta-row { margin-top: 11px; }
 .project-detail-quick-actions { display: grid; gap: 8px; }
 .project-detail-quick-actions .project-detail-card-heading { margin-bottom: 4px; }
 .project-detail-quick-actions > button { display: flex; min-height: 40px; align-items: center; gap: 9px; border: 1px solid var(--workspace-border); border-radius: 8px; padding: 0 12px; background: var(--workspace-surface); color: var(--workspace-text); text-align: left; font-size: 12px; cursor: pointer; }
@@ -7236,15 +7240,26 @@ html[data-theme='dark'] .planner-bucket-menu {
 @media (max-width: 700px) { .project-detail-tabs { overflow-x: auto; } .project-detail-tabs button { flex: 0 0 auto; padding-inline: 11px; } .project-detail-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-detail-stat-line { flex-direction: column; gap: 4px; } }
 
 .workspace-view.projects-view .project-task-stats {
-  gap: 5px;
-  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.workspace-view.projects-view .project-task-stats span,
-.workspace-view.projects-view .project-task-link {
-  flex: 0 0 auto;
+.workspace-view.projects-view .project-task-stats span {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 8px;
+  background: var(--workspace-surface-soft);
+  color: var(--workspace-text-soft);
+  font-size: 11px;
   white-space: nowrap;
 }
+.workspace-view.projects-view .project-task-stats strong { color: var(--workspace-text); font-size: 16px; }
 
 .workspace-view.projects-view .project-footer > div {
   min-width: 0;
@@ -7252,11 +7267,15 @@ html[data-theme='dark'] .planner-bucket-menu {
 }
 
 .workspace-view.projects-view .project-footer {
-  gap: 6px;
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid var(--workspace-border);
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
 }
+.workspace-view.projects-view .project-updated { min-width: 0; flex: 1; overflow: hidden; color: var(--workspace-text-soft); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-view.projects-view .project-open-button { display: inline-flex; height: 32px; flex: 0 0 auto; align-items: center; gap: 5px; border: 0; border-radius: 7px; padding: 0 10px; background: var(--brand-navy, #0B0B45); color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.workspace-view.projects-view .project-footer [data-slot='button'] { width: 44px; height: 32px; min-height: 32px; padding: 0; border: 1px solid var(--workspace-border); border-radius: 7px; }
 
 @media (max-width: 1100px) {
   .workspace-view.projects-view .project-toolbar {

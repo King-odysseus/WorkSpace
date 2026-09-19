@@ -67,7 +67,6 @@ import {
   Settings,
   Sparkles,
   Square,
-  Target,
   Upload,
   Users,
   Webhook,
@@ -6987,7 +6986,9 @@ function WorkspaceView({
           (project.status !== "completed" && project.due_date && project.due_date < today),
       ).length,
       completed: withStats.filter((project) => project.status === "completed").length,
-      budgeted: withStats.filter((project) => project.budget_amount !== null && project.budget_amount !== undefined).length,
+      budgetUsage: withStats
+        .map((project) => project.budget_used_percent ?? project.budget_usage_percent)
+        .find((value) => value !== null && value !== undefined),
     };
     if (selectedProjectWorkspace) {
       const projectTasks = tasks.filter((task) => String(task.project_id || "") === String(selectedProjectWorkspace.id));
@@ -7017,43 +7018,47 @@ function WorkspaceView({
       }[projectOperation];
       return (
         <section className="workspace-view project-detail-view">
-          <button
-            type="button"
-            className="text-button project-back-button"
-            onClick={
-              projectOperation ? () => setProjectOperation("") : closeProject
-            }
-          >
-            ←{" "}
-            {projectOperation ? "Back to project overview" : "Back to projects"}
-          </button>
-          <WorkspaceViewHeading
-            title={
-              projectOperation
-                ? `${selectedProjectWorkspace.name}: ${operationTitle}`
-                : selectedProjectWorkspace.name
-            }
-            subtitle={
-              projectOperation
-                ? "Detailed project operational controls."
-                : selectedProjectWorkspace.description ||
-                  "Project workspace and delivery controls."
-            }
-            action={canManageMembers ? "Edit project" : undefined}
-            onAction={() => setSelectedProject(selectedProjectWorkspace)}
-          />
+          <div className="project-detail-header">
+            <button type="button" className="project-detail-back" onClick={projectOperation ? () => setProjectOperation("") : closeProject}>
+              <ChevronLeft size={16} /> {projectOperation ? "Back to project overview" : "Back to projects"}
+            </button>
+            <div className="project-detail-title-row">
+              <h1>{selectedProjectWorkspace.name}</h1>
+              <span className={`project-health ${selectedProjectWorkspace.health || "on-track"}`}>
+                {(selectedProjectWorkspace.health || "on-track").replace("-", " ")}
+              </span>
+              <span className={`project-status-badge ${selectedProjectWorkspace.status}`}>
+                {selectedProjectWorkspace.status}
+              </span>
+              <span className="project-detail-meta-line">
+                {selectedProjectWorkspace.due_date ? `Due ${projectDeadline}` : "No deadline set"}
+              </span>
+              {canManageMembers && <button type="button" className="project-detail-primary-action" onClick={() => setSelectedProject(selectedProjectWorkspace)}>Edit project</button>}
+            </div>
+          </div>
+          <p className="project-detail-description">{selectedProjectWorkspace.description || "Project workspace and delivery controls."}</p>
+          <div className="project-detail-meta-row project-detail-header-meta">
+            <span className="project-owner-avatar" aria-hidden="true">{(selectedProjectWorkspace.owner_name || "U").trim().charAt(0).toUpperCase()}</span>
+            <span>{selectedProjectWorkspace.owner_name || "Unassigned · Core squad"}</span>
+            <CalendarDays size={16} />
+            <span>{selectedProjectWorkspace.due_date ? projectDeadline : "No deadline set"}</span>
+            <Users size={16} />
+            <span>{selectedProjectWorkspace.member_count || 0} members assigned</span>
+            <span className="project-detail-header-updated">Updated {formatRelativeActivityTime(selectedProjectWorkspace.updated_at)}</span>
+          </div>
+          <div className="project-detail-divider" />
+          <div className="project-detail-tabs" role="tablist" aria-label="Project sections">
+            <button type="button" className={!projectOperation ? "active" : ""} role="tab" aria-selected={!projectOperation} onClick={() => setProjectOperation("")}>Overview</button>
+            <button type="button" className={projectOperation === "kanban" ? "active" : ""} role="tab" aria-selected={projectOperation === "kanban"} onClick={() => openOperation("kanban")}>Kanban</button>
+            <button type="button" className={projectOperation === "tasks" ? "active" : ""} role="tab" aria-selected={projectOperation === "tasks"} onClick={() => { window.dispatchEvent(new CustomEvent("planner:project", { detail: String(selectedProjectWorkspace.id) })); onNavigate("Planner"); }}>Tasks</button>
+            <button type="button" className={projectOperation === "risks" ? "active" : ""} role="tab" aria-selected={projectOperation === "risks"} onClick={() => openOperation("risks")}>Risks</button>
+            <button type="button" className={projectOperation === "issues" ? "active" : ""} role="tab" aria-selected={projectOperation === "issues"} onClick={() => openOperation("issues")}>Issues</button>
+            <button type="button" className={projectOperation === "resources" ? "active" : ""} role="tab" aria-selected={projectOperation === "resources"} onClick={() => openOperation("resources")}>Resources</button>
+            <button type="button" className={projectOperation === "budget" ? "active" : ""} role="tab" aria-selected={projectOperation === "budget"} onClick={() => openOperation("budget")}>Budget</button>
+            <button type="button" className={projectOperation === "activity" ? "active" : ""} role="tab" aria-selected={projectOperation === "activity"} onClick={() => openOperation("activity")}>Activity</button>
+          </div>
           {!projectOperation && (
             <>
-              <div className="project-detail-tabs" role="tablist" aria-label="Project sections">
-                <button type="button" className="active" role="tab" aria-selected="true">Overview</button>
-                <button type="button" role="tab" onClick={() => {
-                  window.dispatchEvent(new CustomEvent("planner:project", { detail: String(selectedProjectWorkspace.id) }));
-                  onNavigate("Planner");
-                }}>Tasks</button>
-                <button type="button" role="tab" onClick={() => openOperation("risks")}>Risks</button>
-                <button type="button" role="tab" onClick={() => openOperation("resources")}>Resources</button>
-                <button type="button" role="tab" onClick={() => openOperation("budget")}>Budget</button>
-              </div>
               <div className="project-detail-overview">
                 <div className="project-detail-main-column">
                   <section className="project-detail-card project-detail-progress-card">
@@ -7069,10 +7074,16 @@ function WorkspaceView({
                     <div className="project-detail-card-heading"><div><p className="eyebrow">Attention</p><h2>Current blockers</h2></div><span className="project-detail-card-note">{projectBlocked + projectOverdue} open</span></div>
                     {projectBlocked || projectOverdue ? <div className="project-detail-list">{projectTasks.filter((task) => task.status === "blocked" || (task.status !== "done" && task.due_date && task.due_date < today)).slice(0, 4).map((task) => <button type="button" key={task.id} onClick={() => onOpenTask(task)}><span className={task.status === "blocked" ? "is-danger" : "is-warning"} /><span>{task.title}</span><small>{task.status === "blocked" ? "Blocked" : "Overdue"}</small></button>)}</div> : <p className="project-detail-empty">No blockers or overdue tasks in this project.</p>}
                   </section>
+                  <section className="project-detail-card project-detail-recent-activity">
+                    <div className="project-detail-card-heading"><div><p className="eyebrow">Timeline</p><h2>Recent activity</h2></div></div>
+                    {(localData.activity || []).filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)).slice(0, 3).map((item) => <p className="project-detail-meta-row" key={item.id}><RefreshCw size={16} />{item.description || item.message || "Project activity updated"}</p>)}
+                    {!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && <p className="project-detail-empty">No recent project activity.</p>}
+                  </section>
                 </div>
                 <aside className="project-detail-side-column">
                   <ProjectOperationsSummary project={selectedProjectWorkspace} workspaceId={workspaceId} onOpen={openOperation} />
                   <section className="project-detail-card"><div className="project-detail-card-heading"><div><p className="eyebrow">Delivery</p><h2>Delivery summary</h2></div></div><p className="project-detail-meta-row"><CalendarDays size={16} />{projectDeadline}</p><p className="project-detail-meta-row"><Users size={16} />{selectedProjectWorkspace.member_count || 0} members assigned</p><p className="project-detail-meta-row"><RefreshCw size={16} />Updated {formatRelativeActivityTime(selectedProjectWorkspace.updated_at)}</p></section>
+                  <section className="project-detail-card"><div className="project-detail-card-heading"><div><p className="eyebrow">Next milestone</p><h2>Upcoming deadline</h2></div></div><p className="project-detail-deadline">{projectDeadline}</p><p className="project-detail-card-note">{projectOpen ? `${projectOpen} open tasks remaining` : "All tasks complete"}</p></section>
                   <section className="project-detail-card project-detail-quick-actions"><div className="project-detail-card-heading"><div><p className="eyebrow">Next step</p><h2>Quick actions</h2></div></div><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent("planner:project", { detail: String(selectedProjectWorkspace.id) })); onNavigate("Planner"); }}><LayoutGrid size={16} />Open project tasks</button><button type="button" onClick={() => openOperation("risks")}><AlertCircle size={16} />Review risks</button></section>
                 </aside>
               </div>
@@ -7157,9 +7168,9 @@ function WorkspaceView({
             <small>At risk, delayed or blocked</small>
           </div>
           <div>
-            <strong>{summary.budgeted ? `${summary.budgeted}` : "—"}</strong>
+            <strong>{summary.budgetUsage !== undefined ? `${Math.round(Number(summary.budgetUsage))}%` : "—"}</strong>
             <span>Budget used</span>
-            <small>{summary.budgeted ? `${summary.budgeted} projects approaching limit` : "No budgets configured"}</small>
+            <small>{summary.budgetUsage !== undefined ? "Across the portfolio" : "No budget data available"}</small>
           </div>
         </div>
         <div className="project-toolbar">
@@ -7216,15 +7227,24 @@ function WorkspaceView({
           {visibleProjects.length ? (
             visibleProjects.map((project) => (
               <Card
-                className={`project-card project-health-${project.health} px-5`}
+                className={`project-card project-health-${project.health}`}
                 key={project.id}
               >
-                <div className="project-card-top">
-                  <span className="project-icon">
-                    <Target size={17} />
-                  </span>
+                <div className="project-card-heading">
+                  <h3>{project.name}</h3>
                   <span className={`project-health ${project.health}`}>
                     {project.health.replace("-", " ")}
+                  </span>
+                </div>
+                <p className="project-card-description">
+                  {project.description || "No project description yet."}
+                </p>
+                <div className="project-card-owner-row">
+                  <span className="project-owner-avatar" aria-hidden="true">
+                    {(project.owner_name || "U").trim().charAt(0).toUpperCase()}
+                  </span>
+                  <span className="project-owner-name">
+                    {project.owner_name || "Unassigned · Core squad"}
                   </span>
                   <AppSelect
                     className={`project-status ${project.status}`}
@@ -7240,57 +7260,25 @@ function WorkspaceView({
                     <option value="paused">Paused</option>
                     <option value="completed">Completed</option>
                   </AppSelect>
-                  {canManageMembers && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setSelectedProject(project)}
-                        aria-label={`Edit ${project.name}`}
-                      >
-                        <MoreHorizontal size={14} />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => deleteProject(project)}
-                        aria-label={`Delete ${project.name}`}
-                      >
-                        <X size={14} />
-                      </Button>
-                    </>
-                  )}
                 </div>
-                <h3>{project.name}</h3>
-                <p>{project.description || "No project description yet."}</p>
+                <div className="project-card-rule" />
                 <ProjectProgress project={project} tasks={tasks} />
                 <div className="project-task-stats">
-                  <span>{project.taskCount - project.completed} open</span>
-                  <span className={project.blocked ? "risk" : ""}>
-                    {project.blocked} blocked
-                  </span>
-                  <span className={project.overdue ? "danger" : ""}>
-                    {project.overdue} overdue
-                  </span>
+                  <span><strong>{project.taskCount - project.completed}</strong>open</span>
+                  <span className={project.blocked ? "risk" : ""}><strong>{project.blocked}</strong>blocked</span>
+                  <span className={project.overdue ? "danger" : ""}><strong>{project.overdue}</strong>overdue</span>
                 </div>
                 <div className="project-footer">
-                  <div>
-                    <span>
-                      {project.due_date
+                  <span className="project-updated">
+                    {project.updated_at
+                      ? `Updated ${formatRelativeActivityTime(project.updated_at)}`
+                      : project.due_date
                         ? `Due ${formatDay(project.due_date)}`
-                        : "No due date"}
-                    </span>
-                    {project.updated_at && (
-                      <small>
-                        Updated {formatRelativeActivityTime(project.updated_at)}
-                      </small>
-                    )}
-                  </div>
+                        : "Updated recently"}
+                  </span>
                   <button
                     type="button"
-                    className="project-task-link"
+                    className="project-open-button"
                     onClick={() => {
                       setSelectedProjectWorkspace(project);
                       setProjectOperation("");
@@ -7299,6 +7287,16 @@ function WorkspaceView({
                   >
                     Open project <ArrowUpRight size={15} />
                   </button>
+                  {canManageMembers && (
+                    <>
+                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => setSelectedProject(project)} aria-label={`Edit ${project.name}`}>
+                        <MoreHorizontal size={14} />
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => deleteProject(project)} aria-label={`Delete ${project.name}`}>
+                        <X size={14} />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </Card>
             ))
