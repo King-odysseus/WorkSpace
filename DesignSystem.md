@@ -356,8 +356,9 @@ The dashboard block also sets the shared control metrics:
 ## Typography
 
 > Migration note. The design system now ships a full type, spacing and radius
-> scale in the foundation layer (`--text-*`, `--spacing-*`, `--radius-*`, all
-> declared `@theme static` so they survive Tailwind's tree-shaking). The sections
+> scale in the foundation layer (`--font-*`, `--text-*`, `--spacing-*`,
+> `--radius-*`, all declared `@theme static` so they survive Tailwind's
+> tree-shaking). The sections
 > below still describe what the app actually renders, because the legacy rules
 > hardcode the older values and no view has been migrated yet. Expect the two to
 > disagree until the page-by-page migration finishes. The scale is also a real
@@ -366,6 +367,15 @@ The dashboard block also sets the shared control metrics:
 
 - UI text: `Roboto`, with weights `400`, `500`, `600`, `700`, and `800`.
 - Headings and metrics: `Montserrat`, with weights `400`, `600`, `700`, and `800`.
+- These two are the WorkSpace families, settled. The design document leaves the
+  family as an alias slot and sketches `Inter` and `JetBrains Mono` in it; those
+  are placeholders and are not adopted. The foundation layer declares the real
+  pair as `--font-display` (`Montserrat`) and `--font-sans` (`Roboto`), with
+  `--font-mono` for the spreadsheet and code surfaces. Use the `font-display`
+  and `font-sans` utilities in migrated views instead of writing family names,
+  so a future licensed font is a one-line change here. `--font-sans` is
+  overridden globally and deliberately: Tailwind's stock value is `Inter`, which
+  WorkSpace never loaded.
 - `h1` to `h6` are forced to `Montserrat` with `letter-spacing: 0` by a global
   rule in the dashboard layer. Do not add letter spacing to a heading.
 - Page title: `Montserrat 400`, `22px`, line-height `1.2`.

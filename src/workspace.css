@@ -4676,14 +4676,25 @@ html[data-theme='light'] .ai-chat-error { background:#FDECEA; color:#8A2A20; }
   --elevation-modal: 0 12 40px -12px rgb(0 0 0 / 0.18);
 }
 
-/* Type scale - foundations 04. Sizes are provisional relative to the font
-   family, which remains an alias slot pending the licensed WorkSpace font.
+/* Type scale - foundations 04.
+
+   The design leaves the font family as an alias slot. WorkSpace's families are
+   Montserrat for display and headings, Roboto for body and controls - the pair
+   the app already loads and renders. They are declared here so the migrated
+   views use `font-display` and `font-sans` rather than repeating literal family
+   names, and so a future licensed font is a single-line change. The generic
+   fallbacks are kept in the stack because Montserrat and Roboto arrive over the
+   network and a cold load should not fall back to Times.
 
    These blocks are "static" so Tailwind emits every variable even before a
    utility consumes it. Without that, Tailwind tree-shakes unused theme
    variables and a hand-written `var(--radius-control)` in this stylesheet
    resolves to nothing. */
 @theme static {
+  --font-display: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --text-display: 40px;
   --text-display--line-height: 44px;
   --text-display--font-weight: 700;
