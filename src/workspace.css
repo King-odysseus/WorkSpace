@@ -8608,3 +8608,115 @@ html[data-theme='dark'] .my-task-row:hover { box-shadow: 0 5px 16px rgb(0 0 0 / 
   .my-task-row .task-status-pill { flex-basis: auto; width: auto; min-width: 76px; }
   .my-task-row > span { display: none; }
 }
+
+/* Planner - Open Pencil board surface. The board scrolls inside this region so
+   wide lane sets never widen or horizontally scroll the whole workspace. */
+.planner-view {
+  --planner-card: var(--neutral-surface, #FFFFFF);
+  --planner-surface: var(--neutral-background, #F9FAFB);
+  --planner-lane: var(--neutral-surface-hover, #F3F4F6);
+  --planner-border: var(--neutral-border, #E5E7EB);
+  --planner-text: var(--neutral-text-primary, #101828);
+  --planner-muted: var(--neutral-text-muted, #6A7282);
+  min-width: 0;
+  max-width: 1280px;
+  margin: 0 auto;
+  color: var(--planner-text);
+}
+.planner-header { align-items: flex-end; border-color: var(--planner-border); }
+.planner-header h1 { letter-spacing: -.03em; }
+.planner-header button { box-shadow: 0 4px 10px rgb(11 11 69 / 12%); }
+.planner-commandbar {
+  padding: 10px;
+  border: 1px solid var(--planner-border);
+  border-radius: 12px;
+  background: var(--planner-card);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 3%);
+}
+.planner-commandbar > * { min-width: 0; }
+.planner-commandbar [data-slot='search-input'] { flex: 1 1 260px; }
+.planner-commandbar [data-slot='select-trigger'] { min-width: 150px; }
+.planner-scope-summary {
+  min-height: 25px;
+  color: var(--planner-muted);
+}
+.planner-scope-summary button { color: var(--brand-navy, #0B0B45); }
+.planner-board {
+  min-width: 0;
+  padding: 14px 2px 14px;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.planner-column {
+  width: 280px;
+  height: 720px;
+  overflow: hidden;
+  border: 1px solid var(--planner-border);
+  border-radius: 14px;
+  background: var(--planner-lane);
+  box-shadow: 0 2px 6px rgb(16 24 40 / 4%);
+}
+.planner-column-heading {
+  min-height: 66px;
+  border-bottom: 1px solid var(--planner-border);
+  background: var(--planner-card);
+}
+.planner-column-heading strong { color: var(--planner-text); letter-spacing: -.01em; }
+.planner-column-heading > span { color: var(--planner-muted); }
+.planner-column > div:not(.planner-column-heading) { scrollbar-width: thin; }
+.planner-card {
+  width: 100%;
+  min-height: 76px;
+  border-color: var(--planner-border);
+  background: var(--planner-card);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.planner-card:hover {
+  border-color: color-mix(in srgb, var(--brand-navy-focus, #2E2EB8) 32%, var(--planner-border));
+  box-shadow: 0 5px 12px rgb(16 24 40 / 8%);
+  transform: translateY(-1px);
+}
+.planner-card .planner-card-check { border-color: var(--neutral-border-strong, #D1D5DC); }
+.planner-card .planner-card-check:hover { border-color: var(--brand-navy-focus, #2E2EB8); }
+.planner-card .text-body-compact { color: var(--planner-text); }
+.planner-card .text-caption { color: var(--planner-muted); }
+.planner-dropzone {
+  border: 1px dashed var(--planner-border);
+  background: color-mix(in srgb, var(--planner-card) 68%, var(--planner-lane));
+}
+.planner-column > div:last-child { background: var(--planner-lane); }
+.planner-column > div:last-child button {
+  border-color: var(--planner-border);
+  background: var(--planner-card);
+}
+.planner-board-empty {
+  min-width: min(100%, 420px);
+  min-height: 160px;
+  padding: 30px;
+  border: 1px dashed var(--planner-border);
+  border-radius: 14px;
+  background: var(--planner-card);
+}
+
+html[data-theme='dark'] .planner-view {
+  --planner-card: var(--neutral-surface);
+  --planner-surface: var(--neutral-background);
+  --planner-lane: var(--neutral-surface-hover);
+  --planner-border: var(--neutral-border);
+}
+html[data-theme='dark'] .planner-card:hover { box-shadow: 0 5px 14px rgb(0 0 0 / 25%); }
+
+@media (max-width: 900px) {
+  .planner-commandbar > * { flex: 1 1 180px; }
+  .planner-commandbar [data-slot='search-input'] { flex-basis: 100%; }
+  .planner-commandbar button { justify-content: center; }
+}
+@media (max-width: 700px) {
+  .planner-header { align-items: flex-start; }
+  .planner-header > button { width: 100%; justify-content: center; }
+  .planner-commandbar { padding: 8px; }
+  .planner-commandbar > * { flex-basis: 100%; width: 100%; }
+  .planner-commandbar [data-slot='select-trigger'] { width: 100%; }
+  .planner-column { width: min(280px, calc(100vw - 52px)); }
+}

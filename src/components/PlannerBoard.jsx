@@ -344,7 +344,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   </div>
 
   return <section className="workspace-view planner-view">
-    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
+    <header className="planner-header flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
       <div className="min-w-0">
         <p className={`text-overline uppercase ${isOperations ? 'text-text-muted' : 'text-navy'}`}>Work planning</p>
         <h1 className="mt-1 text-page-heading text-text-primary">{isOperations ? 'Daily operations' : 'Planner'}</h1>
@@ -358,7 +358,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     </header>
 
     {bucketArchiveOpen ? archiveContent : <>
-    <div className="mt-[9px] flex flex-wrap items-center gap-3">
+    <div className="planner-commandbar mt-[9px] flex flex-wrap items-center gap-3">
       <SearchInput
         className="w-full min-w-0 sm:max-w-[280px] sm:flex-1"
         label="Search tasks"
@@ -384,7 +384,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       {canManageBuckets && !isOperations && <Button size="page" type="button" onClick={() => setCreating(current => !current)} aria-expanded={creating}><Plus size={20} strokeWidth={1.75} /> New bucket</Button>}
     </div>
 
-    <div className="mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">
+    <div className="planner-scope-summary mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">
       <span>{scopeLine}</span>
       {filtersHiding && <button type="button" className="text-caption font-medium text-navy underline underline-offset-2" onClick={clearHiddenFilters}>Clear filters</button>}
     </div>
@@ -392,7 +392,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     {createPanel}
     {(bucketError || workstreamError) && <p className="auth-error" role="alert">{bucketError || workstreamError}</p>}
 
-    <div className="mt-[17px] flex gap-4 overflow-x-auto pb-2" aria-label="Planner board">
+    <div className="planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2" aria-label="Planner board">
       {buckets.map(bucket => {
         const persistedIndex = persistedBuckets.findIndex(item => item.id === bucket.id)
         const bucketDraggable = canManageBuckets && Boolean(bucketScope) && typeof bucket.id === 'number' && bucket.name !== 'Backlog'
