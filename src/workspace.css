@@ -1281,8 +1281,10 @@ html[data-theme='dark'] .auth-divider::after {
 }
 
 /* Keep the visual language consistent across Flowbite and app-owned controls. */
-:where(button, input, textarea) {
-  font: inherit;
+@layer base {
+  :where(button, input, textarea) {
+    font: inherit;
+  }
 }
 
 :where(.primary-button, .secondary-button, .filter-button, .icon-button, .theme-toggle, .calendar-nav-button, .calendar-view-switcher button, .text-button, .row-add, .task-more-button) {
@@ -2322,7 +2324,7 @@ html[data-theme='dark'] .today-metrics > button {
 .sidebar-upgrade-card { box-shadow: 7px 8px 18px rgb(2 5 31 / 28%), inset 0 1px 0 rgb(255 255 255 / 12%); }
 
 /* Every shared Card receives the same page-level neumorphic treatment. */
-[data-slot='card'] { border-radius: 16px !important; background: var(--workspace-surface) !important; border-color: var(--workspace-border) !important; box-shadow: 12px 15px 32px rgb(7 26 46 / 20%), -10px -10px 25px rgb(255 255 255 / 92%), inset 0 1px 0 rgb(255 255 255 / 95%) !important; }
+[data-slot='card'] { border-radius: var(--radius-control) !important; background: var(--workspace-surface) !important; border-color: var(--workspace-border) !important; box-shadow: 12px 15px 32px rgb(7 26 46 / 20%), -10px -10px 25px rgb(255 255 255 / 92%), inset 0 1px 0 rgb(255 255 255 / 95%) !important; }
 html[data-theme='dark'] [data-slot='card'] { box-shadow: 12px 15px 34px rgb(2 5 31 / 55%), -8px -8px 20px rgb(255 255 255 / 6%), inset 0 1px 0 rgb(255 255 255 / 7%) !important; }
 .workspace-view .today-panel, .workspace-view .today-metrics > button, .workspace-view .team-board-metrics > button, .workspace-view .sidebar-upgrade-card { box-shadow: 12px 15px 30px rgb(7 26 46 / 20%), -9px -9px 22px rgb(255 255 255 / 90%), inset 0 1px 0 rgb(255 255 255 / 92%) !important; }
 html[data-theme='dark'] .workspace-view .today-panel, html[data-theme='dark'] .workspace-view .today-metrics > button, html[data-theme='dark'] .workspace-view .team-board-metrics > button { box-shadow: 12px 15px 32px rgb(2 5 31 / 55%), -7px -7px 18px rgb(255 255 255 / 6%), inset 0 1px 0 rgb(255 255 255 / 7%) !important; }
@@ -5332,7 +5334,7 @@ html[data-theme='dark'] .today-dashboard {
 
 [data-slot='card'] {
   border-color: var(--workspace-border) !important;
-  border-radius: 18px !important;
+  border-radius: var(--radius-control) !important;
   box-shadow: 0 1px 2px rgb(16 24 40 / 4%), 0 12px 28px rgb(16 24 40 / 6%) !important;
 }
 
@@ -8868,9 +8870,15 @@ html[data-theme='dark'] .planner-bucket-menu {
    uses. It stays at a single element selector on purpose, because that loses to
    every class rule above it: cards, metric tiles, list rows, checkbox squares, the
    spreadsheet cells and the slide rail keep whatever corner their own rule asks
-   for. */
-button {
-  border-radius: 999px;
+   for.
+
+   It has to sit in @layer base to do that. A bare unlayered element rule beats
+   @layer utilities no matter how specific the class is, so outside a layer this
+   rule was quietly winning over every Tailwind radius on every button. */
+@layer base {
+  button {
+    border-radius: 999px;
+  }
 }
 
 /* Enabled controls should advertise that they are clickable. The zero-specificity
@@ -9501,6 +9509,29 @@ button {
 .workspace-alert-copy strong { color: var(--workspace-text, #1f2937); font-size: 11px; }
 .workspace-alert-copy > div { color: var(--workspace-text-soft, #6b7280); }
 .workspace-alert-action { align-self: center; }
+
+/* The search field draws its own box, so it has to opt out of the two global
+   form rules that would otherwise override it: the soft-surface rule sets a
+   grey fill with !important, and the generic field rule sets a 10px radius.
+   Both are unscoped element selectors, so an inline utility cannot win and the
+   reset has to live here. Any future primitive that paints its own field
+   container needs the same treatment. */
+[data-slot='search-input'] input {
+  appearance: none;
+  min-width: 0;
+  height: auto;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0;
+  color: var(--neutral-text-primary);
+  font: 400 14px/20px var(--font-sans);
+}
+
+[data-slot='search-input'] input:focus { box-shadow: none !important; }
+[data-slot='search-input'] input::placeholder { color: var(--neutral-text-muted); }
+[data-slot='search-input'] input::-webkit-search-cancel-button { appearance: none; }
 
 .workspace-view .activity-list { position: relative; }
 

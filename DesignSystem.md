@@ -43,6 +43,29 @@ Do not add another application stylesheet. Extend the relevant current layer in
 `workspace.css` and reuse the React primitives in `src/components/ui/` where one
 already exists.
 
+#### Tailwind Layers And Global Element Rules
+
+Tailwind puts all of its utilities in `@layer utilities`. Almost everything in
+`workspace.css` is unlayered, and an unlayered rule beats a layered one no
+matter how low its specificity is. A bare element or `:where()` rule written
+here therefore outranks every Tailwind utility on the same element, and no
+amount of class or specificity on the element can win against it.
+
+Two rules were doing that, and both now sit in `@layer base`:
+
+- `button { border-radius: 999px }` is the pill fallback. Its comment claimed it
+  "loses to every class rule above it", which was false while it was unlayered.
+  In `@layer base` it still beats preflight and now genuinely loses to
+  `.rounded-*`, which is what the comment always said.
+- `:where(button, input, textarea) { font: inherit }` duplicated the same
+  normalisation that already ships in preflight. Unlayered, it reset `font-size`
+  on every button and input, so no `text-*` utility could size a control.
+
+Put any new global element fallback in `@layer base` for the same reason. When
+one existing primitive still loses to an unlayered rule, scope an opt-out to its
+attribute (`[data-slot='search-input'] input { ... }`) instead of escalating
+with `!important`; `!important` on a `:where()` selector will beat class
+utilities, which is worse than the problem it solves.
 ### Mockups And Retired Stylesheets
 
 Build a mockup as a React page that uses the shared primitives and the tokens in
@@ -407,10 +430,12 @@ letter spacing when the label is genuinely a label, not body copy.
 - Standard card depth comes from `--dashboard-shadow`.
 - Hover depth comes from `--dashboard-shadow-hover` and a small vertical lift.
 
-Every `[data-slot='card']` is pinned to `18px` radius, the
-`--workspace-border` colour, and a `0 1px 2px` plus `0 12px 28px` shadow by one
+Every `[data-slot='card']` is pinned to `var(--radius-control)` (`12px`), the
+`--workspace-border` colour, and a `0 1px 2px` plus `0 12px 28px` shadow by a
 rule in the dashboard layer. Changing card depth means editing that rule, not an
-individual card.
+individual card. Two separate sections pin the same slot; both now read the
+radius token, so the ladder keeps a single owner even though the rule is
+duplicated. Collapsing them into one is worthwhile but not yet done.
 
 Avoid hard-coded viewport-scaled font sizes. Use stable dimensions, `minmax()`,
 `aspect-ratio`, and wrapping constraints so controls do not resize unexpectedly.
