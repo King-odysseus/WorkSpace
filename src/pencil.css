@@ -86,11 +86,6 @@ button { cursor: pointer; }
 .screen-share-video-source { display: none !important; }
 .skip-link { position: fixed; z-index: 100; top: -64px; left: 16px; padding: 8px 12px; border-radius: 8px; background: var(--pencil-navy); color: #fff; }
 .skip-link:focus { top: 16px; }
-.cookie-consent { position: fixed; right: 24px; bottom: 24px; z-index: 80; display: flex; max-width: 520px; align-items: end; gap: 20px; padding: 16px; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; box-shadow: 0 12px 40px rgb(16 24 40 / 18%); }
-.cookie-consent p { margin: 6px 0; color: var(--pencil-text-secondary); font-size: 13px; }
-.cookie-link { padding: 0; border: 0; background: transparent; color: var(--pencil-blue); font-size: 13px; }
-.cookie-actions { display: flex; flex: 0 0 auto; gap: 8px; }
-.cookie-actions .primary-button, .cookie-actions .secondary-button { min-height: 36px; padding: 0 12px; white-space: nowrap; }
 
 /* Application shell: P1's 264px navy rail, 64px header and 32px canvas gap. */
 .main-content { min-width: 0; background: var(--pencil-canvas) !important; color: var(--pencil-text); }
