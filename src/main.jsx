@@ -174,6 +174,7 @@ import { notificationDestinations, parseNotificationDeepLink, resolveNotificatio
 import { requestChatThread } from "./lib/chat-navigation.js";
 import { startInstallPromptCapture } from "./lib/install-prompt.js";
 import {
+  CookieConsent,
   HelpView,
   InstallAppView,
   LegalView,
@@ -3677,6 +3678,7 @@ function App() {
           tasks={tasks}
         />
       )}
+      <CookieConsent onOpenLegal={() => setActive("Legal")} />
     </div>
   );
 }
