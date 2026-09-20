@@ -298,6 +298,9 @@ aside[class*='bg-navy'] > div:last-child .text-text-muted { color: #93B4D4 !impo
   outline: 2px solid rgb(255 255 255 / 62%);
   outline-offset: 2px;
 }
+@media (max-width: 1023px) {
+  .sidebar-expand-flyout { display: none; }
+}
 /* P1 desktop header controls. */
 button[aria-label='Open Zuri'] { width: 118px !important; height: 36px !important; margin-right: 2px !important; border: 1px solid #BFDBFE !important; border-radius: 10px !important; background: #EFF6FF !important; color: #1447E6 !important; box-shadow: none !important; }
 button[aria-label='Open Zuri']:hover { background: #DBEAFE !important; }

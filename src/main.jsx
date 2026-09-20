@@ -33,7 +33,6 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronsLeft,
   ClipboardList,
   Clock3,
   Copy,
@@ -2627,18 +2626,6 @@ function App() {
                 <span className="truncate text-[15px] font-bold tracking-[-0.2px] text-text-primary">
                   WorkSpace
                 </span>
-                {/* The design puts the collapse control on the brand row rather
-                    than on a pill floating over the sidebar's edge. */}
-                <button
-                  type="button"
-                  onClick={() => setSidebarCollapsed((current) => !current)}
-                  aria-expanded={!sidebarCollapsed}
-                  aria-label="Collapse sidebar"
-                  title="Collapse sidebar"
-                  className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-chip text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary"
-                >
-                  <ChevronsLeft size={16} />
-                </button>
               </div>
 
               <div className="relative" ref={workspaceMenuRef}>
@@ -2834,15 +2821,16 @@ function App() {
           </div>
         </div>
 
-        {railCollapsed && (
+        {!mobileOpen && (
           <button
             type="button"
-            className="sidebar-expand-flyout"
-            onClick={() => setSidebarCollapsed(false)}
-            aria-label="Expand sidebar"
-            title="Expand sidebar"
+            className={`sidebar-expand-flyout${railCollapsed ? ' is-collapsed' : ' is-expanded'}`}
+            onClick={() => setSidebarCollapsed((current) => !current)}
+            aria-expanded={!sidebarCollapsed}
+            aria-label={railCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={railCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <ChevronRight size={16} aria-hidden="true" />
+            {railCollapsed ? <ChevronRight size={16} aria-hidden="true" /> : <ChevronLeft size={16} aria-hidden="true" />}
           </button>
         )}
       </aside>
