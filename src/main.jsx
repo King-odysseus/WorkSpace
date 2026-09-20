@@ -138,6 +138,7 @@ import {
   TodayDashboard,
 } from "./components/BoardViews.jsx";
 import { WorkspaceComposer } from "./components/WorkspaceComposer.jsx";
+import Avatar from "./components/Avatar.jsx";
 const ChatWorkspaceView = lazy(() =>
   import("./components/ChatViews.jsx").then((module) => ({
     default: module.ChatWorkspaceView,
@@ -223,6 +224,30 @@ import {
 const isConversationNotification = (notification) =>
   ["chat_channel", "direct_conversation"].includes(notification?.target_type);
 
+const notificationBadgeLabel = (count, max = 99) =>
+  count > max ? `${max}+` : String(count);
+
+function NotificationIndicator({
+  count,
+  countKnown,
+  label,
+  max = 99,
+  className = "",
+  dotClassName = "",
+}) {
+  if (count <= 0) return null;
+
+  if (!countKnown) {
+    return <span aria-label={`Unread ${label}`} className={dotClassName} />;
+  }
+
+  return (
+    <span aria-label={`${count} unread ${label}`} className={className}>
+      {notificationBadgeLabel(count, max)}
+    </span>
+  );
+}
+
 function App() {
   const today = toDateKey(new Date());
   const todayLabel = formatLongDate(today);
@@ -233,7 +258,7 @@ function App() {
     const saved = localStorage.getItem("workspace-last-page");
     const requestedPage = requested || saved || "Today";
     const page = requestedPage === "Team board" ? "Team" : requestedPage;
-    return ["Files", "Import data"].includes(page) ? "Today" : page;
+    return page;
   });
   useEffect(() => {
     localStorage.setItem("workspace-last-page", active);
@@ -288,6 +313,8 @@ function App() {
   useEffect(() => {
     if (!showModal) return undefined;
     const previouslyFocused = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKeyDown = (event) => {
       const dialog = taskModalRef.current;
       if (event.key === "Escape") {
@@ -311,6 +338,7 @@ function App() {
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
       if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
     };
   }, [showModal]);
@@ -2183,6 +2211,12 @@ function App() {
     (workspaceData.conversationNotifications || []).filter(
       (notification) => notification.target_type === "direct_conversation" && !notification.read,
     ).length;
+  const conversationCountKnown = Number.isFinite(
+    workspaceData.notificationCounts?.conversation,
+  );
+  const activityCountKnown = Number.isFinite(
+    workspaceData.notificationCounts?.activity,
+  );
   // Newest first. The panel is a list to pick from, so it keeps every unread
   // alert rather than the single newest one it used to jump straight into.
   const conversationAlerts = [...unreadConversationNotifications].sort(
@@ -2743,7 +2777,7 @@ function App() {
                                 : "bg-danger",
                           )}
                         >
-                          {badge > 9 ? "9+" : badge}
+                          {notificationBadgeLabel(badge, 9)}
                         </span>
                       )}
                     </button>
@@ -2770,29 +2804,21 @@ function App() {
                 aria-expanded={sidebarProfileOpen}
                 aria-label={`More account options for ${currentUserName}`}
               >
-                <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
-                  {currentUserAvatarUrl ? (
-                    <img src={currentUserAvatarUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    currentUserInitials
-                  )}
-                </span>
+                <Avatar
+                  name={currentUserName}
+                  avatarUrl={currentUserAvatarUrl}
+                  presence={currentUserPresence}
+                  className="shell-avatar-rail"
+                />
               </button>
             ) : (
               <>
-                <span className="relative inline-flex size-8 shrink-0">
-                  <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
-                    {currentUserAvatarUrl ? (
-                      <img src={currentUserAvatarUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      currentUserInitials
-                    )}
-                  </span>
-                  <span
-                    className={`presence-dot presence-${currentUserPresence}`}
-                    title={PRESENCE_LABEL[currentUserPresence] || currentUserPresence}
-                  />
-                </span>
+                <Avatar
+                  name={currentUserName}
+                  avatarUrl={currentUserAvatarUrl}
+                  presence={currentUserPresence}
+                  className="shell-avatar-expanded"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-text-primary">
                     {currentUserName}
@@ -2904,16 +2930,14 @@ function App() {
               {/* The design puts the count on the bell's own 28px box rather
                   than on the bar, a 14px roundel against that box's top-right
                   corner, and draws no ring around it. */}
-              {unreadActivityNotificationCount > 0 && (
-                <span
-                  aria-label={`${unreadActivityNotificationCount} unread workspace notifications`}
-                  className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[9px] font-bold leading-none text-white"
-                >
-                  {unreadActivityNotificationCount > 9
-                    ? "9+"
-                    : unreadActivityNotificationCount}
-                </span>
-              )}
+              <NotificationIndicator
+                count={unreadActivityNotificationCount}
+                countKnown={activityCountKnown}
+                max={9}
+                label="workspace notifications"
+                className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[9px] font-bold leading-none text-white"
+                dotClassName="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-danger ring-2 ring-surface"
+              />
             </button>
 
             <button
@@ -2925,13 +2949,14 @@ function App() {
               aria-haspopup="true"
               aria-expanded={profileMenuOpen}
               aria-label={`Open account menu for ${currentUserName}`}
-              className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-[10px] font-bold text-white"
+              className="flex size-7 shrink-0 items-center justify-center rounded-full"
             >
-              {currentUserAvatarUrl ? (
-                <img src={currentUserAvatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                currentUserInitials
-              )}
+              <Avatar
+                name={currentUserName}
+                avatarUrl={currentUserAvatarUrl}
+                presence={currentUserPresence}
+                className="shell-avatar-mobile"
+              />
             </button>
           </div>
         </div>
@@ -2985,7 +3010,7 @@ function App() {
           {/* The column is a fixed 272px so the search after it starts on the
               design's 320px, and the utility cluster is pushed right by ml-auto
               rather than by a matching flex-1 on this side. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-[272px] lg:flex-none">
+          <div className="hidden min-w-0 flex-1 items-center gap-2 2xl:flex 2xl:w-[272px] 2xl:flex-none">
             <span
               aria-hidden="true"
               className="flex size-7 shrink-0 items-center justify-center rounded-badge bg-primary text-body-compact font-bold text-primary-foreground"
@@ -3005,7 +3030,7 @@ function App() {
             </span>
           </div>
 
-          <div className="relative ml-3 min-w-0 flex-1 lg:ml-0 lg:w-[400px] lg:flex-none" ref={searchRef}>
+          <div className="relative ml-3 min-w-0 flex-1 lg:ml-0 2xl:w-[400px] 2xl:flex-none" ref={searchRef}>
             {/* The field surface sits on the wrapper, not the input. Every plain
                 input in this app is repainted by an !important soft-field rule
                 further down the stylesheet, so an input styled here would look
@@ -3039,7 +3064,7 @@ function App() {
             </div>
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
+          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1 2xl:gap-3">
             {/* The design's Assistant lives in the header rather than on a
                 launcher floating over the page, and opens the same flyout. */}
             <button
@@ -3049,13 +3074,13 @@ function App() {
                 setAiLauncherVisibility(false);
                 setAiFlyoutOpen(true);
               }}
-              className="hidden h-9 items-center gap-2 rounded-[10px] border border-alert-info-stroke bg-alert-info-fill pl-3 pr-3 text-body-compact font-medium text-assistant-accent transition-colors hover:bg-alert-info-stroke/40 lg:flex"
+              className="hidden size-9 items-center justify-center gap-2 rounded-[10px] border border-alert-info-stroke bg-alert-info-fill text-body-compact font-medium text-assistant-accent transition-colors hover:bg-alert-info-stroke/40 lg:flex 2xl:w-auto 2xl:px-3"
               aria-haspopup="dialog"
               aria-label="Open Zuri"
               title="Ask Zuri"
             >
               <Sparkles size={18} />
-              Assistant
+              <span className="hidden 2xl:inline">Assistant</span>
             </button>
 
             <button
@@ -3090,11 +3115,13 @@ function App() {
                 title="Open chats and channels"
               >
                 <MessageSquare size={20} />
-                {unreadConversationCount > 0 && (
-                  <span aria-label={`${unreadConversationCount} unread messages`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white ring-2 ring-surface">
-                    {unreadConversationCount > 99 ? "99+" : unreadConversationCount}
-                  </span>
-                )}
+                <NotificationIndicator
+                  count={unreadConversationCount}
+                  countKnown={conversationCountKnown}
+                  label="messages"
+                  className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white ring-2 ring-surface"
+                  dotClassName="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-danger ring-2 ring-surface"
+                />
               </button>
               {messagesOpen &&
                 messagesOrigin === "header" &&
@@ -3114,9 +3141,13 @@ function App() {
                 aria-label="Open workspace activity notifications"
               >
                 <Bell size={20} />
-                {unreadActivityNotificationCount > 0 && (
-                  <span aria-label={`${unreadActivityNotificationCount} unread workspace notifications`} className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface">{unreadActivityNotificationCount}</span>
-                )}
+                <NotificationIndicator
+                  count={unreadActivityNotificationCount}
+                  countKnown={activityCountKnown}
+                  label="workspace notifications"
+                  className="absolute right-0 top-0 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-surface"
+                  dotClassName="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-danger ring-2 ring-surface"
+                />
               </button>
               {notificationOpen &&
                 notificationOrigin === "header" &&
@@ -3129,7 +3160,7 @@ function App() {
                 the avatar lands on 1096 rather than on the cluster's own gap. */}
             <span
               aria-hidden="true"
-              className="hidden h-7 w-px shrink-0 bg-border lg:mr-[7px] lg:block"
+              className="hidden h-7 w-px shrink-0 bg-border 2xl:mr-[7px] 2xl:block"
             />
 
             <div className="relative" ref={profileMenuRef}>
@@ -3144,24 +3175,14 @@ function App() {
                 aria-label={`Account menu for ${currentUserName}`}
                 className="flex items-center gap-2 rounded-control py-1 pl-1 transition-colors hover:bg-surface-secondary"
               >
-                <span className="relative inline-flex size-8 shrink-0">
-                  <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-navy-soft text-xs font-bold text-white">
-                    {currentUserAvatarUrl ? (
-                      <img
-                        src={currentUserAvatarUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      currentUserInitials
-                    )}
-                  </span>
-                  <span
-                    className={`presence-dot presence-${currentUserPresence}`}
-                    title={
-                      PRESENCE_LABEL[currentUserPresence] || currentUserPresence
-                    }
-                  />
+                <Avatar
+                  name={currentUserName}
+                  avatarUrl={currentUserAvatarUrl}
+                  presence={currentUserPresence}
+                  className="shell-avatar-header"
+                />
+                <span className="hidden max-w-36 truncate text-label font-semibold text-text-primary 2xl:block">
+                  {currentUserName}
                 </span>
                 <ChevronDown
                   size={16}
@@ -3445,32 +3466,33 @@ function App() {
         </div>}
 
       {showModal && (
-        <div className="modal-backdrop" onMouseDown={() => setShowModal(false)}>
+        <div className="modal-backdrop task-dialog-backdrop" onMouseDown={() => setShowModal(false)}>
           <form
-            className="modal task-composer-modal"
+            className="task-dialog task-composer-modal"
             ref={taskModalRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-task-title"
+            aria-describedby="add-task-description"
             onSubmit={addTask}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="modal-heading task-composer-heading">
-              <div className="task-composer-heading-copy">
+            <div className="task-dialog-header task-composer-heading">
+              <div className="task-dialog-heading-copy task-composer-heading-copy">
                 <p className="eyebrow">New task</p>
                 <h2 id="add-task-title">Add a task</h2>
-                <p>Set ownership, timing, and placement.</p>
+                <p id="add-task-description">Set ownership, timing, and placement. Required fields are marked in the form.</p>
               </div>
               <button
                 type="button"
-                className="close-button"
+                className="close-button task-dialog-close"
                 onClick={() => setShowModal(false)}
                 aria-label="Close add task dialog"
               >
                 <X size={18} />
               </button>
             </div>
-            <div className="task-composer-body">
+            <div className="task-dialog-body task-composer-body">
               <label className="task-composer-field">
                 Task name
                 <input
@@ -3481,6 +3503,7 @@ function App() {
                     setTaskError("");
                   }}
                   placeholder="What needs to happen?"
+                  maxLength="200"
                 />
               </label>
               <label className="task-composer-field">
@@ -3612,7 +3635,7 @@ function App() {
                 </p>
               )}
             </div>
-            <div className="task-composer-footer">
+            <div className="task-dialog-footer task-composer-footer">
               <button type="button" className="secondary-button" onClick={() => setShowModal(false)}>
                 Cancel
               </button>
@@ -3803,11 +3826,17 @@ function WorkspaceView({
   const [notificationPage, setNotificationPage] = useState(1);
   const [notificationHistory, setNotificationHistory] = useState([]);
   const [notificationPagination, setNotificationPagination] = useState(null);
+  const [notificationSummary, setNotificationSummary] = useState(null);
+  const [notificationFilter, setNotificationFilter] = useState("all");
   const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationLoadingMore, setNotificationLoadingMore] = useState(false);
   const [notificationError, setNotificationError] = useState("");
   const [notificationReload, setNotificationReload] = useState(0);
   useEffect(() => {
-    const reloadPage = () => setNotificationReload((current) => current + 1);
+    const reloadPage = () => {
+      setNotificationPage(1);
+      setNotificationReload((current) => current + 1);
+    };
     window.addEventListener("workspace:notifications-changed", reloadPage);
     return () => window.removeEventListener("workspace:notifications-changed", reloadPage);
   }, []);
@@ -3816,6 +3845,7 @@ function WorkspaceView({
   const [projectHealthFilter, setProjectHealthFilter] = useState("all");
   const [projectSort, setProjectSort] = useState("due");
   const [projectViewMode, setProjectViewMode] = useState("grid");
+  const [projectActivityFilter, setProjectActivityFilter] = useState("all");
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
@@ -3951,37 +3981,63 @@ function WorkspaceView({
     activityReload,
   ]);
   useEffect(() => {
-    if (active === "Notifications") setNotificationPage(1);
-  }, [active]);
+    if (active !== "Notifications") return;
+    setNotificationPage(1);
+    setNotificationFilter("all");
+    setNotificationHistory([]);
+    setNotificationPagination(null);
+    setNotificationSummary(null);
+  }, [active, workspaceId]);
   useEffect(() => {
     if (active !== "Notifications" || !workspaceId) return undefined;
     let current = true;
-    setNotificationLoading(true);
+    if (notificationPage === 1) setNotificationLoading(true);
+    else setNotificationLoadingMore(true);
     setNotificationError("");
-    fetch(`/api/workspaces/${workspaceId}/notifications/?page=${notificationPage}&exclude_chat=1&sort=newest`, {
+    const params = new URLSearchParams({
+      page: String(notificationPage),
+      exclude_chat: "1",
+      sort: "newest",
+      page_size: "7",
+    });
+    if (notificationFilter !== "all") params.set("filter", notificationFilter);
+    fetch(`/api/workspaces/${workspaceId}/notifications/?${params.toString()}`, {
       credentials: "include",
+      headers: { "X-Workspace-Id": String(workspaceId) },
     })
       .then(async (response) => {
-        const payload = await response.json();
+        const payload = await readJsonResponse(response, "Notifications could not be loaded.");
         if (!response.ok)
           throw new Error(payload.error || "Notifications could not be loaded.");
         return payload;
       })
       .then((payload) => {
         if (!current) return;
-        setNotificationHistory(payload.notifications || []);
+        setNotificationHistory((existing) => {
+          if (notificationPage === 1) return payload.notifications || [];
+          const existingIds = new Set(existing.map((notification) => notification.id));
+          return [
+            ...existing,
+            ...(payload.notifications || []).filter(
+              (notification) => !existingIds.has(notification.id),
+            ),
+          ];
+        });
         setNotificationPagination(payload.pagination || null);
+        setNotificationSummary(payload.summary || null);
       })
       .catch((error) => {
         if (current) setNotificationError(error.message || "Notifications could not be loaded.");
       })
       .finally(() => {
-        if (current) setNotificationLoading(false);
+        if (!current) return;
+        setNotificationLoading(false);
+        setNotificationLoadingMore(false);
       });
     return () => {
       current = false;
     };
-  }, [active, workspaceId, notificationPage, notificationReload]);
+  }, [active, workspaceId, notificationFilter, notificationPage, notificationReload]);
   useEffect(() => {
     const handleReportFilter = (event) => {
       if (event.detail) setPlannerFilter(event.detail);
@@ -6038,6 +6094,7 @@ function WorkspaceView({
         taskTemplates={localData.taskTemplates || []}
         projectTemplates={localData.projectTemplates || []}
         projects={localData.projects}
+        invitations={localData.invitations || []}
         onRefresh={onRefresh}
         onConfirm={onConfirm}
         onNavigate={onNavigate}
@@ -6137,9 +6194,9 @@ function WorkspaceView({
       </Suspense>
     );
   }
-  if (active === "Import data") return null;
+  if (active === "Import data") return <ImportView workspaceId={workspaceId} role={currentWorkspace?.role} />;
   if (active === "My planner") return <PersonalPlanner workspaceId={workspaceId} />;
-  if (active === "What's new") return <WhatsNew onOpen={onWhatsNewSeen} />;
+  if (active === "What's new") return <WhatsNew onOpen={onWhatsNewSeen} onNavigate={onNavigate} />;
   if (active === "Install app") return <InstallAppView onNavigate={onNavigate} />;
   if (active === "Help") return <HelpView onNavigate={onNavigate} />;
   if (active === "Legal") return <LegalView />;
@@ -7041,6 +7098,7 @@ function WorkspaceView({
       const projectDeadline = selectedProjectWorkspace.due_date ? formatDay(selectedProjectWorkspace.due_date) : "No deadline set";
       const openOperation = (operation) => {
         setProjectOperation(operation);
+        if (operation === "activity") setProjectActivityFilter("all");
         window.history.replaceState(
           null,
           "",
@@ -7167,7 +7225,13 @@ function WorkspaceView({
             </section>
           )}
           {projectOperation === "issues" && (
-            <ProjectRiskIssuePanel projects={[selectedProjectWorkspace]} workspaceId={workspaceId} tasks={tasks} canManage={canManageMembers} design="p32" />
+            <ProjectRiskIssuePanel
+              projects={[selectedProjectWorkspace]}
+              workspaceId={workspaceId}
+              tasks={tasks}
+              canManage={canManageMembers}
+              design="p33"
+            />
           )}
           {projectOperation === "resources" && (
             <ProjectStakeholderResourcePanel
@@ -7183,6 +7247,7 @@ function WorkspaceView({
               project={selectedProjectWorkspace}
               workspaceId={workspaceId}
               canManage={canManageMembers}
+              design="p35"
               onProjectUpdated={(updatedProject) => {
                 setSelectedProjectWorkspace(updatedProject);
                 setLocalData((current) => ({
@@ -7196,7 +7261,51 @@ function WorkspaceView({
             />
           )}
           {projectOperation === "activity" && (
-            <section className="project-activity-surface"><div className="project-activity-filter-label">Filter activity</div><div className="project-activity-chips">{["All", "Tasks", "Risks", "Issues", "Budget", "Resources", "Stakeholders", "Comments"].map((label) => <button type="button" className={label === "All" ? "active" : ""} key={label}>{label}</button>)}</div><div className="project-activity-list">{(localData.activity || []).filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)).map((item) => <div className="project-activity-row" key={item.id}><RefreshCw size={16} /><div><strong>{item.description || item.message || "Project activity updated"}</strong><small>{formatRelativeActivityTime(item.created_at || item.updated_at)}</small></div></div>)}{!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && <p className="project-detail-empty">No activity has been recorded for this project.</p>}</div></section>
+            <section className="project-activity-surface">
+              <div className="project-activity-filter-label">Filter activity</div>
+              <div className="project-activity-chips" role="group" aria-label="Filter project activity">
+                {["All", "Tasks", "Risks", "Issues", "Budget", "Resources", "Stakeholders", "Comments"].map((label) => (
+                  <button
+                    type="button"
+                    className={projectActivityFilter === label.toLowerCase() ? "active" : ""}
+                    aria-pressed={projectActivityFilter === label.toLowerCase()}
+                    key={label}
+                    onClick={() => setProjectActivityFilter(label.toLowerCase())}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="project-activity-list">
+                {(localData.activity || [])
+                  .filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id))
+                  .filter((item) => {
+                    if (projectActivityFilter === "all") return true;
+                    const kind = String(item.kind || "").toLowerCase();
+                    if (projectActivityFilter === "tasks") return kind.startsWith("task_");
+                    if (projectActivityFilter === "risks") return kind.startsWith("risk_");
+                    if (projectActivityFilter === "issues") return kind.startsWith("issue_");
+                    if (projectActivityFilter === "budget") return kind.includes("budget") || kind.includes("expense");
+                    if (projectActivityFilter === "resources") return kind.includes("resource");
+                    if (projectActivityFilter === "stakeholders") return kind.includes("stakeholder");
+                    if (projectActivityFilter === "comments") return kind.includes("comment");
+                    return true;
+                  })
+                  .map((item) => (
+                    <div className="project-activity-row" key={item.id}>
+                      <RefreshCw size={18} />
+                      <div>
+                        <strong>{item.description || item.message || "Project activity updated"}</strong>
+                        <small>{item.actor_name ? `${item.actor_name} - ` : ""}{formatRelativeActivityTime(item.created_at || item.updated_at)}</small>
+                      </div>
+                      <ArrowUpRight size={16} aria-hidden="true" />
+                    </div>
+                  ))}
+                {!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && (
+                  <p className="project-detail-empty">Project-scoped activity is not available from the current activity API.</p>
+                )}
+              </div>
+            </section>
           )}
           {selectedProject && (
             <ProjectEditDrawer

@@ -21,7 +21,7 @@ const task = {
   can_edit: true,
 }
 
-it('closes the task drawer and confirms an update after updating task fields', async () => {
+it('closes the task dialog and confirms an update after updating task fields', async () => {
   const onClose = vi.fn()
   const onTaskUpdated = vi.fn()
   const notices = []
@@ -45,8 +45,8 @@ it('closes the task drawer and confirms an update after updating task fields', a
       />,
     )
 
-    const updateButton = await screen.findByRole('button', { name: 'Update task' })
-    fireEvent.submit(updateButton.closest('form'))
+    const updateButton = await screen.findByRole('button', { name: 'Save changes' })
+    fireEvent.click(updateButton)
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(onTaskUpdated).toHaveBeenCalledWith(expect.objectContaining({ title: 'Updated UI' }))
@@ -54,6 +54,30 @@ it('closes the task drawer and confirms an update after updating task fields', a
   } finally {
     window.removeEventListener('workspace:notice', captureNotice)
   }
+})
+
+it('closes the task dialog on Escape and locks page scrolling', async () => {
+  const onClose = vi.fn()
+  mockApi({
+    '/api/tasks/91/comments/': { comments: [] },
+    '/api/tasks/91/subtasks/': { subtasks: [] },
+    '/api/tasks/91/attachments/': { attachments: [] },
+    '/api/workspaces/1/tasks/': { tasks: [] },
+  })
+
+  render(
+    <TaskDetailDrawer
+      task={task}
+      workspaceId={1}
+      onClose={onClose}
+      onTaskUpdated={vi.fn()}
+    />,
+  )
+
+  expect(await screen.findByRole('dialog', { name: /Design UI/ })).toBeInTheDocument()
+  expect(document.body.style.overflow).toBe('hidden')
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(onClose).toHaveBeenCalledTimes(1)
 })
 
 const members = [

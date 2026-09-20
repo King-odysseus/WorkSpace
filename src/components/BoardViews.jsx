@@ -64,6 +64,7 @@ import {
   formatEstimateMinutes,
   formatDayMonthName,
   formatLastSeen,
+  formatRelativeActivityTime,
   formatTodayEyebrow,
   formatShiftClock,
   formatShiftDuration,
@@ -2350,6 +2351,7 @@ function ProjectRiskIssuePanel({
   const [projectId, setProjectId] = useState(() => projects[0]?.id || "");
   const [records, setRecords] = useState([]);
   const [activeTab, setActiveTab] = useState("risk");
+  const [selectedIssueId, setSelectedIssueId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [kind, setKind] = useState("risk");
   const [form, setForm] = useState({
@@ -2401,6 +2403,19 @@ function ProjectRiskIssuePanel({
     return () =>
       window.removeEventListener("project-register:tab", selectRegisterTab);
   }, []);
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setModalOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [modalOpen]);
   const items = records;
   const openAddModal = () => {
     setKind(activeTab);
@@ -2509,6 +2524,23 @@ function ProjectRiskIssuePanel({
   const pageSize = 20;
   const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize));
   const pageItems = visibleItems.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => {
+    if (design !== "p33") return;
+    if (issues.some((item) => item.id === selectedIssueId)) return;
+    setSelectedIssueId(issues[0]?.id || null);
+  }, [design, issues, selectedIssueId]);
+  const selectedIssue =
+    issues.find((item) => item.id === selectedIssueId) || issues[0] || null;
+  const issueReference = (item) => {
+    const index = issues.findIndex((candidate) => candidate.id === item.id);
+    return `I-${String(index + 1).padStart(2, "0")}`;
+  };
+  const issueStatusLabel = (status) =>
+    String(status || "open")
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const issueAction = (item) =>
+    item.mitigation || item.detail || "No next action recorded.";
   const statuses =
     activeTab === "risk"
       ? [
@@ -2525,26 +2557,662 @@ function ProjectRiskIssuePanel({
   if (hidden) return null;
 
   if (design === "p32") {
-    const openRisks = risks.filter((item) => !["mitigated", "closed"].includes(item.status));
-    const openIssues = issues.filter((item) => !["resolved", "closed"].includes(item.status));
-    const highRisk = risks.filter((item) => ["high", "critical"].includes(item.severity));
-    const escalated = items.filter((item) => item.escalation && !["closed", "resolved"].includes(item.status));
+    const openRisks = risks.filter((item) => item.status === "open");
+    const monitoringRisks = risks.filter(
+      (item) =>
+        item.status === "open" && Boolean(item.mitigation || item.escalation),
+    );
+    const escalated = items.filter(
+      (item) =>
+        item.escalation && !["closed", "resolved"].includes(item.status),
+    );
+    const mitigatedRisks = risks.filter((item) => item.status === "mitigated");
+    const scoreFor = (item) =>
+      Number(item.likelihood || 0) * Number(item.impact || 0);
+    const highestScore = risks.reduce(
+      (highest, item) => Math.max(highest, scoreFor(item)),
+      0,
+    );
+    const riskSummaryMeta = `${openRisks.length} open, ${monitoringRisks.length} monitoring, ${escalated.length} escalated${highestScore ? `, highest score ${highestScore}` : ""}`;
     return (
       <section className="project-risk-design">
         <div className="project-risk-metrics">
-          <div><span>Open risks</span><strong>{openRisks.length}</strong><small>Unmitigated threats</small></div>
-          <div><span>Open issues</span><strong>{openIssues.length}</strong><small>Active delivery blockers</small></div>
-          <div><span>High severity</span><strong>{highRisk.length}</strong><small>Requires attention</small></div>
-          <div><span>Escalations</span><strong>{escalated.length}</strong><small>Needs an owner decision</small></div>
+          <div className="tone-open">
+            <span>Open</span>
+            <strong>{openRisks.length}</strong>
+            <small>Not yet being worked</small>
+          </div>
+          <div className="tone-monitoring">
+            <span>Monitoring</span>
+            <strong>{monitoringRisks.length}</strong>
+            <small>Mitigation in flight</small>
+          </div>
+          <div className="tone-escalated">
+            <span>Escalated</span>
+            <strong>{escalated.length}</strong>
+            <small>With the project board</small>
+          </div>
+          <div className="tone-mitigated">
+            <span>Mitigated</span>
+            <strong>{mitigatedRisks.length}</strong>
+            <small>Controls in place</small>
+          </div>
+        </div>
+
+        <Card className="project-register-card project-risk-design-table">
+          <div className="project-register-toolbar">
+            <div
+              className="project-register-tabs"
+              role="tablist"
+              aria-label="Project risk register"
+            >
+              <button
+                type="button"
+                className={activeTab === "risk" ? "active" : ""}
+                onClick={() => setActiveTab("risk")}
+              >
+                Risk register <span>{risks.length}</span>
+              </button>
+              <button
+                type="button"
+                className={activeTab === "issue" ? "active" : ""}
+                onClick={() => setActiveTab("issue")}
+              >
+                Issue log <span>{issues.length}</span>
+              </button>
+            </div>
+            {canManage && (
+              <button
+                type="button"
+                className="primary-button project-register-add"
+                onClick={openAddModal}
+              >
+                <Plus size={15} /> Add new
+              </button>
+            )}
+          </div>
+          <div className="project-register-table-wrap">
+            <table className="project-register-table">
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>{activeTab === "risk" ? "Risk" : "Issue"}</th>
+                  <th>Severity</th>
+                  <th>Score</th>
+                  <th>Owner</th>
+                  <th>Target</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.length ? (
+                  pageItems.map((item, index) => (
+                    <tr key={item.id}>
+                      <td className="project-register-ref">
+                        {activeTab === "risk" ? "R" : "I"}-
+                        {String((page - 1) * pageSize + index + 1).padStart(
+                          2,
+                          "0",
+                        )}
+                      </td>
+                      <td>
+                        <strong>{item.title}</strong>
+                        <span>{item.detail || "No description added."}</span>
+                      </td>
+                      <td>
+                        <span className={`record-severity ${item.severity}`}>
+                          {item.severity}
+                        </span>
+                      </td>
+                      <td>{scoreFor(item) || <span className="table-muted">--</span>}</td>
+                      <td>
+                        {item.owner || (
+                          <span className="table-muted">Unassigned</span>
+                        )}
+                      </td>
+                      <td>
+                        {item.due || (
+                          <span className="table-muted">No date</span>
+                        )}
+                      </td>
+                      <td>
+                        {canManage ? (
+                          <AppSelect
+                            value={item.status}
+                            onChange={(event) =>
+                              updateStatus(item.id, event.target.value)
+                            }
+                            aria-label={`Set status for ${item.title}`}
+                          >
+                            {statuses.map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </AppSelect>
+                        ) : (
+                          <span className="project-register-status">
+                            {item.status}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {canManage && (
+                          <button
+                            type="button"
+                            className="inline-delete"
+                            onClick={() => remove(item.id)}
+                            aria-label={`Delete ${item.title}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="project-register-empty" colSpan="8">
+                      <Brush size={22} />
+                      <strong>
+                        No {activeTab === "risk" ? "risks" : "issues"} yet
+                      </strong>
+                      <span>Add a record to begin tracking project controls.</span>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <div className="project-risk-summary-heading">
+          <h2>Risk summary</h2>
+          <span>{riskSummaryMeta}</span>
         </div>
         <div className="project-risk-design-grid">
-          <section className="project-risk-design-card"><div className="project-risk-design-heading"><h2>Risk by status</h2><span>{risks.length} risks</span></div>{["open", "mitigated", "closed"].map((status) => <div className="project-risk-bar" key={status}><span>{status}</span><i><b style={{ width: `${risks.length ? Math.round((risks.filter((item) => item.status === status).length / risks.length) * 100) : 0}%` }} /></i><strong>{risks.filter((item) => item.status === status).length}</strong></div>)}</section>
-          <section className="project-risk-design-card"><div className="project-risk-design-heading"><h2>Risk matrix</h2><span>Likelihood × impact</span></div><div className="project-risk-matrix">{["Low", "Medium", "High"].map((impact) => <div key={impact}><span>{impact}</span><b>{risks.filter((item) => String(item.impact || "").toLowerCase() === impact.toLowerCase()).length}</b></div>)}</div></section>
+          <section className="project-risk-design-card">
+            <div className="project-risk-design-heading">
+              <h2>Open risks by severity</h2>
+              <span>Counts cover active risks only</span>
+            </div>
+            {["critical", "high", "medium", "low"].map((severity) => {
+              const count = openRisks.filter(
+                (item) => item.severity === severity,
+              ).length;
+              const width = openRisks.length
+                ? Math.round((count / openRisks.length) * 100)
+                : 0;
+              return (
+                <div
+                  className={`project-risk-bar severity-${severity}`}
+                  key={severity}
+                >
+                  <span>
+                    <i aria-hidden="true" />
+                    {severity}
+                  </span>
+                  <i>
+                    <b style={{ width: `${Math.max(width, count ? 8 : 0)}%` }} />
+                  </i>
+                  <strong>{count}</strong>
+                </div>
+              );
+            })}
+          </section>
+          <section className="project-risk-design-card project-risk-concentration">
+            <div className="project-risk-design-heading">
+              <h2>Concentration</h2>
+              <span>Likelihood x impact</span>
+            </div>
+            <p>
+              {highestScore
+                ? `The highest current risk score is ${highestScore}. Review high likelihood and impact records before the next delivery checkpoint.`
+                : "No scored risks are recorded for this project yet."}
+            </p>
+            <div className="project-risk-matrix">
+              {["Low", "Medium", "High"].map((impact) => (
+                <div key={impact}>
+                  <span>{impact}</span>
+                  <b>
+                    {
+                      risks.filter(
+                        (item) =>
+                          String(item.impact || "").toLowerCase() ===
+                          impact.toLowerCase(),
+                      ).length
+                    }
+                  </b>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
-        <h2 className="project-risk-summary-label">Risk summary</h2>
-        <div className="project-risk-escalation"><strong>Escalation watch</strong><span>{escalated.length ? `${escalated.length} records need a decision owner.` : "No active escalations."}</span><button type="button" onClick={openAddModal}>Add risk or issue <Plus size={14} /></button></div>
-        <Card className="project-register-card project-risk-design-table"><div className="project-register-toolbar"><div className="project-register-tabs" role="tablist" aria-label="Project risk register"><button type="button" className={activeTab === "risk" ? "active" : ""} onClick={() => setActiveTab("risk")}>Risk register <span>{risks.length}</span></button><button type="button" className={activeTab === "issue" ? "active" : ""} onClick={() => setActiveTab("issue")}>Issue log <span>{issues.length}</span></button></div>{canManage && <button type="button" className="primary-button project-register-add" onClick={openAddModal}><Plus size={15} /> Add new</button>}</div><div className="project-register-table-wrap"><table className="project-register-table"><thead><tr><th>{activeTab === "risk" ? "Risk" : "Issue"}</th><th>Severity</th><th>Owner</th><th>Target date</th><th>Status</th><th /></tr></thead><tbody>{pageItems.length ? pageItems.map((item) => <tr key={item.id}><td><strong>{item.title}</strong><span>{item.detail || "No description added."}</span></td><td><span className={`record-severity ${item.severity}`}>{item.severity}</span></td><td>{item.owner || <span className="table-muted">Unassigned</span>}</td><td>{item.due || <span className="table-muted">No date</span>}</td><td>{canManage ? <AppSelect value={item.status} onChange={(event) => updateStatus(item.id, event.target.value)} aria-label={`Set status for ${item.title}`}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</AppSelect> : item.status}</td><td>{canManage && <button type="button" className="inline-delete" onClick={() => remove(item.id)} aria-label={`Delete ${item.title}`}><X size={14} /></button>}</td></tr>) : <tr><td className="project-register-empty" colSpan="6"><Brush size={22} /><strong>No {activeTab === "risk" ? "risks" : "issues"} yet</strong><span>Add a record to begin tracking project controls.</span></td></tr>}</tbody></table></div></Card>
-        {modalOpen && <div className="project-register-modal" role="dialog" aria-modal="true"><form onSubmit={addRecord}><div className="drawer-section-heading"><h3>Add {kind}</h3><button type="button" className="inline-delete" onClick={() => setModalOpen(false)} aria-label="Close"><X size={14} /></button></div><label>Title<input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required /></label><label>Details<textarea value={form.detail} onChange={(event) => setForm((current) => ({ ...current, detail: event.target.value }))} /></label><label>Severity<AppSelect value={form.severity} onChange={(event) => setForm((current) => ({ ...current, severity: event.target.value }))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></AppSelect></label><button type="submit" className="primary-button">Save {kind}</button></form></div>}
+        <div className="project-risk-escalation">
+          <AlertTriangle size={20} />
+          <div>
+            <strong>Escalation needed</strong>
+            <span>
+              {escalated.length
+                ? `${escalated.length} risk or issue record${escalated.length === 1 ? "" : "s"} need a decision owner.`
+                : "No active escalations need a decision owner."}
+            </span>
+            <button type="button" onClick={() => setActiveTab("risk")}>
+              Review escalated risks
+            </button>
+          </div>
+          <button type="button" onClick={openAddModal}>
+            Add risk or issue <Plus size={14} />
+          </button>
+        </div>
+        {modalOpen && (
+          <div
+            className="project-register-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Add ${kind}`}
+          >
+            <form onSubmit={addRecord}>
+              <div className="drawer-section-heading">
+                <h3>Add {kind}</h3>
+                <button
+                  type="button"
+                  className="inline-delete"
+                  onClick={() => setModalOpen(false)}
+                  aria-label="Close"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <label>
+                Title
+                <input
+                  autoFocus
+                  value={form.title}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                Details
+                <textarea
+                  value={form.detail}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      detail: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Severity
+                <AppSelect
+                  value={form.severity}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      severity: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </AppSelect>
+              </label>
+              <button type="submit" className="primary-button">
+                Save {kind}
+              </button>
+            </form>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (design === "p33") {
+    const today = toDateKey(new Date());
+    const openIssues = issues.filter(
+      (item) => String(item.status || "open").toLowerCase() === "open",
+    );
+    const inProgressIssues = issues.filter((item) =>
+      ["in_progress", "in progress"].includes(
+        String(item.status || "").toLowerCase(),
+      ),
+    );
+    const resolvedIssues = issues.filter(
+      (item) => String(item.status || "").toLowerCase() === "resolved",
+    );
+    const overdueIssues = issues.filter(
+      (item) =>
+        item.due_date &&
+        item.due_date < today &&
+        !["resolved", "closed"].includes(String(item.status || "").toLowerCase()),
+    );
+    return (
+      <section className="project-issues-design">
+        <div className="project-issue-metrics">
+          <div className="tone-open">
+            <span>Open</span>
+            <strong>{openIssues.length}</strong>
+            <small>Logged, not started</small>
+          </div>
+          <div className="tone-investigating">
+            <span>In progress</span>
+            <strong>{inProgressIssues.length}</strong>
+            <small>Being fixed</small>
+          </div>
+          <div className="tone-mitigated">
+            <span>Resolved</span>
+            <strong>{resolvedIssues.length}</strong>
+            <small>Closed out</small>
+          </div>
+          <div className="tone-escalated">
+            <span>Overdue</span>
+            <strong>{overdueIssues.length}</strong>
+            <small>Past target date</small>
+          </div>
+        </div>
+
+        <section className="project-issue-table-card">
+          <div className="project-issue-table-toolbar">
+            <div>
+              <h2>Issue log</h2>
+              <span>{issues.length} active records</span>
+            </div>
+            {canManage && (
+              <button
+                type="button"
+                className="primary-button project-register-add"
+                onClick={() => {
+                  setKind("issue");
+                  setModalOpen(true);
+                }}
+              >
+                <Plus size={15} /> Add issue
+              </button>
+            )}
+          </div>
+          <div className="project-issues-table-wrap">
+            <table className="project-issues-table">
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>Issue</th>
+                  <th>Severity</th>
+                  <th>Owner</th>
+                  <th>Status</th>
+                  <th>Next action</th>
+                  <th>Target</th>
+                  <th>Updated</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {issues.length ? (
+                  issues.map((item) => (
+                    <tr
+                      key={item.id}
+                      className={selectedIssue?.id === item.id ? "is-selected" : ""}
+                      tabIndex={0}
+                      onClick={() => setSelectedIssueId(item.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedIssueId(item.id);
+                        }
+                      }}
+                    >
+                      <td className="project-issue-ref">{issueReference(item)}</td>
+                      <td>
+                        <strong>{item.title}</strong>
+                        <span>{item.detail || "No description added."}</span>
+                      </td>
+                      <td>
+                        <span className={`record-severity ${item.severity}`}>
+                          {item.severity}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="project-issue-owner">
+                          <i aria-hidden="true">
+                            {String(item.owner || "U").charAt(0).toUpperCase()}
+                          </i>
+                          <span>{item.owner || "Unassigned"}</span>
+                        </span>
+                      </td>
+                      <td>
+                        {canManage ? (
+                          <span
+                            className="project-issue-status-cell"
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                          >
+                            <AppSelect
+                              value={item.status}
+                              onChange={(event) =>
+                                updateStatus(item.id, event.target.value)
+                              }
+                              aria-label={`Set status for ${item.title}`}
+                            >
+                              {[
+                                ["open", "Open"],
+                                ["in progress", "In progress"],
+                                ["resolved", "Resolved"],
+                              ].map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </AppSelect>
+                          </span>
+                        ) : (
+                          <span className="project-issue-status">
+                            {issueStatusLabel(item.status)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="project-issue-next">{issueAction(item)}</td>
+                      <td>
+                        {item.due_date ? formatDayMonthName(item.due_date) : "--"}
+                      </td>
+                      <td className="project-issue-updated">
+                        {formatRelativeActivityTime(item.updated_at)}
+                      </td>
+                      <td>
+                        {canManage && (
+                          <button
+                            type="button"
+                            className="inline-delete"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              remove(item.id);
+                            }}
+                            aria-label={`Delete ${item.title}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="project-register-empty" colSpan="9">
+                      <Brush size={22} />
+                      <strong>No issues yet</strong>
+                      <span>Add an issue to start tracking active delivery problems.</span>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="project-issue-mobile-list">
+            {issues.length ? (
+              issues.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={selectedIssue?.id === item.id ? "is-selected" : ""}
+                  onClick={() => setSelectedIssueId(item.id)}
+                >
+                  <span className="project-issue-mobile-heading">
+                    <strong>{item.title}</strong>
+                    <span className={`record-severity ${item.severity}`}>
+                      {item.severity}
+                    </span>
+                  </span>
+                  <span>{item.detail || "No description added."}</span>
+                  <span className="project-issue-mobile-meta">
+                    {issueReference(item)} - {issueStatusLabel(item.status)} -{" "}
+                    {item.owner || "Unassigned"}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="project-issue-mobile-empty">
+                <Brush size={22} />
+                <strong>No issues yet</strong>
+                <span>Active delivery problems will appear here.</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {selectedIssue && (
+          <section
+            className="project-issue-drawer"
+            aria-label={`Issue details for ${selectedIssue.title}`}
+          >
+            <div className="project-issue-drawer-heading">
+              <h2>
+                <span>{issueReference(selectedIssue)} / </span>
+                {selectedIssue.title}
+              </h2>
+              <button
+                type="button"
+                className="inline-delete"
+                onClick={() => setSelectedIssueId(null)}
+                aria-label="Close issue details"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="project-issue-drawer-rule" />
+            <div className="project-issue-drawer-badges">
+              <span className="project-issue-status">
+                {issueStatusLabel(selectedIssue.status)}
+              </span>
+              <span className={`record-severity ${selectedIssue.severity}`}>
+                {selectedIssue.severity}
+              </span>
+              <span className="project-issue-drawer-meta">
+                Owner {selectedIssue.owner || "Unassigned"} - target{" "}
+                {selectedIssue.due_date
+                  ? formatDayMonthName(selectedIssue.due_date)
+                  : "not set"}
+              </span>
+            </div>
+            <div className="project-issue-drawer-section">
+              <span>Next action</span>
+              <p>{issueAction(selectedIssue)}</p>
+            </div>
+            <div className="project-issue-drawer-section">
+              <span>Escalation</span>
+              <p>{selectedIssue.escalation || "No escalation recorded."}</p>
+            </div>
+            <div className="project-issue-drawer-section">
+              <span>Linked task</span>
+              {selectedIssue.task_title ? (
+                <span className="project-issue-linked-chip">
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                  {selectedIssue.task_title}
+                </span>
+              ) : (
+                <p>No linked task.</p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {modalOpen && (
+          <div
+            className="project-register-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add issue"
+          >
+            <form onSubmit={addRecord}>
+              <div className="drawer-section-heading">
+                <h3>Add issue</h3>
+                <button
+                  type="button"
+                  className="inline-delete"
+                  onClick={() => setModalOpen(false)}
+                  aria-label="Close"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <label>
+                Title
+                <input
+                  autoFocus
+                  value={form.title}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                Details
+                <textarea
+                  value={form.detail}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      detail: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Severity
+                <AppSelect
+                  value={form.severity}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      severity: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </AppSelect>
+              </label>
+              <button type="submit" className="primary-button">
+                Save issue
+              </button>
+            </form>
+          </div>
+        )}
       </section>
     );
   }
@@ -3261,13 +3929,344 @@ function ProjectStakeholderResourcePanel({
     }
   };
   if (design === "p34") {
-    const capacityTotal = resources.reduce((sum, item) => sum + Number(item.capacity_percent || 0), 0);
-    const allocationTotal = resources.reduce((sum, item) => sum + Number(item.allocation_percent || 0), 0);
+    const capacityTotal = resources.reduce(
+      (sum, item) => sum + Number(item.capacity_percent || 0),
+      0,
+    );
+    const allocationTotal = resources.reduce(
+      (sum, item) => sum + Number(item.allocation_percent || 0),
+      0,
+    );
+    const resourceTypes = [
+      ["person", "Person", Users],
+      ["equipment", "Equipment", Target],
+      ["supplier", "Supplier", Archive],
+      ["file", "File", Copy],
+      ["other", "Other", Plus],
+    ];
+    const matrixCells = [
+      ["high", "high", "Manage closely"],
+      ["high", "low", "Keep satisfied"],
+      ["low", "high", "Keep informed"],
+      ["low", "low", "Monitor"],
+    ];
     return (
       <section className="project-resources-design">
-        <div className="project-resource-actions-card"><div><p className="eyebrow">Project delivery</p><h2>Resource planning</h2><p>Assign people, capacity, and stakeholders to this project.</p></div>{canManage && <div className="project-resource-actions"><form onSubmit={addResource}><input value={resourceForm.name} onChange={(event) => setResourceForm((current) => ({ ...current, name: event.target.value }))} placeholder="Resource name" aria-label="Resource name" required /><button type="submit" className="primary-button"><Plus size={15} /> Add resource</button></form><form onSubmit={addStakeholder}><input value={stakeholderForm.name} onChange={(event) => setStakeholderForm((current) => ({ ...current, name: event.target.value }))} placeholder="Stakeholder name" aria-label="Stakeholder name" required /><button type="submit" className="secondary-button"><Plus size={15} /> Add stakeholder</button></form></div>}</div>
-        <section className="project-resource-stakeholder-table project-resources-design-card"><div className="project-resources-design-heading"><h2>Stakeholders</h2><span>{stakeholders.length}</span></div><div className="project-resources-table-head"><span>Name</span><span>Role</span><span>Influence</span><span>Interest</span></div>{stakeholders.map((item) => <div className="project-resources-table-row" key={item.id}><strong>{item.name}</strong><span>{item.role || "—"}</span><span>{item.influence || "—"}</span><span>{item.interest || "—"}</span></div>)}{!stakeholders.length && <p className="project-detail-empty">No stakeholders assigned yet.</p>}</section>
-        <div className="project-resources-lower-grid"><section className="project-resources-design-card project-resource-table"><div className="project-resources-design-heading"><h2>Resources</h2><span>{resources.length}</span></div><div className="project-resources-table-head"><span>Resource</span><span>Role</span><span>Allocation</span><span>Capacity</span></div>{resources.map((item) => <div className="project-resources-table-row" key={item.id}><strong>{item.name}</strong><span>{item.role || item.resource_type || "—"}</span><span>{item.allocation_percent || 0}%</span><span>{item.capacity_percent || 0}%</span></div>)}{!resources.length && <p className="project-detail-empty">No resources assigned yet.</p>}</section><section className="project-resources-design-card project-capacity-card"><div className="project-resources-design-heading"><h2>Capacity</h2><span>{allocationTotal}% allocated</span></div><div className="project-capacity-track"><span style={{ width: `${Math.min(allocationTotal, 100)}%` }} /></div><p>{allocationTotal}% of {capacityTotal || 0}% available capacity allocated.</p><div className="project-capacity-legend"><span><i />Allocated</span><span><i />Available</span></div></section><section className="project-resources-design-card project-influence-card"><div className="project-resources-design-heading"><h2>Influence matrix</h2><span>Stakeholder view</span></div><div className="project-influence-matrix">{["high", "medium", "low"].map((level) => <div key={level}><span>{level} influence</span><strong>{stakeholders.filter((item) => item.influence === level).length}</strong></div>)}</div></section></div>
+        {loading && (
+          <p className="workspace-inline-status" role="status">
+            Loading project management data...
+          </p>
+        )}
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="project-resources-layout">
+          <section className="project-resources-design-card project-resource-table">
+            <div className="project-resources-design-heading">
+              <h2>Resources</h2>
+              <span>{resources.length} active</span>
+            </div>
+            <div className="project-resources-table-head">
+              <span>Resource</span>
+              <span>Role</span>
+              <span>Allocation</span>
+              <span>Capacity</span>
+              <span />
+            </div>
+            {resources.map((item) => {
+              const allocation = Number(item.allocation_percent || 0);
+              const capacity = Number(item.capacity_percent || 0);
+              const overAllocated = allocation > capacity && capacity > 0;
+              return (
+                <div className="project-resources-table-row" key={item.id}>
+                  <div className="project-resource-identity">
+                    <span className="project-resource-avatar" aria-hidden="true">
+                      {String(item.name || "?").charAt(0).toUpperCase()}
+                    </span>
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>{item.resource_type || "resource"}</small>
+                    </span>
+                  </div>
+                  <span>{item.role || item.resource_type || "-"}</span>
+                  <span className="project-resource-allocation">
+                    <i>
+                      <b style={{ width: `${Math.min(allocation, 100)}%` }} />
+                    </i>
+                    <small>
+                      {allocation}% of {capacity || 0}%
+                    </small>
+                  </span>
+                  <span
+                    className={
+                      overAllocated
+                        ? "project-resource-status is-over"
+                        : "project-resource-status"
+                    }
+                  >
+                    {item.availability ||
+                      (overAllocated ? "Over allocated" : "Available")}
+                  </span>
+                  {canManage && (
+                    <button
+                      type="button"
+                      className="inline-delete"
+                      onClick={() => archiveResource(item)}
+                      aria-label={`Archive ${item.name}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {!resources.length && (
+              <p className="project-detail-empty">No resources assigned yet.</p>
+            )}
+          </section>
+
+          <section className="project-resources-design-card project-capacity-card">
+            <div className="project-resources-design-heading">
+              <h2>Capacity vs allocation</h2>
+              <span>{allocationTotal}% allocated</span>
+            </div>
+            <div className="project-capacity-chart">
+              {resources.map((item) => {
+                const allocation = Number(item.allocation_percent || 0);
+                const capacity = Number(item.capacity_percent || 0);
+                return (
+                  <div key={item.id}>
+                    <span className="project-capacity-bars">
+                      <i
+                        className="is-capacity"
+                        style={{ height: `${Math.min(capacity || 100, 100)}%` }}
+                      />
+                      <i
+                        className={
+                          allocation > capacity && capacity > 0
+                            ? "is-allocated is-over"
+                            : "is-allocated"
+                        }
+                        style={{ height: `${Math.min(allocation || 4, 100)}%` }}
+                      />
+                    </span>
+                    <small>{String(item.name || "").split(" ")[0]}</small>
+                  </div>
+                );
+              })}
+            </div>
+            <p>
+              {allocationTotal}% of {capacityTotal || 0}% available capacity
+              allocated.
+            </p>
+            <div className="project-capacity-legend">
+              <span><i className="is-capacity" />Capacity</span>
+              <span><i className="is-allocated" />Allocated</span>
+              <span><i className="is-over" />Over</span>
+            </div>
+          </section>
+
+          <section className="project-resource-actions-card">
+            <div className="project-resources-design-heading">
+              <h2>Add a resource</h2>
+              <span>People, equipment, suppliers, files or other</span>
+            </div>
+            {canManage ? (
+              <form className="project-resource-add-form" onSubmit={addResource}>
+                <div className="project-resource-type-picker" role="group" aria-label="Resource type">
+                  {resourceTypes.map(([value, label, Icon]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={resourceForm.resource_type === value ? "active" : ""}
+                      aria-pressed={resourceForm.resource_type === value}
+                      onClick={() =>
+                        setResourceForm((current) => ({
+                          ...current,
+                          resource_type: value,
+                        }))
+                      }
+                    >
+                      <Icon size={17} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="project-resource-add-fields">
+                  <label>
+                    Name
+                    <input
+                      value={resourceForm.name}
+                      onChange={(event) =>
+                        setResourceForm((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="Resource name"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Role
+                    <input
+                      value={resourceForm.role}
+                      onChange={(event) =>
+                        setResourceForm((current) => ({
+                          ...current,
+                          role: event.target.value,
+                        }))
+                      }
+                      placeholder="Role"
+                    />
+                  </label>
+                  <label>
+                    Allocation %
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={resourceForm.allocation_percent}
+                      onChange={(event) =>
+                        setResourceForm((current) => ({
+                          ...current,
+                          allocation_percent: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Capacity %
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={resourceForm.capacity_percent}
+                      onChange={(event) =>
+                        setResourceForm((current) => ({
+                          ...current,
+                          capacity_percent: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <button type="submit" className="primary-button">
+                    <Plus size={15} /> Add resource
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="project-detail-empty">
+                You do not have permission to add project resources.
+              </p>
+            )}
+          </section>
+
+          <section className="project-resources-design-card project-influence-card">
+            <div className="project-resources-design-heading">
+              <h2>Influence x interest</h2>
+              <span>Stakeholder view</span>
+            </div>
+            <div className="project-influence-matrix">
+              {matrixCells.map(([influence, interest, label]) => {
+                const names = stakeholders.filter(
+                  (item) =>
+                    item.influence === influence && item.interest === interest,
+                );
+                return (
+                  <div key={`${influence}-${interest}`}>
+                    <strong>{label}</strong>
+                    <small>
+                      {influence} influence, {interest} interest
+                    </small>
+                    {names.slice(0, 3).map((item) => (
+                      <span key={item.id}>{item.name}</span>
+                    ))}
+                    {!names.length && <em>No stakeholders</em>}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="project-resource-stakeholder-table project-resources-design-card">
+            <div className="project-resources-design-heading">
+              <h2>Stakeholders</h2>
+              <span>{stakeholders.length}</span>
+            </div>
+            {canManage && (
+              <form className="project-stakeholder-add-form" onSubmit={addStakeholder}>
+                <input
+                  value={stakeholderForm.name}
+                  onChange={(event) =>
+                    setStakeholderForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="Stakeholder name"
+                  aria-label="Stakeholder name"
+                  required
+                />
+                <input
+                  value={stakeholderForm.role}
+                  onChange={(event) =>
+                    setStakeholderForm((current) => ({
+                      ...current,
+                      role: event.target.value,
+                    }))
+                  }
+                  placeholder="Role"
+                  aria-label="Stakeholder role"
+                />
+                <button type="submit" className="secondary-button">
+                  <Plus size={15} /> Add stakeholder
+                </button>
+              </form>
+            )}
+            <div className="project-resources-table-head">
+              <span>Name</span>
+              <span>Role</span>
+              <span>Influence</span>
+              <span>Interest</span>
+              <span />
+            </div>
+            {stakeholders.map((item) => (
+              <div className="project-resources-table-row" key={item.id}>
+                <div className="project-resource-identity">
+                  <span className="project-resource-avatar is-stakeholder" aria-hidden="true">
+                    {String(item.name || "?").charAt(0).toUpperCase()}
+                  </span>
+                  <strong>{item.name}</strong>
+                </div>
+                <span>{item.role || "-"}</span>
+                <span className="project-stakeholder-level">
+                  {item.influence || "-"}
+                </span>
+                <span className="project-stakeholder-level">
+                  {item.interest || "-"}
+                </span>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="inline-delete"
+                    onClick={() => archiveStakeholder(item)}
+                    aria-label={`Archive ${item.name}`}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {!stakeholders.length && (
+              <p className="project-detail-empty">
+                No stakeholders assigned yet.
+              </p>
+            )}
+          </section>
+        </div>
       </section>
     );
   }
@@ -3621,7 +4620,7 @@ function ProjectCostBudgetPanel({
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",
-        currency: budgetForm.budget_currency || "USD",
+        currency: project.budget_currency || "USD",
       }).format(Number(amount) || 0);
     } catch {
       return `${amount}`;
@@ -3718,16 +4717,323 @@ function ProjectCostBudgetPanel({
     }
   };
   if (design === "p35") {
-    const categoryTotals = ["labor", "software", "materials", "travel", "other"].map((category) => ({ category, total: expenses.filter((item) => item.category === category).reduce((sum, item) => sum + Number(item.amount || 0), 0) }));
-    const usedPercent = budgetAmount ? Math.min(Math.round((totalSpent / budgetAmount) * 100), 999) : 0;
+    const categoryTotals = [
+      "labor",
+      "software",
+      "materials",
+      "travel",
+      "other",
+    ].map((category) => ({
+      category,
+      total: expenses
+        .filter((item) => item.category === category)
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    }));
+    const usedPercent = budgetAmount
+      ? Math.min(Math.round((totalSpent / budgetAmount) * 100), 999)
+      : 0;
+    const actualPercent = budgetAmount
+      ? Math.min(Math.round((actualSpent / budgetAmount) * 100), 100)
+      : 0;
+    const committedPercent = budgetAmount
+      ? Math.min(Math.round((committedSpent / budgetAmount) * 100), 100)
+      : 0;
+    const warning =
+      remaining !== null && remaining < 0
+        ? "Project is over budget."
+        : usedPercent >= 80
+          ? `Approaching the limit - ${usedPercent}% used.`
+          : "Spend is within the approved project budget.";
     return (
       <section className="project-budget-design">
-        <div className="project-budget-summary-card project-budget-summary-top"><div className="project-resources-design-heading"><h2>Budget summary</h2><span className="project-currency-badge">{project.budget_currency || "USD"}</span></div><div className="project-budget-summary-values"><div><span>Total budget</span><strong>{budgetAmount === null ? "Not set" : formatMoney(budgetAmount)}</strong></div><div><span>Actual spend</span><strong>{formatMoney(actualSpent)}</strong></div><div><span>Remaining</span><strong>{remaining === null ? "n/a" : formatMoney(remaining)}</strong></div><div><span>Variance</span><strong>{budgetAmount ? `${usedPercent}%` : "n/a"}</strong></div></div><div className="project-budget-usage-track"><span style={{ width: `${usedPercent}%` }} /></div><p className="project-budget-warning">{remaining !== null && remaining < 0 ? "Project is over budget." : "Spend is within the approved project budget."}</p></div>
-        <section className="project-budget-expense-table project-budget-card"><div className="project-resources-design-heading"><h2>Expenses</h2><span>{expenses.length} records</span></div><div className="project-resources-table-head"><span>Name</span><span>Category</span><span>Amount</span><span>Date</span></div>{expenses.slice(0, 5).map((item) => <div className="project-resources-table-row" key={item.id}><strong>{item.name}</strong><span>{item.category}</span><span>{formatMoney(item.amount)}</span><span>{item.incurred_on || "—"}</span></div>)}{!expenses.length && <p className="project-detail-empty">No expenses recorded yet.</p>}</section>
-        <Card className="project-budget-form-card project-budget-card"><div className="project-resources-design-heading"><h2>Budget target</h2><span>{project.budget_currency || "USD"}</span></div>{canManage && <form className="project-budget-mini-form" onSubmit={saveBudget}><label>Amount<input type="number" min="0" step="0.01" value={budgetForm.budget_amount} onChange={(event) => setBudgetForm((current) => ({ ...current, budget_amount: event.target.value }))} /></label><label>Currency<AppSelect value={budgetForm.budget_currency} onChange={(event) => setBudgetForm((current) => ({ ...current, budget_currency: event.target.value }))}><option value="USD">USD</option><option value="GBP">GBP</option><option value="NGN">NGN</option></AppSelect></label><button type="submit" className="primary-button">Save budget</button></form>}</Card>
-        <section className="project-budget-currency-list project-budget-card"><div className="project-resources-design-heading"><h2>Currency</h2><span>Supported</span></div><div className="project-currency-options"><span>USD · US Dollar</span><span>GBP · British Pound</span><span>NGN · Nigerian Naira</span></div></section>
-        <section className="project-budget-spend-chart project-budget-card"><div className="project-resources-design-heading"><h2>Spend by category</h2><span>{formatMoney(totalSpent)}</span></div>{categoryTotals.map((item) => <div className="project-budget-category" key={item.category}><span>{item.category}</span><i><b style={{ width: `${totalSpent ? Math.round((item.total / totalSpent) * 100) : 0}%` }} /></i><strong>{formatMoney(item.total)}</strong></div>)}</section>
-        <section className="project-budget-add-expense project-budget-card"><div className="project-resources-design-heading"><h2>Add expense</h2><span>Actual or committed</span></div>{canManage && <form className="project-budget-mini-form" onSubmit={addExpense}><label>Name<input value={expenseForm.name} onChange={(event) => setExpenseForm((current) => ({ ...current, name: event.target.value }))} required /></label><label>Amount<input type="number" min="0" step="0.01" value={expenseForm.amount} onChange={(event) => setExpenseForm((current) => ({ ...current, amount: event.target.value }))} required /></label><button type="submit" className="secondary-button"><Plus size={15} /> Add expense</button></form>}</section>
+        {loading && (
+          <p className="workspace-inline-status" role="status">
+            Loading budget data...
+          </p>
+        )}
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="project-budget-top-grid">
+          <section className="project-budget-summary-card project-budget-summary-top">
+            <div className="project-resources-design-heading">
+              <h2>{project.name} budget</h2>
+              <span className="project-currency-badge">
+                {project.budget_currency || "USD"}
+              </span>
+            </div>
+            <div className="project-budget-summary-values">
+              <div>
+                <span>Budget total</span>
+                <strong>
+                  {budgetAmount === null ? "Not set" : formatMoney(budgetAmount)}
+                </strong>
+              </div>
+              <div>
+                <span>Total spend</span>
+                <strong>{formatMoney(totalSpent)}</strong>
+              </div>
+              <div className="is-success">
+                <span>Remaining</span>
+                <strong>
+                  {remaining === null ? "n/a" : formatMoney(remaining)}
+                </strong>
+              </div>
+              <div className={usedPercent > 100 ? "is-danger" : "is-warning"}>
+                <span>Variance</span>
+                <strong>{budgetAmount ? `${usedPercent}%` : "n/a"}</strong>
+              </div>
+            </div>
+            <div className="project-budget-usage-track">
+              <span
+                className="is-actual"
+                style={{ width: `${actualPercent}%` }}
+              />
+              <span
+                className="is-committed"
+                style={{ width: `${committedPercent}%` }}
+              />
+            </div>
+            <div className="project-budget-key">
+              <span><i className="is-actual" />Actual spend {formatMoney(actualSpent)}</span>
+              <span><i className="is-committed" />Committed {formatMoney(committedSpent)}</span>
+              <span><i className="is-remaining" />Remaining {remaining === null ? "n/a" : formatMoney(remaining)}</span>
+            </div>
+            <p className={`project-budget-warning${remaining !== null && remaining < 0 ? " is-danger" : ""}`}>
+              <AlertTriangle size={16} /> {warning}
+            </p>
+          </section>
+
+          <section className="project-budget-spend-chart project-budget-card">
+            <div className="project-resources-design-heading">
+              <h2>Spend by category</h2>
+              <span>{formatMoney(totalSpent)}</span>
+            </div>
+            {categoryTotals.map((item) => (
+              <div className="project-budget-category" key={item.category}>
+                <span>{item.category}</span>
+                <i>
+                  <b
+                    style={{
+                      width: `${totalSpent ? Math.round((item.total / totalSpent) * 100) : 0}%`,
+                    }}
+                  />
+                </i>
+                <strong>{formatMoney(item.total)}</strong>
+              </div>
+            ))}
+          </section>
+        </div>
+
+        <div className="project-budget-lower-grid">
+          <section className="project-budget-expense-table project-budget-card">
+            <div className="project-resources-design-heading">
+              <h2>Expenses</h2>
+              <span>{expenses.length} records</span>
+            </div>
+            <div className="project-resources-table-head">
+              <span>Expense</span>
+              <span>Category</span>
+              <span>Amount</span>
+              <span>Date</span>
+              <span>State</span>
+              <span />
+            </div>
+            {expenses.slice(0, 8).map((item) => (
+              <div className="project-resources-table-row" key={item.id}>
+                <div className="project-expense-identity">
+                  <strong>{item.name}</strong>
+                  <small>{item.notes || "Project expense"}</small>
+                </div>
+                <span className="project-expense-category">
+                  {item.category}
+                </span>
+                <strong>{formatMoney(item.amount)}</strong>
+                <span>{item.incurred_on || "-"}</span>
+                <span
+                  className={
+                    item.is_committed
+                      ? "project-expense-state is-committed"
+                      : "project-expense-state is-actual"
+                  }
+                >
+                  {item.is_committed ? "Committed" : "Actual"}
+                </span>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="inline-delete"
+                    onClick={() => archiveExpense(item)}
+                    aria-label={`Archive ${item.name}`}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {!expenses.length && (
+              <p className="project-detail-empty">No expenses recorded yet.</p>
+            )}
+          </section>
+
+          <div className="project-budget-side-column">
+            <Card className="project-budget-form-card project-budget-card">
+              <div className="project-resources-design-heading">
+                <h2>Set budget</h2>
+                <span>{project.budget_currency || "USD"}</span>
+              </div>
+              {canManage ? (
+                <form className="project-budget-mini-form" onSubmit={saveBudget}>
+                  <label>
+                    Budget amount
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={budgetForm.budget_amount}
+                      onChange={(event) =>
+                        setBudgetForm((current) => ({
+                          ...current,
+                          budget_amount: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Currency
+                    <AppSelect
+                      value={budgetForm.budget_currency}
+                      onChange={(event) =>
+                        setBudgetForm((current) => ({
+                          ...current,
+                          budget_currency: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="USD">USD</option>
+                      <option value="GBP">GBP</option>
+                      <option value="NGN">NGN</option>
+                    </AppSelect>
+                  </label>
+                  <button type="submit" className="primary-button">
+                    Save budget
+                  </button>
+                </form>
+              ) : (
+                <p className="project-detail-empty">
+                  You do not have permission to change the project budget.
+                </p>
+              )}
+            </Card>
+
+            <section className="project-budget-currency-list project-budget-card">
+              <div className="project-resources-design-heading">
+                <h2>Supported currencies</h2>
+                <span>3</span>
+              </div>
+              <div className="project-currency-options">
+                <span className={budgetForm.budget_currency === "USD" ? "active" : ""}>
+                  <strong>USD</strong><small>US dollar - $</small>
+                </span>
+                <span className={budgetForm.budget_currency === "GBP" ? "active" : ""}>
+                  <strong>GBP</strong><small>Pound sterling - GBP</small>
+                </span>
+                <span className={budgetForm.budget_currency === "NGN" ? "active" : ""}>
+                  <strong>NGN</strong><small>Naira - NGN</small>
+                </span>
+              </div>
+            </section>
+
+            <section className="project-budget-add-expense project-budget-card">
+              <div className="project-resources-design-heading">
+                <h2>Add expense</h2>
+                <span>Actual or committed</span>
+              </div>
+              {canManage && (
+                <form className="project-budget-mini-form" onSubmit={addExpense}>
+                  <label>
+                    Name
+                    <input
+                      value={expenseForm.name}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <AppSelect
+                      value={expenseForm.category}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({
+                          ...current,
+                          category: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="labor">Labour</option>
+                      <option value="software">Software</option>
+                      <option value="materials">Materials</option>
+                      <option value="travel">Travel</option>
+                      <option value="other">Other</option>
+                    </AppSelect>
+                  </label>
+                  <label>
+                    Amount
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={expenseForm.amount}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({
+                          ...current,
+                          amount: event.target.value,
+                        }))
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      value={expenseForm.incurred_on}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({
+                          ...current,
+                          incurred_on: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="project-expense-committed">
+                    <input
+                      type="checkbox"
+                      checked={expenseForm.is_committed}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({
+                          ...current,
+                          is_committed: event.target.checked,
+                        }))
+                      }
+                    />
+                    Committed, not yet paid
+                  </label>
+                  <button type="submit" className="secondary-button">
+                    <Plus size={15} /> Add expense
+                  </button>
+                </form>
+              )}
+            </section>
+          </div>
+        </div>
       </section>
     );
   }
@@ -4356,8 +5662,8 @@ function TodayDashboard({
         ))}
       </section>
 
-      <div className="mt-[18px] grid gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
-        <div className="grid content-start gap-[76px]">
+      <div className="mt-[18px] grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
+        <div className="grid min-w-0 grid-cols-1 content-start gap-[76px]">
           <section data-panel="tasks">
             <div className="-mt-1 flex items-center justify-between gap-3">
               <h2 className="text-[16px] font-semibold leading-[22px] text-text-primary">Today's tasks</h2>
@@ -4472,18 +5778,18 @@ function TodayDashboard({
                 aria-valuemin={0}
                 aria-valuemax={memberCount}
                 aria-valuenow={checkedInCount}
-                className="mt-[9px] h-2 w-[415px] overflow-hidden rounded-full bg-surface-secondary"
+                className="mt-[9px] h-2 w-full max-w-[415px] overflow-hidden rounded-full bg-surface-secondary"
               >
                 <div
                   className="h-full rounded-full bg-navy"
                   style={{ width: `${checkInPercent}%` }}
                 />
               </div>
-              <div className="mt-6 grid">
+              <div className="mt-6 grid min-w-0 grid-cols-1">
                 {members.slice(0, 4).map((member) => {
                   const submitted = checkedInMemberIds.has(String(member.id));
                   return (
-                    <div key={member.id} className="flex h-9 items-center gap-3 pr-[25px]">
+                    <div key={member.id} className="flex h-9 min-w-0 items-center gap-3 pr-[25px]">
                       <Avatar
                         name={memberName(member)}
                         avatarUrl={member.avatar_url}
@@ -4516,7 +5822,7 @@ function TodayDashboard({
           </section>
         </div>
 
-        <aside className="grid content-start gap-6">
+        <aside className="grid min-w-0 grid-cols-1 content-start gap-6">
           <ClockInCard
             shifts={workShifts}
             currentUserId={currentUserId}

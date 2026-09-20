@@ -1,52 +1,93 @@
 # WorkSpace Design Coverage Gaps
 
-This report tracks production screens and states that do not have an approved
-OpenPencil frame. They remain functional with their existing backend behavior,
-but they are not 1:1 fidelity targets until a design is reviewed and approved.
+This is the consolidated list of production surfaces that still need an
+approved OpenPencil design. Existing APIs, authentication, permissions, data
+flows, and feature behavior remain authoritative. A surface listed here is not
+a license to invent a layout.
 
-## Settings
+## Design Authority
 
-The P4 frame (`0:4498`) defines the Settings shell and navigation. The AI panel
-(`0:4554`) and the P39-P45 desktop panels now define the default content layout
-for Profile, Appearance, Notifications, Workspaces, Workspace access,
-Integrations, and Templates. Their mobile counterparts are M23-M30 on the
-`04 Mobile` page.
+The approved sources are:
 
-The implemented default screens do not yet cover every operational state.
+- `01 Foundations`: `0:3`
+- `02 Components`: `0:946`
+- `03 Pages`: `0:3994`
+- `04 Mobile`: `0:9758`
+- `05 Project States`: `0:11925`
+- `06 Feature Coverage`: `0:1346436`
+
+The F1-F12 Feature Coverage boards close the previously undocumented gaps for
+the global shell, notification panels, presence and identity, account menus,
+mobile app bar, mobile operational routes, mobile work routes, mobile insight
+and resource routes, AI settings, task create/edit dialogs, authentication and
+workspace gates, and loading/empty/error/offline/session/permission states.
+
+Those are implementation references, not permission to add unsupported
+production behavior. The backend contract remains unchanged.
+
+## Remaining Whole-Screen Gap
+
+### My planner
+
+`My planner` has no approved OpenPencil frame at any breakpoint. The current
+screen is a production feature, but it is not a 1:1 fidelity target.
+
+A future design needs to cover:
+
+| Area | Missing design scope |
+| --- | --- |
+| Desktop | Page hierarchy, plan list or board, note area, filtering, empty and loading states |
+| Tablet | Column collapse, sticky controls, task and note navigation |
+| Mobile | Screen structure, section switching, scrolling ownership, fixed actions, and safe-area behavior |
+| Create and edit | Plan item form, validation, long text, due-date states, recurrence, save failure, and cancellation |
+| Notes | View, create, edit, delete, empty, loading, error, and permission-denied states |
+| Schedule | Overdue, due today, upcoming, undated, completed, and conflict states |
+| Permissions | Read-only, member change, and unsupported-action states |
+| Destructive flows | Delete confirmation, archive or restore behavior where a backend action already exists |
+
+## Settings State Coverage
+
+The default Settings shell and panel layouts are covered by P4 and P39-P45,
+with M23-M30 for mobile. The following operational states still need approved
+OpenPencil frames.
 
 | Settings surface | Missing design scope |
 | --- | --- |
-| Profile | Loading, saving, validation, avatar upload error, and long-content states |
-| Appearance | Selected focus, reduced-motion, and persisted/error states |
-| Notifications | Loading, unsupported browser, permission denied, save failure, and disabled-sound states |
-| Workspaces | Busy, lifecycle error, confirmation, archived action, and empty states |
-| Workspace access | Loading, permission denied, role-save failure, invite, removal, and empty states |
-| Integrations | Loading, disconnected, credential error, URL validation, save failure, and reconnect states |
-| Templates | Loading, empty, create/edit validation, apply failure, and destructive-action states |
+| Profile | Avatar replacement and removal errors, retry, long identity content, validation failure, and loading state |
+| Appearance | Persisted-error state, reduced-motion behavior, and unsupported-theme fallback |
+| Notifications | Push-permission denied, unsupported browser, subscription failure, disabled-sound state, and save failure |
+| Workspaces | Busy, lifecycle error, confirmation, archived action, archived workspace, and empty state |
+| Workspace access | Loading, permission denied, role-save failure, invite failure, removal, accepted or expired invite, and empty state |
+| AI settings | Credential rotation, provider removal confirmation, concurrent-update conflict, and desktop/mobile error parity |
+| Integrations | Loading, disconnected, invalid credentials, URL validation, save failure, reconnect, and revoked-access states |
+| Templates | Loading, empty, create/edit validation, apply failure, duplicate name, and destructive-action states |
 
-Help and Legal are covered by the standalone P22 and P23 frames, so they are not
-Settings design gaps.
+The shared loading, empty, offline, expired-session, permission, and recoverable
+error compositions on F12 define the shell-level treatment. A Settings panel
+still needs its own composition when its content, permission rule, or recovery
+action differs from those generic states.
 
-## Task Create And Edit Popup Modal
+## Resolved Gaps
 
-The task create/edit popup currently reads as visually attached to the right
-edge instead of appearing as a centered, self-contained dialog. It must not be
-anchored to a side panel or the right-hand side of the viewport. The create and
-edit variants need one responsive OpenPencil dialog contract with a centered
-shell, backdrop, defined sizing, and internal scrolling where required.
+The following are no longer unresolved design gaps:
 
-The form behavior and API contract are functional, but the popup layout and its
-desktop/mobile states still need a reviewed OpenPencil design before they can
-be treated as a 1:1 target. Missing states include default create, edit,
-validation, long content, loading, submission error, mobile keyboard, fields
-locked by permissions, and destructive confirmation where the existing flow
-supports it.
+- Global header, search, notification indicators, account chooser, and avatar fallback: F1.
+- Notification panel states: F2.
+- Presence, identity, account, and workspace menus: F3 and F4.
+- Mobile app bar and tab bar states: F5.
+- Missing mobile operational, work, insight, and resource routes: F6-F8.
+- AI settings mobile coverage: F9.
+- Task create and edit dialogs, including desktop, tablet, mobile, focus, scroll ownership, and validation presentation: F10.
+- Authentication, invitation review, no-workspace, and session-expired gates: F11.
+- Loading, empty, offline, permission, expired-session, search, and recoverable-error states: F12.
+
+The task dialog no longer needs to be treated as a side-attached surface. It is
+a centered, self-contained dialog with a fixed header and footer, one scrollable
+body, Escape close, focus containment, and a preserved form/API contract.
 
 ## Rules For Unresolved Surfaces
 
-- Do not invent layouts for these screens or states.
+- Do not invent layouts, states, or behavior that an approved frame does not define.
 - Keep existing APIs, permissions, authentication, and data flows unchanged.
-- When a design is added, build it from the shared OpenPencil Foundations,
-  Components, and tokens rather than from a one-off visual treatment.
-- Remove an item from this report only after its approved frames and state
-  coverage have been implemented and verified.
+- When a design is added, build it from Foundations, Components, and the shared tokens.
+- Remove an item from this report only after its approved frames have been implemented and verified.

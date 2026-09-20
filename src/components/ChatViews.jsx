@@ -1,18 +1,19 @@
 import { AppSelect } from './ui/select.jsx'
 import { Alert } from './ui/alert.jsx'
 import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
+import '../chat-mobile.css'
 // Channels and direct messages, plus the shared composer modal used for every
 // "create a record" flow (events, projects, check-ins, chat, follow-ups, invites).
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, ChevronLeft, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, ChevronLeft, Compass, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { PRESENCE_LABEL, effectivePresence, formatDate, formatDay, formatRelativeActivityTime, getCsrfToken, isImageFileName, toDateKey } from '../lib/workspace-format.js'
-import { takePendingChatThread, takePendingDirectMessage } from '../lib/chat-navigation.js'
+import { requestChatThread, takePendingChatThread, takePendingDirectMessage } from '../lib/chat-navigation.js'
 
 const EMOJI_CATEGORIES = [
   ['Smileys', '😀', ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😋', '😛', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '🥺', '😢', '😭', '😤', '😠', '😡', '🤯', '😳', '🥵', '🥶', '😱', '😨', '🤗', '🤔', '🫡', '🤭', '🫢', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😴', '🤤', '😷', '🤒', '🤕']],
@@ -206,6 +207,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [unreadMarker, setUnreadMarker] = useState(null)
   const messageScrollRef = useRef(null)
   const messageInputRef = useRef(null)
+  const channelListScrollRef = useRef(null)
   const draftKeyRef = useRef(null)
   const skipNextBottomPinRef = useRef(false)
   const pendingScrollRestoreRef = useRef(null)
@@ -377,7 +379,12 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     ? channels.reduce((total, channel) => total + unreadCountFor('chat_channel', channel.name), 0)
     : conversations.reduce((total, conversation) => total + unreadCountFor('direct_conversation', conversation.id), 0)
   const normalizedListSearch = listSearch.trim().toLowerCase()
-  const filteredChannels = channels.filter(channel => (chatFilter !== 'unread' || unreadCountFor('chat_channel', channel.name) > 0) && (!normalizedListSearch || channel.name.toLowerCase().includes(normalizedListSearch)))
+  const privateChannelCount = channels.filter(channel => channel.is_private).length
+  const filteredChannels = channels.filter(channel => {
+    if (chatFilter === 'unread' && unreadCountFor('chat_channel', channel.name) < 1) return false
+    if (chatFilter === 'private' && !channel.is_private) return false
+    return !normalizedListSearch || `${channel.name} ${channel.description || ''}`.toLowerCase().includes(normalizedListSearch)
+  })
   const filteredConversations = conversations.filter(conversation => {
     if (chatFilter === 'unread' && unreadCountFor('direct_conversation', conversation.id) < 1) return false
     if (!normalizedListSearch) return true
@@ -916,6 +923,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setShareOpen(false)
     setError('')
   }
+  const browseAllChannels = () => {
+    setChatFilter('all')
+    setListSearch('')
+    channelListScrollRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+  }
+  const openDirectFromChannels = conversation => {
+    requestChatThread('direct_conversation', conversation.id)
+    onNavigate?.('Chats')
+  }
   const toggleReaction = async (message, emoji) => {
     const direct = mode === 'direct'
     const endpoint = direct ? `/api/direct-messages/${message.id}/reactions/` : `/api/chat-messages/${message.id}/reactions/`
@@ -1105,14 +1121,30 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const renderChannelRow = channel => {
     const unread = unreadCountFor('chat_channel', channel.name)
     const unreadLabel = `${unread} unread message${unread === 1 ? '' : 's'}`
+    const meta = channel.description || `${channel.message_count || 0} message${channel.message_count === 1 ? '' : 's'}`
     return <div className="channel-row-wrap" key={channel.id}>
-      <button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''} ${unread > 0 ? 'has-unread' : ''}`} onClick={() => selectChannel(channel.name)} aria-label={unread > 0 ? `${channel.name}, ${unreadLabel}` : undefined}>
-        {channel.is_private ? <Lock size={15} /> : <Hash size={15} />}
-        <span className="channel-name">{channel.name}</span>
+      <button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''} ${unread > 0 ? 'has-unread' : ''}`} onClick={() => selectChannel(channel.name)} aria-label={unread > 0 ? `${channel.name}, ${unreadLabel}` : channel.name}>
+        <span className="channel-row-icon">{channel.is_private ? <Lock size={14} /> : <Hash size={14} />}</span>
+        <span className="channel-row-copy"><span className="channel-name">{channel.name}</span><small className="channel-row-meta">{meta}</small></span>
         {unread > 0 && <Badge aria-label={unreadLabel}>{unread > 99 ? '99+' : unread}</Badge>}
       </button>
       {channel.name !== 'general' && channel.created_by === currentUserId && <button type="button" className="channel-delete" onClick={() => deleteChannel(channel)} aria-label={`Delete ${channel.name}`}><X size={13} /></button>}
     </div>
+  }
+
+  const renderChannelDirectRow = conversation => {
+    const unread = unreadCountFor('direct_conversation', conversation.id)
+    const unreadLabel = `${unread} unread message${unread === 1 ? '' : 's'}`
+    const other = directOtherMember(conversation)
+    const title = conversation.is_self ? 'Message yourself' : conversation.title
+    const subtitle = conversation.is_group
+      ? `Group - ${conversation.participants.length} people`
+      : conversation.last_message_deleted ? 'This message was deleted' : conversation.last_message || 'Direct chat'
+    return <button type="button" className={`channel-direct-row ${unread > 0 ? 'has-unread' : ''}`} onClick={() => openDirectFromChannels(conversation)} aria-label={unread > 0 ? `${title}, ${unreadLabel}` : title} key={conversation.id}>
+      <Avatar name={title} avatarUrl={other?.avatar_url} presence={other ? effectivePresence(other) : null} small />
+      <span className="channel-direct-copy"><strong>{title}</strong><small>{subtitle}</small></span>
+      {unread > 0 && <Badge aria-label={unreadLabel}>{unread > 99 ? '99+' : unread}</Badge>}
+    </button>
   }
 
   const renderDirectConversationRow = (conversation, archived = false) => {
@@ -1211,14 +1243,19 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           <div className="chat-list-heading-copy"><h3>{mode === 'channels' ? 'Channels' : 'Chats'}</h3><span>{unreadTotal ? `${unreadTotal} unread` : 'All caught up'}</span></div>
           <button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button>
         </div>
-        <div className="chat-filter-tabs" role="tablist" aria-label="Filter conversations">
+        <div className="chat-filter-tabs" role="tablist" aria-label={mode === 'channels' ? 'Filter channels' : 'Filter conversations'}>
           <button type="button" role="tab" aria-selected={chatFilter === 'all'} className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>All <span>{mode === 'channels' ? channels.length : conversations.length}</span></button>
           <button type="button" role="tab" aria-selected={chatFilter === 'unread'} className={chatFilter === 'unread' ? 'active' : ''} onClick={() => setChatFilter('unread')}>Unread <span>{unreadTotal}</span></button>
+          {mode === 'channels' && <button type="button" role="tab" aria-selected={chatFilter === 'private'} className={chatFilter === 'private' ? 'active' : ''} onClick={() => setChatFilter('private')}>Private <span>{privateChannelCount}</span></button>}
           {mode === 'direct' && <button type="button" role="tab" aria-selected={chatFilter === 'archived'} className={chatFilter === 'archived' ? 'active' : ''} onClick={() => setChatFilter('archived')}>Archived <span>{archivedConversations.length}</span></button>}
         </div>
-        <div className="chat-list-scroll">
+        <div className="chat-list-scroll" ref={channelListScrollRef}>
           {mode === 'channels'
-            ? (filteredChannels.length ? filteredChannels.map(renderChannelRow) : <p className="chat-sidebar-empty">No unread channels.</p>)
+            ? <>
+              {filteredChannels.length > 0 && <section className="chat-list-group"><h4>Team channels <span>{filteredChannels.length}</span></h4><div className="chat-list-group-rows">{filteredChannels.map(renderChannelRow)}</div></section>}
+              {chatFilter !== 'private' && filteredConversations.length > 0 && <section className="chat-list-group"><h4>Direct messages <span>{filteredConversations.length}</span></h4><div className="chat-list-group-rows">{filteredConversations.map(renderChannelDirectRow)}</div></section>}
+              {filteredChannels.length === 0 && (chatFilter === 'private' || filteredConversations.length === 0) && <p className="chat-sidebar-empty">{chatFilter === 'unread' ? 'No unread channels or conversations.' : chatFilter === 'private' ? 'No private channels.' : 'No channels or conversations yet.'}</p>}
+            </>
             : chatFilter === 'archived'
               ? (archivedConversations.length
                 ? <section className="chat-list-group"><h4>Archived <span>{archivedConversations.length}</span></h4><div className="chat-list-group-rows">{archivedConversations.map(conversation => renderDirectConversationRow(conversation, true))}</div></section>
@@ -1230,6 +1267,8 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
                 </>
                 : <p className="chat-sidebar-empty">{chatFilter === 'unread' ? 'No unread conversations.' : 'No chats yet.'}</p>}
         </div>
+        {mode === 'channels' && <button type="button" className="chat-browse-channels" onClick={browseAllChannels}><Compass size={18} /> Browse all channels</button>}
+        <button type="button" className="chat-mobile-fab" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={20} /></button>
       </aside>
     </div>
     {channelDialogOpen && <div className="modal-backdrop" onMouseDown={() => setChannelDialogOpen(false)}><form className="modal chat-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-channel-title" onSubmit={createChannel} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Channels</p><h2 id="create-channel-title">Create a channel</h2></div><button type="button" className="close-button" onClick={() => setChannelDialogOpen(false)} aria-label="Close"><X size={18} /></button></div><label>Channel name<input autoFocus value={channelForm.name} onChange={event => setChannelForm(current => ({ ...current, name: event.target.value }))} placeholder="e.g. product-launch" maxLength="80" required /></label><label>Description<textarea value={channelForm.description} onChange={event => setChannelForm(current => ({ ...current, description: event.target.value }))} placeholder="What is this channel for?" maxLength="240" /></label><label className="chat-privacy-toggle"><input type="checkbox" checked={channelForm.is_private} onChange={event => setChannelForm(current => ({ ...current, is_private: event.target.checked, member_ids: [] }))} /> Private channel</label>{channelForm.is_private && <div className="chat-member-picker"><span>Add members</span>{data.members.filter(member => member.id !== currentUserId).map(member => <label key={member.id}><input type="checkbox" checked={channelForm.member_ids.includes(member.id)} onChange={() => toggleMember(member.id, channelForm.member_ids, member_ids => setChannelForm(current => ({ ...current, member_ids })))} /> {memberName(member)}</label>)}</div>}{error && <Alert tone="danger" compact>{error}</Alert>}<button className="primary-button modal-submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create channel'}</button></form></div>}

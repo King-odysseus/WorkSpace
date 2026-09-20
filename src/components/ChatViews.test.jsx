@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { expect, it, vi } from 'vitest'
 import { ChatWorkspaceView } from './ChatViews.jsx'
 import { mockApi } from '../test/setup-tests.js'
-import { requestChatThread } from '../lib/chat-navigation.js'
+import { requestChatThread, takePendingChatThread } from '../lib/chat-navigation.js'
 
 const workspaceId = 4
 const currentUserId = 1
@@ -17,20 +17,20 @@ const dataFor = () => ({
   notifications: [],
 })
 
-const renderChat = (data, onRefresh = vi.fn(), onConfirm = vi.fn().mockResolvedValue(true), onError = vi.fn()) => {
+const renderChat = (data, onRefresh = vi.fn(), onConfirm = vi.fn().mockResolvedValue(true), onError = vi.fn(), onNavigate = vi.fn(), viewType = 'direct') => {
   const result = render(
     <ChatWorkspaceView
-      viewType="direct"
+      viewType={viewType}
       data={data}
       workspaceId={workspaceId}
       currentUserId={currentUserId}
       onRefresh={onRefresh}
       onError={onError}
       onConfirm={onConfirm}
-      onNavigate={vi.fn()}
+      onNavigate={onNavigate}
     />,
   )
-  return { ...result, onRefresh }
+  return { ...result, onRefresh, onNavigate }
 }
 
 const launchMembers = [
@@ -820,6 +820,40 @@ it('filters the channel list to unread channels', async () => {
 
   expect(screen.getByRole('button', { name: 'product-launch, 1 unread message' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'general' })).not.toBeInTheDocument()
+})
+
+it('filters private channels and opens direct message previews from the channels list', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const onNavigate = vi.fn()
+  renderChat({
+    ...dataFor(),
+    channels: [
+      { id: 20, name: 'general', description: 'Workspace-wide conversation', created_by: 9, is_private: false, member_ids: [] },
+      { id: 21, name: 'leadership', description: 'Private planning', created_by: 9, is_private: true, member_ids: [currentUserId] },
+    ],
+  }, vi.fn(), vi.fn().mockResolvedValue(true), vi.fn(), onNavigate, 'channels')
+
+  expect(screen.getByRole('button', { name: 'general' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Dana Reed' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('tab', { name: /^Private/ }))
+  expect(screen.getByRole('button', { name: 'leadership' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'general' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Dana Reed' })).not.toBeInTheDocument()
+
+  fireEvent.change(screen.getByLabelText('Find a channel'), { target: { value: 'leadership' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Browse all channels' }))
+  expect(screen.getByLabelText('Find a channel')).toHaveValue('')
+  expect(screen.getByRole('button', { name: 'general' })).toBeInTheDocument()
+
+  takePendingChatThread()
+  fireEvent.click(screen.getByRole('button', { name: 'Dana Reed' }))
+  expect(onNavigate).toHaveBeenCalledWith('Chats')
+  expect(takePendingChatThread()).toEqual(expect.objectContaining({ targetType: 'direct_conversation', targetId: '11' }))
 })
 
 it('uses a mobile master-detail transition for an open chat', async () => {

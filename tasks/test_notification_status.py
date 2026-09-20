@@ -169,6 +169,75 @@ class NotificationSummaryTests(TestCase):
         after = self.client.get(reverse('notification-list', args=[workspace.id])).json()['unread_counts']
         self.assertEqual(after, {'channel': 22, 'direct': 3, 'conversation': 25, 'activity': 0})
 
+    def test_p16_filters_page_size_and_all_history_summary(self):
+        user = User.objects.create_user(username='p16-user')
+        workspace = Workspace.objects.create(name='P16', slug='p16')
+        Membership.objects.create(workspace=workspace, user=user)
+        mention = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='mention', title='Mention',
+            target_type='task', target_id='1',
+        )
+        task_update = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='task_assigned', title='Task update',
+            target_type='task', target_id='2',
+        )
+        message = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='channel_message', title='Message',
+            target_type='chat_channel', target_id='general',
+        )
+        read_mention = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='mention', title='Read mention',
+            target_type='task', target_id='3', read_at=timezone.now(),
+        )
+        risk = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='risk_issue_assigned', title='Risk',
+            target_type='risk', target_id='4',
+        )
+        old_task = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='task_status', title='Old task update',
+            target_type='task', target_id='5',
+        )
+        WorkspaceNotification.objects.filter(pk=old_task.pk).update(
+            created_at=timezone.now() - timedelta(days=8),
+        )
+        self.client.force_login(user)
+
+        unread_payload = self.client.get(
+            reverse('notification-list', args=[workspace.id]) + '?exclude_chat=1&filter=unread&sort=newest&page_size=2'
+        ).json()
+        self.assertEqual(unread_payload['unread_count'], 4)
+        self.assertEqual(len(unread_payload['notifications']), 2)
+        self.assertEqual(unread_payload['pagination'], {
+            'page': 1,
+            'page_size': 2,
+            'total_items': 4,
+            'total_pages': 2,
+            'has_next': True,
+            'has_previous': False,
+        })
+        self.assertEqual(unread_payload['summary'], {
+            'unread_count': 4,
+            'weekly_total': 4,
+            'categories': {
+                'task_updates': 2,
+                'messages_mentions': 1,
+                'risks_members': 1,
+            },
+        })
+
+        mentions_payload = self.client.get(
+            reverse('notification-list', args=[workspace.id]) + '?exclude_chat=1&filter=mentions&sort=newest'
+        ).json()
+        self.assertEqual(
+            [item['id'] for item in mentions_payload['notifications']],
+            [read_mention.id, mention.id],
+        )
+        self.assertEqual(mentions_payload['summary']['unread_count'], 4)
+
+        invalid_filter = self.client.get(reverse('notification-list', args=[workspace.id]) + '?filter=unknown')
+        self.assertEqual(invalid_filter.status_code, 400)
+        self.assertEqual(invalid_filter.json(), {'error': 'Unsupported filter value.'})
+
     def test_each_notification_panel_gets_its_own_unread_rows(self):
         user = User.objects.create_user(username='feed-user')
         workspace = Workspace.objects.create(name='Feeds', slug='feeds')

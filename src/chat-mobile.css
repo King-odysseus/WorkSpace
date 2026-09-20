@@ -1,0 +1,234 @@
+/* Mobile messaging surfaces follow OpenPencil M4/M22. Desktop keeps the
+   existing two-pane composition and only receives the richer row scaffold. */
+.chat-workspace-view .channel-row-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--pencil-text-muted);
+}
+
+.chat-workspace-view .channel-row-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.chat-workspace-view .channel-row-meta {
+  display: none;
+  overflow: hidden;
+  color: var(--pencil-text-muted);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-workspace-view .channel-direct-row,
+.chat-workspace-view .chat-browse-channels,
+.chat-workspace-view .chat-mobile-fab {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .chat-workspace-view .chat-toolbar {
+    top: 44px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    height: 40px;
+  }
+
+  .chat-workspace-view.chat-mode-direct .chat-toolbar { width: auto; }
+  .chat-workspace-view .chat-toolbar .chat-search { height: 40px; border-radius: 10px; background: #fff; }
+  .chat-workspace-view .chat-search input { font-size: 13px; }
+
+  .chat-workspace-view.chat-mobile-detail-open .chat-toolbar,
+  .chat-workspace-view.chat-mobile-detail-open .chat-browse-channels,
+  .chat-workspace-view.chat-mobile-detail-open .chat-mobile-fab {
+    display: none;
+  }
+
+  .chat-workspace-view .chat-list-heading { display: none; }
+
+  .chat-workspace-view .chat-filter-tabs,
+  .chat-workspace-view.chat-mode-channels .chat-filter-tabs {
+    top: 96px;
+    right: 16px;
+    left: 16px;
+    display: flex;
+    height: 30px;
+    gap: 8px;
+  }
+
+  .chat-workspace-view .chat-filter-tabs button {
+    height: 30px;
+    flex: 0 0 auto;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .chat-workspace-view .chat-list-scroll,
+  .chat-workspace-view.chat-mode-channels .chat-list-scroll {
+    top: 140px;
+    bottom: 96px;
+    padding: 0 16px 176px;
+  }
+
+  .chat-workspace-view.chat-mode-channels .chat-list-scroll::before { display: none; }
+
+  .chat-workspace-view .chat-list-group > h4 {
+    position: static;
+    display: flex;
+    width: auto;
+    height: 13px;
+    align-items: center;
+    gap: 6px;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    margin: 8px 0 11px;
+    color: var(--pencil-text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 13px;
+    white-space: normal;
+  }
+
+  .chat-workspace-view .chat-list-group > h4 span {
+    font-size: 10px;
+    font-weight: 500;
+    opacity: .72;
+  }
+
+  .chat-workspace-view .chat-list-group + .chat-list-group { margin-top: 8px; }
+  .chat-workspace-view .chat-list-group-rows { gap: 8px; }
+
+  .chat-workspace-view .channel-row {
+    height: 52px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 14px;
+    padding: 0 12px;
+    border: 1px solid var(--pencil-border);
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .chat-workspace-view .channel-row:hover { background: #fff; }
+  .chat-workspace-view .channel-row.active { border-color: var(--pencil-navy); background: var(--pencil-selected); }
+
+  .chat-workspace-view .channel-row-icon {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    border-radius: 8px;
+    background: var(--pencil-surface-muted);
+    color: var(--pencil-text-secondary);
+  }
+
+  .chat-workspace-view .channel-row.active .channel-row-icon { background: #fff; }
+  .chat-workspace-view .channel-row-copy { grid-template-rows: 16px 12px; gap: 2px; }
+  .chat-workspace-view .channel-name { font-size: 13px; font-weight: 500; line-height: 16px; }
+  .chat-workspace-view .channel-row-meta { display: block; }
+
+  .chat-workspace-view .channel-row .badge,
+  .chat-workspace-view .channel-direct-row .badge {
+    min-width: 31px;
+    height: 18px;
+    padding: 0 8px;
+    font-size: 10px;
+    line-height: 12px;
+  }
+
+  .chat-workspace-view .channel-delete { top: 14px; right: 12px; }
+
+  .chat-workspace-view .channel-direct-row {
+    display: grid;
+    width: 100%;
+    height: 52px;
+    min-width: 0;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 0 12px;
+    border: 1px solid var(--pencil-border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--pencil-text-secondary);
+    text-align: left;
+  }
+
+  .chat-workspace-view .channel-direct-row > .avatar {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+  }
+
+  .chat-workspace-view .channel-direct-copy {
+    display: grid;
+    min-width: 0;
+    grid-template-rows: 16px 12px;
+    gap: 2px;
+  }
+
+  .chat-workspace-view .channel-direct-copy strong,
+  .chat-workspace-view .channel-direct-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-workspace-view .channel-direct-copy strong {
+    color: var(--pencil-text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 16px;
+  }
+
+  .chat-workspace-view .channel-direct-copy small {
+    color: var(--pencil-text-muted);
+    font-size: 10px;
+    line-height: 12px;
+  }
+
+  .chat-workspace-view .chat-browse-channels {
+    position: absolute;
+    right: 16px;
+    bottom: 160px;
+    z-index: 3;
+    display: flex;
+    width: 238px;
+    height: 44px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--pencil-border);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--pencil-navy);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .chat-workspace-view .chat-mobile-fab {
+    position: absolute;
+    right: 20px;
+    bottom: 92px;
+    z-index: 3;
+    display: grid;
+    width: 52px;
+    height: 52px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 26px;
+    background: var(--pencil-navy);
+    color: #fff;
+    box-shadow: 0 2px 6px rgb(16 24 40 / 10%);
+  }
+
+  .chat-workspace-view .chat-mobile-fab:hover { background: var(--pencil-navy-hover); }
+}

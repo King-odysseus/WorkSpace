@@ -266,6 +266,7 @@
 /* Profile */
 .settings-view .settings-profile-card {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 16px;
   margin: 24px 32px 0;
@@ -277,6 +278,7 @@
 
 .settings-view .settings-profile-card > div {
   display: grid;
+  min-width: 0;
   gap: 3px;
 }
 
@@ -291,6 +293,43 @@
   color: var(--pencil-text-muted);
   font-size: 12px;
   line-height: 16px;
+}
+
+.settings-view .settings-profile-card strong,
+.settings-view .settings-profile-card > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-view .avatar-upload {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.settings-view .avatar-upload-trigger {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid #f9fafb;
+  border-radius: 999px;
+  background: var(--pencil-navy);
+  color: #fff;
+  cursor: pointer;
+}
+
+.settings-view .avatar-upload-trigger input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .settings-view .settings-profile-avatar,

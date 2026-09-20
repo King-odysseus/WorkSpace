@@ -119,7 +119,7 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   fireEvent.click(opener)
 
   await waitFor(
-    () => expect(document.querySelector('.task-drawer')).not.toBeNull(),
+    () => expect(document.querySelector('.task-dialog')).not.toBeNull(),
     { timeout: 20000 },
   )
   expect(document.body.innerText).not.toContain('could not render this view')

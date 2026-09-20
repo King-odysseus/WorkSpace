@@ -181,6 +181,38 @@ NOTIFICATION_KIND_PREFERENCE = {
 }
 
 
+P16_MESSAGE_KINDS = frozenset({
+    'mention', 'direct_message', 'channel_message',
+})
+
+P16_RISK_MEMBER_KINDS = frozenset({
+    'risk_issue_assigned', 'membership_change', 'invitation_response', 'manager_activity',
+})
+
+# The notifications page groups the long tail of operational alerts under
+# "Task updates". Keep this list explicit so adding a new kind cannot silently
+# change the category through a subtraction rule.
+P16_TASK_UPDATE_KINDS = frozenset({
+    'task_assigned', 'task_status', 'task_comment', 'task_attachment',
+    'task_attachment_deleted', 'task_created', 'task_permanently_deleted',
+    'task_archived', 'task_title', 'task_priority', 'task_due_date',
+    'task_recurrence', 'task_bucket', 'task_labels', 'task_project',
+    'subtask_created', 'follow_up_assigned', 'follow_up_unassigned',
+    'follow_up_completed', 'follow_up_comment', 'follow_up_created',
+    'follow_up_deleted', 'follow_up_status', 'follow_up_due_date',
+    'follow_up_task', 'calendar_created', 'calendar_updated',
+    'calendar_deleted', 'calendar_reminder', 'check_in_blocker',
+    'check_in_comment', 'check_in_submitted', 'check_in_reminder',
+    'check_in_summary', 'document_comment_resolved', 'document_shared',
+    'document_comment', 'due_soon_reminder', 'overdue_reminder',
+    'blocked_alert', 'stale_update_reminder', 'workspace_digest',
+    'screen_share_request', 'screen_share_response', 'screen_share_cancelled',
+    'screen_capture_viewed', 'workspace_activity', 'invitation_sent',
+    'invitation_resent', 'invitation_accepted', 'invitation_declined',
+    'invitation_cancelled',
+})
+
+
 def notification_deep_link(notification_id, target_type='', target_id='', message_id=''):
     """The app deep links by query string (see the ?view= handling in
     src/main.jsx). A push carries the notification and its target so tapping it
@@ -2472,12 +2504,21 @@ def notification_list(request, workspace_id):
     if request.method == 'GET':
         everything = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)
         notifications = everything
+        activity = everything.exclude(target_type__in=['chat_channel', 'direct_conversation'])
         exclude_chat = request.GET.get('exclude_chat') in {'1', 'true', 'yes'}
         only_conversation = request.GET.get('only_conversation') in {'1', 'true', 'yes'}
         if exclude_chat:
             notifications = notifications.exclude(target_type__in=['chat_channel', 'direct_conversation'])
         elif only_conversation:
             notifications = notifications.filter(target_type__in=['chat_channel', 'direct_conversation'])
+        notification_filter = request.GET.get('filter', '').strip().lower()
+        if notification_filter not in {'', 'all', 'unread', 'mentions'}:
+            return JsonResponse({'error': 'Unsupported filter value.'}, status=400)
+        unread_only = request.GET.get('unread') in {'1', 'true', 'yes'} or notification_filter == 'unread'
+        if unread_only:
+            notifications = notifications.filter(read_at__isnull=True)
+        if notification_filter == 'mentions':
+            notifications = notifications.filter(kind='mention')
         sort = request.GET.get('sort', '').strip()
         if sort == 'newest':
             # The history page is chronological even when it contains a mix of
@@ -2499,13 +2540,26 @@ def notification_list(request, workspace_id):
         )
         unread_channel = unread_counts['channel'] or 0
         unread_direct = unread_counts['direct'] or 0
+        unread_total = unread_counts['total'] or 0
+        summary_counts = activity.filter(read_at__isnull=True).aggregate(
+            task_updates=Count('id', filter=Q(kind__in=P16_TASK_UPDATE_KINDS)),
+            messages_mentions=Count('id', filter=Q(kind__in=P16_MESSAGE_KINDS)),
+            risks_members=Count('id', filter=Q(kind__in=P16_RISK_MEMBER_KINDS)),
+        )
+        task_updates = summary_counts['task_updates'] or 0
+        messages_mentions = summary_counts['messages_mentions'] or 0
+        risks_members = summary_counts['risks_members'] or 0
         try:
             page_number = max(int(request.GET.get('page', 1)), 1)
         except ValueError:
             return JsonResponse({'error': 'page must be an integer.'}, status=400)
+        try:
+            page_size = max(min(int(request.GET.get('page_size', 20)), 100), 1)
+        except ValueError:
+            return JsonResponse({'error': 'page_size must be an integer.'}, status=400)
         # Keep the history endpoint bounded as a workspace accumulates years of
         # read notifications, while still retaining all entries for paging.
-        paginator = Paginator(notifications, 20)
+        paginator = Paginator(notifications, page_size)
         try:
             page = paginator.page(page_number)
         except EmptyPage:
@@ -2517,11 +2571,20 @@ def notification_list(request, workspace_id):
                 'channel': unread_channel,
                 'direct': unread_direct,
                 'conversation': unread_channel + unread_direct,
-                'activity': (unread_counts['total'] or 0) - unread_channel - unread_direct,
+                'activity': unread_total - unread_channel - unread_direct,
+            },
+            'summary': {
+                'unread_count': activity.filter(read_at__isnull=True).count(),
+                'weekly_total': activity.filter(created_at__gte=timezone.now() - timedelta(days=7)).count(),
+                'categories': {
+                    'task_updates': task_updates,
+                    'messages_mentions': messages_mentions,
+                    'risks_members': risks_members,
+                },
             },
             'pagination': {
                 'page': page.number,
-                'page_size': 20,
+                'page_size': page_size,
                 'total_items': paginator.count,
                 'total_pages': paginator.num_pages,
                 'has_next': page.has_next(),

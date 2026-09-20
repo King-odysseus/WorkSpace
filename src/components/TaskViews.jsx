@@ -4,7 +4,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 // The two ways a task is rendered: the compact card used across every board, and
 // the detail drawer with comments, subtasks, attachments and dependencies.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Archive, Check, ChevronDown, X } from 'lucide-react'
 import { DateField } from './workspace-ui.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -101,6 +101,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const dialogRef = useRef(null)
   const memberLabel = member => [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email
   const selectedAssignees = taskFields.assignee_ids.map(String).map(id => members.find(member => String(member.id) === id)).filter(Boolean)
   const assigneeLabel = selectedAssignees.length ? selectedAssignees.map(memberLabel).join(', ') : 'Unassigned'
@@ -230,7 +231,277 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
     if (!response.ok) return setError('Attachment could not be deleted.')
     setAttachments(current => current.filter(item => item.id !== attachment.id))
   }
-    return <div className="drawer-backdrop" onMouseDown={onClose}><aside className="task-drawer" role="dialog" aria-modal="true" aria-labelledby="task-detail-title" onMouseDown={event => event.stopPropagation()}><div className="drawer-heading"><div><p className="eyebrow">Task details</p><h2 id="task-detail-title">{taskFields.title || task.title}</h2><span>{assigneeLabel} | {projectLabel} | {dueLabel}</span></div><button type="button" className="close-button" onClick={onClose} aria-label="Close task details"><X size={18} /></button></div>{error && <Alert tone="danger" compact>{error}</Alert>}{loading ? <SkeletonGroup className="drawer-skeleton" label="Loading task details"><Skeleton variant="heading" /><Skeleton variant="line" /><Skeleton variant="line" /><Skeleton variant="row" /><Skeleton variant="row" /><Skeleton variant="text" style={{ width: '68%' }} /></SkeletonGroup> : <><section className="drawer-section"><div className="drawer-section-heading"><h3>Task controls</h3><span>Saved to workspace</span></div><form className="drawer-task-form" onSubmit={saveTaskFields}><label>Title<input name="title" value={taskFields.title} onChange={updateTaskField} disabled={!canEdit} maxLength="200" /></label><label>Description<textarea name="description" value={taskFields.description} onChange={updateTaskField} disabled={!canEdit} maxLength="4000" /></label><div className="modal-grid"><label>Assign to<AssigneePicker members={members} value={taskFields.assignee_ids} onChange={assigneeIds => setTaskFields(current => ({ ...current, assignee_ids: assigneeIds }))} disabled={!canManageTasks} /></label><label>Project<AppSelect name="project_id" value={taskFields.project_id} onChange={updateTaskField} disabled={!canManageTasks}><option value="">General</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</AppSelect></label></div><label>Planner bucket<AppSelect name="bucket" value={taskFields.bucket} onChange={updateTaskField} disabled={!canEdit}>{(buckets.length ? buckets : [{ id: 'backlog', name: 'Backlog' }]).map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</AppSelect></label><label>Status<AppSelect name="status" value={taskFields.status} onChange={updateTaskField} disabled={!canEdit}><option value="todo">To do</option><option value="in_progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></AppSelect></label><label>Priority<AppSelect name="priority" value={taskFields.priority} onChange={updateTaskField} disabled={!canEdit}><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></AppSelect></label><DateField label="Due date" name="due_date" value={taskFields.due_date} onChange={updateTaskField} disabled={!canEdit} /><label>Repeat<AppSelect name="recurrence" value={taskFields.recurrence} onChange={updateTaskField} disabled={!canEdit}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></AppSelect></label><button type="submit" className="secondary-button" disabled={!canEdit}>Update task</button></form></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Labels</h3><span>Comma separated</span></div><form className="inline-form" onSubmit={saveLabels}><input value={labelInput} onChange={event => setLabelInput(event.target.value)} placeholder="priority, client, risk" aria-label="Task labels" disabled={!canEdit} /><button className="secondary-button" disabled={!canEdit}>Save</button></form></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Attachments</h3><span>{attachments.length}</span></div>{attachments.map(attachment => <div className="attachment-row" key={attachment.id}><a href={attachment.file_url} target="_blank" rel="noreferrer">{isImageFileName(attachment.original_name) && <img className="attachment-thumb" src={attachment.file_url} alt="" loading="lazy" />}<span>{attachment.original_name}</span></a>{canEdit && <button className="inline-delete" onClick={() => deleteAttachment(attachment)} aria-label={`Delete ${attachment.original_name}`}><X size={14} /></button>}</div>)}<label className="attachment-upload"><span>Upload file</span><input type="file" onChange={uploadAttachment} disabled={!canEdit} /></label></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Subtasks</h3><span>{subtasks.filter(item => item.completed).length} of {subtasks.length}</span></div>{subtasks.map(item => <div className="subtask-row" key={item.id}><label><input type="checkbox" checked={item.completed} onChange={() => toggleSubtask(item)} disabled={!canEdit} /><span className={item.completed ? 'completed' : ''}>{item.title}</span></label>{canEdit && <button type="button" className="inline-delete" onClick={() => deleteSubtask(item)} aria-label={`Delete subtask ${item.title}`}><X size={14} /></button>}</div>)}<form className="inline-form" onSubmit={addSubtask}><input value={subtask} onChange={event => setSubtask(event.target.value)} placeholder="Add a subtask" aria-label="Add a subtask" disabled={!canEdit} /><button className="secondary-button" disabled={!canEdit}>Add</button></form></section><section className="drawer-section"><div className="drawer-section-heading"><h3>Dependencies</h3><span>{(task.blocked_by_ids || []).length} blocking</span></div>{task.is_blocked_by_dependency && <p className="drawer-muted dependency-warning">Waiting on {(task.blocked_by_ids || []).length} unfinished task{(task.blocked_by_ids || []).length === 1 ? '' : 's'} below.</p>}<div className="dependency-list">{dependencyTasks.filter(item => item.id !== task.id && item.state !== 'archived').map(item => <label className="dependency-row" key={item.id}><input type="checkbox" checked={(task.blocked_by_ids || []).includes(item.id)} onChange={() => toggleDependency(item.id)} disabled={!canEdit} /><span className={item.status === 'done' ? 'completed' : ''}>{item.title}</span></label>)}{!dependencyTasks.length && <p className="drawer-muted">No other tasks in this workspace yet.</p>}</div>{(task.blocking_ids || []).length > 0 && <p className="drawer-muted">Blocks: {dependencyTasks.filter(item => (task.blocking_ids || []).includes(item.id)).map(item => item.title).join(', ')}</p>}</section><section className="drawer-section"><div className="drawer-section-heading"><h3>Comments</h3><span>{comments.length}</span></div>{comments.length ? comments.map(item => <article className="drawer-comment" key={item.id}><strong>{item.author_name}</strong><p><LinkedText text={item.body} /></p></article>) : <p className="drawer-muted">No comments yet.</p>}<MentionPicker members={members} value={comment} onChange={setComment} currentUserId={currentUserId}>{inputRef => <form className="drawer-comment-form" onSubmit={addComment}><textarea ref={inputRef} value={comment} onChange={event => setComment(event.target.value)} placeholder="Write an update for the team" aria-label="Write a task comment" /><button type="submit" className="primary-button">Post comment</button></form>}</MentionPicker></section></>}</aside></div>
+  useEffect(() => {
+    const previouslyFocused = document.activeElement
+    const previousOverflow = document.body.style.overflow
+    const dialog = dialogRef.current
+    document.body.style.overflow = 'hidden'
+    dialog?.focus()
+    const onKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab' || !dialog) return
+      const focusable = [...dialog.querySelectorAll('button, input, textarea, select, [href], [tabindex]:not([tabindex="-1"])')]
+        .filter(element => !element.disabled && element.getAttribute('aria-hidden') !== 'true')
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus()
+    }
+  }, [onClose])
+    return (
+      <div className="modal-backdrop task-dialog-backdrop" onMouseDown={onClose}>
+        <section
+          ref={dialogRef}
+          className="task-dialog task-detail-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-detail-title"
+          aria-describedby="task-detail-summary"
+          tabIndex={-1}
+          onMouseDown={event => event.stopPropagation()}
+        >
+          <div className="task-dialog-header">
+            <div className="task-dialog-heading-copy">
+              <p className="eyebrow">Edit task</p>
+              <h2 id="task-detail-title">{taskFields.title || task.title}</h2>
+              <p id="task-detail-summary">{assigneeLabel} | {projectLabel} | {dueLabel}</p>
+            </div>
+            <button type="button" className="close-button task-dialog-close" onClick={onClose} aria-label="Close task details">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="task-dialog-body">
+            {error && <Alert tone="danger" compact>{error}</Alert>}
+            {loading ? (
+              <SkeletonGroup className="drawer-skeleton" label="Loading task details">
+                <Skeleton variant="heading" />
+                <Skeleton variant="line" />
+                <Skeleton variant="line" />
+                <Skeleton variant="row" />
+                <Skeleton variant="row" />
+                <Skeleton variant="text" style={{ width: '68%' }} />
+              </SkeletonGroup>
+            ) : (
+              <>
+                <form id="task-detail-form" className="drawer-task-form task-dialog-section task-detail-form" onSubmit={saveTaskFields}>
+                  <div className="drawer-section-heading">
+                    <h3>Task controls</h3>
+                    <span>Saved to workspace</span>
+                  </div>
+                  <div className="modal-grid task-dialog-grid">
+                    <label>
+                      Status
+                      <AppSelect name="status" value={taskFields.status} onChange={updateTaskField} disabled={!canEdit}>
+                        <option value="todo">To do</option>
+                        <option value="in_progress">In progress</option>
+                        <option value="review">Review</option>
+                        <option value="blocked">Blocked</option>
+                        <option value="on_hold">On hold</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="done">Done</option>
+                      </AppSelect>
+                    </label>
+                    <label>
+                      Priority
+                      <AppSelect name="priority" value={taskFields.priority} onChange={updateTaskField} disabled={!canEdit}>
+                        <option value="urgent">Urgent</option>
+                        <option value="high">High</option>
+                        <option value="normal">Normal</option>
+                        <option value="low">Low</option>
+                      </AppSelect>
+                    </label>
+                  </div>
+                  <div className="modal-grid task-dialog-grid">
+                    <DateField label="Due date" name="due_date" value={taskFields.due_date} onChange={updateTaskField} disabled={!canEdit} />
+                    <label>
+                      Repeat
+                      <AppSelect name="recurrence" value={taskFields.recurrence} onChange={updateTaskField} disabled={!canEdit}>
+                        <option value="none">Does not repeat</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </AppSelect>
+                    </label>
+                  </div>
+                  <label>
+                    Title
+                    <input name="title" value={taskFields.title} onChange={updateTaskField} disabled={!canEdit} maxLength="200" />
+                  </label>
+                  <label>
+                    Description
+                    <textarea name="description" value={taskFields.description} onChange={updateTaskField} disabled={!canEdit} maxLength="4000" />
+                  </label>
+                  <div className="modal-grid task-dialog-grid">
+                    <label>
+                      Assign to
+                      <AssigneePicker
+                        members={members}
+                        value={taskFields.assignee_ids}
+                        onChange={assigneeIds => setTaskFields(current => ({ ...current, assignee_ids: assigneeIds }))}
+                        disabled={!canManageTasks}
+                      />
+                    </label>
+                    <label>
+                      Project
+                      <AppSelect name="project_id" value={taskFields.project_id} onChange={updateTaskField} disabled={!canManageTasks}>
+                        <option value="">General</option>
+                        {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                      </AppSelect>
+                    </label>
+                  </div>
+                  <label>
+                    Planner bucket
+                    <AppSelect name="bucket" value={taskFields.bucket} onChange={updateTaskField} disabled={!canEdit}>
+                      {(buckets.length ? buckets : [{ id: 'backlog', name: 'Backlog' }]).map(bucket => (
+                        <option key={bucket.id} value={bucket.name}>{bucket.name}</option>
+                      ))}
+                    </AppSelect>
+                  </label>
+                </form>
+
+                <section className="drawer-section task-dialog-section">
+                  <div className="drawer-section-heading">
+                    <h3>Labels</h3>
+                    <span>Comma separated</span>
+                  </div>
+                  <form className="inline-form" onSubmit={saveLabels}>
+                    <input
+                      value={labelInput}
+                      onChange={event => setLabelInput(event.target.value)}
+                      placeholder="priority, client, risk"
+                      aria-label="Task labels"
+                      disabled={!canEdit}
+                    />
+                    <button className="secondary-button" disabled={!canEdit}>Save</button>
+                  </form>
+                </section>
+
+                <section className="drawer-section task-dialog-section">
+                  <div className="drawer-section-heading">
+                    <h3>Attachments</h3>
+                    <span>{attachments.length}</span>
+                  </div>
+                  {attachments.map(attachment => (
+                    <div className="attachment-row" key={attachment.id}>
+                      <a href={attachment.file_url} target="_blank" rel="noreferrer">
+                        {isImageFileName(attachment.original_name) && <img className="attachment-thumb" src={attachment.file_url} alt="" loading="lazy" />}
+                        <span>{attachment.original_name}</span>
+                      </a>
+                      {canEdit && (
+                        <button type="button" className="inline-delete" onClick={() => deleteAttachment(attachment)} aria-label={`Delete ${attachment.original_name}`}>
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <label className="attachment-upload">
+                    <span>Upload file</span>
+                    <input type="file" onChange={uploadAttachment} disabled={!canEdit} />
+                  </label>
+                </section>
+
+                <section className="drawer-section task-dialog-section">
+                  <div className="drawer-section-heading">
+                    <h3>Subtasks</h3>
+                    <span>{subtasks.filter(item => item.completed).length} of {subtasks.length}</span>
+                  </div>
+                  {subtasks.map(item => (
+                    <div className="subtask-row" key={item.id}>
+                      <label>
+                        <input type="checkbox" checked={item.completed} onChange={() => toggleSubtask(item)} disabled={!canEdit} />
+                        <span className={item.completed ? 'completed' : ''}>{item.title}</span>
+                      </label>
+                      {canEdit && (
+                        <button type="button" className="inline-delete" onClick={() => deleteSubtask(item)} aria-label={`Delete subtask ${item.title}`}>
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <form className="inline-form" onSubmit={addSubtask}>
+                    <input value={subtask} onChange={event => setSubtask(event.target.value)} placeholder="Add a subtask" aria-label="Add a subtask" disabled={!canEdit} />
+                    <button className="secondary-button" disabled={!canEdit}>Add</button>
+                  </form>
+                </section>
+
+                <section className="drawer-section task-dialog-section">
+                  <div className="drawer-section-heading">
+                    <h3>Dependencies</h3>
+                    <span>{(task.blocked_by_ids || []).length} blocking</span>
+                  </div>
+                  {task.is_blocked_by_dependency && (
+                    <p className="drawer-muted dependency-warning">
+                      Waiting on {(task.blocked_by_ids || []).length} unfinished task{(task.blocked_by_ids || []).length === 1 ? '' : 's'} below.
+                    </p>
+                  )}
+                  <div className="dependency-list">
+                    {dependencyTasks.filter(item => item.id !== task.id && item.state !== 'archived').map(item => (
+                      <label className="dependency-row" key={item.id}>
+                        <input type="checkbox" checked={(task.blocked_by_ids || []).includes(item.id)} onChange={() => toggleDependency(item.id)} disabled={!canEdit} />
+                        <span className={item.status === 'done' ? 'completed' : ''}>{item.title}</span>
+                      </label>
+                    ))}
+                    {!dependencyTasks.length && <p className="drawer-muted">No other tasks in this workspace yet.</p>}
+                  </div>
+                  {(task.blocking_ids || []).length > 0 && (
+                    <p className="drawer-muted">
+                      Blocks: {dependencyTasks.filter(item => (task.blocking_ids || []).includes(item.id)).map(item => item.title).join(', ')}
+                    </p>
+                  )}
+                </section>
+
+                <section className="drawer-section task-dialog-section">
+                  <div className="drawer-section-heading">
+                    <h3>Comments</h3>
+                    <span>{comments.length}</span>
+                  </div>
+                  {comments.length ? comments.map(item => (
+                    <article className="drawer-comment" key={item.id}>
+                      <strong>{item.author_name}</strong>
+                      <p><LinkedText text={item.body} /></p>
+                    </article>
+                  )) : <p className="drawer-muted">No comments yet.</p>}
+                  <MentionPicker members={members} value={comment} onChange={setComment} currentUserId={currentUserId}>
+                    {inputRef => (
+                      <form className="drawer-comment-form" onSubmit={addComment}>
+                        <textarea ref={inputRef} value={comment} onChange={event => setComment(event.target.value)} placeholder="Write an update for the team" aria-label="Write a task comment" />
+                        <button type="submit" className="primary-button">Post comment</button>
+                      </form>
+                    )}
+                  </MentionPicker>
+                </section>
+              </>
+            )}
+          </div>
+          <div className="task-dialog-footer">
+            <button type="button" className="secondary-button" onClick={onClose}>
+              {canEdit ? 'Cancel' : 'Close'}
+            </button>
+            {canEdit && (
+              <button type="submit" form="task-detail-form" className="primary-button modal-submit" disabled={loading || saving}>
+                {saving ? 'Saving...' : 'Save changes'} <Check size={16} />
+              </button>
+            )}
+          </div>
+        </section>
+      </div>
+    )
 }
 
 export { AssigneePicker, TaskCard, TaskDetailDrawer }
