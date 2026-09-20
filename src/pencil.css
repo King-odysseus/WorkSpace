@@ -589,7 +589,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgb(20 71 230 / 1
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 [data-slot='search-input']:focus-within { border-color: var(--pencil-blue); box-shadow: 0 0 0 3px rgb(37 99 235 / 18%); }
-[data-slot='search-input'] input {
+[data-slot='search-input'] input[type='search'] {
   appearance: none;
   min-width: 0;
   height: auto;
