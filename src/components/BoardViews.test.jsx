@@ -155,6 +155,31 @@ it('does not treat an unassigned task as yours when the name lookup fails', () =
   expect(panel.queryByText('Nobody owns this')).not.toBeInTheDocument()
 })
 
+it('renders only the five dashboard task rows from the design', () => {
+  renderDashboard(
+    Array.from({ length: 6 }, (_, index) => ({
+      id: index + 1,
+      title: `Dashboard task ${index + 1}`,
+      status: 'todo',
+      assignee_id: 7,
+      member: 'Nate Foster',
+      priority: 'normal',
+      tag: 'Ops',
+    })),
+  )
+
+  const panel = within(todayPanel('tasks'))
+  expect(panel.getAllByText(/^Dashboard task /)).toHaveLength(5)
+  expect(panel.queryByText('Dashboard task 6')).not.toBeInTheDocument()
+})
+
+it('keeps the upcoming events card mounted without inventing an empty state', () => {
+  renderDashboard([])
+
+  expect(screen.getByRole('heading', { name: 'Upcoming events' })).toBeInTheDocument()
+  expect(screen.queryByText('No upcoming events.')).not.toBeInTheDocument()
+})
+
 it('shows the real check-in denominator instead of inventing one for an empty workspace', () => {
   // This read `{count} of {members.length || 1}`, so a workspace with nobody in
   // it claimed "0 of 1".

@@ -2908,17 +2908,17 @@ function ClockInCard({
       ? `Last shift ended ${formatShiftClock(closedToday[0].ended_at)}`
       : "Not started yet";
   return (
-    <div className="rounded-container bg-navy p-5 text-text-on-navy">
+    <div className="min-h-[240px] rounded-container bg-navy p-6 text-text-on-navy">
       <p className="text-caption opacity-70">{headline}</p>
       <strong
-        className="mt-1 block text-[32px] font-bold leading-tight tabular-nums"
+        className="mt-0.5 block text-[32px] font-bold leading-[39px] tabular-nums"
         role="timer"
         aria-live="off"
         aria-label={`Current shift ${formatShiftDuration(shiftSeconds)}`}
       >
         {formatShiftDuration(shiftSeconds)}
       </strong>
-      <p className="mt-1 text-caption opacity-70">
+      <p className="mt-[7px] text-caption opacity-70">
         {dayTotalSeconds
           ? `Today ${formatShiftDuration(dayTotalSeconds)}`
           : "Nothing logged today"}
@@ -2935,13 +2935,13 @@ function ClockInCard({
             : `Break running ${formatShiftDuration(runningBreakSeconds)}`}
         </p>
       )}
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-[10px] flex flex-wrap gap-2">
         {!openShift && (
           <button
             type="button"
             disabled={Boolean(pending)}
             onClick={() => run("clock_in")}
-            className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
+            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
           >
             <Play size={14} aria-hidden="true" /> Clock in
           </button>
@@ -2951,7 +2951,7 @@ function ClockInCard({
             type="button"
             disabled={Boolean(pending)}
             onClick={() => run("end_break")}
-            className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
+            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
           >
             <Play size={14} aria-hidden="true" /> Continue
           </button>
@@ -2964,7 +2964,7 @@ function ClockInCard({
               type="button"
               disabled={Boolean(pending)}
               onClick={() => run("start_break", minutes)}
-              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
+              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-control bg-white/10 text-caption font-medium transition-colors hover:bg-white/20 disabled:opacity-50"
             >
               <Pause size={14} aria-hidden="true" /> {BREAK_PRESET_LABEL[minutes]}
             </button>
@@ -2975,7 +2975,7 @@ function ClockInCard({
           type="button"
           disabled={Boolean(pending)}
           onClick={() => run("clock_out")}
-          className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-control bg-white text-label font-medium text-navy transition-colors hover:bg-white/90 disabled:opacity-50"
+          className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-control bg-white text-label font-medium text-navy transition-colors hover:bg-white/90 disabled:opacity-50"
         >
           <Square size={15} aria-hidden="true" /> Clock out
         </button>
@@ -4110,7 +4110,7 @@ function TodayDashboard({
         rowRank(a) - rowRank(b) ||
         (a.due_date || "9999").localeCompare(b.due_date || "9999"),
     )
-    .slice(0, 6);
+    .slice(0, 5);
   const checkedInCount = checkedInMemberIds.size;
   const memberCount = members.length;
   const pendingCheckIns = missingCheckInMembers.length;
@@ -4236,7 +4236,7 @@ function TodayDashboard({
   const eyebrow = formatTodayEyebrow(today) || todayLabel;
   return (
     <section className="pb-10">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[17px]">
         <div className="min-w-0">
           <p className="text-overline uppercase text-navy">{eyebrow}</p>
           <h1 className="mt-1 text-page-heading text-text-primary">Today</h1>
@@ -4254,29 +4254,29 @@ function TodayDashboard({
             type="button"
             data-metric={metric.key}
             onClick={metric.onOpen}
-            className="rounded-card border border-border bg-card p-5 text-left transition-colors hover:border-border-strong"
+            className="rounded-card border border-border bg-card text-left transition-colors hover:border-border-strong"
           >
-            <span className="block text-caption text-text-muted">{metric.label}</span>
-            <strong className="mt-1 block text-metric text-text-primary">{metric.value}</strong>
-            <span className="mt-1.5 block text-caption text-success">{metric.sub}</span>
+            <span className="block text-[12px] leading-4 text-text-muted">{metric.label}</span>
+            <strong className="mt-1 block text-[32px] leading-9 tracking-[-0.6px] text-text-primary">{metric.value}</strong>
+            <span className="mt-3.5 block text-[12px] leading-4 text-success">{metric.sub}</span>
           </button>
         ))}
       </section>
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
-        <div className="grid content-start gap-8">
+      <div className="mt-[18px] grid gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
+        <div className="grid content-start gap-[76px]">
           <section data-panel="tasks">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-card-heading text-text-primary">Today's tasks</h2>
+            <div className="-mt-1 flex items-center justify-between gap-3">
+              <h2 className="text-[16px] font-semibold leading-[22px] text-text-primary">Today's tasks</h2>
               <button
                 type="button"
                 onClick={() => onNavigate("My tasks")}
-                className="text-body-compact font-medium text-navy transition-colors hover:text-text-primary"
+                className="text-[12px] font-medium leading-4 text-navy transition-colors hover:text-text-primary"
               >
                 See all tasks
               </button>
             </div>
-            <div className="mt-3.5 overflow-hidden rounded-card border border-border bg-card">
+            <div className="mt-3.5 flex h-[304px] flex-col overflow-hidden rounded-card border border-border bg-card pb-2 pt-3.5">
               {todayTaskRows.length ? (
                 todayTaskRows.map((task) => {
                   const assignee = assigneeFor(task);
@@ -4284,7 +4284,7 @@ function TodayDashboard({
                   return (
                     <article
                       key={task.id}
-                      className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0"
+                      className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 last:border-b-0"
                     >
                       <button
                         type="button"
@@ -4307,25 +4307,25 @@ function TodayDashboard({
                           type="button"
                           onClick={() => onOpenTask(task)}
                           className={cn(
-                            "block max-w-full truncate text-left text-body-small font-semibold text-text-primary hover:underline",
+                            "block max-w-full truncate text-left text-[14px] font-medium leading-[17px] text-text-primary hover:underline",
                             done && "text-text-muted line-through",
                           )}
                         >
                           {task.title}
                         </button>
-                        <span className="mt-0.5 block truncate text-caption text-text-muted">
+                        <span className="block truncate text-[12px] leading-[15px] text-text-muted">
                           {taskRowMeta(task)}
                         </span>
                       </div>
                       <span
                         className={cn(
-                          "hidden shrink-0 rounded-badge px-2 py-0.5 text-caption font-medium sm:inline-block",
+                          "hidden h-6 w-24 shrink-0 items-center justify-center rounded-chip text-[12px] font-medium leading-[15px] sm:inline-flex",
                           STATUS_PILL[task.status] || STATUS_PILL.todo,
                         )}
                       >
                         {STATUS_LABEL[task.status] || task.status}
                       </span>
-                      <span className="w-16 shrink-0 text-right text-caption text-text-secondary">
+                      <span className="w-20 shrink-0 text-right text-[12px] leading-[15px] text-text-secondary">
                         {taskRowDate(task)}
                       </span>
                       <Avatar
@@ -4338,7 +4338,7 @@ function TodayDashboard({
                   );
                 })
               ) : (
-                <div className="grid justify-items-center gap-2 px-4 py-10 text-center">
+                <div className="grid h-full content-center justify-items-center gap-2 px-4 text-center">
                   <CheckCircle2 size={22} className="text-text-muted" aria-hidden="true" />
                   <p className="text-body-small text-text-secondary">
                     Nothing is assigned to you today.
@@ -4352,45 +4352,45 @@ function TodayDashboard({
           </section>
 
           <section data-panel="check-ins">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-card-heading text-text-primary">Team check-ins</h2>
+            <div className="-mt-1 flex items-center justify-between gap-3">
+              <h2 className="text-[16px] font-semibold leading-[22px] text-text-primary">Team check-ins</h2>
               <button
                 type="button"
                 onClick={() => onNavigate("Check-ins")}
-                className="text-body-compact font-medium text-navy transition-colors hover:text-text-primary"
+                className="text-[12px] font-medium leading-4 text-navy transition-colors hover:text-text-primary"
               >
                 View all
               </button>
             </div>
-            <div className="mt-3.5 rounded-card border border-border bg-card p-5">
-              <p className="text-body-small font-semibold text-text-primary">
+            <div className="mt-3.5 flex h-[280px] flex-col rounded-card border border-border bg-card px-[23px] pb-5 pt-[19px]">
+              <p className="text-[16px] font-semibold leading-[20px] text-text-primary">
                 Daily check-in progress
               </p>
-              <p className="mt-1 text-section-heading text-text-primary">
+              <p className="mt-1.5 text-[24px] font-bold leading-[29px] tracking-[-0.4px] text-text-primary">
                 <strong>
                   {checkedInCount} of {memberCount}
                 </strong>{" "}
                 received
               </p>
-              <p className="mt-1 text-caption text-text-muted">{checkInPendingLine}</p>
+              <p className="mt-[5px] text-[12px] leading-[15px] text-text-muted">{checkInPendingLine}</p>
               <div
                 role="progressbar"
                 aria-label="Team check-ins received today"
                 aria-valuemin={0}
                 aria-valuemax={memberCount}
                 aria-valuenow={checkedInCount}
-                className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary"
+                className="mt-[9px] h-2 w-[415px] overflow-hidden rounded-full bg-surface-secondary"
               >
                 <div
                   className="h-full rounded-full bg-navy"
                   style={{ width: `${checkInPercent}%` }}
                 />
               </div>
-              <div className="mt-2 grid">
+              <div className="mt-6 grid">
                 {members.slice(0, 4).map((member) => {
                   const submitted = checkedInMemberIds.has(String(member.id));
                   return (
-                    <div key={member.id} className="flex items-center gap-3 py-2.5">
+                    <div key={member.id} className="flex h-9 items-center gap-3 pr-[25px]">
                       <Avatar
                         name={memberName(member)}
                         avatarUrl={member.avatar_url}
@@ -4401,13 +4401,13 @@ function TodayDashboard({
                         type="button"
                         onClick={() => setProfileMember(member)}
                         aria-label={`Open ${memberName(member)} profile`}
-                        className="min-w-0 flex-1 truncate text-left text-body-small text-text-primary hover:underline"
+                        className="min-w-0 flex-1 truncate text-left text-[13px] font-medium leading-4 text-text-primary hover:underline"
                       >
                         {memberName(member)}
                       </button>
                       <span
                         className={cn(
-                          "shrink-0 rounded-badge px-2 py-0.5 text-caption font-medium",
+                          "inline-flex h-6 w-[83px] shrink-0 items-center justify-center rounded-chip text-[12px] font-medium leading-[15px]",
                           submitted
                             ? "bg-success-soft text-success"
                             : "bg-warning-soft text-warning",
@@ -4419,16 +4419,11 @@ function TodayDashboard({
                   );
                 })}
               </div>
-              {memberCount > 4 && (
-                <p className="mt-1 text-caption text-text-muted">
-                  and {memberCount - 4} more
-                </p>
-              )}
             </div>
           </section>
         </div>
 
-        <aside className="grid content-start gap-4">
+        <aside className="grid content-start gap-6">
           <ClockInCard
             shifts={workShifts}
             currentUserId={currentUserId}
@@ -4437,40 +4432,42 @@ function TodayDashboard({
             onChangePresence={onChangePresence}
           />
 
-          {upcomingEvents.length > 0 && (
-            <section className="rounded-card border border-border bg-card p-5">
-              <h2 className="text-body-small font-semibold text-text-primary">
+          <section className="-mt-1 min-h-[264px] rounded-card border border-border bg-card px-[19px] pb-5 pt-[19px]">
+              <h2 className="text-[16px] font-semibold leading-[19px] text-text-primary">
                 Upcoming events
               </h2>
-              <div className="mt-3 grid gap-3">
-                {upcomingEvents.slice(0, 3).map((event) => {
+              <div className="mt-[19px] grid">
+                {upcomingEvents.slice(0, 3).map((event, index) => {
                   const pill = eventPill(event);
                   return (
                     <button
                       key={event.id}
                       type="button"
                       onClick={() => onOpenEvent?.(event)}
-                      className="flex items-start gap-2.5 text-left"
+                      className={cn(
+                        "flex h-[40px] items-center gap-2.5 text-left",
+                        index > 0 && "mt-7",
+                      )}
                     >
                       <span
                         aria-hidden="true"
                         className={cn(
-                          "mt-0.5 h-9 w-[3px] shrink-0 rounded-chip",
+                          "h-10 w-1 shrink-0 rounded-chip",
                           EVENT_BAR_TONE[event.event_type] || "bg-navy",
                         )}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-label text-text-primary">
+                        <span className="block truncate text-[13px] font-medium leading-4 text-text-primary">
                           {event.title}
                         </span>
-                        <span className="block text-caption text-text-muted">
+                        <span className="block text-[12px] leading-[15px] text-text-muted">
                           {eventTimeRange(event)}
                         </span>
                       </span>
                       {pill && (
                         <span
                           className={cn(
-                            "shrink-0 rounded-badge px-2 py-0.5 text-caption font-medium",
+                            "inline-flex h-[22px] shrink-0 items-center justify-center rounded-chip px-2 text-[11px] font-medium leading-[14px]",
                             pill.className,
                           )}
                         >
@@ -4482,28 +4479,27 @@ function TodayDashboard({
                 })}
               </div>
             </section>
-          )}
 
-          <section className="rounded-card border border-border bg-card p-5">
-            <h2 className="text-body-small font-semibold text-text-primary">
+          <section className="min-h-[192px] rounded-card border border-border bg-card px-[19px] pb-5 pt-[19px]">
+            <h2 className="text-[16px] font-semibold leading-[19px] text-text-primary">
               Team exceptions
             </h2>
-            <div className="mt-3 grid gap-2.5">
+            <div className="mt-4 grid gap-6">
               {exceptionRows.map((row) => (
                 <button
                   key={row.key}
                   type="button"
                   onClick={row.onOpen}
-                  className="flex items-center gap-2.5 text-left"
+                  className="flex h-4 items-center gap-2.5 text-left"
                 >
                   <span
                     aria-hidden="true"
-                    className={cn("size-2 shrink-0 rounded-full", row.dot)}
+                    className={cn("size-2.5 shrink-0 translate-y-0.5 rounded-full", row.dot)}
                   />
-                  <span className="min-w-0 flex-1 truncate text-label text-text-primary">
+                  <span className="min-w-0 flex-1 truncate text-[13px] leading-4 text-text-secondary">
                     {row.label}
                   </span>
-                  <span className="shrink-0 text-label font-semibold text-text-primary">
+                  <span className="shrink-0 text-[13px] font-semibold leading-4 text-text-primary">
                     {row.count}
                   </span>
                 </button>
@@ -4511,29 +4507,29 @@ function TodayDashboard({
             </div>
           </section>
 
-          <section className="rounded-card border border-border bg-card p-5">
-            <h2 className="text-body-small font-semibold text-text-primary">
+          <section className="min-h-[208px] rounded-card border border-border bg-card px-[19px] pb-5 pt-[19px]">
+            <h2 className="text-[16px] font-semibold leading-[19px] text-text-primary">
               Quick actions
             </h2>
-            <div className="mt-3 grid gap-2">
+            <div className="mt-[3px] grid gap-1.5">
               <button
                 type="button"
                 onClick={onAddEvent}
-                className="flex h-11 items-center gap-2.5 rounded-control bg-navy px-4 text-label font-medium text-text-on-navy transition-colors hover:bg-navy-hover"
+                className="flex h-10 items-center gap-2.5 rounded-control bg-navy px-4 text-[14px] font-medium leading-[17px] text-text-on-navy transition-colors hover:bg-navy-hover"
               >
                 <Clock3 size={17} aria-hidden="true" /> Log work today
               </button>
               <button
                 type="button"
                 onClick={onAddTask}
-                className="flex h-11 items-center gap-2.5 rounded-control border border-border px-4 text-label text-text-primary transition-colors hover:bg-surface-hover"
+                className="flex h-10 items-center gap-2.5 rounded-control border border-border px-4 text-[14px] leading-[17px] text-text-primary transition-colors hover:bg-surface-hover"
               >
                 <Plus size={17} aria-hidden="true" /> New task
               </button>
               <button
                 type="button"
                 onClick={onCheckIn}
-                className="flex h-11 items-center gap-2.5 rounded-control border border-border px-4 text-label text-text-primary transition-colors hover:bg-surface-hover"
+                className="flex h-10 items-center gap-2.5 rounded-control border border-border px-4 text-[14px] leading-[17px] text-text-primary transition-colors hover:bg-surface-hover"
               >
                 <Check size={17} aria-hidden="true" /> Start team check-in
               </button>
