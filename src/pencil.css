@@ -610,15 +610,26 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgb(20 71 230 / 1
 /* The shell search surface is painted by its wrapper too. Match the global
    field rule's specificity so the inner search input cannot add a second line. */
 input.shell-search[type='search'] {
+  -webkit-appearance: none;
   appearance: none;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
+  background-image: none !important;
   box-shadow: none !important;
+  outline: 0 !important;
 }
 input.shell-search[type='search']:focus {
   outline: 0 !important;
   box-shadow: none !important;
+}
+input.shell-search[type='search']::-webkit-search-decoration,
+input.shell-search[type='search']::-webkit-search-cancel-button,
+input.shell-search[type='search']::-webkit-search-results-button,
+input.shell-search[type='search']::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
 }
 
 /* C2 menu and field controls. The trigger uses the same 40px rhythm as text
