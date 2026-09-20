@@ -6,19 +6,23 @@ but they are not 1:1 fidelity targets until a design is reviewed and approved.
 
 ## Settings
 
-The P4 frame (`0:4498`) defines the Settings shell, navigation, and AI Settings
-panel (`0:4554`). It does not define separate desktop or mobile frames for the
-other Settings detail panels.
+The P4 frame (`0:4498`) defines the Settings shell and navigation. The AI panel
+(`0:4554`) and the P39-P45 desktop panels now define the default content layout
+for Profile, Appearance, Notifications, Workspaces, Workspace access,
+Integrations, and Templates. Their mobile counterparts are M23-M30 on the
+`04 Mobile` page.
 
-| Settings panel | Current behavior that must be preserved | Missing design scope |
-| --- | --- | --- |
-| Profile | Avatar upload/removal, first and last name, email, company, job role, presence, role display | Desktop and mobile default, loading, saving, validation, upload error, and long-content states |
-| Appearance | Light, dark, and system themes plus expanded or collapsed sidebar | Desktop and mobile default, selected, focus, and reduced-motion states |
-| Notifications | Notification categories, sound style, volume, check-in reminder, and browser push | Desktop and mobile default, enabled/disabled, permission denied, unsupported, loading, and error states |
-| Workspaces | Switch workspace, set default, create, leave, archived workspace, and empty state | Desktop and mobile card, action, confirmation, busy, error, and empty states |
-| Workspace access | Members, roles, permission controls, invitations, and owner/manager restrictions | Desktop and mobile member list, editing, permission denied, invite, removal, loading, and empty states |
-| Integrations | Calendar subscription and team webhooks | Desktop and mobile connected, disconnected, credential, validation, loading, and error states |
-| Templates | Task and project templates plus apply-from-template actions | Desktop and mobile list, create/edit, empty, loading, validation, and destructive-action states |
+The implemented default screens do not yet cover every operational state.
+
+| Settings surface | Missing design scope |
+| --- | --- |
+| Profile | Loading, saving, validation, avatar upload error, and long-content states |
+| Appearance | Selected focus, reduced-motion, and persisted/error states |
+| Notifications | Loading, unsupported browser, permission denied, save failure, and disabled-sound states |
+| Workspaces | Busy, lifecycle error, confirmation, archived action, and empty states |
+| Workspace access | Loading, permission denied, role-save failure, invite, removal, and empty states |
+| Integrations | Loading, disconnected, credential error, URL validation, save failure, and reconnect states |
+| Templates | Loading, empty, create/edit validation, apply failure, and destructive-action states |
 
 Help and Legal are covered by the standalone P22 and P23 frames, so they are not
 Settings design gaps.
@@ -33,6 +37,18 @@ The production route must keep its current planner, task, and backend behavior.
 It needs a reviewed desktop and mobile design covering empty, populated, add,
 rename, delete, loading, error, and long-name states before it can be treated
 as a 1:1 rebuild target.
+
+## Task Create And Edit Modal
+
+The task create/edit modal currently reads as visually attached to the right
+edge instead of appearing as a centered, self-contained dialog. The form
+behavior and API contract are functional, but the modal layout and its
+desktop/mobile states still need a reviewed OpenPencil design before they can
+be treated as a 1:1 target.
+
+Missing states include default create, edit, validation, long content, loading,
+submission error, mobile keyboard, and destructive confirmation where the
+existing flow supports it.
 
 ## Rules For Unresolved Surfaces
 

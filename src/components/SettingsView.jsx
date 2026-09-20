@@ -22,7 +22,6 @@ import {
   Sparkles,
   Sun,
   UserRound,
-  Users,
   Volume2,
   Webhook,
   X,
@@ -36,9 +35,10 @@ const AISettingsPanel = lazy(() =>
     default: module.AISettingsPanel,
   })),
 );
-import { EmptyState, WorkspaceViewHeading } from "./workspace-ui.jsx";
+import { WorkspaceViewHeading } from "./workspace-ui.jsx";
 import { effectivePresence, getCsrfToken } from "../lib/workspace-format.js";
 import { NOTIFICATION_SOUND_OPTIONS, playNotificationSound } from "../lib/notification-sounds.js";
+import "../settings.css";
 
 // Mirrors tasks/models.py PERMISSION_KEYS - keep in sync with the backend list.
 const PERMISSION_LABELS = [
@@ -1069,54 +1069,80 @@ function SettingsView({
                   <p>Choose how WorkSpace looks on this device.</p>
                 </div>
               </div>
-              <div className="settings-row settings-control-row settings-control-stack">
+              <div className="settings-section-heading">
                 <div>
                   <strong>Theme</strong>
-                  <span>Light, dark, or follow your operating system.</span>
-                </div>
-                <div
-                  className="settings-segmented"
-                  role="radiogroup"
-                  aria-label="Theme"
-                >
-                  <button
-                    type="button"
-                    className={theme === "light" ? "active" : ""}
-                    onClick={() => onSetTheme("light")}
-                  >
-                    Light
-                  </button>
-                  <button
-                    type="button"
-                    className={theme === "dark" ? "active" : ""}
-                    onClick={() => onSetTheme("dark")}
-                  >
-                    Dark
-                  </button>
-                  <button
-                    type="button"
-                    className={theme === "system" ? "active" : ""}
-                    onClick={() => onSetTheme("system")}
-                  >
-                    System
-                  </button>
+                  <span>Select a theme. System follows your operating system setting.</span>
                 </div>
               </div>
-              <div className="settings-row settings-control-row">
+              <div className="settings-theme-grid" role="radiogroup" aria-label="Theme">
+                {[
+                  ["light", "Light", "Bright surfaces"],
+                  ["dark", "Dark", "Low-light comfort"],
+                  ["system", "System", "Match your device"],
+                ].map(([value, label, description]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={theme === value}
+                    className={`settings-theme-card ${theme === value ? "is-active" : ""}`}
+                    data-theme={value}
+                    onClick={() => onSetTheme(value)}
+                  >
+                    <span className="settings-theme-preview" aria-hidden="true" />
+                    <span className="settings-theme-choice">
+                      <span className="settings-radio" aria-hidden="true" />
+                      <span>
+                        <strong>{label}</strong>
+                        <small>{description}</small>
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="settings-sidebar-layout">
                 <div>
                   <strong>Sidebar</strong>
-                  <span>Use a full navigation menu or compact icon rail.</span>
+                  <span>Keep the full navigation menu or reduce it to a compact icon rail.</span>
                 </div>
-                <button
-                  type="button"
-                  className="settings-switch"
-                  aria-pressed={!sidebarCollapsed}
-                  onClick={onToggleSidebar}
-                >
-                  <span className="settings-switch-track" aria-hidden="true" />
-                  <span className="settings-switch-label">{sidebarCollapsed ? "Collapsed" : "Expanded"}</span>
-                </button>
+                <div className="settings-segmented settings-sidebar-segmented" role="radiogroup" aria-label="Sidebar">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={!sidebarCollapsed}
+                    className={!sidebarCollapsed ? "active" : ""}
+                    onClick={() => sidebarCollapsed && onToggleSidebar?.()}
+                  >
+                    Expanded
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={sidebarCollapsed}
+                    className={sidebarCollapsed ? "active" : ""}
+                    onClick={() => !sidebarCollapsed && onToggleSidebar?.()}
+                  >
+                    Collapsed
+                  </button>
+                </div>
+                <div className="settings-sidebar-preview" aria-hidden="true">
+                  <span className="settings-sidebar-demo">
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <ChevronRight className="settings-sidebar-arrow" size={18} />
+                  <span className="settings-sidebar-rail">
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                </div>
               </div>
+              <p className="settings-note">Appearance is saved on this device and updates immediately.</p>
             </Card>
           )}
           {section === "ai" && (
@@ -1139,8 +1165,8 @@ function SettingsView({
                     start one of your own.
                   </p>
                 </div>
-                <Button size="sm" onClick={() => onCreateWorkspace?.()}>
-                  <Plus size={14} /> New workspace
+                <Button size="sm" aria-label="New workspace" onClick={() => onCreateWorkspace?.()}>
+                  <Plus size={14} /> New
                 </Button>
               </div>
               {lifecycleError && (
@@ -1149,7 +1175,7 @@ function SettingsView({
                 </p>
               )}
               {workspaces.length ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="settings-workspace-grid">
                   {workspaces.map((workspace) => {
                     const isCurrent = workspace.id === workspaceId;
                     const isDefault = workspace.id === defaultWorkspaceId;
@@ -1164,18 +1190,26 @@ function SettingsView({
                     return (
                       <div
                         key={workspace.id}
-                        className={`rounded-xl border p-4 text-left transition-colors ${isCurrent ? "border-primary bg-primary/5" : "border-border hover:bg-surface-secondary"}`}
+                        className={`settings-workspace-card ${isCurrent ? "is-current" : ""}`}
                       >
-                        <strong className="block text-sm">
-                          {workspace.name}
-                          {isArchivedWorkspace ? " (archived)" : ""}
-                        </strong>
-                        <span className="mt-1 block text-xs text-text-muted">
+                        <header>
+                          <strong>{workspace.name}</strong>
+                          <span
+                            className={`settings-workspace-status ${
+                              isDefault ? "is-default" : isArchivedWorkspace ? "is-archived" : ""
+                            }`}
+                          >
+                            {isCurrent ? "Current" : isDefault ? "Default" : isArchivedWorkspace ? "Archived" : workspace.role}
+                          </span>
+                        </header>
+                        <p>
                           {isCurrent
                             ? `Open now - you are ${workspace.role}`
-                            : `You are ${workspace.role}${isDefault ? " - opens on sign in" : ""}`}
-                        </span>
-                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                            : isArchivedWorkspace
+                              ? "Archived - read-only workspace"
+                              : `You are ${workspace.role}${isDefault ? " - opens on sign in" : ""}`}
+                        </p>
+                        <div className="settings-workspace-actions">
                           <Button
                             size="sm"
                             disabled={isCurrent || isArchivedWorkspace}
@@ -1186,7 +1220,7 @@ function SettingsView({
                           {canManageTeam && !isArchivedWorkspace && (
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="outline"
                               type="button"
                               onClick={() => {
                                 onSwitchWorkspace?.(workspace.id);
@@ -1198,12 +1232,21 @@ function SettingsView({
                               Manage team
                             </Button>
                           )}
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          {isArchivedWorkspace && isCurrent && canManageTeam && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              type="button"
+                              disabled={lifecycleBusy}
+                              onClick={restoreWorkspace}
+                            >
+                              Restore
+                            </Button>
+                          )}
                           {!isArchivedWorkspace && (
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="outline"
                               type="button"
                               disabled={isDefault}
                               onClick={() =>
@@ -1216,7 +1259,7 @@ function SettingsView({
                           {workspace.role !== "owner" && (
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="outline"
                               type="button"
                               disabled={lifecycleBusy}
                               onClick={() =>
@@ -1230,9 +1273,30 @@ function SettingsView({
                       </div>
                     );
                   })}
+                  <div
+                    className="settings-workspace-create-tile"
+                  >
+                    <span><Plus size={18} aria-hidden="true" /></span>
+                    <strong>Create another workspace</strong>
+                    <small>Keep projects, members, and settings independent.</small>
+                    <Button size="sm" variant="outline" type="button" onClick={() => onCreateWorkspace?.()}>
+                      Create workspace
+                    </Button>
+                  </div>
                 </div>
               ) : (
-                <EmptyState text="You are not in a workspace yet. Create one to get started." />
+                <div className="settings-workspace-grid">
+                  <div
+                    className="settings-workspace-create-tile"
+                  >
+                    <span><Plus size={18} aria-hidden="true" /></span>
+                    <strong>Create your first workspace</strong>
+                    <small>Keep projects, members, and settings independent.</small>
+                    <Button size="sm" variant="outline" type="button" onClick={() => onCreateWorkspace?.()}>
+                      Create workspace
+                    </Button>
+                  </div>
+                </div>
               )}
             </Card>
           )}
@@ -1251,25 +1315,61 @@ function SettingsView({
               </div>
               {notificationPrefs ? (
                 <>
-                  {preferenceRows.map(([key, label, description]) => (
-                    <div className="settings-row settings-control-row" key={key}>
+                  <div className="settings-section-heading">
+                    <div>
+                      <strong>Notification categories</strong>
+                    </div>
+                  </div>
+                  <div className="settings-group-card">
+                    {preferenceRows
+                      .filter(([key]) => key !== "notification_sound")
+                      .map(([key, label, description]) => (
+                        <div className="settings-row settings-control-row settings-notification-row" key={key}>
+                          <div>
+                            <strong>{label}</strong>
+                            <span>{description}</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            className={`settings-switch ${notificationPrefs[key] ? "is-on" : ""}`}
+                            aria-label={label}
+                            aria-checked={notificationPrefs[key]}
+                            onClick={() =>
+                              updatePreference(key, !notificationPrefs[key])
+                            }
+                          >
+                            <span className="settings-switch-track" aria-hidden="true" />
+                            <span className="settings-switch-label">{notificationPrefs[key] ? "On" : "Off"}</span>
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                  <div className="settings-section-heading">
+                    <div>
+                      <strong>Sound and device alerts</strong>
+                    </div>
+                  </div>
+                  <div className="settings-group-card">
+                    <div className="settings-row settings-control-row settings-notification-row">
                       <div>
-                        <strong>{label}</strong>
-                        <span>{description}</span>
+                        <strong>Notification sound</strong>
+                        <span>Play a sound when WorkSpace is focused.</span>
                       </div>
                       <button
                         type="button"
-                        className={`settings-switch ${notificationPrefs[key] ? "is-on" : ""}`}
-                        aria-pressed={notificationPrefs[key]}
+                        role="switch"
+                        className={`settings-switch ${notificationPrefs.notification_sound ? "is-on" : ""}`}
+                        aria-label="Notification sound"
+                        aria-checked={notificationPrefs.notification_sound}
                         onClick={() =>
-                          updatePreference(key, !notificationPrefs[key])
+                          updatePreference("notification_sound", !notificationPrefs.notification_sound)
                         }
                       >
                         <span className="settings-switch-track" aria-hidden="true" />
-                        <span className="settings-switch-label">{notificationPrefs[key] ? "On" : "Off"}</span>
+                        <span className="settings-switch-label">{notificationPrefs.notification_sound ? "On" : "Off"}</span>
                       </button>
                     </div>
-                  ))}
                   <div className="settings-row settings-control-row">
                     <div>
                       <strong>Sound style</strong>
@@ -1314,14 +1414,14 @@ function SettingsView({
                         onKeyUp={(event) => commitNotificationVolume(Number(event.currentTarget.value))}
                         onBlur={(event) => commitNotificationVolume(Number(event.currentTarget.value))}
                         aria-label="Notification sound volume"
-                        className="h-2 w-32 cursor-pointer"
-                        style={{ accentColor: "var(--brand-accent)" }}
+                        className="settings-volume-slider"
                       />
-                      <span className="min-w-9 text-right text-xs font-bold tabular-nums">{notificationVolume}%</span>
+                      <span className="settings-volume-value">{notificationVolume}%</span>
                     </div>
                   </div>
+                  </div>
                   <p className="settings-note">
-                    Sound style and volume apply while WorkSpace is focused. When WorkSpace is backgrounded, minimized, or closed, desktop notifications use your operating system&apos;s notification sound and system volume.
+                    Sound style and volume apply while WorkSpace is focused. When WorkSpace is backgrounded, minimized, or closed, desktop notifications use your operating system's notification sound and system volume.
                   </p>
                 </>
               ) : (
@@ -1336,47 +1436,49 @@ function SettingsView({
                   {prefsError}
                 </p>
               )}
-              {canManageMembers && checkInSettings && (
+              {checkInSettingsError && <p className="auth-error" role="alert">{checkInSettingsError}</p>}
+              <div className="settings-group-card settings-device-alerts">
+                {canManageMembers && checkInSettings && (
+                  <div className="settings-row settings-control-row">
+                    <div>
+                      <strong>Daily check-in reminder</strong>
+                      <span>Send reminders at this workspace's local time.</span>
+                    </div>
+                    <AppSelect
+                      value={checkInSettings.check_in_reminder_hour}
+                      onChange={(event) => updateCheckInReminderHour(event.target.value)}
+                      aria-label="Daily check-in reminder hour"
+                    >
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <option key={hour} value={hour}>{`${String(hour).padStart(2, "0")}:00`}</option>
+                      ))}
+                    </AppSelect>
+                  </div>
+                )}
                 <div className="settings-row settings-control-row">
                   <div>
-                    <strong>Daily check-in reminder</strong>
-                    <span>Send reminders at this workspace’s local time.</span>
+                    <strong>Desktop notifications</strong>
+                    <span>
+                      {browserPermission === "denied"
+                        ? "Blocked - allow notifications for this site in your browser settings."
+                        : !pushSupported
+                          ? "Not supported in this browser."
+                          : pushSubscribed
+                            ? "Enabled on this device - alerts arrive even when WorkSpace is closed."
+                            : "Enable alerts on this device even when WorkSpace is closed."}
+                    </span>
                   </div>
-                  <AppSelect
-                    value={checkInSettings.check_in_reminder_hour}
-                    onChange={(event) => updateCheckInReminderHour(event.target.value)}
-                    aria-label="Daily check-in reminder hour"
-                  >
-                    {Array.from({ length: 24 }, (_, hour) => (
-                      <option key={hour} value={hour}>{`${String(hour).padStart(2, "0")}:00`}</option>
-                    ))}
-                  </AppSelect>
+                  {pushSupported && pushConfigured && browserPermission !== "denied" && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={pushBusy}
+                      onClick={togglePushSubscription}
+                    >
+                      {pushBusy ? "Working..." : pushSubscribed ? "Disable" : "Enable"}
+                    </button>
+                  )}
                 </div>
-              )}
-              {checkInSettingsError && <p className="auth-error" role="alert">{checkInSettingsError}</p>}
-              <div className="settings-row settings-control-row">
-                <div>
-                  <strong>Desktop notifications</strong>
-                  <span>
-                    {browserPermission === "denied"
-                      ? "Blocked - allow notifications for this site in your browser settings."
-                      : !pushSupported
-                        ? "Not supported in this browser."
-                        : pushSubscribed
-                          ? "Enabled on this device - alerts arrive even when WorkSpace is closed."
-                          : "Enable alerts on this device even when WorkSpace is closed."}
-                  </span>
-                </div>
-                {pushSupported && pushConfigured && browserPermission !== "denied" && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={pushBusy}
-                    onClick={togglePushSubscription}
-                  >
-                    {pushBusy ? "Working..." : pushSubscribed ? "Disable" : "Enable"}
-                  </button>
-                )}
               </div>
               {pushError && <p className="settings-note" role="alert">{pushError}</p>}
               {pushSupported && !pushConfigured && !pushError && (
@@ -1440,6 +1542,9 @@ function SettingsView({
                   {avatarError}
                 </p>
               )}
+              <div className="settings-section-heading settings-profile-section-heading">
+                <div><strong>Personal details</strong></div>
+              </div>
               <form className="settings-profile-form" onSubmit={saveProfile}>
                 <div className="modal-grid">
                   <label>
@@ -1503,6 +1608,9 @@ function SettingsView({
                   {profileSaving ? "Saving…" : "Save profile"}
                 </button>
               </form>
+              <div className="settings-section-heading">
+                <div><strong>Availability</strong></div>
+              </div>
               <div className="settings-row settings-control-row">
                 <div>
                   <strong>Presence</strong>
@@ -1557,8 +1665,10 @@ function SettingsView({
                   </p>
                 </div>
               </div>
+              <div className="settings-template-grid">
               <div className="settings-template-section">
                 <h3>Task templates</h3>
+                <p className="settings-template-description">Pre-fill priority, recurrence, project, and assignee.</p>
                 <form
                   className="settings-template-form"
                   onSubmit={createTaskTemplate}
@@ -1620,19 +1730,7 @@ function SettingsView({
                       </AppSelect>
                     </label>
                     <label>
-                      Bucket
-                      <input
-                        value={taskTemplateForm.bucket}
-                        onChange={(event) =>
-                          setTaskTemplateForm((current) => ({
-                            ...current,
-                            bucket: event.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Repeat
+                      Recurrence
                       <AppSelect
                         value={taskTemplateForm.recurrence}
                         onChange={(event) =>
@@ -1668,6 +1766,18 @@ function SettingsView({
                           </option>
                         ))}
                       </AppSelect>
+                    </label>
+                    <label>
+                      Bucket
+                      <input
+                        value={taskTemplateForm.bucket}
+                        onChange={(event) =>
+                          setTaskTemplateForm((current) => ({
+                            ...current,
+                            bucket: event.target.value,
+                          }))
+                        }
+                      />
                     </label>
                     <label>
                       Project
@@ -1741,6 +1851,7 @@ function SettingsView({
               </div>
               <div className="settings-template-section">
                 <h3>Project templates</h3>
+                <p className="settings-template-description">Create the project shell and a default due window.</p>
                 <form
                   className="settings-template-form"
                   onSubmit={createProjectTemplate}
@@ -1798,6 +1909,17 @@ function SettingsView({
                       }
                     />
                   </label>
+                  <div className="settings-template-preview">
+                    <span>Preview</span>
+                    <strong>{projectTemplateForm.project_name || "New project"}</strong>
+                    <small>Due {projectTemplateForm.due_days || 0} days after creation</small>
+                    <i
+                      aria-hidden="true"
+                      style={{
+                        "--template-progress": `${Math.min(Math.max(Number(projectTemplateForm.due_days) || 0, 0), 365) / 365 * 100}%`,
+                      }}
+                    />
+                  </div>
                   <button
                     className="secondary-button"
                     disabled={templateSaving}
@@ -1834,6 +1956,7 @@ function SettingsView({
                     </div>
                   ))}
                 </div>
+              </div>
               </div>
               {templateError && (
                 <p className="auth-error" role="alert">
@@ -1880,6 +2003,10 @@ function SettingsView({
                   </strong>
                   <span>Your role</span>
                 </div>
+              </div>
+              <div className="settings-section-heading">
+                <div><strong>Members and roles</strong></div>
+                <span>{members.length} member{members.length === 1 ? "" : "s"}</span>
               </div>
               <div className="settings-member-list">
                 {permissionsError && (
@@ -1940,15 +2067,7 @@ function SettingsView({
               {isOwner &&
                 members.filter((member) => member.role === "manager").length >
                   0 && (
-                  <div
-                    className="settings-row settings-control-row"
-                    style={{
-                      marginTop: "1rem",
-                      flexDirection: "column",
-                      alignItems: "stretch",
-                      gap: "0.75rem",
-                    }}
-                  >
+                  <div className="settings-manager-panel">
                     <div>
                       <strong>Manager permissions</strong>
                       <span>
@@ -1962,7 +2081,7 @@ function SettingsView({
                       .map((manager) => (
                         <div
                           key={manager.id}
-                          className="rounded-xl border border-border p-4"
+                          className="settings-manager-card"
                         >
                           <strong className="block text-sm">
                             {[manager.first_name, manager.last_name]
@@ -1972,7 +2091,7 @@ function SettingsView({
                           <span className="mt-1 block text-xs text-text-muted">
                             {manager.email}
                           </span>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <div className="settings-permission-grid">
                             {PERMISSION_LABELS.map(([key, label]) => (
                               <label
                                 key={key}
@@ -1997,15 +2116,7 @@ function SettingsView({
                   </div>
                 )}
               {isOwner && (
-                <div
-                  className="settings-row settings-control-row"
-                  style={{
-                    marginTop: "1rem",
-                    flexDirection: "column",
-                    alignItems: "stretch",
-                    gap: "0.75rem",
-                  }}
-                >
+                <div className="settings-danger-panel">
                   <div>
                     <strong>Danger zone</strong>
                     <span>
@@ -2084,54 +2195,50 @@ function SettingsView({
                   </p>
                 </div>
               </div>
-              <div className="settings-row settings-control-row">
-                <div>
-                  <strong>Calendar subscribe link</strong>
-                  <span>
-                    Add this feed to Outlook, Google Calendar, or Apple Calendar
-                    - it updates automatically as events change.
-                  </span>
+              <div className="settings-integration-card">
+                <div className="settings-integration-card-heading">
+                  <span><Link2 size={16} aria-hidden="true" /></span>
+                  <div>
+                    <strong>Calendar subscribe link</strong>
+                    <small>
+                      Add this feed to Outlook, Google Calendar, or Apple Calendar. It updates automatically as events change.
+                    </small>
+                  </div>
                 </div>
-              </div>
-              {calendarSubscribeUrl ? (
-                <div className="settings-webhook-url-row">
-                  <Link2 size={14} />
-                  <code>{calendarSubscribeUrl}</code>
-                  <Button
+                {calendarSubscribeUrl ? (
+                  <div className="settings-webhook-url-row">
+                    <Link2 size={14} />
+                    <code>{calendarSubscribeUrl}</code>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={copyCalendarSubscribeUrl}
+                      aria-label="Copy subscribe link"
+                    >
+                      <Copy size={14} />
+                    </Button>
+                  </div>
+                ) : (
+                  <SkeletonGroup className="settings-inline-skeleton" label="Loading your subscribe link">
+                    <Skeleton variant="row" />
+                  </SkeletonGroup>
+                )}
+                {canManageMembers && (
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={copyCalendarSubscribeUrl}
-                    aria-label="Copy subscribe link"
+                    className="secondary-button settings-reset-link"
+                    disabled={calendarTokenSaving}
+                    onClick={resetCalendarToken}
                   >
-                    <Copy size={14} />
-                  </Button>
-                </div>
-              ) : (
-                <SkeletonGroup className="settings-inline-skeleton" label="Loading your subscribe link">
-                  <Skeleton variant="row" />
-                </SkeletonGroup>
-              )}
-              {canManageMembers && (
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={calendarTokenSaving}
-                  onClick={resetCalendarToken}
-                >
-                  {calendarTokenSaving ? "Resetting…" : "Reset link"}
-                </button>
-              )}
-              <div
-                className="settings-row settings-control-row"
-                style={{ marginTop: "1rem" }}
-              >
+                    {calendarTokenSaving ? "Resetting..." : "Reset link"}
+                  </button>
+                )}
+              </div>
+              <div className="settings-section-heading">
                 <div>
                   <strong>Webhooks</strong>
-                  <span>
-                    Post task, calendar, and chat notifications to a Teams or
-                    Slack channel.
-                  </span>
+                  <span>Post task, calendar, and chat notifications to a Teams or Slack channel.</span>
                 </div>
               </div>
               {webhooksError && (
@@ -2183,6 +2290,7 @@ function SettingsView({
               </div>
               {canManageMembers && (
                 <form className="settings-webhook-form" onSubmit={addWebhook}>
+                  <strong className="settings-webhook-form-title">Connect a channel</strong>
                   <AppSelect
                     value={webhookForm.kind}
                     onChange={(event) =>
@@ -2224,8 +2332,9 @@ function SettingsView({
                     maxLength={120}
                   />
                   <Button type="submit" disabled={webhookSaving}>
-                    {webhookSaving ? "Connecting…" : "Connect"}
+                    {webhookSaving ? "Connecting..." : "Connect"}
                   </Button>
+                  <small className="settings-webhook-form-note">The webhook starts sending notifications as soon as it is connected.</small>
                 </form>
               )}
               {!canManageMembers && (

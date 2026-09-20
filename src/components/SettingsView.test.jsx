@@ -66,6 +66,102 @@ it('orders settings by everyday priority with Profile first', () => {
   ])
 })
 
+it('renders the designed appearance, workspace, and template structures', () => {
+  const onToggleSidebar = vi.fn()
+  render(
+    <SettingsView
+      theme="light"
+      onToggleSidebar={onToggleSidebar}
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserPresence="available"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[{ id: 1, name: 'Northstar', role: 'owner', status: 'active' }]}
+      taskTemplates={[]}
+      projectTemplates={[]}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+  expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeInTheDocument()
+  expect(screen.getByRole('radio', { name: /Light/ })).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByRole('radiogroup', { name: 'Sidebar' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }))
+  expect(onToggleSidebar).toHaveBeenCalledTimes(1)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
+  expect(document.querySelector('.settings-workspace-grid')).toBeInTheDocument()
+  expect(document.querySelector('.settings-workspace-card')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Create workspace' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+  expect(document.querySelector('.settings-template-grid')).toBeInTheDocument()
+  expect(document.querySelector('.settings-template-preview')).toBeInTheDocument()
+})
+
+it('groups notification categories and exposes switches with pressed state', async () => {
+  mockApi({
+    '/notification-preferences/': {
+      preferences: {
+        mentions: true,
+        direct_messages: true,
+        channel_messages: true,
+        task_updates: true,
+        calendar_reminders: true,
+        manager_activity: false,
+        notification_sound: true,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+  expect(await screen.findByRole('switch', { name: 'Mentions' })).toHaveAttribute('aria-checked', 'true')
+  expect(document.querySelectorAll('.settings-group-card')).toHaveLength(3)
+  const soundRow = screen.getByText('Notification sound').closest('.settings-row')
+  expect(within(soundRow).getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
+})
+
+it('renders integrations as a calendar card and a webhook connection form', async () => {
+  mockApi({
+    '/api/workspaces/1/webhooks/?page_size=500': { webhooks: [] },
+    '/api/workspaces/1/calendar-feed-token/': { token: 'calendar-token' },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+  expect(await screen.findByText('Calendar subscribe link')).toBeInTheDocument()
+  expect(document.querySelector('.settings-integration-card')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Copy subscribe link' })).toBeInTheDocument()
+  expect(document.querySelector('.settings-webhook-form')).toBeInTheDocument()
+})
+
 it('renders the P4 AI panel and saves provider and member access changes together', async () => {
   const api = mockApi({
     '/api/workspaces/1/ai/settings/': {
@@ -283,7 +379,7 @@ it('does not subscribe when permission is denied', async () => {
 it('saves the Notification sound choice from notification settings', async () => {
   const { api } = await setup()
   const row = screen.getByText('Notification sound').closest('.settings-row')
-  fireEvent.click(within(row).getByRole('button', { name: 'On' }))
+  fireEvent.click(within(row).getByRole('switch', { name: 'Notification sound' }))
   await waitFor(() => expectRequest(api, '/notification-preferences/', 'PATCH'))
   const [, request] = expectRequest(api, '/notification-preferences/', 'PATCH')
   expect(JSON.parse(request.body)).toEqual({ notification_sound: false })
