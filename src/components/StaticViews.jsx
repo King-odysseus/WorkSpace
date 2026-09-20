@@ -4,11 +4,12 @@
 
 import { useEffect, useState } from 'react'
 import {
-  BarChart3, Bell, CalendarDays, Camera, CheckCircle2, ChevronDown, ClipboardList, Download,
+  BarChart3, Bell, CalendarDays, Camera, CheckCircle2, ChevronDown, ClipboardList, Cookie, Download,
   Filter, Hash, LayoutGrid, Megaphone, MessageSquare, MonitorDown, Plus, Settings, Share2,
-  Smartphone, Target, Users,
+  Smartphone, Target, Users, X,
 } from 'lucide-react'
 import { Card } from './ui/card.jsx'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { formatDay } from '../lib/workspace-format.js'
 import { RELEASE_NOTES, markReleaseNotesSeen } from '../lib/release-notes.js'
@@ -318,11 +319,206 @@ function LegalView() {
   return <section className="workspace-view legal-view"><WorkspaceViewHeading title="Legal & privacy" subtitle="Review the policies that govern your use of WorkSpace." /><div className="legal-layout"><nav className="legal-nav" aria-label="Legal documents">{Object.entries(documents).map(([key, item]) => <button type="button" className={document === key ? 'active' : ''} key={key} onClick={() => setDocument(key)}>{item.label}</button>)}</nav><Card className="legal-document"><p className="eyebrow">WorkSpace policies</p><h2>{current.title}</h2><p className="legal-intro">{current.intro}</p>{current.sections.map(([heading, body]) => <section key={heading}><h3>{heading}</h3><p>{body}</p></section>)}<p className="legal-meta">Last updated: 4 September 2026 · Review this policy with your legal adviser for your organisation's specific obligations.</p></Card></div><Card className="legal-acceptance"><div><h3>Policy acknowledgement</h3><p>To continue using this workspace, confirm that you have read and agree to the Terms of service and Acceptable use policy, and acknowledge the Privacy and Cookie notices.</p></div><div className="legal-acceptance-actions"><button type="button" className="primary-button" onClick={acceptPolicies} disabled={accepted}>{accepted ? 'Policies accepted' : 'Accept policies'}</button></div></Card></section>
 }
 
-function CookieConsent({ onOpenLegal }) {
-  const [choice, setChoice] = useState(() => localStorage.getItem('workspace-cookie-consent-v1'))
+const COOKIE_CONSENT_KEY = 'workspace-cookie-consent-v1'
+const EMPTY_COOKIE_PREFERENCES = {
+  analytics: false,
+  preferences: false,
+  productUpdates: false,
+}
+const DEFAULT_COOKIE_PREFERENCES = {
+  analytics: true,
+  preferences: true,
+  productUpdates: false,
+}
+const ALL_COOKIE_PREFERENCES = {
+  analytics: true,
+  preferences: true,
+  productUpdates: true,
+}
+
+function readCookieConsent() {
+  const stored = localStorage.getItem(COOKIE_CONSENT_KEY)
+  if (!stored) return null
+  if (stored === 'essential') return EMPTY_COOKIE_PREFERENCES
+  if (stored === 'all') return ALL_COOKIE_PREFERENCES
+  try {
+    const parsed = JSON.parse(stored)
+    return {
+      analytics: parsed.analytics === true,
+      preferences: parsed.preferences === true,
+      productUpdates: parsed.productUpdates === true,
+    }
+  } catch {
+    return EMPTY_COOKIE_PREFERENCES
+  }
+}
+
+function writeCookieConsent(preferences) {
+  localStorage.setItem(COOKIE_CONSENT_KEY, JSON.stringify({
+    version: 1,
+    analytics: preferences.analytics === true,
+    preferences: preferences.preferences === true,
+    productUpdates: preferences.productUpdates === true,
+  }))
+}
+
+function CookieConsent({ onOpenLegal, variant = 'bar' }) {
+  const [choice, setChoice] = useState(() => readCookieConsent())
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [draft, setDraft] = useState(() => readCookieConsent() || DEFAULT_COOKIE_PREFERENCES)
+
+  const saveChoice = (nextChoice) => {
+    writeCookieConsent(nextChoice)
+    setChoice(nextChoice)
+    setDraft(nextChoice)
+    setPreferencesOpen(false)
+  }
+
+  const openPreferences = () => {
+    setDraft(choice || DEFAULT_COOKIE_PREFERENCES)
+    setPreferencesOpen(true)
+  }
+
+  const toggleDraft = (key) => {
+    setDraft((current) => ({ ...current, [key]: !current[key] }))
+  }
+
   if (choice) return null
-  const save = value => { localStorage.setItem('workspace-cookie-consent-v1', value); setChoice(value) }
-  return <aside className="cookie-consent" role="dialog" aria-label="Cookie preferences"><div><strong>Cookie preferences</strong><p>We use essential cookies to keep you signed in and secure. Optional analytics cookies are currently not enabled.</p><button type="button" className="cookie-link" onClick={onOpenLegal}>Read the Cookie notice</button></div><div className="cookie-actions"><button type="button" className="secondary-button" onClick={() => save('essential')}>Essential only</button><button type="button" className="primary-button" onClick={() => save('all')}>Accept all</button></div></aside>
+
+  const preferencePanel = (
+    <Dialog open={preferencesOpen} onOpenChange={setPreferencesOpen} modal={false}>
+      <DialogContent
+        className="cookie-preferences-dialog"
+        overlayClassName="hidden"
+        showCloseButton={false}
+        aria-describedby="cookie-preferences-description"
+      >
+        <header className="cookie-preferences-header">
+          <DialogTitle className="cookie-preferences-title">Cookie preferences</DialogTitle>
+          <button
+            type="button"
+            className="cookie-icon-button"
+            onClick={() => setPreferencesOpen(false)}
+            aria-label="Close cookie preferences"
+          >
+            <X size={18} />
+          </button>
+        </header>
+        <DialogDescription id="cookie-preferences-description" className="cookie-preferences-copy">
+          Choose which categories you allow. Essential cookies cannot be turned off.
+        </DialogDescription>
+        <div className="cookie-preferences-list">
+          <div className="cookie-preference-row">
+            <div className="cookie-preference-copy">
+              <strong>Essential</strong>
+              <span>Sign-in, security and load balancing.</span>
+            </div>
+            <span className="cookie-fixed-badge">Always</span>
+          </div>
+          <div className="cookie-preference-row">
+            <div className="cookie-preference-copy">
+              <strong>Analytics</strong>
+              <span>Aggregate usage statistics.</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={draft.analytics}
+              aria-label="Analytics cookies"
+              className={`cookie-toggle ${draft.analytics ? 'is-on' : ''}`}
+              onClick={() => toggleDraft('analytics')}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+          <div className="cookie-preference-row">
+            <div className="cookie-preference-copy">
+              <strong>Preferences</strong>
+              <span>Theme, layout and saved views.</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={draft.preferences}
+              aria-label="Preference cookies"
+              className={`cookie-toggle ${draft.preferences ? 'is-on' : ''}`}
+              onClick={() => toggleDraft('preferences')}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+          <div className="cookie-preference-row">
+            <div className="cookie-preference-copy">
+              <strong>Product updates</strong>
+              <span>Occasional in-app announcements.</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={draft.productUpdates}
+              aria-label="Product update cookies"
+              className={`cookie-toggle ${draft.productUpdates ? 'is-on' : ''}`}
+              onClick={() => toggleDraft('productUpdates')}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <footer className="cookie-preferences-footer">
+          <button type="button" className="cookie-cancel-button" onClick={() => setPreferencesOpen(false)}>Cancel</button>
+          <button type="button" className="cookie-save-button" onClick={() => saveChoice(draft)}>Save preferences</button>
+        </footer>
+      </DialogContent>
+    </Dialog>
+  )
+
+  if (variant === 'card') {
+    return (
+      <>
+        <aside className="cookie-consent-card" role="region" aria-label="Cookie consent">
+          <div className="cookie-card-heading">
+            <span className="cookie-card-tile" aria-hidden="true"><Cookie size={20} /></span>
+            <h2>Cookies on Workspace</h2>
+            <button type="button" className="cookie-icon-button" onClick={() => saveChoice(EMPTY_COOKIE_PREFERENCES)} aria-label="Dismiss cookie notice">
+              <X size={18} />
+            </button>
+          </div>
+          <p className="cookie-card-copy">We use essential cookies to run Workspace, and optional cookies to understand how it is used. You can accept, decline or choose per category.</p>
+          <button type="button" className="cookie-notice-link" onClick={onOpenLegal}>Read our cookie notice</button>
+          <button type="button" className="cookie-card-preferences" onClick={openPreferences}>Manage preferences</button>
+          <div className="cookie-card-actions">
+            <button type="button" className="cookie-card-decline" onClick={() => saveChoice(EMPTY_COOKIE_PREFERENCES)}>Decline optional</button>
+            <button type="button" className="cookie-card-accept" onClick={() => saveChoice(ALL_COOKIE_PREFERENCES)}>Accept all</button>
+          </div>
+        </aside>
+        {preferencePanel}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <aside className="cookie-consent-bar" role="region" aria-label="Cookie consent">
+        <div className="cookie-consent-copy">
+          <span className="cookie-consent-tile" aria-hidden="true"><Cookie size={20} /></span>
+          <div className="cookie-consent-message">
+            <strong>We use cookies</strong>
+            <p>Essential cookies keep you signed in. Analytics and preference cookies are optional, and you can change your choice at any time.</p>
+          </div>
+          <button type="button" className="cookie-notice-link" onClick={onOpenLegal}>Read our cookie notice</button>
+        </div>
+        <div className="cookie-consent-actions">
+          <button type="button" className="cookie-bar-preferences" onClick={openPreferences}>Preferences</button>
+          <button type="button" className="cookie-bar-decline" onClick={() => saveChoice(EMPTY_COOKIE_PREFERENCES)}>Decline</button>
+          <button type="button" className="cookie-bar-accept" onClick={() => saveChoice(ALL_COOKIE_PREFERENCES)}>Accept all</button>
+          <button type="button" className="cookie-bar-close" onClick={() => saveChoice(EMPTY_COOKIE_PREFERENCES)} aria-label="Dismiss cookie notice">
+            <X size={16} />
+          </button>
+        </div>
+      </aside>
+      {preferencePanel}
+    </>
+  )
 }
 
 function WhatsNew({ onOpen }) {
