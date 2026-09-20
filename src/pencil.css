@@ -300,7 +300,7 @@ button[aria-label='Open Zuri'] svg { color: #1447E6 !important; }
 header.h-16 { padding-top: 1px; border-bottom-color: var(--pencil-border) !important; background: #fff !important; }
 
 /* Reusable Pencil primitives. */
-.workspace-view { width: min(1112px, 100%); margin: 0 auto; color: var(--pencil-text); }
+.workspace-view { width: 100%; min-width: 0; margin: 0 auto; color: var(--pencil-text); }
 .workspace-view h1, .workspace-view h2, .workspace-view h3, .workspace-view p { font-family: inherit; }
 [data-slot='card'], .workspace-view .card, .workspace-view .report-panel, .workspace-view .project-card, .workspace-view .project-detail-panel {
   border: 1px solid var(--pencil-border) !important;
@@ -820,8 +820,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-commandbar { min-height: 42px; gap: 12px !important; }
 .planner-commandbar > * { min-height: 42px; }
 .planner-scope-summary { min-height: 18px; margin-top: 14px !important; }
-.planner-board { gap: 8px !important; margin-top: 17px !important; padding-bottom: 16px !important; }
-.planner-column { width: 152px !important; height: 604px !important; border: 1px solid var(--pencil-border); border-radius: 12px !important; background: var(--pencil-surface-muted) !important; }
+.planner-board { display: grid !important; grid-auto-flow: column; grid-auto-columns: minmax(152px, 1fr); gap: 8px !important; margin-top: 17px !important; padding-bottom: 16px !important; }
+.planner-column { width: auto !important; min-width: 152px; height: 604px !important; border: 1px solid var(--pencil-border); border-radius: 12px !important; background: var(--pencil-surface-muted) !important; }
 .planner-column-heading { padding: 14px 12px 10px !important; border-bottom: 1px solid var(--pencil-border); }
 .planner-column-heading strong { font-size: 13px; line-height: 18px; }
 .planner-column-heading span { font-size: 11px; line-height: 16px; }
