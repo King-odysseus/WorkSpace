@@ -9,6 +9,7 @@ import { AppSelect } from './ui/select.jsx'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
+import Avatar from './Avatar.jsx'
 import { formatDate, formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 import { FORMULA_ERRORS, columnLabel, evaluateSheet } from '../lib/spreadsheet-formulas.js'
 
@@ -1144,8 +1145,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   const [helpOpen, setHelpOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [saving, setSaving] = useState(false)
-  const [savingProvider, setSavingProvider] = useState('')
-  const [providerNotices, setProviderNotices] = useState({})
+  const [expandedProvider, setExpandedProvider] = useState('')
 
   useEffect(() => {
     let active = true
@@ -1153,7 +1153,9 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       .then(async response => ({ ok: response.ok, result: await response.json() }))
       .then(({ ok, result }) => {
         if (!active) return
-        setData(ok ? { ...result, savedSettings: result.settings } : { error: result.error || 'AI settings could not be loaded.' })
+        setData(ok
+          ? { ...result, savedSettings: result.settings, savedProviderConfig: result.provider_config }
+          : { error: result.error || 'AI settings could not be loaded.' })
       })
       .catch(() => active && setData({ error: 'AI settings could not be loaded.' }))
     return () => { active = false }
@@ -1173,18 +1175,22 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   settings.ai_enabled_providers = settings.ai_enabled_providers || []
   const providerConfig = data.provider_config || {}
   const mayManage = Boolean(data.can_manage)
+  const providerMeta = {
+    openai: { label: 'OpenAI', description: 'Fast general model, best for summaries and drafting.' },
+    claude: { label: 'Anthropic · Claude', description: 'Strong at long-context analysis and review.' },
+    kimi: { label: 'Kimi', description: 'Long-context research for document-heavy work.' },
+    deepseek: { label: 'DeepSeek', description: 'Efficient reasoning for technical workspace tasks.' },
+  }
 
   const updateSettings = changes => {
-    setNotice(current => current ? '' : current)
+    setNotice('')
     setData(current => ({
       ...current,
-      settings: { ...current.settings, ...changes },
+      settings: { ...(current.settings || {}), ...changes },
     }))
   }
   const updateProvider = (provider, changes) => {
-    // Any edit invalidates the last save's feedback - clear it so a stale
-    // "Saved" notice can never sit next to a field the user has since changed.
-    setProviderNotices(current => (current[provider] ? { ...current, [provider]: '' } : current))
+    setNotice('')
     setData(current => ({
       ...current,
       provider_config: {
@@ -1213,45 +1219,14 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
     }
   }
 
-  const saveProvider = async provider => {
-    setSavingProvider(provider)
-    setProviderNotices(current => ({ ...current, [provider]: '' }))
-    try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/ai/settings/`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ ...settings, provider_config: { [provider]: providerPayload(provider) } }),
-      })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || `Could not save ${provider}.`)
-      setData(current => ({
-        ...current,
-        can_manage: result.can_manage,
-        providers: result.providers,
-        settings: result.settings,
-        savedSettings: result.settings,
-        provider_config: {
-          ...current.provider_config,
-          [provider]: result.provider_config[provider],
-        },
-      }))
-      // A toast is unambiguous where the old inline "Saved" text was not: it
-      // appears and clears itself, so it can never be mistaken for confirming
-      // an edit made after the save. Errors stay inline, next to the field
-      // that needs fixing, where they are more useful sitting still.
-      const label = AI_PROVIDERS.find(([value]) => value === provider)?.[1] || provider
-      toast.success(`${label} settings saved.`)
-    } catch (error) {
-      // The PATCH failed, so nothing was persisted - drop this provider's
-      // unsaved edits back to the server's last confirmed state instead of
-      // leaving the form showing a change that a reload would silently undo.
-      setData(current => ({ ...current, settings: current.savedSettings || current.settings }))
-      setProviderNotices(current => ({ ...current, [provider]: error.message || 'Could not save provider.' }))
-      toast.error(error.message || `Could not save ${provider}.`)
-    } finally {
-      setSavingProvider('')
-    }
+  const cancel = () => {
+    setData(current => ({
+      ...current,
+      settings: current.savedSettings || current.settings,
+      provider_config: current.savedProviderConfig || current.provider_config,
+    }))
+    setExpandedProvider('')
+    setNotice('')
   }
 
   const save = async () => {
@@ -1262,16 +1237,28 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
         method: 'PATCH',
         credentials: 'include',
         headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          ...settings,
+          provider_config: Object.fromEntries(
+            AI_PROVIDERS.map(([provider]) => [provider, providerPayload(provider)]),
+          ),
+        }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Could not save AI settings.')
-      setData(current => ({ ...current, ...result, savedSettings: result.settings }))
+      setData(current => ({
+        ...current,
+        ...result,
+        savedSettings: result.settings,
+        savedProviderConfig: result.provider_config,
+      }))
       toast.success('Zuri access settings saved.')
     } catch (error) {
-      // Same rule as saveProvider: a failed save must not leave the checkboxes
-      // showing a change that never actually made it to the database.
-      setData(current => ({ ...current, settings: current.savedSettings || current.settings }))
+      setData(current => ({
+        ...current,
+        settings: current.savedSettings || current.settings,
+        provider_config: current.savedProviderConfig || current.provider_config,
+      }))
       setNotice(error.message || 'Could not save AI settings.')
       toast.error(error.message || 'Could not save AI settings.')
     } finally {
@@ -1279,121 +1266,190 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
     }
   }
 
-  return <Card className="settings-panel p-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
+  return <Card className="settings-panel ai-settings-panel">
+    <header className="ai-settings-heading">
       <div>
-        <p className="eyebrow">Zuri</p>
-        <h2>Providers & access</h2>
-        <p className="text-sm text-text-muted">Add the company credentials that power Zuri here. API keys are encrypted and are never shown again.</p>
+        <h2>AI assistance</h2>
+        <p>Configure the providers available to this workspace and control who can use the assistant. Provider keys are stored encrypted and never exposed to members.</p>
       </div>
-      <button type="button" className="secondary-button" onClick={() => setHelpOpen(current => !current)}>
-        <HelpCircle size={15} /> Setup help
+      <button
+        type="button"
+        className="ai-settings-help-toggle"
+        aria-expanded={helpOpen}
+        aria-label="Setup help"
+        title="Setup help"
+        onClick={() => setHelpOpen(current => !current)}
+      >
+        <HelpCircle size={17} />
+      </button>
+    </header>
+
+    {helpOpen && <div className="ai-settings-help">
+      <strong>Connect a provider</strong>
+      <p>Create an API key in the provider's developer console, add it to the provider row, choose the model, then save. Default base URLs are already filled in for a compatible gateway or proxy.</p>
+      <p>Railway environment variables still work as a fallback, but they are not required for workspace setup.</p>
+    </div>}
+
+    <div className="ai-settings-enable-row">
+      <div>
+        <strong>Enable AI assistance</strong>
+        <span>Turns on the workspace assistant, AI summaries and provider-backed features.</span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        className="ai-settings-switch"
+        aria-label="Enable AI assistance"
+        aria-checked={settings.ai_enabled}
+        disabled={!mayManage}
+        onClick={() => updateSettings({ ai_enabled: !settings.ai_enabled })}
+      >
+        <span aria-hidden="true" />
       </button>
     </div>
 
-    {helpOpen && <div className="mt-4 rounded-xl bg-info/10 p-4 text-sm leading-6">
-      <strong>How to connect a provider</strong>
-      <p className="mt-1 text-text-muted">Create an API key in the provider's developer console, paste it below, check Enable, choose a model, then save. The default base URLs are already filled in. You only need to change one when using a compatible gateway or proxy.</p>
-      <p className="mt-2 text-text-muted">Railway environment variables still work as a fallback, but they are no longer required for setup.</p>
-    </div>}
+    <section className="ai-settings-providers" aria-labelledby="ai-provider-heading">
+      <h3 id="ai-provider-heading">Default provider</h3>
+      <div className="ai-provider-list">
+        {AI_PROVIDERS.map(([provider, fallbackLabel]) => {
+          const config = providerConfig[provider] || {}
+          const meta = providerMeta[provider] || { label: fallbackLabel, description: 'Provider-backed assistant capabilities.' }
+          const enabled = settings.ai_enabled_providers.includes(provider)
+          const isDefault = settings.ai_default_provider === provider
+          const isExpanded = expandedProvider === provider
+          const status = isDefault
+            ? { label: 'Default', className: 'is-default' }
+            : config.has_api_key && enabled
+              ? { label: 'Ready', className: 'is-ready' }
+              : config.has_api_key
+                ? { label: 'Disabled', className: 'is-disabled' }
+                : { label: 'Not connected', className: 'is-offline' }
 
-    <div className="mt-5 space-y-3">
-      {AI_PROVIDERS.map(([provider, label]) => {
-        const config = providerConfig[provider] || {}
-        const enabled = settings.ai_enabled_providers.includes(provider)
-        const isDefault = settings.ai_default_provider === provider
-        return <section key={provider} className="rounded-2xl bg-surface-secondary p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold">{label}</h3>
-              {/* Reflects the last-saved server state only - config.clear_api_key
-                  is a pending, unsaved choice, and mixing it in here made this
-                  line claim the key was gone before Save was ever clicked. */}
-              <p className="text-xs text-text-muted">{config.has_api_key ? `Key saved (${config.key_hint})` : 'No API key saved'}</p>
-              {config.clear_api_key && <p className="text-xs font-semibold text-danger">Removing on next save, not yet saved</p>}
+          return <div className="ai-provider-block" key={provider}>
+            <div className={`ai-provider-row ${isDefault ? 'is-selected' : ''}`}>
+              <button
+                type="button"
+                className="ai-provider-radio"
+                aria-label={`Use ${meta.label} as the default provider`}
+                aria-pressed={isDefault}
+                disabled={!mayManage || !config.has_api_key}
+                onClick={() => updateSettings({ ai_default_provider: provider })}
+              >
+                <span aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="ai-provider-summary"
+                aria-expanded={isExpanded}
+                aria-controls={`ai-provider-config-${provider}`}
+                onClick={() => setExpandedProvider(current => current === provider ? '' : provider)}
+              >
+                <strong>{meta.label}{config.model ? ` · ${config.model}` : ''}</strong>
+                <span>{meta.description}</span>
+              </button>
+              <button
+                type="button"
+                className={`ai-provider-status ${status.className}`}
+                aria-expanded={isExpanded}
+                aria-controls={`ai-provider-config-${provider}`}
+                aria-label={`Configure ${meta.label}; ${status.label}`}
+                onClick={() => setExpandedProvider(current => current === provider ? '' : provider)}
+              >
+                {status.label}
+              </button>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="ai-provider-default">
-                <input type="radio" name="company-default-ai-provider" checked={isDefault} onChange={() => updateSettings({ ai_default_provider: provider })} disabled={!mayManage} />
-                <span>Company default</span>
-              </label>
-              <label className="ai-provider-switch">
-                <input type="checkbox" checked={enabled} onChange={() => toggleProvider(provider)} disabled={!mayManage} />
-                <span className="ai-provider-switch-track" aria-hidden="true"><span /></span>
-                <span>{enabled ? 'Enabled' : 'Disabled'}</span>
-              </label>
-            </div>
+            {isExpanded && <div className="ai-provider-config" id={`ai-provider-config-${provider}`}>
+              <div className="ai-provider-config-grid">
+                <label className="ai-provider-config-key">API key
+                  <input
+                    type="password"
+                    value={config.api_key || ''}
+                    onChange={event => updateProvider(provider, { api_key: event.target.value, clear_api_key: false })}
+                    placeholder={config.has_api_key ? `Leave blank to keep ${config.key_hint}` : `Paste your ${meta.label} API key`}
+                    autoComplete="new-password"
+                    disabled={!mayManage}
+                  />
+                </label>
+                <label>Base URL
+                  <input
+                    type="url"
+                    value={config.base_url || ''}
+                    onChange={event => updateProvider(provider, { base_url: event.target.value })}
+                    disabled={!mayManage}
+                  />
+                </label>
+                <label>Model
+                  <input
+                    value={config.model || ''}
+                    onChange={event => updateProvider(provider, { model: event.target.value })}
+                    disabled={!mayManage}
+                  />
+                </label>
+              </div>
+              <div className="ai-provider-config-actions">
+                <label className="ai-provider-enabled">
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={() => toggleProvider(provider)}
+                    disabled={!mayManage || !config.has_api_key}
+                  />
+                  <span>Provider enabled</span>
+                </label>
+                {mayManage && config.has_api_key && <button
+                  type="button"
+                  className="ai-provider-remove-key"
+                  onClick={() => {
+                    const clearing = !config.clear_api_key
+                    updateProvider(provider, { api_key: '', clear_api_key: clearing })
+                    if (clearing && enabled) toggleProvider(provider)
+                  }}
+                >{config.clear_api_key ? 'Keep saved key' : 'Remove saved key'}</button>}
+              </div>
+              {config.clear_api_key && <p className="ai-provider-pending">The saved key will be removed when you save.</p>}
+            </div>}
           </div>
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <label className="text-sm lg:col-span-2">API key
-              <input
-                type="password"
-                value={config.api_key || ''}
-                onChange={event => updateProvider(provider, { api_key: event.target.value, clear_api_key: false })}
-                placeholder={config.has_api_key ? `Leave blank to keep ${config.key_hint}` : `Paste your ${label} API key`}
-                autoComplete="new-password"
-                disabled={!mayManage}
-                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-info/30"
-              />
-            </label>
-            <label className="text-sm">Base URL
-              <input
-                type="url"
-                value={config.base_url || ''}
-                onChange={event => updateProvider(provider, { base_url: event.target.value })}
-                disabled={!mayManage}
-                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-info/30"
-              />
-            </label>
-            <label className="text-sm">Model
-              <input
-                value={config.model || ''}
-                onChange={event => updateProvider(provider, { model: event.target.value })}
-                disabled={!mayManage}
-                className="mt-1 w-full rounded-xl bg-surface px-3 py-2.5 outline-none focus:ring-2 focus:ring-info/30"
-              />
-            </label>
-          </div>
-          {mayManage && config.has_api_key && <button
-            type="button"
-            className="mt-3 text-xs font-semibold text-danger"
-            onClick={() => {
-              const clearing = !config.clear_api_key
-              updateProvider(provider, { api_key: '', clear_api_key: clearing })
-              if (clearing && enabled) toggleProvider(provider)
-            }}
-          >{config.clear_api_key ? 'Keep saved key' : 'Remove saved key'}</button>}
-          {mayManage && <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button type="button" className="primary-button" onClick={() => saveProvider(provider)} disabled={Boolean(savingProvider)}>
-              <Save size={15} /> {savingProvider === provider ? 'Saving…' : `Save ${label}`}
-            </button>
-            {providerNotices[provider] && <span className={`text-xs ${providerNotices[provider] === 'Saved' ? 'text-text-muted' : 'text-danger'}`} role="status">{providerNotices[provider]}</span>}
-          </div>}
-        </section>
-      })}
-    </div>
-
-    <div className="mt-5">
-      <label className="flex items-center gap-3 rounded-xl bg-surface-secondary px-4 py-3 text-sm font-semibold">
-        <input type="checkbox" checked={settings.ai_enabled} onChange={event => updateSettings({ ai_enabled: event.target.checked })} disabled={!mayManage} />
-        Enable Zuri for this workspace
-      </label>
-    </div>
-
-    <div className="mt-5">
-      <p className="text-sm font-semibold">Members with access</p>
-      <p className="text-xs text-text-muted">Owners and managers always have access. Select the other team members who may use the company key.</p>
-      <div className="mt-2 grid gap-1 sm:grid-cols-2">
-        {members.map(member => <label key={member.id} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-secondary">
-          <input type="checkbox" checked={settings.ai_user_ids.includes(member.id)} onChange={() => toggleMember(member.id)} disabled={!mayManage} />
-          {[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}
-        </label>)}
+        })}
       </div>
-    </div>
+    </section>
 
-    {mayManage && <button type="button" className="primary-button mt-5" onClick={save} disabled={saving}>
-      <Save size={15} /> {saving ? 'Saving…' : 'Save workspace access'}
-    </button>}
-    {notice && <p className="workspace-inline-status mt-3" role="status">{notice}</p>}
+    <section className="ai-settings-members" aria-labelledby="ai-members-heading">
+      <div className="ai-settings-members-heading">
+        <h3 id="ai-members-heading">Members allowed to use AI</h3>
+        <p>Owners and managers always have access. Select the other team members who may use the company key.</p>
+      </div>
+      <div className="ai-member-list">
+        {members.length ? members.map(member => {
+          const name = [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email
+          const allowed = settings.ai_user_ids.includes(member.id)
+          return <div className="ai-member-row" key={member.id}>
+            <Avatar name={name} avatarUrl={member.avatar_url} presence={member.presence} className="ai-member-avatar" />
+            <span className="ai-member-copy">
+              <strong>{name}</strong>
+              {member.email && member.email !== name && <small>{member.email}</small>}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              className="ai-settings-switch is-small"
+              aria-label={`Allow ${name} to use AI`}
+              aria-checked={allowed}
+              disabled={!mayManage}
+              onClick={() => toggleMember(member.id)}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+        }) : <p className="ai-members-empty">No workspace members are available.</p>}
+      </div>
+    </section>
+
+    {mayManage && <footer className="ai-settings-footer">
+      <button type="button" className="ai-settings-cancel" onClick={cancel} disabled={saving}>Cancel</button>
+      <button type="button" className="ai-settings-save" onClick={save} disabled={saving}>
+        {saving ? <><Save size={15} /> Saving…</> : 'Save'}
+      </button>
+    </footer>}
+    {notice && <p className="workspace-inline-status ai-settings-notice" role="status">{notice}</p>}
   </Card>
 }

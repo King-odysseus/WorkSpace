@@ -3267,6 +3267,7 @@ function App() {
                 onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                 onSwitchWorkspace={setActiveWorkspaceId}
                 onProfileUpdated={updateSessionUser}
+                onSignOut={logout}
                 canManageMembers={["owner", "manager"].includes(
                   currentWorkspace?.role,
                 )}
@@ -3712,6 +3713,7 @@ function WorkspaceView({
   onCreateWorkspace,
   onSwitchWorkspace,
   onProfileUpdated,
+  onSignOut,
   canManageMembers,
   canManageTasks,
   reportRange,
@@ -6051,6 +6053,7 @@ function WorkspaceView({
         onRefresh={onRefresh}
         onConfirm={onConfirm}
         onNavigate={onNavigate}
+        onSignOut={onSignOut}
       />
     );
   }

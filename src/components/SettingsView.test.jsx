@@ -24,7 +24,7 @@ it('uses a mobile settings index before opening one section', () => {
   const shell = document.querySelector('.settings-shell')
   const navigation = screen.getByRole('navigation', { name: 'Settings sections' })
   expect(shell).toHaveClass('is-mobile-index')
-  expect(within(navigation).getByText('Theme and navigation layout.')).toBeInTheDocument()
+  expect(within(navigation).getByText('Appearance')).toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
   expect(shell).toHaveClass('is-mobile-detail')
@@ -50,6 +50,7 @@ it('orders settings by everyday priority with Profile first', () => {
   const labels = within(navigation)
     .getAllByRole('button')
     .map((button) => button.getAttribute('aria-label'))
+    .filter(Boolean)
 
   expect(labels).toEqual([
     'Profile',
@@ -57,12 +58,142 @@ it('orders settings by everyday priority with Profile first', () => {
     'Notifications',
     'Workspaces',
     'Workspace access',
+    'AI settings',
     'Integrations',
     'Templates',
-    'Zuri',
     'Help',
     'Legal',
   ])
+})
+
+it('renders the P4 AI panel and saves provider and member access changes together', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: true,
+      settings: {
+        ai_enabled: true,
+        ai_user_ids: [],
+        ai_enabled_providers: ['openai'],
+        ai_default_provider: 'openai',
+      },
+      providers: { openai: true, claude: false, kimi: false, deepseek: false },
+      provider_config: {
+        openai: { base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini', has_api_key: true, key_hint: '••••1234' },
+        claude: { base_url: 'https://api.anthropic.com/v1', model: 'claude-3-5-haiku-latest', has_api_key: false, key_hint: '' },
+        kimi: { base_url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', has_api_key: false, key_hint: '' },
+        deepseek: { base_url: 'https://api.deepseek.com', model: 'deepseek-v4-flash', has_api_key: false, key_hint: '' },
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test' }]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
+  expect(await screen.findByRole('heading', { name: 'AI assistance' })).toBeInTheDocument()
+  expect(screen.getByText('OpenAI · gpt-4o-mini')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /Configure Anthropic · Claude/ }))
+  fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'claude-4-sonnet' } })
+  fireEvent.click(screen.getByRole('switch', { name: 'Allow Amara Okafor to use AI' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH'))
+  const [, request] = expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH')
+  const body = JSON.parse(request.body)
+  expect(body.ai_user_ids).toEqual([2])
+  expect(body.provider_config.claude.model).toBe('claude-4-sonnet')
+  expect(body.provider_config.openai.api_key).toBe('')
+})
+
+it('cancels unsaved AI provider and member access changes', async () => {
+  mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: true,
+      settings: {
+        ai_enabled: true,
+        ai_user_ids: [],
+        ai_enabled_providers: ['openai'],
+        ai_default_provider: 'openai',
+      },
+      providers: { openai: true, claude: false, kimi: false, deepseek: false },
+      provider_config: {
+        openai: { base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini', has_api_key: true, key_hint: '••••1234' },
+        claude: { base_url: 'https://api.anthropic.com/v1', model: 'claude-3-5-haiku-latest', has_api_key: false, key_hint: '' },
+        kimi: { base_url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', has_api_key: false, key_hint: '' },
+        deepseek: { base_url: 'https://api.deepseek.com', model: 'deepseek-v4-flash', has_api_key: false, key_hint: '' },
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test' }]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  const memberSwitch = await screen.findByRole('switch', { name: 'Allow Amara Okafor to use AI' })
+  fireEvent.click(screen.getByRole('button', { name: /Configure Anthropic · Claude/ }))
+  fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'claude-4-sonnet' } })
+  fireEvent.click(memberSwitch)
+  expect(memberSwitch).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByLabelText('Model')).toHaveValue('claude-4-sonnet')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+  expect(memberSwitch).toHaveAttribute('aria-checked', 'false')
+  expect(screen.queryByLabelText('Model')).not.toBeInTheDocument()
+})
+
+it('shows AI settings read-only when the API denies management', async () => {
+  mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: false,
+      settings: {
+        ai_enabled: true,
+        ai_user_ids: [],
+        ai_enabled_providers: ['openai'],
+        ai_default_provider: 'openai',
+      },
+      providers: { openai: true, claude: false, kimi: false, deepseek: false },
+      provider_config: {
+        openai: { base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini', has_api_key: true, key_hint: '••••1234' },
+        claude: { base_url: 'https://api.anthropic.com/v1', model: 'claude-3-5-haiku-latest', has_api_key: false, key_hint: '' },
+        kimi: { base_url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', has_api_key: false, key_hint: '' },
+        deepseek: { base_url: 'https://api.deepseek.com', model: 'deepseek-v4-flash', has_api_key: false, key_hint: '' },
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test' }]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  expect(await screen.findByRole('heading', { name: 'AI assistance' })).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: 'Enable AI assistance' })).toBeDisabled()
+  expect(screen.getByRole('switch', { name: 'Allow Amara Okafor to use AI' })).toBeDisabled()
+  expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
 })
 
 it('opens the Help and Legal views from Settings, including for members', () => {

@@ -17,9 +17,11 @@ import {
   FileText,
   Layers,
   Link2,
+  LogOut,
   Plus,
   Sparkles,
   Sun,
+  UserRound,
   Users,
   Volume2,
   Webhook,
@@ -84,8 +86,12 @@ function SettingsView({
   onRefresh,
   onConfirm,
   onNavigate,
+  onSignOut,
 }) {
-  const [section, setSection] = useState("appearance");
+  // The P4 frame opens on AI settings for workspace administrators. Members
+  // keep the personal Appearance panel because the AI administration section
+  // is not available to them.
+  const [section, setSection] = useState(() => canManageMembers ? "ai" : "appearance");
   const [mobileSectionOpen, setMobileSectionOpen] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState(null);
   const [notificationVolume, setNotificationVolume] = useState(70);
@@ -239,19 +245,33 @@ function SettingsView({
   // This is a UI convenience, not the authorization boundary - every endpoint
   // behind these panels re-checks the actor's permission server-side.
   const sections = [
-    { value: "profile", label: "Profile", Icon: Users, description: "Your identity and presence.", group: "Personal" },
-    { value: "appearance", label: "Appearance", Icon: Sun, description: "Theme and navigation layout.", group: "Personal" },
-    { value: "notifications", label: "Notifications", Icon: Bell, description: "Alerts, sounds, and device delivery.", group: "Personal" },
-    { value: "workspaces", label: "Workspaces", Icon: Layers, description: "Switch, open, or create a workspace.", group: "Personal" },
+    { value: "profile", label: "Profile", Icon: UserRound, group: "preferences" },
+    { value: "appearance", label: "Appearance", Icon: Sun, group: "preferences" },
+    { value: "notifications", label: "Notifications", Icon: Bell, group: "preferences" },
+    { value: "workspaces", label: "Workspaces", Icon: Layers, group: "workspace" },
     ...(canManageMembers
       ? [
-          { value: "workspace", label: "Workspace access", Icon: Building2, description: "Members, roles, and permissions.", group: "Workspace" },
-          { value: "integrations", label: "Integrations", Icon: Webhook, description: "Calendar feeds and team webhooks.", group: "Workspace" },
-          { value: "templates", label: "Templates", Icon: ClipboardList, description: "Reusable task and project setup.", group: "Workspace" },
-          { value: "ai", label: "Zuri", Icon: Sparkles, description: "Assistant access and providers.", group: "Workspace" },
+          { value: "workspace", label: "Workspace access", Icon: Building2, group: "workspace" },
+          { value: "ai", label: "AI settings", Icon: Sparkles, group: "workspace" },
+          { value: "integrations", label: "Integrations", Icon: Webhook, group: "workspace" },
+          { value: "templates", label: "Templates", Icon: ClipboardList, group: "workspace" },
         ]
       : []),
   ];
+  const supportSections = [
+    { value: "help", label: "Help", Icon: CircleHelp, group: "support" },
+    { value: "legal", label: "Legal", Icon: FileText, group: "support" },
+  ];
+  const navGroups = [
+    { id: "preferences", label: "Preferences", sections: sections.filter((item) => item.group === "preferences") },
+    { id: "workspace", label: "Workspace", sections: sections.filter((item) => item.group === "workspace") },
+    { id: "support", label: "About and support", sections: supportSections },
+  ];
+  const openSection = (value) => {
+    setSection(value);
+    setMobileSectionOpen(true);
+    scrollMobileSettingsToTop();
+  };
   const activeSectionLabel = sections.find((item) => item.value === section)?.label || "Settings";
   const scrollMobileSettingsToTop = () => {
     if (typeof window === "undefined" || !window.matchMedia?.("(max-width: 700px)").matches) return;
@@ -924,68 +944,105 @@ function SettingsView({
       />
       <div className={`settings-shell ${mobileSectionOpen ? "is-mobile-detail" : "is-mobile-index"}`}>
         <nav className="settings-nav" aria-label="Settings sections">
-          {["Personal", "Workspace"].map((group) => {
-            const groupSections = sections.filter((item) => item.group === group);
-            if (!groupSections.length) return null;
+          <button
+            type="button"
+            className="settings-mobile-profile"
+            onClick={() => openSection("profile")}
+          >
+            <Avatar
+              name={currentUserName || currentUserEmail}
+              avatarUrl={currentUserAvatarUrl}
+              presence={currentUserPresence}
+              className="settings-mobile-avatar"
+            />
+            <span className="settings-mobile-profile-copy">
+              <strong>{currentUserName || currentUserEmail || "Workspace member"}</strong>
+              <small>
+                {[currentUserEmail, currentUserJobRole].filter(Boolean).join(" · ")}
+              </small>
+              <em>{currentWorkspace?.role === "owner" ? "Workspace admin" : roleLabel}</em>
+            </span>
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+
+          {navGroups.map((group) => {
+            if (!group.sections.length) return null;
             return (
-              <div className="settings-nav-group" key={group}>
-                <span className="settings-nav-label">{group}</span>
-                {groupSections.map(({ value, label, Icon, description }) => (
-                  <button
-                    type="button"
-                    key={value}
-                    className={`settings-nav-link ${section === value ? "active" : ""}`}
-                    aria-label={label}
-                    aria-current={section === value ? "page" : undefined}
-                    onClick={() => {
-                      setSection(value);
-                      setMobileSectionOpen(true);
-                      scrollMobileSettingsToTop();
-                    }}
-                  >
-                    <span className="settings-nav-icon"><Icon size={17} /></span>
-                    <span className="settings-nav-copy">
-                      <strong>{label}</strong>
-                      <small>{description}</small>
-                    </span>
-                    <ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true" />
-                  </button>
-                ))}
+              <div className="settings-nav-group" data-group={group.id} key={group.id}>
+                <span className="settings-nav-label">{group.label}</span>
+                {group.sections.map(({ value, label, Icon }) => {
+                  const isSupport = group.id === "support";
+                  const isNotificationToggle = value === "notifications";
+                  const isAppearanceToggle = value === "appearance";
+                  const notificationsEnabled = Boolean(notificationPrefs?.notification_sound);
+                  const appearanceEnabled = theme === "dark";
+                  const meta = value === "workspaces"
+                    ? `${workspaces.length} available`
+                    : value === "workspace"
+                      ? `${members.length} member${members.length === 1 ? "" : "s"}`
+                      : value === "templates"
+                        ? `${taskTemplates.length + projectTemplates.length} available`
+                        : value === "integrations"
+                          ? "Webhooks and calendar"
+                          : value === "ai"
+                            ? "Providers and access"
+                            : value === "notifications" && unreadCount
+                              ? `${unreadCount} unread`
+                              : "";
+
+                  return (
+                    <div className="settings-nav-item" key={value}>
+                      <button
+                        type="button"
+                        className={`settings-nav-link ${section === value && !isSupport ? "active" : ""}`}
+                        aria-label={label}
+                        aria-current={section === value && !isSupport ? "page" : undefined}
+                        onClick={() => isSupport ? onNavigate?.(label) : openSection(value)}
+                      >
+                        <span className="settings-nav-icon"><Icon size={18} /></span>
+                        <span className="settings-nav-copy">
+                          <strong>{label}</strong>
+                        </span>
+                        {meta && <span className="settings-nav-meta">{meta}</span>}
+                        <ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true" />
+                      </button>
+                      {isNotificationToggle && (
+                        <button
+                          type="button"
+                          role="switch"
+                          className="settings-nav-toggle"
+                          aria-label="Notification sound"
+                          aria-checked={notificationsEnabled}
+                          disabled={!notificationPrefs}
+                          onClick={() => updatePreference("notification_sound", !notificationsEnabled)}
+                        >
+                          <span aria-hidden="true" />
+                        </button>
+                      )}
+                      {isAppearanceToggle && (
+                        <button
+                          type="button"
+                          role="switch"
+                          className="settings-nav-toggle"
+                          aria-label="Dark appearance"
+                          aria-checked={appearanceEnabled}
+                          onClick={() => onSetTheme?.(appearanceEnabled ? "light" : "dark")}
+                        >
+                          <span aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
-          {/* Help and Legal are documentation rather than places you work, so
-              they are entry points here that open the full views instead of a
-              re-implementation embedded in Settings. */}
-          <div className="settings-nav-group">
-            <span className="settings-nav-label">Support</span>
-            <button
-              type="button"
-              className="settings-nav-link"
-              aria-label="Help"
-              onClick={() => onNavigate?.("Help")}
-            >
-              <span className="settings-nav-icon"><CircleHelp size={17} /></span>
-              <span className="settings-nav-copy">
-                <strong>Help</strong>
-                <small>Guides for the work you do every day.</small>
-              </span>
-              <ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true" />
+          {onSignOut && (
+            <button type="button" className="settings-mobile-signout" onClick={onSignOut}>
+              <LogOut size={18} aria-hidden="true" />
+              <span>Sign out</span>
             </button>
-            <button
-              type="button"
-              className="settings-nav-link"
-              aria-label="Legal"
-              onClick={() => onNavigate?.("Legal")}
-            >
-              <span className="settings-nav-icon"><FileText size={17} /></span>
-              <span className="settings-nav-copy">
-                <strong>Legal</strong>
-                <small>Privacy, cookies, terms, and acceptable use.</small>
-              </span>
-              <ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true" />
-            </button>
-          </div>
+          )}
         </nav>
         <div className="settings-content">
           <button
