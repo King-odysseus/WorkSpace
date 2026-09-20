@@ -1108,6 +1108,246 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .chat-placeholder p { max-width: 360px; margin: 4px 0 0; font-size: 12px; line-height: 18px; }
 .chat-workspace-view .chat-message-skeleton { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 12px 0 14px; border-bottom: 1px solid var(--pencil-border); }
 .chat-workspace-view .chat-message-skeleton-lines { display: grid; gap: 6px; }
+/* The message composer remains a full-width writing surface. Its four actions
+   share the lower-right corner so the textarea can keep the full feed width. */
+.chat-workspace-view .chat-inline-composer {
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 8px;
+  padding: 11px 24px 9px;
+  border-top: 1px solid var(--pencil-border);
+  background: #fff;
+}
+.chat-workspace-view .chat-inline-composer .reply-context {
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--pencil-border);
+  border-left: 3px solid var(--pencil-bronze);
+  border-radius: 8px;
+  background: var(--pencil-bronze-soft);
+  color: var(--pencil-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.chat-workspace-view .chat-inline-composer .reply-context > span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-workspace-view .chat-inline-composer .reply-context strong {
+  color: var(--pencil-navy);
+  font-weight: 600;
+}
+.chat-workspace-view .chat-inline-composer .reply-context > button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--pencil-bronze-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.chat-workspace-view .chat-inline-composer .reply-context > button:hover:not(:disabled) {
+  background: rgb(196 154 108 / 20%);
+}
+.chat-workspace-view .chat-inline-composer .reply-context > button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.chat-workspace-view .chat-pending-attachments {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 1px 0;
+  scrollbar-width: none;
+}
+.chat-workspace-view .chat-pending-attachments::-webkit-scrollbar {
+  display: none;
+}
+.chat-workspace-view .chat-pending-attachments > span {
+  display: inline-flex;
+  max-width: min(260px, 78vw);
+  min-width: 0;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 5px 0 10px;
+  border: 1px solid var(--pencil-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pencil-text-secondary);
+  font-size: 11px;
+  line-height: 14px;
+}
+.chat-workspace-view .chat-pending-attachments > span > svg {
+  flex: 0 0 auto;
+  color: var(--pencil-bronze-text);
+}
+.chat-workspace-view .chat-pending-attachments > span > :not(svg) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-workspace-view .chat-pending-attachments button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--pencil-text-muted);
+}
+.chat-workspace-view .chat-pending-attachments button:hover {
+  background: var(--pencil-surface-muted);
+  color: var(--pencil-text);
+}
+.chat-workspace-view .chat-compose-surface {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--pencil-border-strong);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+.chat-workspace-view .chat-compose-surface:focus-within {
+  border-color: var(--pencil-navy);
+  box-shadow: 0 0 0 3px rgb(11 11 69 / 10%);
+}
+.chat-workspace-view .chat-compose-input {
+  position: relative;
+  min-width: 0;
+}
+.chat-workspace-view .chat-compose-input textarea {
+  display: block;
+  width: 100%;
+  min-height: 76px;
+  max-height: 140px;
+  padding: 14px 208px 14px 14px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: var(--pencil-text) !important;
+  box-shadow: none !important;
+  font-size: 13px;
+  line-height: 20px;
+  resize: none;
+  scrollbar-gutter: stable;
+}
+.chat-workspace-view .chat-compose-input textarea::placeholder {
+  color: var(--pencil-text-muted);
+  opacity: 1;
+}
+.chat-workspace-view .chat-compose-input textarea[readonly] {
+  color: var(--pencil-text-secondary) !important;
+  cursor: progress;
+}
+.chat-workspace-view .chat-compose-actions {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.chat-workspace-view .chat-compose-actions .chat-emoji-trigger,
+.chat-workspace-view .chat-compose-actions .chat-upload-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pencil-text-muted);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+}
+.chat-workspace-view .chat-compose-actions .chat-emoji-trigger:hover,
+.chat-workspace-view .chat-compose-actions .chat-emoji-trigger.active,
+.chat-workspace-view .chat-compose-actions .chat-upload-button:hover {
+  background: var(--pencil-surface-muted);
+  color: var(--pencil-text);
+}
+.chat-workspace-view .chat-upload-button {
+  cursor: pointer;
+}
+.chat-workspace-view .chat-upload-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.chat-workspace-view .chat-upload-button:has(input:disabled) {
+  cursor: wait;
+  opacity: .5;
+}
+.chat-workspace-view .chat-upload-button:has(input:disabled) svg {
+  animation: chat-upload-pulse 900ms ease-in-out infinite alternate;
+}
+@keyframes chat-upload-pulse {
+  from { opacity: .45; }
+  to { opacity: 1; }
+}
+.chat-workspace-view .chat-compose-actions .primary-button {
+  min-width: 68px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 13px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.chat-workspace-view .chat-compose-actions .primary-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+.chat-workspace-view .chat-compose-actions button:focus-visible,
+.chat-workspace-view .chat-pending-attachments button:focus-visible,
+.chat-workspace-view .reply-context button:focus-visible,
+.chat-workspace-view .chat-upload-button:has(input:focus-visible) {
+  outline: 2px solid var(--pencil-navy-focus);
+  outline-offset: 2px;
+}
+.chat-workspace-view .chat-compose-hint {
+  display: block;
+  min-height: 14px;
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+.chat-workspace-view .chat-inline-composer > .workspace-alert {
+  margin-top: 0;
+}
 
 
 @media (max-width: 1100px) {
@@ -1143,4 +1383,14 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .pending-invitation-row { grid-template-columns: 40px minmax(0, 1fr); padding: 8px 0; }
   .pending-invitation-actions { grid-column: 1 / -1; justify-content: end; }
   .projects-view .project-grid { grid-template-columns: 1fr; }
+  .chat-workspace-view .chat-inline-composer { gap: 6px; padding: 10px 12px 8px; }
+  .chat-workspace-view .chat-inline-composer .reply-context { min-height: 32px; gap: 8px; padding: 5px 6px 5px 10px; }
+  .chat-workspace-view .chat-pending-attachments > span { max-width: 82vw; }
+  .chat-workspace-view .chat-compose-surface { border-radius: 10px; }
+  .chat-workspace-view .chat-compose-input textarea { min-height: 64px; padding: 12px 154px 12px 12px; font-size: 16px; line-height: 20px; }
+  .chat-workspace-view .chat-compose-actions { right: 6px; bottom: 6px; gap: 2px; }
+  .chat-workspace-view .chat-compose-actions .chat-emoji-trigger,
+  .chat-workspace-view .chat-compose-actions .chat-upload-button { width: 30px; height: 30px; flex-basis: 30px; }
+  .chat-workspace-view .chat-compose-actions .primary-button { min-width: 58px !important; padding: 0 10px !important; }
+  .chat-workspace-view .chat-compose-hint { display: none; }
 }
