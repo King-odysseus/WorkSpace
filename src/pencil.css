@@ -976,7 +976,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 /* P2 My tasks.  The frame is a 712 / 376 split below the shared page header. */
 .my-task-header, .planner-header { min-height: 101px; }
 .my-task-header > div > p:first-child, .planner-header > div > p:first-child { margin: 0; }
-.my-task-layout { grid-template-columns: minmax(0, 712px) 376px !important; }
+.my-task-layout { grid-template-columns: minmax(0, 1fr) 376px !important; }
 .my-task-filters { min-height: 42px; }
 .my-task-mobile-controls { display: none; }
 .my-task-filters input, .my-task-filters select, .planner-commandbar input, .planner-commandbar select { height: 42px !important; border-radius: 12px !important; }
