@@ -6,7 +6,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -343,6 +343,11 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const visibleChannelMessages = activeChannelMessages.filter(message => !normalizedMessageSearch || `${message.author_name} ${message.message}`.toLowerCase().includes(normalizedMessageSearch))
   const visibleDirectMessages = directThreadReady ? directMessages.filter(message => !normalizedMessageSearch || `${message.author_name} ${message.message}`.toLowerCase().includes(normalizedMessageSearch)) : []
   const groupedMessages = visibleChannelMessages.reduce((groups, message) => {
+    const key = toDateKey(message.created_at)
+    ;(groups[key] ||= []).push(message)
+    return groups
+  }, {})
+  const groupedDirectMessages = visibleDirectMessages.reduce((groups, message) => {
     const key = toDateKey(message.created_at)
     ;(groups[key] ||= []).push(message)
     return groups
@@ -728,6 +733,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const other = (conversation.participants || []).find(participant => String(participant.id) !== String(currentUserId))
     return data.members.find(member => String(member.id) === String(other?.id)) || null
   }
+  const selectedDirectOther = selectedConversation ? directOtherMember(selectedConversation) : null
   const toggleMember = (id, selectedIds, updateSelectedIds) => updateSelectedIds(selectedIds.includes(id) ? selectedIds.filter(value => value !== id) : [...selectedIds, id])
   const toggleDirectMember = id => {
     const isSelf = String(id) === String(currentUserId)
@@ -1029,7 +1035,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{messageSearch ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{messageSearch ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>)
         : selectedConversation
           ? (directThreadReady
-            ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessageWithUnreadMarker) : <div className="chat-placeholder"><h2>{messageSearch ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
+            ? (visibleDirectMessages.length ? Object.entries(groupedDirectMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : formatDay(date)}</h3>{messages.map(renderMessageWithUnreadMarker)}</div>) : <div className="chat-placeholder"><h2>{messageSearch ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
         : directLoading ? <SkeletonGroup className="chat-feed-skeleton" label="Loading messages">
           {[0, 1, 2].map(item => <div className="chat-message-skeleton" key={item}>
             <Skeleton variant="circle" />
@@ -1142,18 +1148,18 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     <div className="chat-layout">
       <section className={`chat-feed ${detailsOpen ? 'details-open' : ''}`}>
         <div className="chat-feed-header">
-          <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.is_self ? 'Message yourself' : selectedConversation.title}</h2><p>{selectedConversation.is_self ? 'Private notes and reminders' : selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div></div>
+          <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.is_self ? 'Message yourself' : selectedConversation.title}</h2><p>{selectedConversation.is_self ? 'Private notes and reminders' : selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div>{mode === 'channels' && selectedMembers.length > 0 && <div className="chat-feed-members" aria-label={`${selectedMembers.length} channel members`}><span className="chat-feed-member-avatars">{selectedMembers.slice(0, 3).map(member => <Avatar key={member.id} name={memberName(member)} avatarUrl={member.avatar_url} presence={effectivePresence(member)} small />)}</span><span>{selectedMembers.length} members</span></div>}{mode === 'direct' && selectedDirectOther && <span className="chat-feed-direct-presence"><Avatar name={memberName(selectedDirectOther)} avatarUrl={selectedDirectOther.avatar_url} presence={effectivePresence(selectedDirectOther)} small /><small>{PRESENCE_LABEL[effectivePresence(selectedDirectOther)] || 'Available'}</small></span>}</div>
+          <nav className="chat-pane-tabs" role="tablist" aria-label="Conversation views">
+            <button type="button" role="tab" aria-label="Posts" aria-selected={activePane === 'posts'} className={activePane === 'posts' ? 'active' : ''} onClick={() => setActivePane('posts')}><MessageSquare size={15} /> Posts</button>
+            <button type="button" role="tab" aria-label={sharedItems.length > 0 ? `Files, ${sharedItems.length} shared items` : 'Files'} aria-selected={activePane === 'files'} className={activePane === 'files' ? 'active' : ''} onClick={() => setActivePane('files')}><FolderOpen size={15} /> Files{sharedItems.length > 0 && <span>{sharedItems.length}</span>}</button>
+            <button type="button" role="tab" aria-label="About" aria-selected={activePane === 'about'} className={activePane === 'about' ? 'active' : ''} onClick={() => setActivePane('about')}><Info size={15} /> About</button>
+          </nav>
           {mode === 'direct' && selectedConversation?.is_group && !selectedConversation.is_archived && <button type="button" className="secondary-button chat-header-members" onClick={() => openParticipantEditor(selectedConversation)}><Users size={15} /> <span>Add or remove members</span></button>}
           {messageSearchOpen
             ? <label className="chat-feed-search"><Search size={15} /><input autoFocus value={messageSearch} onChange={event => setMessageSearch(event.target.value)} placeholder="Search messages" aria-label="Search messages" /><button type="button" onClick={() => { setMessageSearch(''); setMessageSearchOpen(false) }} aria-label="Close message search"><X size={14} /></button></label>
             : <button type="button" className="chat-feed-search-toggle" onClick={() => setMessageSearchOpen(true)} aria-label="Search messages" title="Search messages"><Search size={17} /></button>}
-          <button type="button" className={`chat-details-toggle ${detailsOpen ? 'active' : ''}`} onClick={() => setDetailsOpen(open => !open)} aria-label={detailsOpen ? 'Hide conversation details' : 'Show conversation details'} aria-expanded={detailsOpen} disabled={mode === 'direct' && !selectedConversation}><PanelRight size={17} /></button>
+          <button type="button" className={`chat-details-toggle ${detailsOpen ? 'active' : ''}`} onClick={() => setDetailsOpen(open => !open)} aria-label={detailsOpen ? 'Hide conversation details' : 'Show conversation details'} aria-expanded={detailsOpen} disabled={mode === 'direct' && !selectedConversation}><MoreVertical size={18} /></button>
         </div>
-        <nav className="chat-pane-tabs" role="tablist" aria-label="Conversation views">
-          <button type="button" role="tab" aria-selected={activePane === 'posts'} className={activePane === 'posts' ? 'active' : ''} onClick={() => setActivePane('posts')}><MessageSquare size={15} /> Posts</button>
-          <button type="button" role="tab" aria-selected={activePane === 'files'} className={activePane === 'files' ? 'active' : ''} onClick={() => setActivePane('files')}><FolderOpen size={15} /> Files{sharedItems.length > 0 && <span>{sharedItems.length}</span>}</button>
-          <button type="button" role="tab" aria-selected={activePane === 'about'} className={activePane === 'about' ? 'active' : ''} onClick={() => setActivePane('about')}><Info size={15} /> About</button>
-        </nav>
         {mode === 'direct' && selectedConversation?.is_archived && <div className="chat-archive-banner"><Archive size={15} /><span>Archived chat</span><button type="button" onClick={() => restoreConversation(selectedConversation)}><ArchiveRestore size={14} /> Restore</button></div>}
         <div className={`chat-feed-body ${detailsOpen ? 'details-open' : ''}`}>
           <div className="chat-main-pane">
