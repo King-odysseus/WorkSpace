@@ -38,17 +38,20 @@ It needs a reviewed desktop and mobile design covering empty, populated, add,
 rename, delete, loading, error, and long-name states before it can be treated
 as a 1:1 rebuild target.
 
-## Task Create And Edit Modal
+## Task Create And Edit Popup Modal
 
-The task create/edit modal currently reads as visually attached to the right
-edge instead of appearing as a centered, self-contained dialog. The form
-behavior and API contract are functional, but the modal layout and its
+The task create/edit popup currently reads as visually attached to the right
+edge instead of appearing as a centered, self-contained dialog. It must not be
+anchored to a side panel or the right-hand side of the viewport. The create and
+edit variants need one responsive OpenPencil dialog contract with a centered
+shell, backdrop, defined sizing, and internal scrolling where required.
+
+The form behavior and API contract are functional, but the popup layout and its
 desktop/mobile states still need a reviewed OpenPencil design before they can
-be treated as a 1:1 target.
-
-Missing states include default create, edit, validation, long content, loading,
-submission error, mobile keyboard, and destructive confirmation where the
-existing flow supports it.
+be treated as a 1:1 target. Missing states include default create, edit,
+validation, long content, loading, submission error, mobile keyboard, fields
+locked by permissions, and destructive confirmation where the existing flow
+supports it.
 
 ## Rules For Unresolved Surfaces
 
