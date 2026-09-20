@@ -163,7 +163,7 @@ it('shows the real check-in denominator instead of inventing one for an empty wo
   expect(screen.queryByText('0 of 1')).not.toBeInTheDocument()
 })
 
-it('lists an event that started earlier but runs into today', () => {
+it('lists a carried-over event today and keeps future events in the upcoming card', () => {
   // Matching on start_at === today dropped every event carried over from a
   // previous day.
   renderDashboard([], noop, [], {
@@ -174,10 +174,26 @@ it('lists an event that started earlier but runs into today', () => {
   })
 
   expect(screen.getByText('Offsite')).toBeInTheDocument()
-  expect(screen.queryByText('Future thing')).not.toBeInTheDocument()
+  const upcomingCard = screen
+    .getByRole('heading', { name: 'Upcoming events' })
+    .closest('section')
+  expect(within(upcomingCard).getByText('Future thing')).toBeInTheDocument()
   // A carried-over event shows the day it began, not a bare time that reads as
   // if it started today.
   expect(screen.getByText(/^11 Sep /)).toBeInTheDocument()
+})
+
+it('shows the upcoming events card when no event overlaps today', () => {
+  renderDashboard([], noop, [], {
+    events: [
+      { id: 2, title: 'Future thing', event_type: 'meeting', start_at: '2026-09-13T12:00:00Z', end_at: '2026-09-13T13:00:00Z' },
+    ],
+  })
+
+  const upcomingCard = screen
+    .getByRole('heading', { name: 'Upcoming events' })
+    .closest('section')
+  expect(within(upcomingCard).getByText('Future thing')).toBeInTheDocument()
 })
 
 it('opens an agenda event through the supplied action', () => {

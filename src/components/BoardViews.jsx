@@ -3965,6 +3965,13 @@ function TodayDashboard({
     )
     .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
     .slice(0, 6);
+  const upcomingEvents = events
+    // The side card is broader than today's agenda: it keeps an event visible
+    // until the day it ends, so a workspace with no event today can still show
+    // what is next.
+    .filter((event) => toDateKey(event.end_at || event.start_at) >= today)
+    .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+    .slice(0, 6);
   const dueFollowUps = followUps
     .filter(
       (item) =>
@@ -4181,7 +4188,7 @@ function TodayDashboard({
   const eventPill = (event) => {
     const start = new Date(event.start_at).getTime();
     const end = new Date(event.end_at || event.start_at).getTime();
-    const clashing = todaysEvents.some((other) => {
+    const clashing = upcomingEvents.some((other) => {
       if (other.id === event.id) return false;
       const otherStart = new Date(other.start_at).getTime();
       const otherEnd = new Date(other.end_at || other.start_at).getTime();
@@ -4430,13 +4437,13 @@ function TodayDashboard({
             onChangePresence={onChangePresence}
           />
 
-          {todaysEvents.length > 0 && (
+          {upcomingEvents.length > 0 && (
             <section className="rounded-card border border-border bg-card p-5">
               <h2 className="text-body-small font-semibold text-text-primary">
                 Upcoming events
               </h2>
               <div className="mt-3 grid gap-3">
-                {todaysEvents.slice(0, 3).map((event) => {
+                {upcomingEvents.slice(0, 3).map((event) => {
                   const pill = eventPill(event);
                   return (
                     <button
