@@ -274,27 +274,28 @@ aside[class*='bg-navy'] > div:last-child .text-text-muted { color: #93B4D4 !impo
 .sidebar-expand-flyout {
   position: absolute;
   z-index: 60;
-  top: 18px;
+  top: 50%;
   left: 100%;
   display: grid;
   width: 28px;
   height: 46px;
   place-items: center;
-  border: 1px solid var(--pencil-border);
+  border: 1px solid rgb(255 255 255 / 12%);
   border-left: 0;
   border-radius: 0 10px 10px 0;
-  background: #fff;
-  color: var(--pencil-navy);
-  box-shadow: 0 6px 16px rgb(16 24 40 / 10%);
+  background: var(--pencil-navy);
+  color: #fff;
+  box-shadow: 0 6px 16px rgb(2 5 31 / 18%);
+  transform: translateY(-50%);
   transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
 }
 .sidebar-expand-flyout:hover {
-  background: #EFF6FF;
-  color: var(--pencil-navy-hover);
-  transform: translateX(1px);
+  background: var(--pencil-navy-hover);
+  color: #fff;
+  transform: translate(1px, -50%);
 }
 .sidebar-expand-flyout:focus-visible {
-  outline: 2px solid rgb(20 71 230 / 28%);
+  outline: 2px solid rgb(255 255 255 / 62%);
   outline-offset: 2px;
 }
 /* P1 desktop header controls. */
