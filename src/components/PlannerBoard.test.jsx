@@ -221,6 +221,86 @@ it('offers lifecycle actions on every lane the design draws a menu on', async ()
   expect(screen.queryByRole('menuitem', { name: 'Move Backlog right' })).not.toBeInTheDocument()
 })
 
+it('shows the designed insertion state while dragging a bucket', () => {
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null },
+      { id: 19, name: 'Review', project_id: 2 },
+      { id: 24, name: 'Done', project_id: 2 },
+    ],
+    scopeMode: 'projects',
+    projectFilter: '2',
+    canManageBuckets: true,
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:19') }
+  const sourceHeading = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Review').closest('.planner-column-heading')
+  const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Done').closest('.planner-column')
+
+  fireEvent.dragStart(sourceHeading, { dataTransfer })
+  fireEvent.dragEnter(targetColumn, { dataTransfer })
+
+  expect(container.querySelector('.planner-board')).toHaveClass('is-bucket-dragging')
+  expect(sourceHeading.closest('.planner-column')).toHaveClass('is-bucket-source')
+  expect(targetColumn).toHaveClass('is-bucket-drop-target')
+  expect(screen.getByText('Drop here')).toBeInTheDocument()
+  expect(screen.getByText('Review lands at position 2')).toBeInTheDocument()
+})
+
+it('keeps the bucket grip decorative and offers keyboard-reachable move actions', async () => {
+  const user = userEvent.setup()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null },
+      { id: 19, name: 'Review', project_id: 2 },
+      { id: 24, name: 'Done', project_id: 2 },
+    ],
+    scopeMode: 'projects',
+    projectFilter: '2',
+    canManageBuckets: true,
+  })
+
+  expect(container.querySelector('.planner-column-grip')).toHaveAttribute('aria-hidden', 'true')
+  await user.click(screen.getByRole('button', { name: 'Open actions for Review' }))
+  expect(screen.getByRole('menuitem', { name: 'Move Review left' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Move Review right' })).toBeInTheDocument()
+})
+
+it('opens the mobile filter panel and switches the active bucket tab', async () => {
+  const user = userEvent.setup()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null },
+      { id: 19, name: 'Review', project_id: 2 },
+    ],
+    scopeMode: 'projects',
+    projectFilter: '2',
+    canManageBuckets: true,
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Filter' }))
+  expect(document.getElementById('planner-mobile-filters').querySelectorAll('[role="combobox"]')).toHaveLength(3)
+
+  await user.click(screen.getByRole('tab', { name: 'Review' }))
+  expect(container.querySelectorAll('.planner-column.is-mobile-active')).toHaveLength(1)
+  expect([...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Review').closest('.planner-column')).toHaveClass('is-mobile-active')
+})
+
+it('filters to genuinely unassigned tasks from the mobile sheet', async () => {
+  const user = userEvent.setup()
+  cardPlanner({
+    tasks: [
+      { ...cardTask, id: 91, title: 'Unowned task' },
+      { ...cardTask, id: 92, title: 'Owned task', assignee_id: 7, member: 'Nate Boyo' },
+    ],
+  })
+
+  expect(screen.getByRole('button', { name: 'Unassigned 1' })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Unassigned 1' }))
+
+  expect(screen.getByText('Unowned task')).toBeInTheDocument()
+  expect(screen.queryByText('Owned task')).not.toBeInTheDocument()
+})
+
 const cardTask = { id: 91, title: 'Design UI', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal' }
 const cardPlanner = (props = {}) => renderPlanner({
   buckets: [{ id: 2, name: 'Backlog', project_id: null }],
@@ -272,7 +352,7 @@ it('changes a planner task status from the card selector', async () => {
   expect(onStatusChange).toHaveBeenCalledWith(91, 'review')
 })
 
-it('moves a planner task between buckets from the card selector', async () => {
+it('moves a planner task between buckets from the card menu', async () => {
   const onTaskMove = vi.fn()
   const user = userEvent.setup()
   cardPlanner({
@@ -283,8 +363,8 @@ it('moves a planner task between buckets from the card selector', async () => {
     onTaskMove,
   })
 
-  await user.click(screen.getByRole('combobox', { name: 'Move Design UI to another bucket' }))
-  await user.click(screen.getByRole('option', { name: 'New' }))
+  await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Move Design UI to New' }))
 
   expect(onTaskMove).toHaveBeenCalledWith([
     { bucket: 'Backlog', task_ids: [] },
