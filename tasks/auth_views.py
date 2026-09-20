@@ -3,6 +3,7 @@ import mimetypes
 import urllib.error
 import urllib.parse
 import urllib.request
+import warnings
 from pathlib import Path
 
 from axes.handlers.proxy import AxesProxyHandler
@@ -18,11 +19,60 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
+from PIL import Image, UnidentifiedImageError
 
 from .models import Membership, PlanBucket, PushSubscription, UserProfile, Workspace, WorkspaceInvitation
 
 AVATAR_MAX_BYTES = 5 * 1024 * 1024
-AVATAR_ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
+AVATAR_MAX_DIMENSION = 8192
+AVATAR_MAX_PIXELS = 25_000_000
+AVATAR_FORMAT_BY_EXTENSION = {
+    '.png': 'PNG',
+    '.jpg': 'JPEG',
+    '.jpeg': 'JPEG',
+    '.gif': 'GIF',
+    '.webp': 'WEBP',
+}
+
+
+def _avatar_validation_error(uploaded_file):
+    '''Return a user-facing error when an uploaded avatar is not a safe image.'''
+    expected_format = AVATAR_FORMAT_BY_EXTENSION.get(Path(uploaded_file.name).suffix.lower())
+    if expected_format is None:
+        return 'Use a PNG, JPG, GIF, or WebP image.'
+    try:
+        uploaded_file.seek(0)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            image = Image.open(uploaded_file)
+            width, height = image.size
+            detected_format = image.format
+            if detected_format != expected_format:
+                return 'The image contents must match the file extension.'
+            if (
+                width < 1
+                or height < 1
+                or width > AVATAR_MAX_DIMENSION
+                or height > AVATAR_MAX_DIMENSION
+                or width * height > AVATAR_MAX_PIXELS
+            ):
+                return 'Avatar dimensions are too large. Use an image up to 8192 pixels per side.'
+            image.verify()
+    except (
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+        UnidentifiedImageError,
+        OSError,
+        SyntaxError,
+        ValueError,
+    ):
+        return 'This file is not a valid PNG, JPG, GIF, or WebP image.'
+    finally:
+        try:
+            uploaded_file.seek(0)
+        except (AttributeError, OSError, ValueError):
+            pass
+    return None
 
 
 def _create_owned_workspace(user, name):
@@ -207,8 +257,9 @@ def user_avatar(request):
         return JsonResponse({'error': 'An image file is required.'}, status=400)
     if uploaded_file.size > AVATAR_MAX_BYTES:
         return JsonResponse({'error': 'Images must be 5 MB or smaller.'}, status=400)
-    if Path(uploaded_file.name).suffix.lower() not in AVATAR_ALLOWED_EXTENSIONS:
-        return JsonResponse({'error': 'Use a PNG, JPG, GIF, or WebP image.'}, status=400)
+    validation_error = _avatar_validation_error(uploaded_file)
+    if validation_error:
+        return JsonResponse({'error': validation_error}, status=400)
     profile.avatar.delete(save=False)
     profile.avatar = uploaded_file
     profile.save(update_fields=['avatar', 'updated_at'])

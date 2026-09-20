@@ -30,6 +30,14 @@ from .views import create_notification, display_date, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
 
 
+def valid_png_bytes():
+    from PIL import Image
+
+    image_buffer = io.BytesIO()
+    Image.new('RGB', (1, 1), 'white').save(image_buffer, format='PNG')
+    return image_buffer.getvalue()
+
+
 class TaskApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
@@ -763,10 +771,7 @@ class TaskApiTests(TestCase):
         self.assertEqual(self.client.delete(reverse('saved-view-detail', args=[self.workspace.id, view_id])).status_code, 404)
 
     def test_profile_avatar_can_be_uploaded_replaced_and_removed(self):
-        tiny_png = bytes.fromhex(
-            '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753'
-            'de0000000c4944415478da6360606060000000050001a5f645400000000049454e44ae426082'
-        )
+        tiny_png = valid_png_bytes()
         upload = SimpleUploadedFile('face.png', tiny_png, content_type='image/png')
         response = self.client.post(reverse('auth-me-avatar'), data={'avatar': upload})
         self.assertEqual(response.status_code, 200)
@@ -789,16 +794,35 @@ class TaskApiTests(TestCase):
         rejected_type_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': wrong_type})
         self.assertEqual(rejected_type_response.status_code, 400)
 
+        broken_png = bytes.fromhex(
+            '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753'
+            'de0000000c4944415478da6360606060000000050001a5f645400000000049454e44ae426082'
+        )
+        malformed = SimpleUploadedFile('broken.png', broken_png, content_type='image/png')
+        malformed_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': malformed})
+        self.assertEqual(malformed_response.status_code, 400)
+        self.assertIn('not a valid', malformed_response.json()['error'])
+        self.assertEqual(self.client.get(avatar_url).status_code, 200)
+
+        from PIL import Image
+        image_buffer = io.BytesIO()
+        Image.new('RGB', (8193, 1), 'white').save(image_buffer, format='PNG')
+        oversized_dimensions = SimpleUploadedFile(
+            'wide.png',
+            image_buffer.getvalue(),
+            content_type='image/png',
+        )
+        dimensions_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': oversized_dimensions})
+        self.assertEqual(dimensions_response.status_code, 400)
+        self.assertIn('dimensions are too large', dimensions_response.json()['error'])
+
         delete_response = self.client.delete(reverse('auth-me-avatar'))
         self.assertEqual(delete_response.status_code, 200)
         self.assertEqual(delete_response.json()['avatar_url'], '')
         self.assertEqual(self.client.get(avatar_url).status_code, 404)
 
     def test_avatar_download_cannot_reach_an_account_outside_your_workspaces(self):
-        tiny_png = bytes.fromhex(
-            '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753'
-            'de0000000c4944415478da6360606060000000050001a5f645400000000049454e44ae426082'
-        )
+        tiny_png = valid_png_bytes()
 
         def with_avatar(user):
             profile, _ = UserProfile.objects.get_or_create(user=user)
