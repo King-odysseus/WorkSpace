@@ -37,6 +37,7 @@ describe('AppUpdateBanner', () => {
     announce()
 
     expect(await screen.findByText(/new version of workspace is available/i)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveAttribute('aria-atomic', 'true')
     await userEvent.click(screen.getByRole('button', { name: /reload now/i }))
 
     expect(applyAppUpdate).toHaveBeenCalledTimes(1)

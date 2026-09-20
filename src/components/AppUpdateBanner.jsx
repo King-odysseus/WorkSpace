@@ -20,7 +20,12 @@ export default function AppUpdateBanner() {
   if (!updateReady) return null;
 
   return (
-    <div className="app-update-banner" role="status" aria-live="polite">
+    <div
+      className="app-update-banner"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <span className="app-update-banner-mark" aria-hidden="true">
         <Sparkles size={15} strokeWidth={2.4} />
       </span>
