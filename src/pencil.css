@@ -1634,6 +1634,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-team-filters { display: flex; gap: 12px; margin: 14px 0 20px; }
 .pencil-team-filters button { min-width: 96px; height: 36px; padding: 0 16px; border: 1px solid var(--pencil-border); border-radius: 999px; background: #fff; color: var(--pencil-text-secondary); font-size: 13px; }
 .pencil-team-filters button.active { border-color: var(--pencil-navy); background: var(--pencil-navy); color: #fff; font-weight: 600; }
+.pencil-team-view, .pencil-team-layout, .pencil-team-main, .pencil-team-side { min-width: 0; }
 .pencil-team-layout { display: grid; grid-template-columns: minmax(0, 712px) 376px; gap: 24px; }
 .pencil-team-list-label { margin: 0 0 7px; color: var(--pencil-text-muted); font-size: 12px; line-height: 16px; }
 .pencil-team-table { overflow: hidden; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; }
@@ -1655,18 +1656,18 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-team-task-count { color: var(--pencil-text-secondary); font-size: 12px; }
 .pencil-team-message { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--pencil-border); border-radius: 8px; background: #fff; color: var(--pencil-text-secondary); }
 .pencil-team-side { display: grid; align-content: start; gap: 32px; }
-.pencil-team-card { padding: 20px; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; }
+.pencil-team-card { min-width: 0; padding: 20px; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; }
 .pencil-team-card h2 { margin: 0; color: var(--pencil-text); font-size: 16px; font-weight: 600; line-height: 22px; }
 .pencil-team-card > p { margin: 4px 0 8px; color: var(--pencil-text-muted); font-size: 12px; }
 .pencil-team-card > strong { display: block; margin: 0 0 14px; color: var(--pencil-text); font-size: 28px; line-height: 34px; }
 .pencil-team-card > strong small { color: var(--pencil-text-muted); font-size: 14px; font-weight: 400; }
 .pencil-team-capacity { width: 100%; height: 10px; }
 .pencil-team-card > span { display: block; margin-top: 10px; color: var(--pencil-text-muted); font-size: 12px; }
-.pencil-team-breakdown { display: grid; grid-template-columns: 150px 1fr 20px; align-items: center; gap: 8px; margin-top: 16px; color: var(--pencil-text-secondary); font-size: 12px; }
-.pencil-team-breakdown > span { display: flex; align-items: center; gap: 8px; }
+.pencil-team-breakdown { display: grid; grid-template-columns: minmax(96px, 1fr) minmax(0, 150px) 20px; align-items: center; gap: 8px; margin-top: 16px; color: var(--pencil-text-secondary); font-size: 12px; }
+.pencil-team-breakdown > span { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .pencil-team-breakdown i { width: 8px; height: 8px; border-radius: 50%; background: #00875A; }
 .pencil-team-breakdown i.at-capacity { background: #F97316; }.pencil-team-breakdown i.overloaded { background: #C70036; }.pencil-team-breakdown i.away { background: #98A2B3; }
-.pencil-team-breakdown b { display: block; height: 5px; border-radius: 99px; background: #00875A; }.pencil-team-breakdown:nth-of-type(3) b { background: #F97316; }.pencil-team-breakdown:nth-of-type(4) b { background: #C70036; }.pencil-team-breakdown:nth-of-type(5) b { background: #98A2B3; }
+.pencil-team-breakdown b { display: block; width: 100% !important; max-width: 108px; height: 5px; border-radius: 99px; background: #00875A; }.pencil-team-breakdown:nth-of-type(3) b { background: #F97316; }.pencil-team-breakdown:nth-of-type(4) b { background: #C70036; }.pencil-team-breakdown:nth-of-type(5) b { background: #98A2B3; }
 .pencil-team-breakdown em { font-style: normal; text-align: right; }.pencil-team-card > small { display: block; margin-top: 24px; color: var(--pencil-text-muted); font-size: 11px; }
 .pencil-team-invites { display: grid; gap: 16px; }.pencil-team-invites > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }.pencil-team-invites > div span { display: grid; gap: 3px; }.pencil-team-invites > div small { color: var(--pencil-text-muted); font-size: 11px; }.pencil-team-invites > div button { border: 0; background: transparent; color: var(--pencil-navy); font-size: 12px; }.pencil-team-invite-button { display: flex; height: 42px; align-items: center; gap: 10px; border: 1px solid var(--pencil-border); border-radius: 10px; background: #F9FAFB; color: var(--pencil-text); font-size: 13px; }
 
