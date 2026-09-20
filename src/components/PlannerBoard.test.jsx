@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import PlannerBoard from './PlannerBoard.jsx'
+import { toDateKey } from '../lib/workspace-format.js'
 
 const renderPlanner = (props = {}) => render(
   <PlannerBoard
@@ -248,6 +249,66 @@ it('routes each planner card action to its own handler', async () => {
   await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
   await user.click(screen.getByRole('menuitem', { name: 'Delete Design UI permanently' }))
   expect(onDeletePermanently).toHaveBeenCalledWith(cardTask)
+})
+
+it('completes a planner task from the card checkbox', async () => {
+  const onStatusChange = vi.fn()
+  const user = userEvent.setup()
+  cardPlanner({ onStatusChange })
+
+  await user.click(screen.getByRole('checkbox', { name: 'Complete Design UI' }))
+
+  expect(onStatusChange).toHaveBeenCalledWith(91, 'done')
+})
+
+it('changes a planner task status from the card selector', async () => {
+  const onStatusChange = vi.fn()
+  const user = userEvent.setup()
+  cardPlanner({ onStatusChange })
+
+  await user.click(screen.getByRole('combobox', { name: 'Change status for Design UI' }))
+  await user.click(screen.getByRole('option', { name: 'Review' }))
+
+  expect(onStatusChange).toHaveBeenCalledWith(91, 'review')
+})
+
+it('moves a planner task between buckets from the card selector', async () => {
+  const onTaskMove = vi.fn()
+  const user = userEvent.setup()
+  cardPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null },
+      { id: 3, name: 'New', project_id: null },
+    ],
+    onTaskMove,
+  })
+
+  await user.click(screen.getByRole('combobox', { name: 'Move Design UI to another bucket' }))
+  await user.click(screen.getByRole('option', { name: 'New' }))
+
+  expect(onTaskMove).toHaveBeenCalledWith([
+    { bucket: 'Backlog', task_ids: [] },
+    { bucket: 'New', task_ids: [91] },
+  ])
+})
+
+it('marks an incomplete past-due task as overdue', () => {
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const dueDate = toDateKey(yesterday)
+  cardPlanner({ tasks: [{ ...cardTask, due_date: dueDate }], canManageTasks: false, currentUserId: 7 })
+
+  expect(screen.getByText('Overdue')).toBeInTheDocument()
+})
+
+it('does not mark a completed past-due task as overdue', () => {
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const dueDate = toDateKey(yesterday)
+  cardPlanner({ tasks: [{ ...cardTask, status: 'done', due_date: dueDate }], canManageTasks: false, currentUserId: 7 })
+
+  expect(screen.queryByText('Overdue')).not.toBeInTheDocument()
+  expect(screen.getByText(dueDate)).toBeInTheDocument()
 })
 
 it('keeps permanent delete out of the card menu for everyone but an owner', async () => {

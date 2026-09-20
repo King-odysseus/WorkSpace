@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, Check, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, CalendarDays, Check, GripVertical, MoreHorizontal, Pencil, Plus, RotateCcw, Tag, Trash2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { Button } from './ui/button.jsx'
@@ -11,17 +11,19 @@ import { taskMatchesScope } from './WorkScopeSelector.jsx'
 const statusLabel = { todo: 'To do', 'in progress': 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
 const STALE_DAYS = 14
 
-// The design's card: a 242x76 tile holding a completion checkbox, the title
-// beside it, then an assignee circle, a "workstream - estimate" line and the
-// status pill on the same baseline. Status moves between lanes by dragging the
-// card; the overflow menu carries the moves a drag cannot express.
-function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, onDropBefore, draggedTaskId, setDraggedTaskId, dropTaskId, setDropTaskId }) {
+// The design's compact lane card: a completion checkbox and title lead, then
+// status and lane controls, with tag, due date, workstream/estimate, and owner
+// details below. Status moves between lanes by dragging the card; the overflow
+// menu carries the moves a drag cannot express.
+function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, onDropBefore, draggedTaskId, setDraggedTaskId, dropTaskId, setDropTaskId }) {
   const isDone = task.status === 'done'
   const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
   const meta = [task.workstream, formatEstimateMinutes(task.estimate_minutes)].filter(Boolean).join(' · ')
   const assignee = task.assignee || {}
+  const isOverdue = Boolean(task.due_date && task.due_date < (today || toDateKey(new Date())) && !isDone)
+  const taskTag = task.tag && task.tag !== 'General' ? task.tag : task.labels?.[0]
   return <article
-    className={`planner-card group/card relative flex h-[76px] shrink-0 flex-col justify-between rounded-card border border-border bg-card px-[11px] pt-[11px] pb-[17px] text-left transition-colors ${draggedTaskId === task.id ? 'opacity-50' : ''} ${dropTaskId === task.id && draggedTaskId !== task.id ? 'border-navy' : ''}`}
+    className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors ${draggedTaskId === task.id ? 'opacity-50' : ''} ${dropTaskId === task.id && draggedTaskId !== task.id ? 'border-navy' : ''}`}
     draggable={canReorder}
     onDragStart={event => {
       event.stopPropagation()
@@ -40,7 +42,8 @@ function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOp
       setDropTaskId(null)
     }}
   >
-    <div className="flex items-start gap-2">
+    <div className="planner-task-card-top">
+      <GripVertical className="planner-task-card-grip" size={14} strokeWidth={1.8} aria-hidden="true" />
       <input
         type="checkbox"
         className="planner-card-check mt-0.5"
@@ -51,29 +54,11 @@ function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOp
       />
       <button
         type="button"
-        className={`min-w-0 flex-1 truncate text-body-compact font-medium text-left ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}
+        className={`planner-task-card-title ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}
         onClick={() => onOpen(task)}
       >
         {task.title}
       </button>
-    </div>
-    <div className="flex items-center gap-2">
-      <Avatar name={taskAssigneeLabel(task)} avatarUrl={assignee.avatar_url} className="card-avatar" />
-      <span className={`min-w-0 flex-1 truncate text-[11px] leading-[13px] ${isDone ? 'text-text-subtle' : 'text-text-muted'}`}>{meta}</span>
-      {onStatusChange
-        ? <AppSelect
-            className={`task-status-pill planner-status-pill ${task.status}`}
-            value={task.status}
-            onChange={event => onStatusChange(task.id, event.target.value)}
-            aria-label={`Change status for ${task.title}`}
-          >
-            {Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </AppSelect>
-        : <span className={`task-status-pill planner-status-pill ${task.status}`}>{statusLabel[task.status] || task.status}</span>}
-    </div>
-    {/* The design's card shows no overflow control at rest, so it only appears
-        once the card is hovered or the button itself takes focus. */}
-    <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button type="button" className="planner-card-menu" aria-label={`Actions for ${task.title}`} title={`Actions for ${task.title}`}><MoreHorizontal size={16} /></button>
@@ -91,6 +76,34 @@ function PlannerTaskCard({ task, buckets, canReorder, canDeletePermanently, onOp
           </>}
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+    <div className="planner-task-card-meta">
+      {onStatusChange
+        ? <AppSelect
+            className={`task-status-pill planner-status-pill ${task.status}`}
+            value={task.status}
+            onChange={event => onStatusChange(task.id, event.target.value)}
+            aria-label={`Change status for ${task.title}`}
+          >
+            {Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </AppSelect>
+        : <span className={`task-status-pill planner-status-pill ${task.status}`}>{statusLabel[task.status] || task.status}</span>}
+      {canReorder
+        ? <AppSelect
+            className="planner-task-card-bucket"
+            value={task.bucket}
+            onChange={event => onMove(task, event.target.value)}
+            aria-label={`Move ${task.title} to another bucket`}
+          >
+            {buckets.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}
+          </AppSelect>
+        : <span className="planner-task-card-bucket">{task.bucket}</span>}
+    </div>
+    <div className="planner-task-card-details">
+      {taskTag && <span className="planner-task-card-tag"><Tag size={11} aria-hidden="true" />{taskTag}</span>}
+      {task.due_date && <span className={`planner-task-card-due ${isOverdue ? 'overdue' : ''}`}><CalendarDays size={11} aria-hidden="true" />{isOverdue ? 'Overdue' : task.due_date}</span>}
+      {meta && <span className="planner-task-card-workstream">{meta}</span>}
+      {taskAssigneeLabel(task) && <Avatar name={taskAssigneeLabel(task)} avatarUrl={assignee.avatar_url} className="planner-task-card-avatar" />}
     </div>
   </article>
 }
@@ -441,7 +454,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
             </DropdownMenu>}
           </header>
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
-            {orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}
+            {orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} today={today} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}
             {isDefaultBacklog(bucket) && <div className="planner-dropzone mt-3 flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-icon bg-border">
               <ArrowDownToLine size={18} className="text-text-muted" aria-hidden="true" />
               <span className="text-caption font-medium text-text-muted">Drop task here</span>
