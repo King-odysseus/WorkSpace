@@ -781,10 +781,24 @@ class TaskApiTests(TestCase):
 
         download_response = self.client.get(avatar_url)
         self.assertEqual(download_response.status_code, 200)
+        from PIL import Image
+        with Image.open(io.BytesIO(download_response.content)) as served_avatar:
+            self.assertEqual(served_avatar.format, 'WEBP')
+            self.assertEqual(served_avatar.size, (1, 1))
 
-        replacement = SimpleUploadedFile('face2.png', tiny_png, content_type='image/png')
+        replacement_buffer = io.BytesIO()
+        Image.new('RGB', (1200, 800), 'white').save(replacement_buffer, format='PNG')
+        replacement = SimpleUploadedFile(
+            'face2.png',
+            replacement_buffer.getvalue(),
+            content_type='image/png',
+        )
         replace_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': replacement})
         self.assertEqual(replace_response.status_code, 200)
+        replaced_download = self.client.get(avatar_url)
+        with Image.open(io.BytesIO(replaced_download.content)) as served_avatar:
+            self.assertEqual(served_avatar.format, 'WEBP')
+            self.assertLessEqual(max(served_avatar.size), 512)
 
         oversized = SimpleUploadedFile('huge.png', b'0' * (5 * 1024 * 1024 + 1), content_type='image/png')
         rejected_response = self.client.post(reverse('auth-me-avatar'), data={'avatar': oversized})
@@ -804,7 +818,6 @@ class TaskApiTests(TestCase):
         self.assertIn('not a valid', malformed_response.json()['error'])
         self.assertEqual(self.client.get(avatar_url).status_code, 200)
 
-        from PIL import Image
         image_buffer = io.BytesIO()
         Image.new('RGB', (8193, 1), 'white').save(image_buffer, format='PNG')
         oversized_dimensions = SimpleUploadedFile(

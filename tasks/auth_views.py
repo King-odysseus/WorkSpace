@@ -1,4 +1,5 @@
 import json
+import io
 import mimetypes
 import urllib.error
 import urllib.parse
@@ -12,6 +13,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.core.validators import validate_email
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
@@ -19,13 +21,14 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .models import Membership, PlanBucket, PushSubscription, UserProfile, Workspace, WorkspaceInvitation
 
 AVATAR_MAX_BYTES = 5 * 1024 * 1024
 AVATAR_MAX_DIMENSION = 8192
 AVATAR_MAX_PIXELS = 25_000_000
+AVATAR_OUTPUT_BOUNDS = (512, 512)
 AVATAR_FORMAT_BY_EXTENSION = {
     '.png': 'PNG',
     '.jpg': 'JPEG',
@@ -73,6 +76,24 @@ def _avatar_validation_error(uploaded_file):
         except (AttributeError, OSError, ValueError):
             pass
     return None
+
+
+def _normalized_avatar(uploaded_file):
+    '''Return a small, metadata-free WebP avatar that is safe to serve to browsers.'''
+    uploaded_file.seek(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', Image.DecompressionBombWarning)
+        with Image.open(uploaded_file) as source:
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail(AVATAR_OUTPUT_BOUNDS, Image.Resampling.LANCZOS)
+            has_alpha = image.mode in {'RGBA', 'LA'} or (
+                image.mode == 'P' and 'transparency' in image.info
+            )
+            normalized = image.convert('RGBA' if has_alpha else 'RGB')
+
+    output = io.BytesIO()
+    normalized.save(output, format='WEBP', quality=88, method=6)
+    return ContentFile(output.getvalue(), name='avatar.webp')
 
 
 def _create_owned_workspace(user, name):
@@ -260,8 +281,9 @@ def user_avatar(request):
     validation_error = _avatar_validation_error(uploaded_file)
     if validation_error:
         return JsonResponse({'error': validation_error}, status=400)
+    normalized_avatar = _normalized_avatar(uploaded_file)
     profile.avatar.delete(save=False)
-    profile.avatar = uploaded_file
+    profile.avatar = normalized_avatar
     profile.save(update_fields=['avatar', 'updated_at'])
     return JsonResponse({'avatar_url': profile.avatar_url})
 
