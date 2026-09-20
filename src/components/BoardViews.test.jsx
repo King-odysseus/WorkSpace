@@ -344,6 +344,119 @@ it('presents task completion as a labelled checkbox with the correct next action
   expect(completed).toHaveAttribute('title', 'Reopen task')
 })
 
+it('keeps the P2 row status, due date, owner, and action menu in their own slots', async () => {
+  const onDelete = vi.fn()
+  const { container } = render(
+    <MyTasksView
+      tasks={[
+        {
+          id: 3,
+          title: 'Review copy',
+          status: 'todo',
+          assignee_id: 7,
+          member: 'Nate Foster',
+          priority: 'normal',
+          tag: 'Ops',
+          bucket: 'Backlog',
+        },
+      ]}
+      currentUserId={7}
+      currentUserName="Nate Foster"
+      projects={[]}
+      buckets={[{ id: 1, name: 'Backlog' }]}
+      onAddTask={noop}
+      onOpenTask={noop}
+      onComplete={noop}
+      onStatusChange={noop}
+      onDelete={onDelete}
+      canManageTasks
+    />,
+  )
+
+  const row = container.querySelector('.my-task-row')
+  expect(row).not.toBeNull()
+  expect(row.querySelector('.my-task-status-slot .task-status-pill')).toHaveTextContent(
+    'To do',
+  )
+  expect(row.querySelector('.my-task-due')).toHaveTextContent('No due date')
+  expect(row.querySelector('.row-avatar')).toHaveTextContent('NF')
+
+  const actions = within(row).getByRole('button', {
+    name: 'Open actions for Review copy',
+  })
+  expect(actions).toHaveClass('opacity-0')
+  fireEvent.click(actions)
+  const archive = await screen.findByRole('button', { name: 'Archive task' })
+  fireEvent.click(archive)
+  expect(onDelete).toHaveBeenCalledWith(3)
+})
+
+it('filters the mobile task queue through the P2 All, Overdue, and Blocked chips', () => {
+  render(
+    <MyTasksView
+      tasks={[
+        {
+          id: 1,
+          title: 'Late task',
+          status: 'todo',
+          assignee_id: 7,
+          member: 'Nate Foster',
+          priority: 'normal',
+          due_date: dayOffset(-1),
+        },
+        {
+          id: 2,
+          title: 'Blocked task',
+          status: 'blocked',
+          assignee_id: 7,
+          member: 'Nate Foster',
+          priority: 'normal',
+          due_date: dayOffset(2),
+        },
+        {
+          id: 3,
+          title: 'Future task',
+          status: 'todo',
+          assignee_id: 7,
+          member: 'Nate Foster',
+          priority: 'normal',
+          due_date: dayOffset(3),
+        },
+      ]}
+      currentUserId={7}
+      currentUserName="Nate Foster"
+      projects={[]}
+      buckets={[]}
+      onAddTask={noop}
+      onOpenTask={noop}
+      onComplete={noop}
+      onStatusChange={noop}
+      onDelete={noop}
+      canManageTasks={false}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: /Overdue 1/ }))
+  expect(screen.getByText('Late task')).toBeInTheDocument()
+  expect(screen.queryByText('Blocked task')).not.toBeInTheDocument()
+  expect(screen.queryByText('Future task')).not.toBeInTheDocument()
+
+  fireEvent.click(
+    screen
+      .getAllByRole('button', { name: /Blocked 1/ })
+      .find((button) => button.classList.contains('my-task-mobile-chip')),
+  )
+  expect(screen.queryByText('Late task')).not.toBeInTheDocument()
+  expect(screen.getByText('Blocked task')).toBeInTheDocument()
+  expect(screen.queryByText('Future task')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /All 3/ }))
+  expect(screen.getByText('Late task')).toBeInTheDocument()
+  expect(screen.getByText('Blocked task')).toBeInTheDocument()
+  expect(screen.getByText('Future task')).toBeInTheDocument()
+  expect(document.querySelector('.my-task-mobile-sort')).toBeInTheDocument()
+})
+
 it('opens the board on the tasks its tile counted, not the personal queue', () => {
   // The overdue count covered the whole workspace but the card opened My tasks,
   // which only ever holds work assigned to you. A task nobody had picked up was

@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import {
   AlertTriangle,
   Archive,
+  ArrowUpDown,
   ArrowUpRight,
   Brush,
   CalendarCheck2,
@@ -23,6 +24,7 @@ import {
   LayoutDashboard,
   ListChecks,
   MessageSquare,
+  MoreHorizontal,
   Pause,
   Play,
   Plus,
@@ -36,6 +38,12 @@ import { Button } from "./ui/button.jsx";
 import { AppSelect } from "./ui/select.jsx";
 import { SearchInput } from "./ui/search-input.jsx";
 import { Card } from "./ui/card.jsx";
+import {
+  Popover,
+  PopoverContent,
+  PopoverItem,
+  PopoverTrigger,
+} from "./ui/popover.jsx";
 import Avatar from "./Avatar.jsx";
 import WorkScopeSelector, { taskMatchesScope } from "./WorkScopeSelector.jsx";
 import {
@@ -1536,6 +1544,7 @@ function MyTasksView({
   const [bucket, setBucket] = useState("all");
   const [sort, setSort] = useState("due");
   const [query, setQuery] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(false);
 
@@ -1570,6 +1579,7 @@ function MyTasksView({
     );
   };
   const matchesFilters = (task) => {
+    if (overdueOnly && !overdue(task)) return false;
     if (status !== "all" && task.status !== status) return false;
     if (priority !== "all" && task.priority !== priority) return false;
     if (project !== "all" && String(task.project_id || "") !== project)
@@ -1716,11 +1726,19 @@ function MyTasksView({
       .join(" · ");
 
   const filterCount = [
+    overdueOnly,
     status !== "all",
     priority !== "all",
     project !== "all",
     bucket !== "all",
   ].filter(Boolean).length;
+  const clearFilters = () => {
+    setOverdueOnly(false);
+    setStatus("all");
+    setPriority("all");
+    setProject("all");
+    setBucket("all");
+  };
   const summaryLine = [
     `${openMine.length} open`,
     `${openMine.filter(dueToday).length} due today`,
@@ -1781,17 +1799,19 @@ function MyTasksView({
             {rowMeta(task)}
           </span>
         </div>
-        <AppSelect
-          className={cn("task-status-pill", task.status)}
-          value={task.status}
-          onChange={(event) => onStatusChange(task.id, event.target.value)}
-          aria-label={`Change status for ${task.title}`}
-        >
-          {statusOptions}
-        </AppSelect>
+        <span className="my-task-status-slot">
+          <AppSelect
+            className={cn("task-status-pill", task.status)}
+            value={task.status}
+            onChange={(event) => onStatusChange(task.id, event.target.value)}
+            aria-label={`Change status for ${task.title}`}
+          >
+            {statusOptions}
+          </AppSelect>
+        </span>
         <span
           className={cn(
-            "hidden w-16 shrink-0 text-right text-caption sm:block",
+            "my-task-due hidden w-16 shrink-0 text-right text-caption sm:block",
             task.due_date && task.due_date < today && !done
               ? "font-medium text-danger"
               : "text-text-muted",
@@ -1806,20 +1826,32 @@ function MyTasksView({
         <Avatar
           name={ownerName(task)}
           avatarUrl={assignee?.avatar_url}
-          className="row-avatar ml-10"
+          className="row-avatar"
         />
         {canManageTasks && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onDelete(task.id)}
-            aria-label={`Archive ${task.title}`}
-            title="Archive task"
-            className="opacity-0 transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
-          >
-            <Archive size={14} />
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Open actions for ${task.title}`}
+                title="Task actions"
+                className="opacity-0 transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
+              >
+                <MoreHorizontal size={16} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" sideOffset={6} className="w-44">
+              <PopoverItem
+                icon={Archive}
+                destructive
+                onClick={() => onDelete(task.id)}
+              >
+                Archive task
+              </PopoverItem>
+            </PopoverContent>
+          </Popover>
         )}
       </article>
     );
@@ -1890,6 +1922,72 @@ function MyTasksView({
             </AppSelect>
           </div>
 
+          <div className="my-task-mobile-controls">
+            <SearchInput
+              className="my-task-mobile-search"
+              label="Search my tasks"
+              placeholder="Search my tasks"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <div className="my-task-mobile-chips">
+              <button
+                type="button"
+                className={cn(
+                  "my-task-mobile-chip",
+                  !overdueOnly && status === "all" && "active",
+                )}
+                onClick={clearFilters}
+                aria-pressed={!overdueOnly && status === "all"}
+              >
+                All <span>{openMine.length}</span>
+              </button>
+              <button
+                type="button"
+                className={cn("my-task-mobile-chip", overdueOnly && "active")}
+                onClick={() => {
+                  setStatus("all");
+                  setOverdueOnly((current) => !current);
+                }}
+                aria-pressed={overdueOnly}
+              >
+                Overdue <span>{openMine.filter(overdue).length}</span>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "my-task-mobile-chip",
+                  status === "blocked" && !overdueOnly && "active",
+                )}
+                onClick={() => {
+                  setOverdueOnly(false);
+                  setStatus((current) =>
+                    current === "blocked" ? "all" : "blocked",
+                  );
+                }}
+                aria-pressed={status === "blocked" && !overdueOnly}
+              >
+                Blocked{" "}
+                <span>
+                  {openMine.filter((task) => task.status === "blocked").length}
+                </span>
+              </button>
+              <AppSelect
+                className="my-task-mobile-sort"
+                value={sort}
+                onChange={(event) => setSort(event.target.value)}
+                aria-label="Sort tasks"
+                renderValue={() => (
+                  <ArrowUpDown size={16} aria-hidden="true" />
+                )}
+              >
+                <option value="due">Due date</option>
+                <option value="priority">Priority</option>
+                <option value="recent">Recently completed</option>
+              </AppSelect>
+            </div>
+          </div>
+
           {filtersOpen && (
             <div className="my-task-filter-panel mt-3 flex flex-wrap items-center gap-4 rounded-card border border-border bg-card px-5 py-4">
               <AppSelect
@@ -1931,12 +2029,7 @@ function MyTasksView({
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => {
-                    setStatus("all");
-                    setPriority("all");
-                    setProject("all");
-                    setBucket("all");
-                  }}
+                  onClick={clearFilters}
                 >
                   Clear filters
                 </Button>

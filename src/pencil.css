@@ -978,19 +978,132 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .my-task-header > div > p:first-child, .planner-header > div > p:first-child { margin: 0; }
 .my-task-layout { grid-template-columns: minmax(0, 712px) 376px !important; }
 .my-task-filters { min-height: 42px; }
+.my-task-mobile-controls { display: none; }
 .my-task-filters input, .my-task-filters select, .planner-commandbar input, .planner-commandbar select { height: 42px !important; border-radius: 12px !important; }
 .my-task-filters button { min-height: 42px; padding-inline: 14px; }
 .my-task-filter-panel { border-radius: 12px !important; }
-.my-task-groups { gap: 24px !important; }
-.my-task-group-heading { min-height: 24px; }
-.my-task-group-heading h2 { font-size: 14px; line-height: 20px; font-weight: 600; }
+.my-task-groups { gap: 31px !important; margin-top: 29px !important; }
+.my-task-group-heading { min-height: 22px; margin-bottom: 7px !important; }
+.my-task-group-heading h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 .my-task-group > .grid { gap: 0 !important; overflow: hidden; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; }
-.my-task-row { min-height: 84px; padding: 16px 20px !important; border: 0 !important; border-bottom: 1px solid #F3F4F6 !important; border-radius: 0 !important; background: #fff !important; box-shadow: none !important; }
+.my-task-group:first-child > .grid > .my-task-row:first-child { margin-bottom: 24px; }
+.my-task-group:nth-child(2) > .grid > .my-task-row + .my-task-row { margin-top: 12px; }
+.my-task-row { position: relative; min-height: 84px; padding: 16px 20px !important; border: 0 !important; border-bottom: 1px solid #F3F4F6 !important; border-radius: 0 !important; background: #fff !important; box-shadow: none !important; }
 .my-task-row:last-child { border-bottom: 0 !important; }
 .my-task-row:hover { background: #F9FAFB !important; transform: none !important; }
-.my-task-sidebar { gap: 20px !important; }
+.my-task-row > div > button { font-size: 14px; line-height: 17px; }
+.my-task-row > div > span { font-size: 12px; line-height: 15px; }
+.my-task-row .row-avatar { width: 28px; height: 28px; flex: 0 0 28px; margin-left: 40px; }
+.my-task-row > button:last-child { position: absolute; z-index: 2; top: 50%; right: 8px; transform: translateY(-50%); }
+.my-task-status-slot { display: flex; width: 96px; flex: 0 0 96px; }
+.my-task-status-slot [data-slot='select-trigger'].task-status-pill { width: auto !important; min-width: 0; border-radius: 6px !important; }
+.my-task-sidebar { gap: 20px !important; margin-top: -1px; }
 .my-task-sidebar > section { padding: 20px !important; border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: #fff !important; box-shadow: none !important; }
-.my-task-sidebar h2 { font-size: 16px; line-height: 22px; }
+.my-task-sidebar h2 { font-size: 16px; line-height: 20px; }
+.my-task-sidebar > .my-task-summary { padding-bottom: 30px !important; }
+.my-task-summary > p:nth-of-type(1) { margin-top: 4px !important; }
+.my-task-summary > p:nth-of-type(2) { margin-top: 6px !important; }
+.my-task-summary > div { margin-top: 13px !important; }
+.my-task-summary > p:nth-of-type(3) { margin-top: 7px !important; }
+.my-task-summary > p:nth-of-type(4) { margin-top: 12px !important; }
+.my-task-sidebar > .my-task-status { padding-bottom: 22px !important; }
+.my-task-status > div { margin-top: 16px !important; }
+.my-task-sidebar > .my-task-completed { padding-bottom: 11px !important; }
+.my-task-completed > div { margin-top: 15px !important; }
+.my-task-completed > div > button > span:last-child > span:first-child { line-height: 16px; }
+.my-task-completed > div > button > span:last-child > span:last-child { line-height: 13px; }
+.my-task-completed > button { margin-top: 9px !important; font-size: 12px; line-height: 15px; font-weight: 500; }
+
+@media (min-width: 1024px) {
+  .my-task-row {
+    display: grid !important;
+    grid-template-columns: 20px 12px minmax(0, 1fr) 8px 96px 12px 64px 52px 28px;
+    align-items: center;
+    column-gap: 0 !important;
+  }
+  .my-task-row > [role='checkbox'] { grid-column: 1; }
+  .my-task-row > div { grid-column: 3; }
+  .my-task-status-slot { grid-column: 5; }
+  .my-task-due { grid-column: 7; }
+  .my-task-row .row-avatar { grid-column: 9; margin-left: 0; }
+}
+
+@media (max-width: 1023px) {
+  .my-task-header { display: none; }
+  .my-task-layout { display: block !important; margin-top: 24px !important; }
+  .my-task-filters { display: none !important; }
+  .my-task-sidebar { display: none !important; }
+  .my-task-mobile-controls { display: grid; gap: 12px; }
+  .my-task-mobile-search { height: 40px !important; border-radius: 10px !important; }
+  .my-task-mobile-chips { display: flex; min-width: 0; align-items: center; gap: 8px; overflow: hidden; }
+  .my-task-mobile-chip {
+    display: inline-flex;
+    height: 32px;
+    min-height: 32px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 12px;
+    border: 1px solid var(--pencil-border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--pencil-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 15px;
+  }
+  .my-task-mobile-chip span { color: var(--pencil-text-muted); font-size: 11px; }
+  .my-task-mobile-chip.active { border-color: var(--pencil-navy); background: var(--pencil-navy); color: #fff; }
+  .my-task-mobile-chip.active span { color: #C7D6E5; }
+  .my-task-mobile-sort {
+    width: 54px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    flex: 0 0 54px;
+    justify-content: center !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+  }
+  .my-task-mobile-sort > svg:last-child { display: none !important; }
+  .my-task-groups { gap: 28px !important; margin-top: 24px !important; }
+  .my-task-group-heading { min-height: 18px; margin-bottom: 10px !important; }
+  .my-task-group-heading h2 { font-size: 15px; line-height: 18px; }
+  .my-task-group-heading > span { font-size: 11px; line-height: 13px; }
+  .my-task-group > .grid {
+    gap: 12px !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  .my-task-group:first-child > .grid > .my-task-row:first-child { margin-bottom: 0 !important; }
+  .my-task-group:nth-child(2) > .grid > .my-task-row + .my-task-row { margin-top: 0 !important; }
+  .my-task-row {
+    display: flex !important;
+    min-height: 84px;
+    gap: 10px !important;
+    padding: 16px 48px 16px 14px !important;
+    border: 1px solid var(--pencil-border) !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+  }
+  .my-task-row > div > button { font-size: 12px; line-height: 15px; }
+  .my-task-row > div > span { font-size: 10px; line-height: 12px; }
+  .my-task-row .row-avatar { display: none; }
+  .my-task-due { display: none !important; }
+  .my-task-status-slot { width: auto; flex: 0 0 auto; margin-left: auto; }
+  .my-task-status-slot [data-slot='select-trigger'].task-status-pill {
+    height: 22px !important;
+    min-height: 22px !important;
+    padding: 0 8px !important;
+    border-radius: 6px !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
+  }
+  .my-task-row > button:last-child { right: 4px; width: 36px; height: 36px; opacity: 1 !important; }
+  .my-tasks-view { padding-bottom: 96px !important; }
+}
 
 /* P3 Planner.  Pencil uses seven 152px lanes, a compact command bar, and a
    pale lane background rather than the former elevated kanban treatment. */
