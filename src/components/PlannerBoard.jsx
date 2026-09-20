@@ -128,6 +128,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [bucketNameDraft, setBucketNameDraft] = useState('')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [mobileBucketId, setMobileBucketId] = useState(null)
+  const [mobileBucketPinned, setMobileBucketPinned] = useState(false)
   const [isMobilePlanner, setIsMobilePlanner] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 760px)').matches)
 
   useEffect(() => {
@@ -140,9 +141,11 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   }, [])
 
   useEffect(() => {
-    if (buckets.some(bucket => bucket.id === mobileBucketId)) return
-    setMobileBucketId(buckets[0]?.id ?? null)
-  }, [buckets, mobileBucketId])
+    if (mobileBucketPinned && buckets.some(bucket => bucket.id === mobileBucketId)) return
+    const firstPopulated = buckets.find(bucket => tasks.some(task => task.bucket === bucket.name))
+    const nextBucketId = firstPopulated?.id ?? buckets[0]?.id ?? null
+    if (nextBucketId !== mobileBucketId) setMobileBucketId(nextBucketId)
+  }, [buckets, mobileBucketId, mobileBucketPinned, tasks])
 
   // externalFilter carries one filter token in from Reports drill-throughs and
   // saved views (main.jsx's plannerFilter) - it can name a status, a bucket, an
@@ -436,7 +439,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     </div>
     <p className="planner-mobile-scope-note">Showing {workstream === 'all' ? 'all workstreams' : workstream}</p>
     <div className="planner-mobile-bucket-tabs" role="tablist" aria-label="Planner buckets">
-      {buckets.map(bucket => <button type="button" role="tab" aria-selected={activeMobileBucketId === bucket.id} className={activeMobileBucketId === bucket.id ? 'is-active' : ''} key={bucket.id} onClick={() => setMobileBucketId(bucket.id)}>{bucket.name}</button>)}
+      {buckets.map(bucket => <button type="button" role="tab" aria-selected={activeMobileBucketId === bucket.id} className={activeMobileBucketId === bucket.id ? 'is-active' : ''} key={bucket.id} onClick={() => { setMobileBucketPinned(true); setMobileBucketId(bucket.id) }}>{bucket.name}</button>)}
     </div>
 
     <div className="planner-scope-summary mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">

@@ -6111,7 +6111,7 @@ function WorkspaceView({
       (notification) => !isConversationNotification(notification),
     );
     return (
-      <section className="workspace-view">
+      <section className="workspace-view pencil-notifications-view">
         <WorkspaceViewHeading
           title="Workspace activity"
           subtitle="Notifications outside chats and channels."
