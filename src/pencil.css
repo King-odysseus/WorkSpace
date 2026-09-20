@@ -607,6 +607,20 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgb(20 71 230 / 1
 [data-slot='search-input'] input::placeholder { color: var(--pencil-text-muted); }
 [data-slot='search-input'] input::-webkit-search-cancel-button { appearance: none; }
 
+/* The shell search surface is painted by its wrapper too. Match the global
+   field rule's specificity so the inner search input cannot add a second line. */
+input.shell-search[type='search'] {
+  appearance: none;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+input.shell-search[type='search']:focus {
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
 /* C2 menu and field controls. The trigger uses the same 40px rhythm as text
    inputs; compact chip overrides are applied at their call sites. */
 [data-slot='select-trigger'].app-select-trigger {
