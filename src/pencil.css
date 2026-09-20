@@ -261,6 +261,8 @@ aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] span:not([aria-
 aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] [aria-hidden='true'] { background: var(--pencil-bronze) !important; color: #fff !important; }
 aside[class*='bg-navy'] > div:first-child .bg-border, aside[class*='bg-navy'] > div:last-child .bg-border { background: rgb(255 255 255 / 12%) !important; }
 aside[class*='bg-navy'] nav { padding: 15px 16px 8px !important; }
+aside[class*='bg-navy'] nav { scrollbar-width: none; }
+aside[class*='bg-navy'] nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 aside[class*='bg-navy'] nav > div { margin-bottom: 17px !important; }
 aside[class*='bg-navy'] nav > div > p { height: 13px !important; padding-left: 0 !important; color: #93B4D4 !important; font-size: 11px !important; line-height: 13px !important; margin-bottom: 11px !important; }
 aside[class*='bg-navy'] nav button { height: 34px !important; padding-left: 12px !important; border: 0 !important; border-left: 3px solid transparent !important; font-size: 14px !important; }
