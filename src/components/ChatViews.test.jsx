@@ -822,6 +822,24 @@ it('filters the channel list to unread channels', async () => {
   expect(screen.queryByRole('button', { name: 'general' })).not.toBeInTheDocument()
 })
 
+it('uses a mobile master-detail transition for an open chat', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const { container } = renderChat(dataFor())
+  const view = container.querySelector('.chat-workspace-view')
+
+  expect(view).not.toHaveClass('chat-mobile-detail-open')
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await waitFor(() => expect(view).toHaveClass('chat-mobile-detail-open'))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to chats' }))
+  expect(view).not.toHaveClass('chat-mobile-detail-open')
+})
+
 it('searches conversations separately from messages in the open thread', async () => {
   mockApi({
     '/documents/': { documents: [] },

@@ -6,7 +6,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, ChevronLeft, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -150,6 +150,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const mode = viewType
   const [selectedChannel, setSelectedChannel] = useState('general')
   const [selectedConversationId, setSelectedConversationId] = useState(null)
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
   const [activePane, setActivePane] = useState('posts')
   const [chatFilter, setChatFilter] = useState('all')
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -229,6 +230,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setActivePane('posts')
     setChatFilter('all')
     setDetailsOpen(false)
+    setMobileDetailOpen(false)
     setEmojiOpen(false)
     setMentionOpen(false)
     setMentionQuery('')
@@ -565,6 +567,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Channel could not be created.')
       setSelectedChannel(payload.channel.name)
+      setMobileDetailOpen(true)
       setChannelForm({ name: '', description: '', is_private: false, member_ids: [] })
       setChannelDialogOpen(false)
       window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `#${payload.channel.name} created.` }))
@@ -589,6 +592,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Conversation could not be created.')
       setSelectedConversationId(payload.conversation.id)
+      setMobileDetailOpen(true)
       setDirectMemberIds([])
       setDirectDialogOpen(false)
       onRefresh()
@@ -628,6 +632,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       const response = await fetch(`/api/chat-channels/${channel.id}/`, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken() } })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Channel could not be deleted.')
+      setMobileDetailOpen(current => current && channel.name === selectedChannel ? false : current)
       setSelectedChannel('general')
       onRefresh()
     } catch (deleteError) {
@@ -637,6 +642,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   const closeConversationIfOpen = conversationId => {
     if (selectedConversationId !== conversationId) return
+    setMobileDetailOpen(false)
     setSelectedConversationId(null)
     setDirectMessages([])
     setDirectMessageConversationId(null)
@@ -877,6 +883,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   }
   const selectChannel = channelName => {
     setSelectedChannel(channelName)
+    setMobileDetailOpen(true)
     setMessageSearch('')
     setReplyTo(null)
     setActivePane('posts')
@@ -889,6 +896,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   }
   const selectConversation = conversationId => {
     setSelectedConversationId(conversationId)
+    setMobileDetailOpen(true)
     setMessageSearch('')
     setReplyTo(null)
     setActivePane('posts')
@@ -896,6 +904,17 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setRevealMessageId(null)
     captureUnreadMarker('direct_conversation', conversationId)
     markConversationRead('direct_conversation', conversationId)
+  }
+  const closeMobileDetail = () => {
+    setMobileDetailOpen(false)
+    setMessageSearch('')
+    setMessageSearchOpen(false)
+    setReplyTo(null)
+    setDetailsOpen(false)
+    setEmojiOpen(false)
+    setMentionOpen(false)
+    setShareOpen(false)
+    setError('')
   }
   const toggleReaction = async (message, emoji) => {
     const direct = mode === 'direct'
@@ -1142,12 +1161,13 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     }
   }
 
-  return <section className={`workspace-view chat-workspace-view chat-mode-${mode}`}>
+  return <section className={`workspace-view chat-workspace-view chat-mode-${mode} ${mobileDetailOpen ? 'chat-mobile-detail-open' : ''}`}>
     <WorkspaceViewHeading title={mode === 'channels' ? 'Channels' : 'Chats'} subtitle={mode === 'channels' ? 'Shared rooms for workspace topics, teams, and projects.' : 'Private one-to-one and group conversations.'} />
     <div className="chat-toolbar"><label className="chat-search"><Search size={15} /><input value={listSearch} onChange={event => setListSearch(event.target.value)} placeholder={mode === 'channels' ? 'Find a channel' : 'Search conversations'} aria-label={mode === 'channels' ? 'Find a channel' : 'Search conversations'} /></label><button type="button" className="primary-button chat-create-button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }}><Plus size={15} /> {mode === 'channels' ? 'Create channel' : 'New chat'}</button></div>
     <div className="chat-layout">
       <section className={`chat-feed ${detailsOpen ? 'details-open' : ''}`}>
         <div className="chat-feed-header">
+          <button type="button" className="chat-mobile-back" onClick={closeMobileDetail} aria-label={mode === 'channels' ? 'Back to channels' : 'Back to chats'}><ChevronLeft size={20} /></button>
           <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.is_self ? 'Message yourself' : selectedConversation.title}</h2><p>{selectedConversation.is_self ? 'Private notes and reminders' : selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div>{mode === 'channels' && selectedMembers.length > 0 && <div className="chat-feed-members" aria-label={`${selectedMembers.length} channel members`}><span className="chat-feed-member-avatars">{selectedMembers.slice(0, 3).map(member => <Avatar key={member.id} name={memberName(member)} avatarUrl={member.avatar_url} presence={effectivePresence(member)} small />)}</span><span>{selectedMembers.length} members</span></div>}{mode === 'direct' && selectedDirectOther && <span className="chat-feed-direct-presence"><Avatar name={memberName(selectedDirectOther)} avatarUrl={selectedDirectOther.avatar_url} presence={effectivePresence(selectedDirectOther)} small /><small>{PRESENCE_LABEL[effectivePresence(selectedDirectOther)] || 'Available'}</small></span>}</div>
           <nav className="chat-pane-tabs" role="tablist" aria-label="Conversation views">
             <button type="button" role="tab" aria-label="Posts" aria-selected={activePane === 'posts'} className={activePane === 'posts' ? 'active' : ''} onClick={() => setActivePane('posts')}><MessageSquare size={15} /> Posts</button>
