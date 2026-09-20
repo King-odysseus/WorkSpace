@@ -149,7 +149,7 @@ import {
   CheckInDetailDialog,
   CheckInEditDialog,
   FollowUpEditDialog,
-  ProjectEditDrawer,
+  ProjectEditDialog,
 } from "./components/RecordDialogs.jsx";
 import {
   AssigneePicker,
@@ -7452,7 +7452,7 @@ function WorkspaceView({
             </section>
           )}
           {selectedProject && (
-            <ProjectEditDrawer
+            <ProjectEditDialog
               project={selectedProject}
               workspaceId={workspaceId}
               onClose={() => setSelectedProject(null)}
@@ -7659,7 +7659,7 @@ function WorkspaceView({
           />
         )}
         {selectedProject && (
-          <ProjectEditDrawer
+          <ProjectEditDialog
             project={selectedProject}
             workspaceId={workspaceId}
             onClose={() => setSelectedProject(null)}

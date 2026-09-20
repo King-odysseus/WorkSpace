@@ -201,7 +201,7 @@ function CheckInDetailDialog({ checkIn, workspaceId, members = [], currentUserId
   </Dialog>
 }
 
-function ProjectEditDrawer({ project, workspaceId, onClose, onUpdated }) {
+function ProjectEditDialog({ project, workspaceId, onClose, onUpdated }) {
   const [form, setForm] = useState({ name: project.name, description: project.description || '', due_date: project.due_date || '' })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -224,7 +224,21 @@ function ProjectEditDrawer({ project, workspaceId, onClose, onUpdated }) {
       setSaving(false)
     }
   }
-  return <div className="drawer-backdrop" onMouseDown={onClose}><aside className="task-drawer" role="dialog" aria-modal="true" aria-labelledby="project-edit-title" onMouseDown={event => event.stopPropagation()}><div className="drawer-heading"><div><p className="eyebrow">Project details</p><h2 id="project-edit-title">Edit project</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Close project editor"><X size={18} /></button></div><form className="drawer-task-form" onSubmit={save}><label>Name<input name="name" value={form.name} onChange={update} maxLength="160" required /></label><label>Description<textarea name="description" value={form.description} onChange={update} /></label><DateField label="Due date" name="due_date" value={form.due_date} onChange={update} />{error && <Alert tone="danger" compact>{error}</Alert>}<button className="primary-button" disabled={saving}>{saving ? 'Saving...' : 'Save project'}</button></form></aside></div>
+  return <Dialog open onOpenChange={openState => !openState && onClose()}>
+    <DialogContent className="modal composer-modal" showCloseButton={false}>
+      <form onSubmit={save}>
+        <DialogHeader className="modal-heading flex-row items-start justify-between gap-3 space-y-0">
+          <div><p className="eyebrow">Project details</p><DialogTitle>Edit project</DialogTitle></div>
+          <Button type="button" variant="ghost" size="icon" className="close-button rounded-full" onClick={onClose} aria-label="Close project editor"><X size={18} /></Button>
+        </DialogHeader>
+        <label>Name<input name="name" value={form.name} onChange={update} maxLength="160" required /></label>
+        <label>Description<textarea name="description" value={form.description} onChange={update} /></label>
+        <DateField label="Due date" name="due_date" value={form.due_date} onChange={update} />
+        {error && <Alert tone="danger" compact>{error}</Alert>}
+        <Button className="primary-button modal-submit w-full justify-center" disabled={saving}>{saving ? 'Saving...' : 'Save project'}</Button>
+      </form>
+    </DialogContent>
+  </Dialog>
 }
 
-export { CalendarEventEditDialog, FollowUpEditDialog, CheckInDetailDialog, CheckInEditDialog, ProjectEditDrawer }
+export { CalendarEventEditDialog, FollowUpEditDialog, CheckInDetailDialog, CheckInEditDialog, ProjectEditDialog }
