@@ -2,10 +2,34 @@
 // Today feed and the Activity view.
 
 import { useEffect, useRef, useState } from 'react'
-import { Building2, CheckCircle2, Eye, EyeOff, LoaderCircle, Mail, Plus } from 'lucide-react'
+import { Activity as ActivityGlyph, Building2, CheckCircle2, Eye, EyeOff, FileText, Flag, FolderKanban, LoaderCircle, Mail, MessageSquare, Plus, TriangleAlert, Upload, UserPlus } from 'lucide-react'
 import { formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 
-function Activity({ avatar, color, kind, text, strong, suffix, time }) { const detail = strong && text && strong.toLowerCase().startsWith(`${text.toLowerCase()} `) ? strong.slice(text.length + 1) : strong; return <div className="activity-item"><span className={`activity-kind activity-kind-${kind || 'default'}`} aria-hidden="true">{(kind || '•').slice(0, 1).toUpperCase()}</span><span className={`avatar small ${color}`}>{avatar}</span><p><strong>{text}</strong> {detail} {suffix}<span title={time}>{time}</span></p></div> }
+function activityVisual(kind = '') {
+  if (kind.includes('risk')) return { Icon: TriangleAlert, tone: 'danger' }
+  if (kind.includes('follow')) return { Icon: Flag, tone: 'warning' }
+  if (kind.includes('check_in')) return { Icon: CheckCircle2, tone: 'success' }
+  if (kind.includes('invitation')) return { Icon: UserPlus, tone: 'success' }
+  if (kind.includes('file')) return { Icon: Upload, tone: 'info' }
+  if (kind.includes('comment') || kind.includes('chat')) return { Icon: MessageSquare, tone: 'info' }
+  if (kind.includes('project') || kind.includes('task') || kind.includes('bucket')) return { Icon: FolderKanban, tone: 'info' }
+  if (kind.includes('document')) return { Icon: FileText, tone: 'info' }
+  return { Icon: ActivityGlyph, tone: 'info' }
+}
+
+function Activity({ kind, text, strong, suffix, time }) {
+  const detail = strong && text && strong.toLowerCase().startsWith(`${text.toLowerCase()} `) ? strong.slice(text.length + 1) : strong
+  const { Icon, tone } = activityVisual(kind)
+  return (
+    <div className="activity-item">
+      <span className={`activity-kind is-${tone}`} aria-hidden="true"><Icon size={16} /></span>
+      <div className="activity-copy">
+        <p><strong>{text}</strong> {detail} {suffix}</p>
+        <time title={time}>{time}</time>
+      </div>
+    </div>
+  )
+}
 
 function GoogleSignInButton({ onCredential, theme, mode }) {
   const buttonRef = useRef(null)
