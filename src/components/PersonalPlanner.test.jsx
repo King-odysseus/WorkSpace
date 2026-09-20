@@ -19,9 +19,13 @@ const loadPlanner = (extra = {}) => mockApi({
 it('lists the member own planners and tasks, with no team data in the request', async () => {
   const fetchMock = loadPlanner()
 
-  render(<PersonalPlanner workspaceId={4} />)
+  const { container } = render(<PersonalPlanner workspaceId={4} />)
 
   expect(await screen.findByRole('button', { name: /^My day/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^My day/ })).toHaveAttribute('aria-current', 'page')
+  expect(container.querySelector('.personal-planner-layout')).toBeInTheDocument()
+  expect(container.querySelector('.personal-planner-rail')).toHaveClass('personal-planner-rail')
+  expect(container.querySelector('.personal-task-shell')).toBeInTheDocument()
   expect(screen.getByText('0 of 2 done - 1 overdue')).toBeInTheDocument()
   expect(screen.getByDisplayValue('Draft handover')).toBeInTheDocument()
   // The due date is shown the way the rest of the app shows days.
@@ -150,7 +154,8 @@ it('deletes a planner only after the confirmation, and takes its tasks with it',
   const fetchMock = loadPlanner({ '/personal/planners/3/': { deleted: 3 } })
 
   render(<PersonalPlanner workspaceId={4} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Delete My day' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Manage My day' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Delete My day' }))
 
   // Nothing has been sent yet: the first click only asks.
   expect(fetchMock.mock.calls.filter(([, init = {}]) => init.method === 'DELETE')).toHaveLength(0)
@@ -158,7 +163,35 @@ it('deletes a planner only after the confirmation, and takes its tasks with it',
 
   fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
-  expect(await screen.findByText('Create a planner to start planning your day.')).toBeInTheDocument()
+  expect(await screen.findByText('Create a planner to start planning your day')).toBeInTheDocument()
   expect(screen.queryByDisplayValue('Draft handover')).not.toBeInTheDocument()
   expectRequest(fetchMock, '/personal/planners/3/', 'DELETE')
+})
+
+it('moves a task to another private planner without changing the API shape', async () => {
+  const secondPlanner = { ...planner, id: 5, name: 'This week', position: 1, task_count: 0 }
+  const fetchMock = loadPlanner({
+    '/personal/planners/': { planners: [planner, secondPlanner], tasks },
+    '/personal/tasks/7/': { task: { ...tasks[0], planner_id: 5 } },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  const move = await screen.findByLabelText('Planner for Draft handover')
+  fireEvent.change(move, { target: { value: '5' } })
+
+  await waitFor(() => {
+    const patches = fetchMock.mock.calls.filter(([, init = {}]) => init.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(JSON.parse(patches[0][1].body)).toEqual({ planner_id: 5 })
+  })
+})
+
+it('renders the loading shell and keeps a server error visible', async () => {
+  loadPlanner({ '/personal/planners/': { status: 500, body: { error: 'Could not load your planner.' } } })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  expect(screen.getByRole('status', { name: 'Loading your planner' })).toBeInTheDocument()
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your planner.')
+  expect(screen.getByText('Create a planner to start planning your day')).toBeInTheDocument()
 })
