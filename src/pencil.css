@@ -237,6 +237,38 @@ button { cursor: pointer; }
 .skip-link { position: fixed; z-index: 100; top: -64px; left: 16px; padding: 8px 12px; border-radius: 8px; background: var(--pencil-navy); color: #fff; }
 .skip-link:focus { top: 16px; }
 
+/* Startup and auth restoration use one quiet brand moment: a full navy field
+   with the app mark, no spinner or duplicate wordmark. */
+.branded-status-screen.is-loading {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #071A2E;
+}
+.branded-status-screen.is-loading .branded-status-logo {
+  display: block;
+  width: clamp(80px, 7vw, 104px);
+  height: auto;
+  object-fit: contain;
+  transform-origin: center;
+  animation: workspace-loading-logo 1.6s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+@keyframes workspace-loading-logo {
+  0%, 100% { opacity: .72; transform: scale(.96); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .branded-status-screen.is-loading .branded-status-logo {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* The app-update notice is a bottom-anchored utility card. It stays outside
    the application shell so a broken build can still offer the waiting version. */
 .app-update-banner {

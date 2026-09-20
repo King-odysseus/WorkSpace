@@ -168,6 +168,7 @@ import ImportView from "./components/ImportView.jsx";
 import PersonalPlanner from "./components/PersonalPlanner.jsx";
 import { releaseNotesUnread } from "./lib/release-notes.js";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
+import BrandedStatusScreen from "./components/BrandedStatusScreen.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
@@ -7804,36 +7805,6 @@ class AppErrorBoundary extends React.Component {
       <BrandedStatusScreen error="The workspace could not render this view." />
     );
   }
-}
-
-function BrandedStatusScreen({ loading = false, error = "" }) {
-  return (
-    <main
-      className={`branded-status-screen ${error ? "is-error" : "is-loading"}`}
-      role={error ? "alert" : "status"}
-    >
-      <section className="branded-status-content">
-        <img
-          className="branded-status-logo"
-          src="/tijha-logo.png"
-          alt="TijhaBooks"
-        />
-        <p className="branded-status-wordmark">WorkSpace</p>
-        <div className="branded-status-mark">{error ? "!" : ""}</div>
-        <p className="eyebrow">{error ? "WorkSpace error" : "WorkSpace"}</p>
-        <h1>{error ? "There was an error" : "Loading WorkSpace"}</h1>
-        <p>{error || "Preparing your workspace..."}</p>
-        {error && (
-          <button
-            className="primary-button"
-            onClick={() => window.location.reload()}
-          >
-            Try again
-          </button>
-        )}
-      </section>
-    </main>
-  );
 }
 
 // The banner sits outside the error boundary on purpose: if a bad build has
