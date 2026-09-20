@@ -6,7 +6,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, PanelRight, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -164,7 +164,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [channelLoadingOlder, setChannelLoadingOlder] = useState(false)
   const [channelHistory, setChannelHistory] = useState({ hasMore: false, nextBefore: null })
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
-  const [search, setSearch] = useState('')
+  const [listSearch, setListSearch] = useState('')
+  const [messageSearch, setMessageSearch] = useState('')
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -220,7 +222,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const draftKey = mode === 'channels' ? `channel:${selectedChannel}` : selectedConversationId ? `conversation:${selectedConversationId}` : ''
 
   useEffect(() => {
-    setSearch('')
+    setListSearch('')
+    setMessageSearch('')
+    setMessageSearchOpen(false)
     setReplyTo(null)
     setActivePane('posts')
     setChatFilter('all')
@@ -335,8 +339,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const activeChannelMessages = channelThreadReady
     ? channelMessages
     : data.messages.filter(message => message.channel === selectedChannel)
-  const visibleChannelMessages = activeChannelMessages.filter(message => !search.trim() || `${message.author_name} ${message.message}`.toLowerCase().includes(search.trim().toLowerCase()))
-  const visibleDirectMessages = directThreadReady ? directMessages.filter(message => !search.trim() || `${message.author_name} ${message.message}`.toLowerCase().includes(search.trim().toLowerCase())) : []
+  const normalizedMessageSearch = messageSearch.trim().toLowerCase()
+  const visibleChannelMessages = activeChannelMessages.filter(message => !normalizedMessageSearch || `${message.author_name} ${message.message}`.toLowerCase().includes(normalizedMessageSearch))
+  const visibleDirectMessages = directThreadReady ? directMessages.filter(message => !normalizedMessageSearch || `${message.author_name} ${message.message}`.toLowerCase().includes(normalizedMessageSearch)) : []
   const groupedMessages = visibleChannelMessages.reduce((groups, message) => {
     const key = toDateKey(message.created_at)
     ;(groups[key] ||= []).push(message)
@@ -364,8 +369,13 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const unreadTotal = mode === 'channels'
     ? channels.reduce((total, channel) => total + unreadCountFor('chat_channel', channel.name), 0)
     : conversations.reduce((total, conversation) => total + unreadCountFor('direct_conversation', conversation.id), 0)
-  const filteredChannels = chatFilter === 'unread' ? channels.filter(channel => unreadCountFor('chat_channel', channel.name) > 0) : channels
-  const filteredConversations = chatFilter === 'unread' ? conversations.filter(conversation => unreadCountFor('direct_conversation', conversation.id) > 0) : conversations
+  const normalizedListSearch = listSearch.trim().toLowerCase()
+  const filteredChannels = channels.filter(channel => (chatFilter !== 'unread' || unreadCountFor('chat_channel', channel.name) > 0) && (!normalizedListSearch || channel.name.toLowerCase().includes(normalizedListSearch)))
+  const filteredConversations = conversations.filter(conversation => {
+    if (chatFilter === 'unread' && unreadCountFor('direct_conversation', conversation.id) < 1) return false
+    if (!normalizedListSearch) return true
+    return `${conversation.title || ''} ${conversation.last_message || ''}`.toLowerCase().includes(normalizedListSearch)
+  })
   const groupConversations = filteredConversations.filter(conversation => conversation.is_group)
   const directConversations = filteredConversations.filter(conversation => !conversation.is_group)
   const activeMessages = mode === 'channels'
@@ -861,7 +871,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   }
   const selectChannel = channelName => {
     setSelectedChannel(channelName)
-    setSearch('')
+    setMessageSearch('')
     setReplyTo(null)
     setActivePane('posts')
     setShowJumpToLatest(false)
@@ -873,7 +883,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   }
   const selectConversation = conversationId => {
     setSelectedConversationId(conversationId)
-    setSearch('')
+    setMessageSearch('')
     setReplyTo(null)
     setActivePane('posts')
     setShowJumpToLatest(false)
@@ -1016,10 +1026,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     <div className="chat-message-scroll" ref={messageScrollRef} onScroll={handleMessageScroll}>
       {mode === 'channels' ? (visibleChannelMessages.length
         ? Object.entries(groupedMessages).map(([date, messages]) => <div className="chat-day" key={date}><h3>{date === toDateKey(new Date()) ? 'Today' : date === toDateKey(new Date(Date.now() - 86400000)) ? 'Yesterday' : formatDay(date)}</h3>{messages.map(renderMessageWithUnreadMarker)}</div>)
-        : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{search ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{search ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>)
+        : <div className="chat-placeholder"><div className="chat-placeholder-icon"><MessageSquare size={22} /></div><h2>{messageSearch ? 'No matching messages' : `No messages in #${selectedChannel}`}</h2><p>{messageSearch ? 'Try a different search term.' : 'Start the conversation below.'}</p></div>)
         : selectedConversation
           ? (directThreadReady
-            ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessageWithUnreadMarker) : <div className="chat-placeholder"><h2>{search ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
+            ? (visibleDirectMessages.length ? visibleDirectMessages.map(renderMessageWithUnreadMarker) : <div className="chat-placeholder"><h2>{messageSearch ? 'No matching messages' : 'No messages yet'}</h2><p>Send the first private message below.</p></div>)
         : directLoading ? <SkeletonGroup className="chat-feed-skeleton" label="Loading messages">
           {[0, 1, 2].map(item => <div className="chat-message-skeleton" key={item}>
             <Skeleton variant="circle" />
@@ -1072,7 +1082,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     const unreadLabel = `${unread} unread message${unread === 1 ? '' : 's'}`
     return <div className="channel-row-wrap" key={channel.id}>
       <button type="button" className={`channel-row ${selectedChannel === channel.name ? 'active' : ''} ${unread > 0 ? 'has-unread' : ''}`} onClick={() => selectChannel(channel.name)} aria-label={unread > 0 ? `${channel.name}, ${unreadLabel}` : undefined}>
-        {channel.is_private ? <span className="channel-private-mark">•</span> : <Hash size={15} />}
+        {channel.is_private ? <Lock size={15} /> : <Hash size={15} />}
         <span className="channel-name">{channel.name}</span>
         {unread > 0 && <Badge aria-label={unreadLabel}>{unread > 99 ? '99+' : unread}</Badge>}
       </button>
@@ -1128,12 +1138,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
 
   return <section className={`workspace-view chat-workspace-view chat-mode-${mode}`}>
     <WorkspaceViewHeading title={mode === 'channels' ? 'Channels' : 'Chats'} subtitle={mode === 'channels' ? 'Shared rooms for workspace topics, teams, and projects.' : 'Private one-to-one and group conversations.'} />
-    <div className="chat-toolbar"><label className="chat-search"><Search size={15} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={mode === 'channels' ? `Search #${selectedChannel}` : 'Search this chat'} aria-label="Search messages" /></label><button type="button" className="primary-button chat-create-button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }}><Plus size={15} /> {mode === 'channels' ? 'Create channel' : 'New chat'}</button></div>
+    <div className="chat-toolbar"><label className="chat-search"><Search size={15} /><input value={listSearch} onChange={event => setListSearch(event.target.value)} placeholder={mode === 'channels' ? 'Find a channel' : 'Search conversations'} aria-label={mode === 'channels' ? 'Find a channel' : 'Search conversations'} /></label><button type="button" className="primary-button chat-create-button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }}><Plus size={15} /> {mode === 'channels' ? 'Create channel' : 'New chat'}</button></div>
     <div className="chat-layout">
       <section className={`chat-feed ${detailsOpen ? 'details-open' : ''}`}>
         <div className="chat-feed-header">
           <div className="chat-feed-heading"><div>{mode === 'channels' ? <><h2><Hash size={17} /> {selectedChannel}</h2><p>{selectedChannelInfo?.description || 'Team conversation'}</p></> : selectedConversation ? <><h2>{selectedConversation.is_group && <Users size={17} />}{selectedConversation.is_self ? 'Message yourself' : selectedConversation.title}</h2><p>{selectedConversation.is_self ? 'Private notes and reminders' : selectedConversation.is_group ? `Group chat · ${selectedConversation.participants.length} people` : 'Direct chat · only you two'}</p></> : <><h2>Chats</h2><p>Select a person or start a group chat</p></>}</div></div>
           {mode === 'direct' && selectedConversation?.is_group && !selectedConversation.is_archived && <button type="button" className="secondary-button chat-header-members" onClick={() => openParticipantEditor(selectedConversation)}><Users size={15} /> <span>Add or remove members</span></button>}
+          {messageSearchOpen
+            ? <label className="chat-feed-search"><Search size={15} /><input autoFocus value={messageSearch} onChange={event => setMessageSearch(event.target.value)} placeholder="Search messages" aria-label="Search messages" /><button type="button" onClick={() => { setMessageSearch(''); setMessageSearchOpen(false) }} aria-label="Close message search"><X size={14} /></button></label>
+            : <button type="button" className="chat-feed-search-toggle" onClick={() => setMessageSearchOpen(true)} aria-label="Search messages" title="Search messages"><Search size={17} /></button>}
           <button type="button" className={`chat-details-toggle ${detailsOpen ? 'active' : ''}`} onClick={() => setDetailsOpen(open => !open)} aria-label={detailsOpen ? 'Hide conversation details' : 'Show conversation details'} aria-expanded={detailsOpen} disabled={mode === 'direct' && !selectedConversation}><PanelRight size={17} /></button>
         </div>
         <nav className="chat-pane-tabs" role="tablist" aria-label="Conversation views">
@@ -1169,7 +1182,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       </section>
       <aside className="chat-conversation-list">
         <div className="chat-list-heading">
-          <div className="chat-list-heading-copy"><h3>{mode === 'channels' ? 'Channels' : 'Conversations'}</h3><span>{unreadTotal ? `${unreadTotal} unread` : 'All caught up'}</span></div>
+          <div className="chat-list-heading-copy"><h3>{mode === 'channels' ? 'Channels' : 'Chats'}</h3><span>{unreadTotal ? `${unreadTotal} unread` : 'All caught up'}</span></div>
           <button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button>
         </div>
         <div className="chat-filter-tabs" role="tablist" aria-label="Filter conversations">

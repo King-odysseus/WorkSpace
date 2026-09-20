@@ -822,6 +822,35 @@ it('filters the channel list to unread channels', async () => {
   expect(screen.queryByRole('button', { name: 'general' })).not.toBeInTheDocument()
 })
 
+it('searches conversations separately from messages in the open thread', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+    '/direct-conversations/11/messages/': { messages: [
+      { id: 1, author_name: 'Dana Reed', message: 'Roadmap review is ready.', created_at: '2026-09-12T10:00:00Z' },
+      { id: 2, author_name: 'Dana Reed', message: 'Deployment notes are attached.', created_at: '2026-09-12T10:01:00Z' },
+    ] },
+  })
+  const group = { id: 12, title: 'Launch team', is_group: true, participants: [{ id: currentUserId }, { id: 9 }], last_message: 'Ready to launch' }
+  renderChat({ ...dataFor(), directConversations: [conversation, group] }, vi.fn(), vi.fn().mockResolvedValue(true))
+
+  fireEvent.change(screen.getByLabelText('Search conversations'), { target: { value: 'launch' } })
+  expect(screen.getByText('Launch team')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Dana Reed/ })).not.toBeInTheDocument()
+
+  fireEvent.change(screen.getByLabelText('Search conversations'), { target: { value: '' } })
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  expect(await screen.findByText('Roadmap review is ready.')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Search messages' }))
+  fireEvent.change(screen.getByLabelText('Search messages'), { target: { value: 'deployment' } })
+
+  expect(screen.queryByText('Roadmap review is ready.')).not.toBeInTheDocument()
+  expect(screen.getByText('Deployment notes are attached.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^DA Dana Reed/ })).toBeInTheDocument()
+})
+
 it('shows the unread boundary before the first new channel message', async () => {
   const fetchMock = mockApi({
     '/documents/': { documents: [] },
