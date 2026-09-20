@@ -27,17 +27,6 @@ The implemented default screens do not yet cover every operational state.
 Help and Legal are covered by the standalone P22 and P23 frames, so they are not
 Settings design gaps.
 
-## Planner
-
-`My planner` currently has no approved product design. A P14 frame exists in the
-OpenPencil file, but the product owner has stated that the screen is not
-designed yet, so the existing P14 frame must not be treated as approval.
-
-The production route must keep its current planner, task, and backend behavior.
-It needs a reviewed desktop and mobile design covering empty, populated, add,
-rename, delete, loading, error, and long-name states before it can be treated
-as a 1:1 rebuild target.
-
 ## Task Create And Edit Popup Modal
 
 The task create/edit popup currently reads as visually attached to the right
