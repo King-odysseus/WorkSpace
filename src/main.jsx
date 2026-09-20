@@ -3771,7 +3771,9 @@ function WorkspaceView({
 }) {
   const today = toDateKey(new Date());
   const [localData, setLocalData] = useState(data);
-  const [calendarView, setCalendarView] = useState("week");
+  const [calendarView, setCalendarView] = useState(() =>
+    window.matchMedia?.("(max-width: 760px)").matches ? "day" : "month",
+  );
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarFilter, setCalendarFilter] = useState("all");
   const [calendarTaskScope, setCalendarTaskScope] = useState("all");
@@ -6401,8 +6403,83 @@ function WorkspaceView({
         </div>
       );
     };
+    const mobileCalendarDays = Array.from({ length: 6 }, (_, index) => {
+      const day = new Date(calendarDate);
+      day.setDate(calendarDate.getDate() - (5 - index));
+      return day;
+    });
+    const mobileCalendarEvents = visibleCalendarEvents
+      .filter((event) => toDateKey(event.start_at) === toDateKey(calendarDate))
+      .sort((left, right) => new Date(left.start_at) - new Date(right.start_at));
+    const mobileCalendarTabs = [
+      { value: "day", label: "Day" },
+      { value: "week", label: "Week" },
+      { value: "month", label: "Month" },
+      { value: "agenda", label: "Upcoming" },
+    ];
+    const renderMobileCalendarEvent = (event, showDate = false) => {
+      const start = new Date(event.start_at);
+      const end = new Date(event.end_at || event.start_at);
+      const timeRange = `${formatCalendarDate(start, {
+        hour: "numeric",
+        minute: "2-digit",
+      })} - ${formatCalendarDate(end, {
+        hour: "numeric",
+        minute: "2-digit",
+      })}`;
+      return (
+        <button
+          type="button"
+          className={`calendar-mobile-event event-type-${event.event_type || "meeting"}`}
+          key={event.id}
+          onClick={() => openCalendarEvent(event)}
+          aria-label={`View ${event.title}`}
+        >
+          <span className="calendar-mobile-event-copy">
+            <strong>{event.title}</strong>
+            <small>
+              {showDate ? `${formatDate(start)} · ` : ""}
+              {timeRange}
+            </small>
+          </span>
+          <em>{event.event_type || "event"}</em>
+        </button>
+      );
+    };
+    const renderMobileCalendarUpcoming = () => (
+      <div className="calendar-mobile-list">
+        <h2>Upcoming</h2>
+        {upcomingItems.slice(0, 8).length ? (
+          upcomingItems.slice(0, 8).map((item) =>
+            item.kind === "event" ? (
+              renderMobileCalendarEvent(item.event, true)
+            ) : (
+              <button
+                type="button"
+                className="calendar-mobile-event event-type-deadline"
+                key={item.key}
+                onClick={() => onOpenTask(item.task)}
+              >
+                <span className="calendar-mobile-event-copy">
+                  <strong>{item.task.title}</strong>
+                  <small>
+                    {formatDay(item.task.due_date)}
+                    {item.task.tag && item.task.tag !== "General"
+                      ? ` · ${item.task.tag}`
+                      : ""}
+                  </small>
+                </span>
+                <em>deadline</em>
+              </button>
+            ),
+          )
+        ) : (
+          <EmptyState text="No upcoming events or task deadlines match this filter." />
+        )}
+      </div>
+    );
     return (
-      <section className="workspace-view">
+      <section className="workspace-view pencil-calendar-view">
         <WorkspaceViewHeading
           title={title}
           subtitle="Plan meetings, focus time, deadlines, and reminders in one place."
@@ -6410,6 +6487,72 @@ function WorkspaceView({
           icon={CalendarDays}
           onAction={() => openComposer("calendar")}
         />
+        <div className="calendar-mobile-agenda">
+          <div className="calendar-mobile-heading">
+            <h1>{formatCalendarDate(calendarDate, { month: "long" })}</h1>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => openComposer("calendar")}
+            >
+              <Plus size={15} />
+              New
+            </Button>
+          </div>
+          <div className="calendar-mobile-tabs" role="tablist" aria-label="Calendar view">
+            {mobileCalendarTabs.map((tab) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={calendarView === tab.value}
+                className={calendarView === tab.value ? "active" : ""}
+                key={tab.value}
+                onClick={() => setCalendarView(tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {calendarView !== "agenda" && (
+            <div className="calendar-mobile-date-strip">
+              {mobileCalendarDays.map((day) => {
+                const selected = toDateKey(day) === toDateKey(calendarDate);
+                const hasEvents = visibleCalendarEvents.some(
+                  (event) => toDateKey(event.start_at) === toDateKey(day),
+                );
+                return (
+                  <button
+                    type="button"
+                    className={selected ? "active" : ""}
+                    key={day.toISOString()}
+                    onClick={() => setCalendarDate(new Date(day))}
+                    aria-label={`Show ${formatDate(day)}`}
+                  >
+                    <span>{formatCalendarDate(day, { weekday: "short" })}</span>
+                    <strong>{formatCalendarDate(day, { day: "numeric" })}</strong>
+                    {hasEvents && <i aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {calendarView === "agenda" ? (
+            renderMobileCalendarUpcoming()
+          ) : (
+            <div className="calendar-mobile-list">
+              <h2>
+                {toDateKey(calendarDate) === today
+                  ? "Today"
+                  : formatDate(calendarDate)}
+              </h2>
+              {mobileCalendarEvents.length ? (
+                mobileCalendarEvents.map((event) => renderMobileCalendarEvent(event))
+              ) : (
+                <EmptyState text="No events match this filter." />
+              )}
+            </div>
+          )}
+        </div>
         <div
           className={`calendar-layout${calendarUpcomingOpen ? "" : " is-upcoming-collapsed"}`}
         >
