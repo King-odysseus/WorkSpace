@@ -319,8 +319,8 @@ header.h-16 { padding-top: 1px; border-bottom-color: var(--pencil-border) !impor
 .primary-button, .project-detail-primary-action, .project-open-button { border: 0; border-radius: 12px; background: var(--pencil-navy) !important; color: #fff !important; box-shadow: none !important; }
 .primary-button:hover, .project-detail-primary-action:hover, .project-open-button:hover { background: var(--pencil-navy-hover) !important; transform: none !important; }
 .secondary-button { border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: #fff !important; color: var(--pencil-text) !important; box-shadow: none !important; }
-input:not([type='checkbox']):not([type='radio']), textarea, select { border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: #fff !important; color: var(--pencil-text) !important; box-shadow: none !important; }
-input:focus, textarea:focus, select:focus { outline: 2px solid rgb(20 71 230 / 18%); outline-offset: 1px; }
+input:where(:not([type='button'], [type='submit'], [type='reset'], [type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden'], [type='image'], [type='color'])), textarea, select { border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; color: var(--pencil-text); box-shadow: none; }
+input:focus, textarea:focus, select:focus { border-color: var(--pencil-blue); outline: 0; box-shadow: 0 0 0 3px rgb(37 99 235 / 18%); }
 
 /* P24 Cookie consent. The bottom bar is the recommended production variant;
    the corner card is retained as the designed compact alternative. */
@@ -636,6 +636,41 @@ input.shell-search[type='search']::-webkit-search-results-decoration {
   -webkit-appearance: none;
   appearance: none;
   display: none;
+}
+
+/* Wrapper-owned fields draw the surface once. Keep their inner controls free
+   of a border, outline, and shadow so both default and focus states stay single. */
+:is(
+  input.shell-search,
+  [data-slot='search-input'] input,
+  .activity-search input,
+  .project-search input,
+  .files-search input,
+  .help-search-bar input,
+  .chat-search input,
+  .chat-feed-search input,
+  .personal-planner-composer input,
+  .personal-task-date-control input
+) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:is(
+  .activity-search,
+  .project-search,
+  .files-search,
+  .help-search-bar,
+  .chat-search,
+  .chat-feed-search,
+  .personal-planner-composer,
+  .personal-task-date-control
+):focus-within {
+  border-color: var(--pencil-blue) !important;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 18%);
 }
 
 /* C2 menu and field controls. The trigger uses the same 40px rhythm as text
