@@ -2914,7 +2914,12 @@ def member_detail(request, workspace_id, user_id):
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     if membership.role == 'owner' and (actor.user_id != membership.user_id or actor.role != 'owner'):
         return JsonResponse({'error': 'Only the owner can update their own working hours.'}, status=403)
-    unknown_fields = set(payload) - {'role', 'permissions', 'daily_capacity_minutes', 'weekly_capacity_minutes'}
+    if 'weekly_capacity_minutes' in payload:
+        return JsonResponse(
+            {'error': 'Weekly capacity is calculated from daily hours and working days.'},
+            status=400,
+        )
+    unknown_fields = set(payload) - {'role', 'permissions', 'daily_capacity_minutes', 'working_days'}
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
     if membership.role == 'owner' and ({'role', 'permissions'} & set(payload)):
@@ -2939,7 +2944,6 @@ def member_detail(request, workspace_id, user_id):
         membership.permissions = permissions
     capacity_fields = (
         ('daily_capacity_minutes', 'Daily capacity', 1440),
-        ('weekly_capacity_minutes', 'Weekly capacity', 10080),
     )
     for field, label, maximum in capacity_fields:
         if field not in payload:
@@ -2954,7 +2958,20 @@ def member_detail(request, workspace_id, user_id):
         if not value.is_integer() or value < 0 or value > maximum:
             return JsonResponse({'error': f'{label} must be between 0 and {maximum} minutes.'}, status=400)
         setattr(membership, field, int(value))
-    membership.save(update_fields=['role', 'permissions', 'daily_capacity_minutes', 'weekly_capacity_minutes'])
+    if 'working_days' in payload:
+        raw_working_days = payload['working_days']
+        if not isinstance(raw_working_days, list):
+            return JsonResponse({'error': 'Working days must be a list of weekdays.'}, status=400)
+        working_days = []
+        for raw_day in raw_working_days:
+            if isinstance(raw_day, bool) or not isinstance(raw_day, int) or raw_day < 0 or raw_day > 6:
+                return JsonResponse({'error': 'Working days must use whole numbers from 0 (Monday) to 6 (Sunday).'}, status=400)
+            if raw_day in working_days:
+                return JsonResponse({'error': 'Working days must not contain duplicates.'}, status=400)
+            working_days.append(raw_day)
+        membership.working_days = sorted(working_days)
+    membership.weekly_capacity_minutes = membership.calculated_weekly_capacity_minutes()
+    membership.save(update_fields=['role', 'permissions', 'daily_capacity_minutes', 'working_days', 'weekly_capacity_minutes'])
     if role_changed and membership.user_id != request.user.id:
         # Deliberately absent from NOTIFICATION_KIND_PREFERENCE so this is never
         # silenced: the target is still a member and needs to know their access

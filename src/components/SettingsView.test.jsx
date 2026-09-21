@@ -162,7 +162,7 @@ it('renders integrations as a calendar card and a webhook connection form', asyn
   expect(document.querySelector('.settings-webhook-form')).toBeInTheDocument()
 })
 
-it('lets an owner save daily and weekly working hours for a member', async () => {
+it('lets an owner save daily hours and working days for a member', async () => {
   const api = mockApi({
     '/api/workspaces/1/notification-preferences/': {
       preferences: {
@@ -196,7 +196,8 @@ it('lets an owner save daily and weekly working hours for a member', async () =>
         id: 2,
         email: 'amara@example.test',
         daily_capacity_minutes: 450,
-        weekly_capacity_minutes: 2250,
+        working_days: [0, 1, 2, 3],
+        weekly_capacity_minutes: 1800,
       },
     },
   })
@@ -206,7 +207,7 @@ it('lets an owner save daily and weekly working hours for a member', async () =>
       currentUserName="Test"
       currentUserEmail="test@example.test"
       currentUserId={1}
-      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member', daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 }]}
+      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member', daily_capacity_minutes: 480, working_days: [0, 1, 2, 3, 4], weekly_capacity_minutes: 2400 }]}
       notifications={[]}
       workspaceId={1}
       canManageMembers
@@ -215,12 +216,14 @@ it('lets an owner save daily and weekly working hours for a member', async () =>
 
   fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Daily hours for Amara Okafor' }), { target: { value: '7.5' } })
-  fireEvent.change(screen.getByRole('spinbutton', { name: 'Weekly hours for Amara Okafor' }), { target: { value: '37.5' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Friday for Amara Okafor' }))
+  expect(screen.getByLabelText('Weekly summary for Amara Okafor')).toHaveTextContent('30h')
+  expect(screen.getByLabelText('Weekly summary for Amara Okafor')).toHaveTextContent('4 days')
   fireEvent.click(screen.getByRole('button', { name: 'Save hours for Amara Okafor' }))
 
   await waitFor(() => expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH'))
   const [, request] = expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH')
-  expect(JSON.parse(request.body)).toEqual({ daily_capacity_minutes: 450, weekly_capacity_minutes: 2250 })
+  expect(JSON.parse(request.body)).toEqual({ daily_capacity_minutes: 450, working_days: [0, 1, 2, 3] })
 })
 
 it('lets a manager save working hours for a regular member only', async () => {
@@ -230,6 +233,7 @@ it('lets a manager save working hours for a regular member only', async () => {
         id: 2,
         email: 'amara@example.test',
         daily_capacity_minutes: 420,
+        working_days: [0, 1, 2, 3, 4],
         weekly_capacity_minutes: 2100,
       },
     },
@@ -241,8 +245,8 @@ it('lets a manager save working hours for a regular member only', async () => {
       currentUserEmail="morgan@example.test"
       currentUserId={1}
       members={[
-        { id: 1, first_name: 'Morgan', last_name: 'Lee', email: 'morgan@example.test', role: 'manager', daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 },
-        { id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member', daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 },
+        { id: 1, first_name: 'Morgan', last_name: 'Lee', email: 'morgan@example.test', role: 'manager', daily_capacity_minutes: 480, working_days: [0, 1, 2, 3, 4], weekly_capacity_minutes: 2400 },
+        { id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member', daily_capacity_minutes: 480, working_days: [0, 1, 2, 3, 4], weekly_capacity_minutes: 2400 },
       ]}
       notifications={[]}
       workspaceId={1}
@@ -252,14 +256,15 @@ it('lets a manager save working hours for a regular member only', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
   expect(screen.queryByRole('spinbutton', { name: 'Daily hours for Morgan Lee' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('spinbutton', { name: 'Weekly hours for Amara Okafor' })).not.toBeInTheDocument()
 
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Daily hours for Amara Okafor' }), { target: { value: '7' } })
-  fireEvent.change(screen.getByRole('spinbutton', { name: 'Weekly hours for Amara Okafor' }), { target: { value: '35' } })
+  expect(screen.getByLabelText('Weekly summary for Amara Okafor')).toHaveTextContent('35h')
   fireEvent.click(screen.getByRole('button', { name: 'Save hours for Amara Okafor' }))
 
   await waitFor(() => expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH'))
   const [, request] = expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH')
-  expect(JSON.parse(request.body)).toEqual({ daily_capacity_minutes: 420, weekly_capacity_minutes: 2100 })
+  expect(JSON.parse(request.body)).toEqual({ daily_capacity_minutes: 420, working_days: [0, 1, 2, 3, 4] })
 })
 
 it('renders the P4 AI panel and saves provider and member access changes together', async () => {

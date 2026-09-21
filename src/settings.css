@@ -1002,6 +1002,22 @@
   margin: 0 32px 12px;
 }
 
+.settings-view .settings-working-hours-table-head {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 112px minmax(302px, 1.65fr) 128px auto;
+  gap: 12px;
+  padding: 0 32px 8px;
+}
+
+.settings-view .settings-working-hours-table-head span {
+  color: var(--pencil-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
 .settings-view .settings-working-hours-list {
   display: grid;
   padding: 0 32px 24px;
@@ -1018,9 +1034,9 @@
 
 .settings-view .settings-working-hours-row {
   display: grid;
-  min-height: 76px;
-  grid-template-columns: minmax(190px, 1fr) 132px 132px auto;
-  align-items: end;
+  min-height: 96px;
+  grid-template-columns: minmax(150px, 1fr) 112px minmax(302px, 1.65fr) 128px auto;
+  align-items: center;
   gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid #f3f4f6;
@@ -1065,6 +1081,10 @@
   font-weight: 500;
 }
 
+.settings-view .settings-working-hours-field-label {
+  display: none;
+}
+
 .settings-view .settings-working-hours-input {
   position: relative;
   display: block;
@@ -1086,9 +1106,79 @@
   pointer-events: none;
 }
 
+.settings-view .settings-working-hours-days {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-view .settings-working-hours-day {
+  display: inline-flex;
+  width: 38px;
+  height: 34px;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: var(--pencil-text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.settings-view .settings-working-hours-day:hover:not(:disabled) {
+  border-color: #c7cdd6;
+  background: #e9edf2;
+}
+
+.settings-view .settings-working-hours-day[aria-pressed='true'] {
+  border-color: var(--pencil-navy);
+  background: var(--pencil-navy);
+  color: #fff;
+}
+
+.settings-view .settings-working-hours-day:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgb(0 22 102 / 16%);
+}
+
+.settings-view .settings-working-hours-day:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.settings-view .settings-working-hours-summary {
+  display: grid;
+  min-height: 48px;
+  align-content: center;
+  gap: 2px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: rgb(0 22 102 / 6%);
+}
+
+.settings-view .settings-working-hours-summary strong {
+  color: var(--pencil-text);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+.settings-view .settings-working-hours-summary span {
+  color: var(--pencil-text-muted);
+  font-size: 10px;
+  line-height: 13px;
+}
+
 .settings-view .settings-working-hours-row > [data-slot='button'] {
   min-width: 72px;
-  margin-bottom: 1px;
 }
 
 .settings-view .settings-working-hours-row.is-readonly {
@@ -1103,6 +1193,65 @@
   color: var(--pencil-text-secondary);
   font-size: 12px;
   font-weight: 500;
+}
+
+.settings-view .settings-working-hours-guidance {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 32px 24px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: rgb(196 154 108 / 14%);
+  color: var(--pencil-text);
+}
+
+.settings-view .settings-working-hours-guidance > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #9b6d3f;
+}
+
+.settings-view .settings-working-hours-guidance > div {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-view .settings-working-hours-guidance strong {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.settings-view .settings-working-hours-guidance span {
+  color: var(--pencil-text-secondary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+html[data-theme='dark'] .settings-view .settings-working-hours-day {
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(255 255 255 / 7%);
+  color: var(--pencil-text-secondary);
+}
+
+html[data-theme='dark'] .settings-view .settings-working-hours-day:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 12%);
+}
+
+html[data-theme='dark'] .settings-view .settings-working-hours-day[aria-pressed='true'] {
+  border-color: #24469a;
+  background: #24469a;
+  color: #fff;
+}
+
+html[data-theme='dark'] .settings-view .settings-working-hours-summary {
+  background: rgb(36 70 154 / 22%);
+}
+
+html[data-theme='dark'] .settings-view .settings-working-hours-guidance {
+  background: rgb(196 154 108 / 12%);
 }
 
 .settings-view .settings-manager-panel,
@@ -1572,10 +1721,36 @@
     padding: 16px 0;
   }
 
+  .settings-view .settings-working-hours-table-head {
+    display: none;
+  }
+
+  .settings-view .settings-working-hours-field-label {
+    display: block;
+  }
+
   .settings-view .settings-working-hours-person,
   .settings-view .settings-working-hours-readonly,
+  .settings-view .settings-working-hours-days,
+  .settings-view .settings-working-hours-summary,
   .settings-view .settings-working-hours-row > [data-slot='button'] {
     grid-column: 1;
+  }
+
+  .settings-view .settings-working-hours-days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .settings-view .settings-working-hours-day {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .settings-view .settings-working-hours-summary {
+    width: 100%;
   }
 
   .settings-view .settings-working-hours-readonly {
@@ -1590,6 +1765,11 @@
 
   .settings-view .settings-working-hours-error {
     margin: 0 18px 12px;
+  }
+
+  .settings-view .settings-working-hours-guidance {
+    margin: 0 18px 18px;
+    padding: 14px;
   }
 
   .settings-view .settings-manager-panel,

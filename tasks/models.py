@@ -101,6 +101,10 @@ MANAGER_DEFAULT_PERMISSIONS = frozenset(PERMISSION_KEYS)
 MEMBER_DEFAULT_PERMISSIONS = frozenset({'create_tasks', 'edit_own_tasks', 'use_ai', 'view_reports', 'comment_check_ins'})
 
 
+def default_working_days():
+    return [0, 1, 2, 3, 4]
+
+
 class Membership(models.Model):
     ROLE_CHOICES = [
         ('owner', 'Owner'),
@@ -118,6 +122,10 @@ class Membership(models.Model):
     # different teams, and a manager's setting must not leak into another
     # workspace's workload calculations.
     daily_capacity_minutes = models.PositiveIntegerField(default=480)
+    # Weekdays are stored as integers: Monday=0 through Sunday=6. Keeping the
+    # schedule explicit lets weekly capacity stay derived rather than becoming a
+    # second, independently editable source of truth.
+    working_days = models.JSONField(default=default_working_days)
     weekly_capacity_minutes = models.PositiveIntegerField(default=2400)
     joined_at = models.DateTimeField(auto_now_add=True)
 
@@ -136,6 +144,28 @@ class Membership(models.Model):
     def has_permission(self, key):
         return key in self.effective_permissions()
 
+    def normalized_working_days(self):
+        if not isinstance(self.working_days, list):
+            return []
+        return sorted({
+            day for day in self.working_days
+            if isinstance(day, int) and not isinstance(day, bool) and 0 <= day <= 6
+        })
+
+    def calculated_weekly_capacity_minutes(self):
+        return self.daily_capacity_minutes * len(self.normalized_working_days())
+
+    def save(self, *args, **kwargs):
+        self.working_days = self.normalized_working_days()
+        self.weekly_capacity_minutes = self.calculated_weekly_capacity_minutes()
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            kwargs['update_fields'] = set(update_fields) | {
+                'working_days',
+                'weekly_capacity_minutes',
+            }
+        return super().save(*args, **kwargs)
+
     def as_dict(self):
         profile = getattr(self.user, 'profile', None)
         return {
@@ -151,7 +181,8 @@ class Membership(models.Model):
             'job_role': profile.job_role if profile else '',
             'presence': profile.presence if profile else 'available',
             'daily_capacity_minutes': self.daily_capacity_minutes,
-            'weekly_capacity_minutes': self.weekly_capacity_minutes,
+            'working_days': self.normalized_working_days(),
+            'weekly_capacity_minutes': self.calculated_weekly_capacity_minutes(),
             'last_seen_at': profile.last_seen_at.isoformat() if profile and profile.last_seen_at else '',
         }
 

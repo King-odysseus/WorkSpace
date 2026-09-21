@@ -66,21 +66,58 @@ const minutesToHoursInput = (minutes) => {
 const memberDisplayName = (member) =>
   [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
 
+const WORKING_DAY_OPTIONS = [
+  { value: 0, short: "M", label: "Monday" },
+  { value: 1, short: "T", label: "Tuesday" },
+  { value: 2, short: "W", label: "Wednesday" },
+  { value: 3, short: "T", label: "Thursday" },
+  { value: 4, short: "F", label: "Friday" },
+  { value: 5, short: "S", label: "Saturday" },
+  { value: 6, short: "S", label: "Sunday" },
+];
+
+const normalizeWorkingDays = (days) =>
+  Array.from(
+    new Set(
+      (Array.isArray(days) ? days : [])
+        .map(Number)
+        .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
+    ),
+  ).sort((left, right) => left - right);
+
+const formatWorkingDays = (days) => {
+  const normalized = normalizeWorkingDays(days);
+  if (!normalized.length) return "No days selected";
+  if (normalized.join(",") === "0,1,2,3,4") return "Mon-Fri";
+  return normalized
+    .map((day) => WORKING_DAY_OPTIONS[day].label.slice(0, 3))
+    .join(", ");
+};
+
 function MemberWorkingHoursRow({ member, canEdit, saving, onSave }) {
   const [dailyHours, setDailyHours] = useState(() => minutesToHoursInput(member.daily_capacity_minutes ?? 480));
-  const [weeklyHours, setWeeklyHours] = useState(() => minutesToHoursInput(member.weekly_capacity_minutes ?? 2400));
+  const [workingDays, setWorkingDays] = useState(() => normalizeWorkingDays(member.working_days ?? [0, 1, 2, 3, 4]));
 
   useEffect(() => {
     setDailyHours(minutesToHoursInput(member.daily_capacity_minutes ?? 480));
-    setWeeklyHours(minutesToHoursInput(member.weekly_capacity_minutes ?? 2400));
-  }, [member.id, member.daily_capacity_minutes, member.weekly_capacity_minutes]);
+    setWorkingDays(normalizeWorkingDays(member.working_days ?? [0, 1, 2, 3, 4]));
+  }, [member.id, member.daily_capacity_minutes, member.working_days]);
 
   const name = memberDisplayName(member);
+  const dailyMinutes = Math.max(0, Math.round((Number(dailyHours) || 0) * 60));
+  const weeklyMinutes = dailyMinutes * workingDays.length;
+  const toggleWorkingDay = (day) => {
+    if (saving) return;
+    setWorkingDays((current) => current.includes(day)
+      ? current.filter((value) => value !== day)
+      : [...current, day].sort((left, right) => left - right));
+  };
+
   if (!canEdit) {
     return (
       <div className="settings-working-hours-row is-readonly">
         <div className="settings-working-hours-person"><strong>{name}</strong><span>{member.email}</span></div>
-        <span className="settings-working-hours-readonly"><Clock3 size={15} aria-hidden="true" />{minutesToHoursInput(member.daily_capacity_minutes ?? 480)}h daily · {minutesToHoursInput(member.weekly_capacity_minutes ?? 2400)}h weekly</span>
+        <span className="settings-working-hours-readonly"><Clock3 size={15} aria-hidden="true" />{minutesToHoursInput(member.daily_capacity_minutes ?? 480)}h daily, {minutesToHoursInput(member.weekly_capacity_minutes ?? 2400)}h weekly, {formatWorkingDays(member.working_days ?? [0, 1, 2, 3, 4])}</span>
       </div>
     );
   }
@@ -89,14 +126,29 @@ function MemberWorkingHoursRow({ member, canEdit, saving, onSave }) {
     <div className="settings-working-hours-row">
       <div className="settings-working-hours-person"><strong>{name}</strong><span>{member.email}</span></div>
       <label className="settings-working-hours-field">
-        <span>Daily</span>
+        <span className="settings-working-hours-field-label">Daily</span>
         <span className="settings-working-hours-input"><input type="number" min="0" max="24" step="0.5" value={dailyHours} onChange={(event) => setDailyHours(event.target.value)} aria-label={`Daily hours for ${name}`} /><em>hours</em></span>
       </label>
-      <label className="settings-working-hours-field">
-        <span>Weekly</span>
-        <span className="settings-working-hours-input"><input type="number" min="0" max="168" step="0.5" value={weeklyHours} onChange={(event) => setWeeklyHours(event.target.value)} aria-label={`Weekly hours for ${name}`} /><em>hours</em></span>
-      </label>
-      <Button size="sm" type="button" disabled={saving} onClick={() => onSave(member, dailyHours, weeklyHours)} aria-label={`Save hours for ${name}`}>{saving ? "Saving" : "Save"}</Button>
+      <div className="settings-working-hours-days" role="group" aria-label={`Working days for ${name}`}>
+        {WORKING_DAY_OPTIONS.map((day) => (
+          <button
+            key={day.value}
+            type="button"
+            className="settings-working-hours-day"
+            aria-pressed={workingDays.includes(day.value)}
+            aria-label={`${day.label} for ${name}`}
+            disabled={saving}
+            onClick={() => toggleWorkingDay(day.value)}
+          >
+            {day.short}
+          </button>
+        ))}
+      </div>
+      <div className="settings-working-hours-summary" role="status" aria-live="polite" aria-label={`Weekly summary for ${name}`}>
+        <strong>{minutesToHoursInput(weeklyMinutes)}h</strong>
+        <span>{workingDays.length} {workingDays.length === 1 ? "day" : "days"}</span>
+      </div>
+      <Button size="sm" type="button" disabled={saving} onClick={() => onSave(member, dailyHours, workingDays)} aria-label={`Save hours for ${name}`}>{saving ? "Saving" : "Save"}</Button>
     </div>
   );
 }
@@ -237,15 +289,15 @@ function SettingsView({
       setPermissionsSavingId(null);
     }
   };
-  const saveMemberWorkingHours = async (member, dailyHours, weeklyHours) => {
+  const saveMemberWorkingHours = async (member, dailyHours, workingDays) => {
     const dailyMinutes = Math.round(Number(dailyHours) * 60);
-    const weeklyMinutes = Math.round(Number(weeklyHours) * 60);
     if (!Number.isFinite(dailyMinutes) || dailyMinutes < 0 || dailyMinutes > 1440) {
       setWorkingHoursError("Daily hours must be between 0 and 24.");
       return;
     }
-    if (!Number.isFinite(weeklyMinutes) || weeklyMinutes < 0 || weeklyMinutes > 10080) {
-      setWorkingHoursError("Weekly hours must be between 0 and 168.");
+    const normalizedWorkingDays = normalizeWorkingDays(workingDays);
+    if (normalizedWorkingDays.length !== workingDays.length) {
+      setWorkingHoursError("Working days must be unique weekdays.");
       return;
     }
     setWorkingHoursSavingId(member.id);
@@ -263,7 +315,7 @@ function SettingsView({
           },
           body: JSON.stringify({
             daily_capacity_minutes: dailyMinutes,
-            weekly_capacity_minutes: weeklyMinutes,
+            working_days: normalizedWorkingDays,
           }),
         },
       );
@@ -2149,13 +2201,22 @@ function SettingsView({
               <div className="settings-section-heading settings-working-hours-heading">
                 <div>
                   <strong>Working hours</strong>
-                  <span>Set the daily and weekly hours Team uses to calculate availability and capacity.</span>
+                  <span>Set daily hours and the days each member works. WorkSpace calculates weekly capacity from that schedule.</span>
                 </div>
               </div>
               {workingHoursError && (
                 <p className="auth-error settings-working-hours-error" role="alert">
                   {workingHoursError}
                 </p>
+              )}
+              {members.length > 0 && (
+                <div className="settings-working-hours-table-head" aria-hidden="true">
+                  <span>Member</span>
+                  <span>Daily hours</span>
+                  <span>Working days</span>
+                  <span>Weekly summary</span>
+                  <span>Action</span>
+                </div>
               )}
               <div className="settings-working-hours-list">
                 {members.length ? (
@@ -2176,6 +2237,13 @@ function SettingsView({
                     No members are available to configure yet.
                   </p>
                 )}
+              </div>
+              <div className="settings-working-hours-guidance">
+                <Clock3 size={17} aria-hidden="true" />
+                <div>
+                  <strong>How Team uses working hours</strong>
+                  <span>Daily hours inform today&apos;s progress. Weekly hours are the sum of the selected days and drive allocated versus remaining capacity. Owners can edit their own row and every member; managers can edit regular members only.</span>
+                </div>
               </div>
               {canManageMembers && (
                 <p className="settings-note">

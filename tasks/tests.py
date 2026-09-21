@@ -905,22 +905,24 @@ class TaskApiTests(TestCase):
         teammate_member = next(member for member in members_response.json()['members'] if member['id'] == teammate.id)
         self.assertEqual(teammate_member['presence'], 'available')
 
-    def test_owner_can_set_member_daily_and_weekly_working_hours(self):
+    def test_owner_can_set_member_daily_hours_and_working_days(self):
         teammate = User.objects.create_user(username='hours-teammate@example.com', email='hours-teammate@example.com', password='secure-pass-123')
         Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
 
         response = self.client.patch(
             reverse('member-detail', args=[self.workspace.id, teammate.id]),
-            data=json.dumps({'daily_capacity_minutes': 450, 'weekly_capacity_minutes': 2250}),
+            data=json.dumps({'daily_capacity_minutes': 450, 'working_days': [0, 1, 2, 3]}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()['member']['daily_capacity_minutes'], 450)
-        self.assertEqual(response.json()['member']['weekly_capacity_minutes'], 2250)
+        self.assertEqual(response.json()['member']['working_days'], [0, 1, 2, 3])
+        self.assertEqual(response.json()['member']['weekly_capacity_minutes'], 1800)
 
         member = Membership.objects.get(workspace=self.workspace, user=teammate)
         self.assertEqual(member.daily_capacity_minutes, 450)
-        self.assertEqual(member.weekly_capacity_minutes, 2250)
+        self.assertEqual(member.working_days, [0, 1, 2, 3])
+        self.assertEqual(member.weekly_capacity_minutes, 1800)
 
         invalid = self.client.patch(
             reverse('member-detail', args=[self.workspace.id, teammate.id]),
@@ -928,6 +930,35 @@ class TaskApiTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(invalid.status_code, 400)
+
+        duplicate_days = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, teammate.id]),
+            data=json.dumps({'working_days': [0, 0, 1]}),
+            content_type='application/json',
+        )
+        self.assertEqual(duplicate_days.status_code, 400)
+
+        out_of_range_days = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, teammate.id]),
+            data=json.dumps({'working_days': [0, 7]}),
+            content_type='application/json',
+        )
+        self.assertEqual(out_of_range_days.status_code, 400)
+
+        no_working_days = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, teammate.id]),
+            data=json.dumps({'working_days': []}),
+            content_type='application/json',
+        )
+        self.assertEqual(no_working_days.status_code, 200, no_working_days.content)
+        self.assertEqual(no_working_days.json()['member']['weekly_capacity_minutes'], 0)
+
+        weekly_is_derived = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, teammate.id]),
+            data=json.dumps({'weekly_capacity_minutes': 1000}),
+            content_type='application/json',
+        )
+        self.assertEqual(weekly_is_derived.status_code, 400)
 
     def test_manager_can_set_a_regular_members_working_hours(self):
         manager = User.objects.create_user(username='hours-manager@example.com', email='hours-manager@example.com', password='secure-pass-123')
@@ -938,11 +969,12 @@ class TaskApiTests(TestCase):
 
         response = self.client.patch(
             reverse('member-detail', args=[self.workspace.id, teammate.id]),
-            data=json.dumps({'daily_capacity_minutes': 420, 'weekly_capacity_minutes': 2100}),
+            data=json.dumps({'daily_capacity_minutes': 420, 'working_days': [0, 1, 2, 3, 4]}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()['member']['daily_capacity_minutes'], 420)
+        self.assertEqual(response.json()['member']['working_days'], [0, 1, 2, 3, 4])
         self.assertEqual(response.json()['member']['weekly_capacity_minutes'], 2100)
 
     def test_last_seen_is_stamped_on_request_and_throttled_within_the_window(self):
