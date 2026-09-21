@@ -39,6 +39,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
   const [dropTaskColumnId, setDropTaskColumnId] = useState(null)
   const [revealColumnId, setRevealColumnId] = useState(null)
   const boardRef = useRef(null)
+  const columnPointerDragRef = useRef(null)
   const taskById = id => tasks.find(task => String(task.id) === String(id))
   const canMoveTask = task => Boolean(onStatusChange && (canManageTasks || task?.can_edit))
   const draggedTask = draggedTaskId ? taskById(draggedTaskId) : null
@@ -73,7 +74,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
 
   const scrollColumnBoard = event => {
     const board = boardRef.current
-    if (!board || !draggedColumnId) return
+    if (!board || (!draggedColumnId && !columnPointerDragRef.current?.dragging)) return
     const pointerX = Number.isFinite(event.clientX) ? event.clientX : event.pageX
     if (!Number.isFinite(pointerX)) return
     const bounds = board.getBoundingClientRect()
@@ -114,6 +115,76 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     if (!placement) return
     onColumnReorder(placement.order)
     setRevealColumnId(sourceId)
+  }
+  const columnNodeAtPoint = (clientX, clientY) => {
+    if (!boardRef.current || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null
+    const nodes = [...boardRef.current.querySelectorAll('[data-column-id]')]
+    const direct = nodes.find(node => {
+      const bounds = node.getBoundingClientRect()
+      return clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom
+    })
+    if (direct) return direct
+    return nodes.reduce((nearest, node) => {
+      const bounds = node.getBoundingClientRect()
+      const distance = Math.abs(clientX - (bounds.left + bounds.width / 2))
+      return distance < nearest.distance ? { distance, node } : nearest
+    }, { distance: Number.POSITIVE_INFINITY, node: null }).node
+  }
+  const updateColumnPointerTarget = event => {
+    const drag = columnPointerDragRef.current
+    if (!drag?.dragging) return
+    scrollColumnBoard(event)
+    const targetNode = columnNodeAtPoint(event.clientX, event.clientY)
+    const targetId = targetNode?.dataset.columnId
+    if (!targetNode || !allowColumnReorder || String(drag.sourceId) === String(targetId)) {
+      setDropColumnId(null)
+      setDropColumnIndex(null)
+      return
+    }
+    const placement = columnOrderForDrop(drag.sourceId, targetId, event.clientX, targetNode)
+    setDropColumnId(targetId ?? null)
+    setDropColumnIndex(placement?.position ?? null)
+    setDropTaskColumnId(null)
+  }
+  const finishColumnPointerDrag = (event, commit) => {
+    const drag = columnPointerDragRef.current
+    if (!drag) return
+    if (commit && drag.dragging) {
+      const targetNode = columnNodeAtPoint(event.clientX, event.clientY)
+      const targetId = targetNode?.dataset.columnId
+      if (targetNode && allowColumnReorder && String(drag.sourceId) !== String(targetId)) moveColumn(drag.sourceId, targetId, event.clientX, targetNode)
+    }
+    if (event.currentTarget?.hasPointerCapture?.(drag.pointerId)) event.currentTarget.releasePointerCapture(drag.pointerId)
+    columnPointerDragRef.current = null
+    setDraggedColumnId(null)
+    setDropColumnId(null)
+    setDropColumnIndex(null)
+  }
+  const startColumnPointerDrag = (event, column) => {
+    if (!allowColumnReorder || (event.button !== 0 && event.pointerType === 'mouse')) return
+    if (event.target.closest?.('button, a, input, textarea, select, [role="menuitem"]')) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    columnPointerDragRef.current = {
+      sourceId: column.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    }
+  }
+  const moveColumnPointerDrag = event => {
+    const drag = columnPointerDragRef.current
+    if (!drag) return
+    if (!drag.dragging) {
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 6) return
+      drag.dragging = true
+      setDraggedColumnId(drag.sourceId)
+      setDropColumnIndex(null)
+    }
+    event.preventDefault()
+    updateColumnPointerTarget(event)
   }
 
   const nudgeColumn = (columnId, direction) => {
@@ -194,6 +265,10 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
           data-reorderable={allowColumnReorder ? 'true' : undefined}
           draggable={allowColumnReorder}
           onDragStart={event => {
+            if (columnPointerDragRef.current) {
+              event.preventDefault()
+              return
+            }
             if (!allowColumnReorder || event.target.closest('button')) {
               event.preventDefault()
               return
@@ -205,6 +280,10 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
             setDraggedColumnId(column.id)
           }}
           onDragEnd={finishDrag}
+          onPointerDown={event => startColumnPointerDrag(event, column)}
+          onPointerMove={moveColumnPointerDrag}
+          onPointerUp={event => finishColumnPointerDrag(event, true)}
+          onPointerCancel={event => finishColumnPointerDrag(event, false)}
         >
           <span className="project-kanban-column-heading-label">
             {allowColumnReorder && <GripVertical className="project-kanban-column-grip" size={15} strokeWidth={1.7} title={`Drag ${column.label} to reorder`} aria-hidden="true" />}

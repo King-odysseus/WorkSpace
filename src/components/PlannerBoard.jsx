@@ -129,6 +129,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [isMobilePlanner, setIsMobilePlanner] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 760px)').matches)
   const [revealBucketId, setRevealBucketId] = useState(null)
   const boardRef = useRef(null)
+  const bucketPointerDragRef = useRef(null)
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
@@ -358,7 +359,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)) && (workstream === 'all' || String(value.name).trim().toLocaleLowerCase() === String(workstream).trim().toLocaleLowerCase()))
   const scrollBucketBoard = event => {
     const board = boardRef.current
-    if (!board || !draggedBucketId) return
+    if (!board || (!draggedBucketId && !bucketPointerDragRef.current?.dragging)) return
     const pointerX = Number.isFinite(event.clientX) ? event.clientX : event.pageX
     if (!Number.isFinite(pointerX)) return
     const bounds = board.getBoundingClientRect()
@@ -379,13 +380,92 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     onBucketReorder(placement.order, placement.scope)
     setRevealBucketId(sourceId)
   }
+  const bucketDropAllowedFor = (sourceId, targetId) => {
+    if (!canManageBuckets || String(sourceId) === String(targetId)) return false
+    const sourceBucket = reorderableBuckets.find(bucket => String(bucket.id) === String(sourceId))
+    const targetBucket = reorderableBuckets.find(bucket => String(bucket.id) === String(targetId))
+    return Boolean(sourceBucket && targetBucket && sameReorderScope(reorderScopeFor(sourceBucket), reorderScopeFor(targetBucket)))
+  }
+  const bucketNodeAtPoint = (clientX, clientY) => {
+    if (!boardRef.current || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null
+    const nodes = [...boardRef.current.querySelectorAll('[data-bucket-id]')]
+    const direct = nodes.find(node => {
+      const bounds = node.getBoundingClientRect()
+      return clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom
+    })
+    if (direct) return direct
+    return nodes.reduce((nearest, node) => {
+      const bounds = node.getBoundingClientRect()
+      const distance = Math.abs(clientX - (bounds.left + bounds.width / 2))
+      return distance < nearest.distance ? { distance, node } : nearest
+    }, { distance: Number.POSITIVE_INFINITY, node: null }).node
+  }
+  const updateBucketPointerTarget = event => {
+    const drag = bucketPointerDragRef.current
+    if (!drag?.dragging) return
+    scrollBucketBoard(event)
+    const targetNode = bucketNodeAtPoint(event.clientX, event.clientY)
+    const targetBucket = targetNode ? buckets.find(bucket => String(bucket.id) === String(targetNode.dataset.bucketId)) : null
+    if (!targetNode || !targetBucket || !bucketDropAllowedFor(drag.sourceId, targetBucket.id)) {
+      setDropBucketId(null)
+      setDropBucketIndex(null)
+      return
+    }
+    const placement = bucketDropPlacementFor(drag.sourceId, targetBucket.id, event.clientX, targetNode)
+    setDropBucketId(targetBucket.id)
+    setDropBucketIndex(placement?.position ?? null)
+  }
+  const finishBucketPointerDrag = (event, commit) => {
+    const drag = bucketPointerDragRef.current
+    if (!drag) return
+    if (commit && drag.dragging) {
+      const targetNode = bucketNodeAtPoint(event.clientX, event.clientY)
+      const targetBucket = targetNode ? buckets.find(bucket => String(bucket.id) === String(targetNode.dataset.bucketId)) : null
+      if (targetNode && targetBucket && bucketDropAllowedFor(drag.sourceId, targetBucket.id)) moveBucket(drag.sourceId, targetBucket.id, event.clientX, targetNode)
+    }
+    if (event.currentTarget?.hasPointerCapture?.(drag.pointerId)) event.currentTarget.releasePointerCapture(drag.pointerId)
+    bucketPointerDragRef.current = null
+    setDraggedBucketId(null)
+    setDropBucketId(null)
+    setDropBucketIndex(null)
+  }
   const startBucketDrag = (event, bucket) => {
+    if (bucketPointerDragRef.current) {
+      event.preventDefault()
+      return
+    }
     event.stopPropagation()
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('application/x-workspace-bucket', String(bucket.id))
     event.dataTransfer.setData('text/plain', `bucket:${bucket.id}`)
     setDraggedBucketId(bucket.id)
     setDropBucketIndex(null)
+  }
+  const startBucketPointerDrag = (event, bucket) => {
+    if (event.button !== 0 && event.pointerType === 'mouse') return
+    if (event.target.closest?.('button, a, input, textarea, select, [role="menuitem"]')) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    bucketPointerDragRef.current = {
+      sourceId: bucket.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    }
+  }
+  const moveBucketPointerDrag = event => {
+    const drag = bucketPointerDragRef.current
+    if (!drag) return
+    if (!drag.dragging) {
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 6) return
+      drag.dragging = true
+      setDraggedBucketId(drag.sourceId)
+      setDropBucketIndex(null)
+    }
+    event.preventDefault()
+    updateBucketPointerTarget(event)
   }
   const nudgeBucket = (bucketId, direction) => {
     const bucket = reorderableBuckets.find(item => String(item.id) === String(bucketId))
@@ -646,6 +726,10 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
                   aria-hidden="true"
                   onDragStart={event => startBucketDrag(event, bucket)}
                   onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null); setDropBucketIndex(null) }}
+                  onPointerDown={event => startBucketPointerDrag(event, bucket)}
+                  onPointerMove={moveBucketPointerDrag}
+                  onPointerUp={event => finishBucketPointerDrag(event, true)}
+                  onPointerCancel={event => finishBucketPointerDrag(event, false)}
                 ><span className="planner-column-grip is-draggable" aria-hidden="true"><GripVertical size={16} strokeWidth={1.5} /></span></span>
               : <span className="planner-column-grip" aria-hidden="true"><GripVertical size={16} strokeWidth={1.5} /></span>}
             {editingBucketId === bucket.id

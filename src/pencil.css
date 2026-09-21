@@ -2187,7 +2187,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-column-heading { height: 60px; padding: 14px 12px 0 34px !important; border: 0 !important; }
 .planner-column-heading[data-reorderable='true'] { cursor: grab; }
 .planner-column-heading[data-reorderable='true']:active { cursor: grabbing; }
-.planner-column-drag-surface { position: absolute; z-index: 1; inset: 0 40px 0 0; display: block; cursor: grab; }
+.planner-column-drag-surface { position: absolute; z-index: 1; inset: 0 40px 0 0; display: block; cursor: grab; touch-action: none; user-select: none; }
 .planner-column-drag-surface:active { cursor: grabbing; }
 .planner-column-grip { position: absolute; left: 12px; top: 18px; display: grid; width: 16px; height: 16px; place-items: center; color: var(--pencil-text-muted); }
 .planner-column-grip.is-draggable { cursor: grab; }
@@ -4307,7 +4307,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .project-kanban-columns { display: grid; grid-auto-flow: column; grid-auto-columns: 304px; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
 .project-kanban-column { display: flex; width: 100%; min-width: 304px; height: 604px; flex-direction: column; overflow: hidden; padding: 0; border: 0; border-radius: 12px; background: var(--pencil-surface-muted); transition: opacity 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
 .project-kanban-column-heading { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px 0 12px; color: var(--pencil-text-secondary); font-size: 12px; font-weight: 600; }
-.project-kanban-column-heading[data-reorderable='true'] { cursor: grab; }
+.project-kanban-column-heading[data-reorderable='true'] { cursor: grab; touch-action: none; user-select: none; }
 .project-kanban-column-heading[data-reorderable='true']:active { cursor: grabbing; }
 .project-kanban-column-heading-label { display: inline-flex; min-width: 0; align-items: center; gap: 6px; }
 .project-kanban-column-heading-label > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -162,6 +162,51 @@ it('moves a project kanban lane backward across multiple lanes to the pointer si
   ])
 })
 
+it('reorders project kanban lanes with a touch or pen pointer drag', () => {
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+  const backlogHeading = screen.getByRole('region', { name: 'Backlog column' }).querySelector('.project-kanban-column-heading')
+  const reviewColumn = screen.getByRole('region', { name: 'Review column' })
+  vi.spyOn(reviewColumn, 'getBoundingClientRect').mockReturnValue({ left: 600, right: 904, width: 304, top: 0, bottom: 600, height: 600, x: 600, y: 0, toJSON: () => ({}) })
+
+  fireEvent.pointerDown(backlogHeading, { pointerId: 11, pointerType: 'touch', clientX: 10, clientY: 10 })
+  fireEvent.pointerMove(backlogHeading, { pointerId: 11, pointerType: 'touch', clientX: 850, clientY: 40 })
+  expect(reviewColumn).toHaveClass('is-column-drop-target')
+  fireEvent.pointerUp(backlogHeading, { pointerId: 11, pointerType: 'touch', clientX: 850, clientY: 40 })
+
+  expect(onColumnReorder).toHaveBeenCalledWith([
+    'todo',
+    'in-progress',
+    'review',
+    'backlog',
+    'blocked',
+    'on-hold',
+    'done',
+  ])
+})
+
+it('moves a project kanban lane left with a pointer drag', () => {
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+  const doneHeading = screen.getByRole('region', { name: 'Done column' }).querySelector('.project-kanban-column-heading')
+  const todoColumn = screen.getByRole('region', { name: 'To do column' })
+  vi.spyOn(todoColumn, 'getBoundingClientRect').mockReturnValue({ left: 300, right: 604, width: 304, top: 0, bottom: 600, height: 600, x: 300, y: 0, toJSON: () => ({}) })
+
+  fireEvent.pointerDown(doneHeading, { pointerId: 12, pointerType: 'pen', clientX: 1000, clientY: 10 })
+  fireEvent.pointerMove(doneHeading, { pointerId: 12, pointerType: 'pen', clientX: 350, clientY: 40 })
+  fireEvent.pointerUp(doneHeading, { pointerId: 12, pointerType: 'pen', clientX: 350, clientY: 40 })
+
+  expect(onColumnReorder).toHaveBeenCalledWith([
+    'backlog',
+    'done',
+    'todo',
+    'in-progress',
+    'review',
+    'blocked',
+    'on-hold',
+  ])
+})
+
 it('offers keyboard-reachable project lane move controls', async () => {
   const user = userEvent.setup()
   const onColumnReorder = vi.fn()
