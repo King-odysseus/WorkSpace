@@ -33,12 +33,17 @@ describe('ImportView', () => {
         checksum: 'abcdef1234567890',
         summary: { total_rows: 12, creates: 9, updates: 3, exceptions: 0 },
         exceptions: [],
+        rows: [
+          { project_name: 'Launch', assignee_name: 'Nate' },
+          { project_name: 'Launch', assignee_name: 'Nate' },
+        ],
       },
     }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<ImportView workspaceId={4} role="owner" />)
 
+    expect(screen.getByText('Choose source').closest('.import-step')).toHaveClass('is-current')
     expect(screen.getByText('Trello or Asana').closest('button')).toBeDisabled()
     expect(screen.getByText('JSON export').closest('button')).toBeDisabled()
     expect(screen.getByText('Workspace archive').closest('button')).toBeDisabled()
@@ -50,6 +55,10 @@ describe('ImportView', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/workspaces/4/imports/preview/')
     expect(await screen.findByRole('heading', { name: 'Preview results' })).toBeVisible()
     expect(screen.getByText('12 rows - checksum abcdef123456...')).toBeVisible()
+    expect(screen.getByText('CSV - 12 rows')).toBeVisible()
+    expect(screen.getByText('Tasks detected').nextElementSibling).toHaveTextContent('12')
+    expect(screen.getByText('Projects detected').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Members matched').nextElementSibling).toHaveTextContent('1')
     expect(screen.getByText('No validation exceptions found. The file is ready to import.')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Commit reviewed import' })).toBeEnabled()
   })

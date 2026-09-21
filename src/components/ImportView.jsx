@@ -4,8 +4,6 @@ import {
   Check,
   CheckCircle2,
   Download,
-  FileArchive,
-  FileJson,
   FileSpreadsheet,
   Info,
   Upload,
@@ -37,28 +35,24 @@ const SOURCE_OPTIONS = [
     label: 'CSV or spreadsheet',
     description: 'Tasks, projects and members from a table or Google Sheet.',
     badge: 'Recommended',
-    icon: FileSpreadsheet,
     supported: true,
   },
   {
     id: 'trello-asana',
     label: 'Trello or Asana',
     description: 'Lists and columns become Planner buckets.',
-    icon: FileArchive,
     supported: false,
   },
   {
     id: 'json',
     label: 'JSON export',
     description: 'A full backup from another workspace tool.',
-    icon: FileJson,
     supported: false,
   },
   {
     id: 'archive',
     label: 'Workspace archive',
     description: 'Restore a previous Workspace export.',
-    icon: FileArchive,
     supported: false,
   },
 ]
@@ -71,7 +65,7 @@ function fileSizeLabel(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function importSummary(preview, kind, file) {
+function importSummary(preview, kind, file, format) {
   if (!preview) {
     return {
       source: file ? file.name : 'No file selected',
@@ -79,14 +73,39 @@ function importSummary(preview, kind, file) {
       creates: 0,
       updates: 0,
       exceptions: 0,
+      metrics: [],
     }
   }
+  const previewSummary = preview.summary || {}
+  const rows = preview.rows || []
+  const unique = (values) => new Set(values.filter(Boolean)).size
+  const totalRows = previewSummary.total_rows || 0
+  const extension = file?.name?.split('.').pop()?.toLowerCase()
+  const sourceFormat = extension === 'xlsx' ? 'Excel' : extension?.toUpperCase() || format.toUpperCase()
+  const metrics = kind === 'tasks'
+    ? [
+        { label: 'Tasks detected', value: totalRows },
+        { label: 'Projects detected', value: unique(rows.map((item) => item.project_name)) },
+        { label: 'Members matched', value: unique(rows.map((item) => item.assignee_name)) },
+      ]
+    : kind === 'projects'
+      ? [
+          { label: 'Projects detected', value: totalRows },
+          { label: 'New projects', value: previewSummary.creates || 0 },
+          { label: 'Updates', value: previewSummary.updates || 0 },
+        ]
+      : [
+          { label: 'Stakeholders detected', value: totalRows },
+          { label: 'New stakeholders', value: previewSummary.creates || 0 },
+          { label: 'Updates', value: previewSummary.updates || 0 },
+        ]
   return {
-    source: `${IMPORT_TYPES[kind].label} spreadsheet`,
-    rows: preview.summary?.total_rows || 0,
-    creates: preview.summary?.creates || 0,
-    updates: preview.summary?.updates || 0,
-    exceptions: preview.summary?.exceptions || 0,
+    source: `${sourceFormat} - ${totalRows} rows`,
+    rows: totalRows,
+    creates: previewSummary.creates || 0,
+    updates: previewSummary.updates || 0,
+    exceptions: previewSummary.exceptions || 0,
+    metrics,
   }
 }
 
@@ -104,8 +123,8 @@ export default function ImportView({ workspaceId, role }) {
 
   const canCommit = ['owner', 'manager'].includes(role)
   const templateUrl = `/api/workspaces/${workspaceId}/imports/templates/${kind}.${format}`
-  const summary = useMemo(() => importSummary(preview, kind, file), [file, kind, preview])
-  const currentStep = preview ? 4 : file ? 3 : 2
+  const summary = useMemo(() => importSummary(preview, kind, file, format), [file, format, kind, preview])
+  const currentStep = preview ? 4 : file ? 3 : 1
 
   const chooseFile = (nextFile) => {
     setFile(nextFile || null)
@@ -229,7 +248,6 @@ export default function ImportView({ workspaceId, role }) {
             </header>
             <div className="import-source-grid">
               {SOURCE_OPTIONS.map((option) => {
-                const Icon = option.icon
                 const selected = source === option.id
                 return (
                   <button
@@ -248,7 +266,6 @@ export default function ImportView({ workspaceId, role }) {
                     <span className="import-source-radio" aria-hidden="true">
                       {selected && <span />}
                     </span>
-                    <Icon size={18} />
                     <span className="import-source-copy">
                       <strong>{option.label}</strong>
                       <small>{option.description}</small>
@@ -263,10 +280,7 @@ export default function ImportView({ workspaceId, role }) {
 
           <Card className="import-section">
             <header className="import-section-heading">
-              <div>
-                <p className="eyebrow">Step 2</p>
-                <h2>Upload your file</h2>
-              </div>
+              <h2>Upload your file</h2>
               <label className="import-format-select">
                 <span>Template</span>
                 <select value={format} onChange={(event) => setFormat(event.target.value)}>
@@ -319,7 +333,10 @@ export default function ImportView({ workspaceId, role }) {
                 <span className="import-file-icon" aria-hidden="true"><FileSpreadsheet size={18} /></span>
                 <span className="import-file-copy">
                   <strong>{file.name}</strong>
-                  <small>{fileSizeLabel(file.size)} - ready to preview</small>
+                  <small>
+                    {fileSizeLabel(file.size)}
+                    {preview ? ` - ${summary.rows} rows - ready to import` : ' - ready to preview'}
+                  </small>
                 </span>
                 <span className="import-file-ready"><CheckCircle2 size={15} /> Selected</span>
                 <button type="button" onClick={() => chooseFile(null)} aria-label={`Remove ${file.name}`} title="Remove file"><X size={16} /></button>
@@ -415,9 +432,9 @@ export default function ImportView({ workspaceId, role }) {
             </header>
             <dl className="import-summary-list">
               <div><dt>Source</dt><dd>{summary.source}</dd></div>
-              <div><dt>Rows detected</dt><dd>{summary.rows}</dd></div>
-              <div><dt>New records</dt><dd>{summary.creates}</dd></div>
-              <div><dt>Updates</dt><dd>{summary.updates}</dd></div>
+              {summary.metrics.map((metric) => (
+                <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>
+              ))}
               <div><dt>Rows needing review</dt><dd className={summary.exceptions ? 'is-warning' : ''}>{summary.exceptions}</dd></div>
             </dl>
             <p className="import-side-note">
