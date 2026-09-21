@@ -373,12 +373,16 @@ button { cursor: pointer; }
   .mobile-nav-drawer > nav { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .mobile-tabbar {
     position: fixed !important;
-    left: max(20px, env(safe-area-inset-left, 0px));
-    right: max(20px, env(safe-area-inset-right, 0px));
+    right: 0 !important;
+    left: 0 !important;
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    margin: 0;
-    transform: none !important;
+    width: min(350px, calc(100vw - 40px));
+    margin: 0 auto;
+    transform: translate3d(0, 0, 0) !important;
     translate: none !important;
+    backface-visibility: hidden;
+    contain: layout style;
+    will-change: transform;
     touch-action: none;
   }
 }
