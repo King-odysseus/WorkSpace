@@ -26,6 +26,49 @@ it('classifies API statuses into the designed project lanes', () => {
   expect(projectKanbanColumnForTask({ status: '' }).label).toBe('Backlog')
 })
 
+it('renders the P30 toolbar and task metadata without changing task actions', async () => {
+  const user = userEvent.setup()
+  const onAddTask = vi.fn()
+  const { container } = renderBoard({
+    tasks: [{
+      id: 97,
+      title: 'Prepare release notes',
+      status: 'review',
+      priority: 'high',
+      due_date: '2026-10-05',
+      assignee_ids: [7],
+      estimate_minutes: 90,
+      can_edit: true,
+    }],
+    members: [{ id: 7, first_name: 'Nadia', last_name: 'Bello' }],
+    today: '2026-09-21',
+    onAddTask,
+  })
+
+  expect(screen.getByRole('searchbox', { name: 'Search project kanban tasks' })).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Filter project kanban by assignee' })).toBeInTheDocument()
+  expect(screen.getByText('5 Oct')).toBeInTheDocument()
+  expect(screen.getByText('P2')).toHaveAttribute('title', 'High')
+  expect(container.querySelector('.project-kanban-task-assignee .avatar-initials')).toHaveTextContent('NB')
+
+  await user.click(screen.getByRole('button', { name: 'New task' }))
+  expect(onAddTask).toHaveBeenCalledWith(null)
+
+  await user.click(screen.getByRole('button', { name: 'Add task to Review' }))
+  expect(onAddTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'review', apiStatus: 'review' }))
+})
+
+it('filters the visible lanes and updates the P30 summary', async () => {
+  const user = userEvent.setup()
+  renderBoard()
+
+  await user.type(screen.getByRole('searchbox', { name: 'Search project kanban tasks' }), 'Design')
+
+  expect(screen.getByText('Design UI')).toBeInTheDocument()
+  expect(screen.queryByText('Review copy')).not.toBeInTheDocument()
+  expect(screen.getByText('1 task in 7 lanes')).toBeInTheDocument()
+})
+
 it('moves a task to another status lane by drag and drop', () => {
   const onStatusChange = vi.fn()
   const { container } = renderBoard({ onStatusChange })

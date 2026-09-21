@@ -3624,10 +3624,9 @@ function ProjectRiskIssuePanel({
           >
             <div className="modal-heading">
               <div>
-                <p className="eyebrow">Project controls</p>
                 <h2 id="project-record-modal-title">Add a new record</h2>
                 <p className="modal-subtitle">
-                  Capture a risk or an active issue for this project.
+                  Capture a risk or an active issue to keep this project's controls current.
                 </p>
               </div>
               <button

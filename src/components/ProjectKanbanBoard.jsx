@@ -1,16 +1,34 @@
-import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, GripVertical } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight, GripVertical, Plus, Search } from 'lucide-react'
+import Avatar from './Avatar.jsx'
 import { AppSelect } from './ui/select.jsx'
+import { formatDayMonthName, formatEstimateMinutes, toDateKey } from '../lib/workspace-format.js'
 
 const COLUMN_DEFINITIONS = [
-  { id: 'backlog', label: 'Backlog', status: null, aliases: ['', 'backlog'] },
-  { id: 'todo', label: 'To do', status: 'todo', aliases: ['todo', 'to-do', 'planned'] },
-  { id: 'in-progress', label: 'In progress', status: 'in progress', aliases: ['in progress', 'in-progress', 'doing'] },
-  { id: 'review', label: 'Review', status: 'review', aliases: ['review', 'in-review'] },
-  { id: 'blocked', label: 'Blocked', status: 'blocked', aliases: ['blocked'] },
-  { id: 'on-hold', label: 'On hold', status: 'on_hold', aliases: ['on_hold', 'on-hold', 'paused'] },
-  { id: 'done', label: 'Done', status: 'done', aliases: ['done', 'completed'] },
+  { id: 'backlog', label: 'Backlog', status: null, apiStatus: null, aliases: ['', 'backlog'] },
+  { id: 'todo', label: 'To do', status: 'todo', apiStatus: 'todo', aliases: ['todo', 'to-do', 'planned'] },
+  { id: 'in-progress', label: 'In progress', status: 'in progress', apiStatus: 'in_progress', aliases: ['in progress', 'in-progress', 'doing'] },
+  { id: 'review', label: 'Review', status: 'review', apiStatus: 'review', aliases: ['review', 'in-review'] },
+  { id: 'blocked', label: 'Blocked', status: 'blocked', apiStatus: 'blocked', aliases: ['blocked'] },
+  { id: 'on-hold', label: 'On hold', status: 'on_hold', apiStatus: 'on_hold', aliases: ['on_hold', 'on-hold', 'paused'] },
+  { id: 'done', label: 'Done', status: 'done', apiStatus: 'done', aliases: ['done', 'completed'] },
 ]
+
+const PRIORITY_DEFINITIONS = [
+  { value: 'urgent', label: 'Urgent', badge: 'P1' },
+  { value: 'high', label: 'High', badge: 'P2' },
+  { value: 'normal', label: 'Normal', badge: 'P3' },
+  { value: 'low', label: 'Low', badge: 'P4' },
+]
+
+const DATE_FILTER_OPTIONS = [
+  { value: 'all', label: 'Any date' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'week', label: 'Due this week' },
+  { value: 'none', label: 'No due date' },
+]
+
+const UNASSIGNED_FILTER = '__unassigned__'
 
 export const PROJECT_KANBAN_COLUMNS = COLUMN_DEFINITIONS
 const PROJECT_KANBAN_COLUMN_BY_ID = new Map(COLUMN_DEFINITIONS.map(column => [column.id, column]))
@@ -30,7 +48,47 @@ export function projectKanbanColumnForTask(task) {
   return PROJECT_KANBAN_COLUMNS.find(column => column.aliases.includes(status)) || PROJECT_KANBAN_COLUMNS[0]
 }
 
-export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusChange, canManageTasks = false, columnOrder, onColumnReorder, canReorderColumns = false }) {
+function memberLabel(member) {
+  return [member?.first_name, member?.last_name].filter(Boolean).join(' ') || member?.email || ''
+}
+
+function taskAssigneeIds(task) {
+  return Array.isArray(task?.assignee_ids) ? task.assignee_ids : []
+}
+
+function taskHasAssignee(task) {
+  return Boolean(taskAssigneeIds(task).length || task?.assignee_id || (task?.member && task.member !== 'Unassigned'))
+}
+
+function priorityDefinition(value) {
+  return PRIORITY_DEFINITIONS.find(option => option.value === normalizeProjectTaskStatus(value)) || PRIORITY_DEFINITIONS[2]
+}
+
+function addDaysToDateKey(value, days) {
+  const date = new Date(`${value}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  date.setDate(date.getDate() + days)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+export default function ProjectKanbanBoard({
+  tasks = [],
+  members = [],
+  today = toDateKey(new Date()),
+  onOpenTask,
+  onStatusChange,
+  onAddTask,
+  canManageTasks = false,
+  columnOrder,
+  onColumnReorder,
+  canReorderColumns = false,
+}) {
+  const [query, setQuery] = useState('')
+  const [assigneeFilter, setAssigneeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
+  const [workstreamFilter, setWorkstreamFilter] = useState('all')
   const [draggedTaskId, setDraggedTaskId] = useState(null)
   const [dropTaskId, setDropTaskId] = useState(null)
   const [draggedColumnId, setDraggedColumnId] = useState(null)
@@ -41,6 +99,50 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
   const boardRef = useRef(null)
   const columnPointerDragRef = useRef(null)
   const taskById = id => tasks.find(task => String(task.id) === String(id))
+  const memberById = useMemo(() => new Map(members.map(member => [String(member.id), member])), [members])
+  const workstreamOptions = useMemo(
+    () => [...new Set(tasks.map(task => task.workstream || task.bucket || 'Backlog'))].sort((left, right) => left.localeCompare(right)),
+    [tasks],
+  )
+  const weekEnd = addDaysToDateKey(today, 7)
+  const memberForTask = task => {
+    const ids = taskAssigneeIds(task)
+    return ids.map(id => memberById.get(String(id))).find(Boolean)
+      || memberById.get(String(task.assignee_id || ''))
+      || members.find(member => memberLabel(member) === task.member)
+      || null
+  }
+  const memberMatchesTask = (member, task) => {
+    if (taskAssigneeIds(task).some(id => String(id) === String(member.id))) return true
+    if (String(task.assignee_id || '') === String(member.id)) return true
+    const name = memberLabel(member)
+    return Boolean(name && task.member === name)
+  }
+  const filteredTasks = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return tasks.filter(task => {
+      const normalizedStatus = normalizeProjectTaskStatus(task.status)
+      const normalizedPriority = normalizeProjectTaskStatus(task.priority || 'normal')
+      const workstream = task.workstream || task.bucket || 'Backlog'
+      const isDone = normalizedStatus === 'done'
+      const isOverdue = Boolean(task.due_date && task.due_date < today && !isDone)
+      const isDueThisWeek = Boolean(task.due_date && task.due_date >= today && task.due_date <= weekEnd && !isDone)
+
+      if (needle && !`${task.title || ''} ${task.description || ''}`.toLowerCase().includes(needle)) return false
+      if (statusFilter !== 'all' && projectKanbanColumnForTask(task).id !== statusFilter) return false
+      if (priorityFilter !== 'all' && normalizedPriority !== normalizeProjectTaskStatus(priorityFilter)) return false
+      if (workstreamFilter !== 'all' && workstream !== workstreamFilter) return false
+      if (dateFilter === 'overdue' && !isOverdue) return false
+      if (dateFilter === 'week' && !isDueThisWeek) return false
+      if (dateFilter === 'none' && task.due_date) return false
+      if (assigneeFilter === UNASSIGNED_FILTER && taskHasAssignee(task)) return false
+      if (assigneeFilter !== 'all' && assigneeFilter !== UNASSIGNED_FILTER) {
+        const member = memberById.get(String(assigneeFilter))
+        if (!member || !memberMatchesTask(member, task)) return false
+      }
+      return true
+    })
+  }, [assigneeFilter, dateFilter, memberById, members, priorityFilter, query, statusFilter, tasks, today, weekEnd, workstreamFilter])
   const canMoveTask = task => Boolean(onStatusChange && (canManageTasks || task?.can_edit))
   const draggedTask = draggedTaskId ? taskById(draggedTaskId) : null
   const orderedColumns = normalizeProjectKanbanColumnOrder(columnOrder).map(id => PROJECT_KANBAN_COLUMN_BY_ID.get(id))
@@ -201,20 +303,54 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     setRevealColumnId(columnId)
   }
 
-  return <div
-    ref={boardRef}
-    className="project-kanban-columns"
-    aria-label="Project Kanban board"
-    onDragOver={scrollColumnBoard}
-    onPointerMove={moveColumnPointerDrag}
-    onPointerUp={event => finishColumnPointerDrag(event, true)}
-    onPointerCancel={event => finishColumnPointerDrag(event, false)}
-    onLostPointerCapture={event => {
-      if (columnPointerDragRef.current?.pointerId === event.pointerId) finishColumnPointerDrag(event, false)
-    }}
-  >
+  return <div className="project-kanban-board">
+    <div className="project-kanban-toolbar">
+      <div className="project-kanban-filter-row">
+        <label className="project-kanban-search">
+          <Search size={15} aria-hidden="true" />
+          <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search tasks" aria-label="Search project kanban tasks" />
+        </label>
+        <AppSelect className="project-kanban-filter" value={assigneeFilter} onChange={event => setAssigneeFilter(event.target.value)} aria-label="Filter project kanban by assignee">
+          <option value="all">All assignees</option>
+          {members.map(member => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}
+          <option value={UNASSIGNED_FILTER}>Unassigned</option>
+        </AppSelect>
+        <AppSelect className="project-kanban-filter" value={statusFilter} onChange={event => setStatusFilter(event.target.value)} aria-label="Filter project kanban by status">
+          <option value="all">All statuses</option>
+          {PROJECT_KANBAN_COLUMNS.map(column => <option key={column.id} value={column.id}>{column.label}</option>)}
+        </AppSelect>
+        <AppSelect className="project-kanban-filter" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)} aria-label="Filter project kanban by priority">
+          <option value="all">All priorities</option>
+          {PRIORITY_DEFINITIONS.map(option => <option key={option.value} value={option.value}>{option.label} ({option.badge})</option>)}
+        </AppSelect>
+        <AppSelect className="project-kanban-filter" value={dateFilter} onChange={event => setDateFilter(event.target.value)} aria-label="Filter project kanban by date">
+          {DATE_FILTER_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </AppSelect>
+        <AppSelect className="project-kanban-filter" value={workstreamFilter} onChange={event => setWorkstreamFilter(event.target.value)} aria-label="Filter project kanban by workstream">
+          <option value="all">All workstreams</option>
+          {workstreamOptions.map(workstream => <option key={workstream} value={workstream}>{workstream}</option>)}
+        </AppSelect>
+      </div>
+      <div className="project-kanban-action-row">
+        {canManageTasks && onAddTask && <button type="button" className="project-kanban-add-task" onClick={() => onAddTask(null)}><Plus size={15} />New task</button>}
+        <span className="project-kanban-summary" aria-live="polite">{filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'} in {orderedColumns.length} lanes</span>
+      </div>
+    </div>
+    <div
+      ref={boardRef}
+      className="project-kanban-columns"
+      aria-label="Project Kanban board"
+      onDragOver={scrollColumnBoard}
+      onPointerMove={moveColumnPointerDrag}
+      onPointerUp={event => finishColumnPointerDrag(event, true)}
+      onPointerCancel={event => finishColumnPointerDrag(event, false)}
+      onLostPointerCapture={event => {
+        if (columnPointerDragRef.current?.pointerId === event.pointerId) finishColumnPointerDrag(event, false)
+      }}
+    >
     {orderedColumns.map((column, columnIndex) => {
-      const columnTasks = tasks.filter(task => projectKanbanColumnForTask(task).id === column.id)
+      const columnTasks = filteredTasks.filter(task => projectKanbanColumnForTask(task).id === column.id)
+      const estimatedMinutes = columnTasks.reduce((total, task) => total + (Number(task.estimate_minutes) || 0), 0)
       const canDrop = Boolean(draggedTask && column.status && canMoveTask(draggedTask) && projectKanbanColumnForTask(draggedTask).id !== column.id)
       const isColumnDropTarget = Boolean(draggedColumnId && draggedColumnId !== column.id && dropColumnId === column.id && allowColumnReorder)
       return <section
@@ -301,7 +437,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
           </span>
           <span className="project-kanban-column-heading-actions">
             {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === 0} onClick={() => nudgeColumn(column.id, -1)} aria-label={`Move ${column.label} left`} title={`Move ${column.label} left`}><ChevronLeft size={13} /></button>}
-            <strong>{columnTasks.length}</strong>
+            <span className="project-kanban-column-count"><strong>{columnTasks.length}</strong><small>tasks</small><i>{formatEstimateMinutes(estimatedMinutes) || '0h'}</i></span>
             {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === orderedColumns.length - 1} onClick={() => nudgeColumn(column.id, 1)} aria-label={`Move ${column.label} right`} title={`Move ${column.label} right`}><ChevronRight size={13} /></button>}
           </span>
         </div>
@@ -310,6 +446,11 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
             const editable = canMoveTask(task)
             const currentColumn = projectKanbanColumnForTask(task)
             const canDropOnTask = Boolean(draggedTask && String(draggedTask.id) !== String(task.id) && canDrop && projectKanbanColumnForTask(draggedTask).id !== currentColumn.id)
+            const assignee = memberForTask(task)
+            const assigneeName = assignee ? memberLabel(assignee) : task.member && task.member !== 'Unassigned' ? task.member : 'Unassigned'
+            const priority = priorityDefinition(task.priority)
+            const dueLabel = formatDayMonthName(task.due_date)
+            const overdue = Boolean(task.due_date && task.due_date < today && currentColumn.id !== 'done')
             return <article
               className={`project-kanban-task${draggedTaskId === task.id ? ' is-dragging' : ''}${canDropOnTask && dropTaskId === task.id ? ' is-drop-target' : ''}`}
               key={task.id}
@@ -343,8 +484,17 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
                 {editable && <GripVertical size={13} strokeWidth={1.7} aria-hidden="true" />}
                 <button type="button" className="project-kanban-task-open" onClick={() => onOpenTask?.(task)}>{task.title}</button>
               </div>
+              <div className={`project-kanban-task-due${overdue ? ' is-overdue' : ''}`}>
+                <CalendarDays size={13} aria-hidden="true" />
+                <span>{overdue ? 'Overdue' : dueLabel || 'No due date'}</span>
+              </div>
               <div className="project-kanban-task-footer">
-                <span>{task.priority || 'Normal'}</span>
+                <span className="project-kanban-task-assignee" title={assigneeName}>
+                  <Avatar name={assigneeName} avatarUrl={assignee?.avatar_url} small />
+                  <span className="sr-only">Assigned to {assigneeName}</span>
+                </span>
+                <span className="project-kanban-task-tags">
+                  <span className={`project-kanban-priority is-${priority.value}`} title={priority.label}>{priority.badge}</span>
                 {editable ? <AppSelect
                   className={`project-kanban-status ${currentColumn.id}`}
                   value={currentColumn.id}
@@ -357,11 +507,14 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
                   <option value="backlog" disabled>Backlog</option>
                   {PROJECT_KANBAN_COLUMNS.filter(item => item.status).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                 </AppSelect> : <small>{currentColumn.label}</small>}
+                </span>
               </div>
             </article>
           })}
         </div>
+        {canManageTasks && onAddTask && <button type="button" className="project-kanban-add-column-task" onClick={() => onAddTask(column)} aria-label={`Add task to ${column.label}`}><Plus size={14} />Add task</button>}
       </section>
     })}
+    </div>
   </div>
 }

@@ -409,6 +409,7 @@ function App() {
   const [newDueDate, setNewDueDate] = useState("");
   const [newRecurrence, setNewRecurrence] = useState("none");
   const [newPriority, setNewPriority] = useState("normal");
+  const [newTaskStatus, setNewTaskStatus] = useState("todo");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("All work");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1686,6 +1687,7 @@ function App() {
     setNewBucket(requestedBucket || matchingBucket?.name || "Backlog");
     setNewRecurrence("none");
     setNewPriority("normal");
+    setNewTaskStatus(options.status || "todo");
     setTaskError("");
     setShowModal(true);
   };
@@ -1979,6 +1981,7 @@ function App() {
           due_date: newDueDate || null,
           recurrence: newRecurrence,
           priority: newPriority,
+          status: newTaskStatus,
         }),
       });
       const data = await readJsonResponse(
@@ -8154,11 +8157,12 @@ function WorkspaceView({
           )}
           {projectOperation === "kanban" && (
             <section className="project-operation-surface project-kanban-surface">
-              <div className="project-operation-toolbar"><span className="eyebrow">Project flow</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All owners <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">All priorities <ChevronDown size={14} /></button></div>
               <ProjectKanbanBoard
                 tasks={projectTasks}
+                members={localData.members}
                 onOpenTask={onOpenTask}
                 onStatusChange={onStatusChange}
+                onAddTask={onAddTask ? (column) => onAddTask(null, { projectId: selectedProjectWorkspace.id, status: column?.apiStatus || "todo" }) : undefined}
                 canManageTasks={canManageTasks}
                 columnOrder={selectedProjectWorkspace.configuration?.kanban_column_order}
                 onColumnReorder={(columnOrder) => reorderProjectKanbanColumns(selectedProjectWorkspace, columnOrder)}

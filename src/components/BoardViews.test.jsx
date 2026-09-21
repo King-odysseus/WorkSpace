@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { MyTasksView, ProjectRiskIssuePanel, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
@@ -107,6 +108,28 @@ it('keeps the legacy risk register heading out of the page and in the toolbar co
     }),
   ).toBeInTheDocument()
   expect(within(toolbar).getByRole('button', { name: 'Add new' })).toBeInTheDocument()
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/risks-issues/'))
+})
+
+it('presents the project record form as one clear dialog hierarchy', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/1/risks-issues/': { records: [] },
+  })
+  const user = userEvent.setup()
+  render(
+    <ProjectRiskIssuePanel
+      projects={[{ id: 42, name: 'Safron Website' }]}
+      workspaceId={1}
+      canManage
+    />,
+  )
+
+  await user.click(screen.getByRole('button', { name: 'Add new' }))
+
+  const dialog = screen.getByRole('dialog')
+  expect(within(dialog).getByRole('heading', { name: 'Add a new record' })).toBeInTheDocument()
+  expect(within(dialog).getByText("Capture a risk or an active issue to keep this project's controls current.")).toBeInTheDocument()
+  expect(within(dialog).queryByText('Project controls')).not.toBeInTheDocument()
   await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/risks-issues/'))
 })
 

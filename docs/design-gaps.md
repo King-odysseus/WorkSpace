@@ -60,6 +60,7 @@ The following are no longer unresolved design gaps:
 - Global crash fallback: P65 defines the branded recoverable error screen.
 - Message reactions: P66 defines the reaction picker and overflow behavior.
 - Project index and project controls: P28 defines the Projects index without the duplicated controls panel. Risk register and issue log live in the project detail Risks and Issues tabs, covered by P32 and P33.
+- Project Kanban: P30 defines the filterable status board, lane counts and estimates, task metadata, add-task affordances, and responsive horizontal board behavior.
 - Global header, search, notification indicators, account chooser, and avatar fallback: F1.
 - Notification panel states: F2.
 - Presence, identity, account, and workspace menus: F3 and F4.
