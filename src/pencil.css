@@ -1084,6 +1084,137 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .task-drawer { width: min(432px, 100%); height: 100dvh; overflow-y: auto; padding: 24px; border-left: 1px solid var(--pencil-border); background: var(--pencil-surface); box-shadow: -18px 0 40px rgb(2 5 31 / 12%); overscroll-behavior: contain; }
 .modal { width: min(440px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); box-shadow: 0 18px 44px rgb(2 5 31 / 20%); overscroll-behavior: contain; }
 
+/* Record composers use the legacy modal shell through several call sites. Keep
+   their heading, field rhythm, and single-column form geometry explicit so
+   native inline controls cannot drift into an overlapping layout. */
+.modal.composer-modal,
+.composer-modal > form {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 18px;
+}
+.composer-modal .modal-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+}
+.composer-modal .modal-heading > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.composer-modal .modal-heading .eyebrow {
+  margin: 0;
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+}
+.composer-modal .modal-heading h2 {
+  margin: 3px 0 0;
+  color: var(--pencil-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 26px;
+  letter-spacing: -.2px;
+}
+.composer-modal .modal-subtitle {
+  margin: 4px 0 0;
+  color: var(--pencil-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 17px;
+}
+.composer-modal .close-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pencil-surface-muted);
+  color: var(--pencil-text-secondary);
+}
+.composer-modal .close-button:hover { background: #E9EDF3; color: var(--pencil-text); }
+.composer-modal .close-button:focus-visible { outline: 2px solid var(--pencil-navy-focus); outline-offset: 2px; }
+.composer-modal label,
+.composer-modal .modal-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--pencil-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.composer-modal input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.composer-modal textarea,
+.composer-modal select:not([aria-hidden='true']),
+.composer-modal [data-slot='select-trigger'].app-select-trigger {
+  width: 100% !important;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--pencil-border) !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  color: var(--pencil-text) !important;
+  font-size: 13px;
+  box-shadow: none !important;
+}
+.composer-modal textarea {
+  display: block;
+  min-height: 96px;
+  resize: vertical;
+}
+.composer-modal input.date-field-required-shadow {
+  position: absolute;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0 !important;
+  border: 0 !important;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.composer-modal input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
+.composer-modal textarea:focus,
+.composer-modal select:not([aria-hidden='true']):focus,
+.composer-modal [data-slot='select-trigger'].app-select-trigger:focus-visible {
+  border-color: var(--pencil-navy) !important;
+  outline: 0;
+  box-shadow: 0 0 0 2px rgb(14 42 71 / 14%) !important;
+}
+.composer-modal .modal-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.composer-modal .modal-grid > * { min-width: 0; }
+.composer-modal .modal-submit {
+  min-height: 42px;
+  justify-self: end;
+}
+.composer-modal .modal-submit.justify-center { justify-self: stretch; }
+
+@media (max-width: 560px) {
+  .composer-modal .modal-grid { grid-template-columns: minmax(0, 1fr); }
+  .composer-modal .modal-submit { width: 100%; justify-self: stretch; }
+}
+
 /* Task create/edit dialogs use a fixed header and footer around one scrollable
    body so long task details never push the primary action off screen. */
 .task-dialog-backdrop { z-index: 80; background: rgb(14 42 71 / 42%); }
