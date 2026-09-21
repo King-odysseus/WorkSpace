@@ -4244,16 +4244,17 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .projects-view .project-progress { position: absolute; top: 148px; right: 24px; left: 24px; display: grid; gap: 7px; }
 .projects-view .project-progress-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--pencil-text-muted); font-size: 11px; }
 .projects-view .project-progress-label strong { color: var(--pencil-text); font-size: 12px; }
-.projects-view .project-progress-track { overflow: hidden; width: 270px; max-width: 100%; height: 8px; border-radius: 999px; background: var(--pencil-border); }
+.projects-view .project-progress-track { overflow: hidden; width: 100%; max-width: 270px; height: 8px; border-radius: 999px; background: var(--pencil-border); }
 .projects-view .project-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--pencil-navy); }
 .projects-view .project-task-stats { position: absolute; top: 194px; right: 24px; left: 24px; display: grid; height: 44px; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .projects-view .project-task-stats span { display: grid; height: 44px; align-content: center; gap: 1px; padding: 6px 10px; border: 1px solid var(--pencil-border-light); border-radius: 8px; background: var(--pencil-canvas); color: var(--pencil-text-muted); font-size: 10px; line-height: 13px; }
 .projects-view .project-task-stats strong { color: var(--pencil-text); font-size: 14px; }
 .projects-view .project-task-stats .risk strong, .projects-view .project-task-stats .danger strong { color: var(--pencil-danger); }
-.projects-view .project-footer { position: absolute; top: 240px; right: 24px; left: 24px; display: flex; min-width: 0; height: 32px; align-items: center; gap: 6px; margin-top: 0; }
+.projects-view .project-footer { position: absolute; top: 248px; right: 24px; left: 24px; display: flex; min-width: 0; height: 36px; align-items: center; gap: 8px; margin-top: 0; }
 .projects-view .project-updated { margin-right: auto; color: var(--pencil-text-muted); font-size: 10px; }
-.projects-view .project-open-button { display: inline-flex; height: 32px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 8px !important; font-size: 11px; font-weight: 600; }
-.projects-view .project-card-action { width: 44px !important; height: 32px !important; min-height: 32px !important; padding: 0 !important; border: 1px solid var(--pencil-border) !important; border-radius: 8px !important; background: var(--pencil-surface) !important; color: var(--pencil-text-secondary) !important; box-shadow: none !important; }
+.projects-view .project-open-button { display: inline-flex; height: 36px; min-height: 36px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 9px !important; font-size: 12px; font-weight: 600; line-height: 16px; letter-spacing: 0; white-space: nowrap; }
+.projects-view .project-open-button svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.projects-view .project-card-action { width: 40px !important; height: 36px !important; min-height: 36px !important; flex: 0 0 40px; padding: 0 !important; border: 1px solid var(--pencil-border) !important; border-radius: 9px !important; background: var(--pencil-surface) !important; color: var(--pencil-text-secondary) !important; box-shadow: none !important; }
 .projects-view .project-card-action:hover { background: var(--pencil-surface-muted) !important; color: var(--pencil-text) !important; }
 .project-detail-view > .project-detail-header { display: grid; gap: 12px; padding: 0 0 18px; border-bottom: 1px solid var(--pencil-border); }
 .project-detail-back { display: inline-flex; width: fit-content; height: 32px; align-items: center; gap: 6px; padding: 0 9px; border: 0; border-radius: 8px; background: transparent; color: var(--pencil-text-secondary); font-size: 12px; }
@@ -5373,6 +5374,9 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .planner-commandbar { grid-template-columns: minmax(0, 1fr) 40px; }
   .planner-mobile-filter-button { width: 40px; min-width: 40px; gap: 0; padding: 0; font-size: 0; }
   .planner-mobile-filter-button svg { width: 18px; height: 18px; }
+  .projects-view .project-card { height: 328px; min-height: 328px; }
+  .projects-view .project-footer { top: 248px; height: 58px; align-content: start; flex-wrap: wrap; gap: 6px 8px; }
+  .projects-view .project-updated { flex: 0 0 100%; margin-right: 0; line-height: 15px; }
 }
 
 /* P52-P61 My planner. Geometry and state treatment are taken directly from the
