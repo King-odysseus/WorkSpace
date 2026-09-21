@@ -81,6 +81,52 @@ const WORKING_DAY_OPTIONS = [
   { value: 6, short: "S", label: "Sunday" },
 ];
 
+const LIFECYCLE_ACTION_COPY = {
+  archive: {
+    errorTitle: "Workspace could not be archived",
+    errorMessage: "No workspace state changed. Check the connection and try again.",
+  },
+  restore: {
+    errorTitle: "Workspace could not be restored",
+    errorMessage: "The workspace is still archived. Check the connection and try again.",
+  },
+  leave: {
+    errorTitle: "Workspace could not be left",
+    errorMessage: "You are still a member. Check the connection and try again.",
+  },
+  delete: {
+    errorTitle: "Workspace could not be deleted",
+    errorMessage: "The archived workspace is unchanged. Check the connection and try again.",
+  },
+};
+
+const lifecycleFailure = (action, status, message) => {
+  if (status === 403) {
+    return {
+      tone: "warning",
+      title: "Workspace action not permitted",
+      message: message || "Your role does not allow this action.",
+      retryable: false,
+    };
+  }
+
+  if (status === 409) {
+    return {
+      tone: "warning",
+      title: LIFECYCLE_ACTION_COPY[action].errorTitle,
+      message: message || LIFECYCLE_ACTION_COPY[action].errorMessage,
+      retryable: false,
+    };
+  }
+
+  return {
+    tone: "danger",
+    title: LIFECYCLE_ACTION_COPY[action].errorTitle,
+    message: message || LIFECYCLE_ACTION_COPY[action].errorMessage,
+    retryable: true,
+  };
+};
+
 const normalizeWorkingDays = (days) =>
   Array.from(
     new Set(
@@ -281,8 +327,9 @@ function SettingsView({
   const [webhookSaving, setWebhookSaving] = useState(false);
   const [calendarToken, setCalendarToken] = useState("");
   const [calendarTokenSaving, setCalendarTokenSaving] = useState(false);
-  const [lifecycleBusy, setLifecycleBusy] = useState(false);
-  const [lifecycleError, setLifecycleError] = useState("");
+  const [lifecycleBusy, setLifecycleBusy] = useState(null);
+  const [lifecycleError, setLifecycleError] = useState(null);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [permissionsSavingId, setPermissionsSavingId] = useState(null);
   const [permissionsError, setPermissionsError] = useState("");
@@ -293,6 +340,8 @@ function SettingsView({
   const [pushConfigReloadKey, setPushConfigReloadKey] = useState(0);
   const isOwner = currentWorkspace?.role === "owner";
   const isArchived = currentWorkspace?.status === "archived";
+  const lifecycleBusyFor = (action, targetWorkspaceId) =>
+    lifecycleBusy?.action === action && lifecycleBusy?.workspaceId === targetWorkspaceId;
   const toggleManagerPermission = async (member, key) => {
     const current = member.permissions || [];
     const next = current.includes(key)
@@ -395,14 +444,20 @@ function SettingsView({
     }
   };
   const runLifecycleAction = async (
+    action,
     targetWorkspaceId,
     method,
     path,
     confirmOptions,
   ) => {
-    if (confirmOptions && !(await onConfirm?.(confirmOptions.message, confirmOptions))) return;
-    setLifecycleBusy(true);
-    setLifecycleError("");
+    if (confirmOptions) {
+      const confirmed = onConfirm
+        ? await onConfirm(confirmOptions.message, confirmOptions)
+        : false;
+      if (!confirmed) return;
+    }
+    setLifecycleBusy({ action, workspaceId: targetWorkspaceId });
+    setLifecycleError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${targetWorkspaceId}${path}`,
@@ -417,32 +472,54 @@ function SettingsView({
         },
       );
       const data = await response.json().catch(() => ({}));
-      if (!response.ok)
-        throw new Error(data.error || "This action could not be completed.");
+      if (!response.ok) {
+        const failure = lifecycleFailure(action, response.status, data.error);
+        setLifecycleError({
+          ...failure,
+          retry: failure.retryable
+            ? () => runLifecycleAction(action, targetWorkspaceId, method, path, confirmOptions)
+            : null,
+        });
+        return;
+      }
       // Membership, the default-workspace fallback, and which workspace is
       // "current" can all change from this one call - reload so the app
       // re-derives session state from scratch instead of hand-patching every
       // affected piece of client state.
       window.location.reload();
     } catch (error) {
-      setLifecycleError(error.message || "This action could not be completed.");
-      setLifecycleBusy(false);
+      const failure = lifecycleFailure(action, 0, error.message);
+      setLifecycleError({
+        ...failure,
+        retry: () => runLifecycleAction(action, targetWorkspaceId, method, path, confirmOptions),
+      });
+    } finally {
+      setLifecycleBusy(null);
     }
   };
   const leaveWorkspace = (targetWorkspaceId, name) =>
-    runLifecycleAction(targetWorkspaceId, "POST", "/leave/", {
+    runLifecycleAction("leave", targetWorkspaceId, "POST", "/leave/", {
       title: `Leave ${name || "this workspace"}?`,
       message: `Leave ${name || "this workspace"}? You will lose access until you are invited again.`,
       confirmLabel: "Leave",
     });
   const archiveWorkspace = () =>
-    runLifecycleAction(workspaceId, "POST", "/archive/", {
+    runLifecycleAction("archive", workspaceId, "POST", "/archive/", {
       title: `Archive ${currentWorkspace?.name || "this workspace"}?`,
       message: `Archive ${currentWorkspace?.name || "this workspace"}? Members keep read access; only the owner can restore or permanently delete it.`,
       confirmLabel: "Archive",
     });
-  const restoreWorkspace = () => runLifecycleAction(workspaceId, "POST", "/restore/", "");
-  const deleteWorkspace = () => runLifecycleAction(workspaceId, "DELETE", "/", "");
+  const restoreWorkspace = (targetWorkspaceId = workspaceId) =>
+    runLifecycleAction("restore", targetWorkspaceId, "POST", "/restore/");
+  const deleteWorkspace = (targetWorkspaceId = workspaceId) =>
+    runLifecycleAction("delete", targetWorkspaceId, "DELETE", "/");
+  const toggleDeleteConfirmation = (targetWorkspaceId) => {
+    setLifecycleError(null);
+    setDeleteTargetId((current) =>
+      current === targetWorkspaceId ? null : targetWorkspaceId,
+    );
+    setDeleteConfirmText("");
+  };
   // Regular members only ever see personal settings (appearance, notifications,
   // profile/presence); workspace-wide administration is owner/manager-only.
   // This is a UI convenience, not the authorization boundary - every endpoint
@@ -1502,7 +1579,7 @@ function SettingsView({
             </Suspense>
           )}
           {section === "workspaces" && (
-            <Card className="settings-panel">
+            <Card className="settings-panel" aria-busy={Boolean(lifecycleBusy)}>
               <div className="settings-panel-heading">
                 <div>
                   <h2>Workspaces</h2>
@@ -1516,9 +1593,13 @@ function SettingsView({
                 </Button>
               </div>
               {lifecycleError && (
-                <p className="auth-error" role="alert">
-                  {lifecycleError}
-                </p>
+                <SettingsAlert
+                  tone={lifecycleError.tone}
+                  title={lifecycleError.title}
+                  onRetry={lifecycleError.retry}
+                >
+                  {lifecycleError.message}
+                </SettingsAlert>
               )}
               {workspaces.length ? (
                 <div className="settings-workspace-grid">
@@ -1533,36 +1614,42 @@ function SettingsView({
                     const canManageTeam = ["owner", "manager"].includes(
                       workspace.role,
                     );
+                    const isArchivedBusy = lifecycleBusyFor("restore", workspace.id);
+                    const isLeaveBusy = lifecycleBusyFor("leave", workspace.id);
+                    const isDeleteBusy = lifecycleBusyFor("delete", workspace.id);
                     return (
                       <div
                         key={workspace.id}
                         className={`settings-workspace-card ${isCurrent ? "is-current" : ""}`}
+                        aria-busy={isArchivedBusy || isLeaveBusy || isDeleteBusy}
                       >
                         <header>
                           <strong>{workspace.name}</strong>
                           <span
                             className={`settings-workspace-status ${
-                              isDefault ? "is-default" : isArchivedWorkspace ? "is-archived" : ""
+                              isArchivedWorkspace ? "is-archived" : isDefault ? "is-default" : ""
                             }`}
                           >
-                            {isCurrent ? "Current" : isDefault ? "Default" : isArchivedWorkspace ? "Archived" : workspace.role}
+                            {isArchivedWorkspace ? "Archived" : isCurrent ? "Current" : isDefault ? "Default" : workspace.role}
                           </span>
                         </header>
                         <p>
-                          {isCurrent
+                          {isArchivedWorkspace
+                            ? "Read-only until restored."
+                            : isCurrent
                             ? `Open now - you are ${workspace.role}`
-                            : isArchivedWorkspace
-                              ? "Archived - read-only workspace"
-                              : `You are ${workspace.role}${isDefault ? " - opens on sign in" : ""}`}
+                            : `You are ${workspace.role}${isDefault ? " - opens on sign in" : ""}`}
                         </p>
                         <div className="settings-workspace-actions">
-                          <Button
-                            size="sm"
-                            disabled={isCurrent || isArchivedWorkspace}
-                            onClick={() => onSwitchWorkspace?.(workspace.id)}
-                          >
-                            {isCurrent ? "Open now" : "Switch"}
-                          </Button>
+                          {!isArchivedWorkspace && (
+                            <Button
+                              size="sm"
+                              disabled={isCurrent}
+                              onClick={() => onSwitchWorkspace?.(workspace.id)}
+                            >
+                              {isCurrent ? "Open now" : "Switch"}
+                            </Button>
+                          )}
                           {canManageTeam && !isArchivedWorkspace && (
                             <Button
                               size="sm"
@@ -1578,28 +1665,41 @@ function SettingsView({
                               Manage team
                             </Button>
                           )}
-                          {isArchivedWorkspace && isCurrent && canManageTeam && (
+                          {isArchivedWorkspace && workspace.role === "owner" && (
                             <Button
                               size="sm"
                               variant="outline"
                               type="button"
-                              disabled={lifecycleBusy}
-                              onClick={restoreWorkspace}
+                              loading={isArchivedBusy}
+                              disabled={Boolean(lifecycleBusy)}
+                              onClick={() => restoreWorkspace(workspace.id)}
                             >
-                              Restore
+                              {isArchivedBusy ? "Restoring" : "Restore"}
                             </Button>
                           )}
-                          {!isArchivedWorkspace && (
+                          {isArchivedWorkspace && workspace.role === "owner" && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              type="button"
+                              loading={isDeleteBusy}
+                              disabled={Boolean(lifecycleBusy)}
+                              aria-expanded={deleteTargetId === workspace.id}
+                              onClick={() => toggleDeleteConfirmation(workspace.id)}
+                            >
+                              {isDeleteBusy ? "Deleting" : "Delete forever"}
+                            </Button>
+                          )}
+                          {!isArchivedWorkspace && !isDefault && (
                             <Button
                               size="sm"
                               variant="outline"
                               type="button"
-                              disabled={isDefault}
                               onClick={() =>
                                 onSetDefaultWorkspace?.(workspace.id)
                               }
                             >
-                              {isDefault ? "Opens on sign in" : "Set as default"}
+                              Set as default
                             </Button>
                           )}
                           {workspace.role !== "owner" && (
@@ -1607,15 +1707,64 @@ function SettingsView({
                               size="sm"
                               variant="outline"
                               type="button"
-                              disabled={lifecycleBusy}
+                              loading={isLeaveBusy}
+                              disabled={Boolean(lifecycleBusy)}
                               onClick={() =>
                                 leaveWorkspace(workspace.id, workspace.name)
                               }
                             >
-                              Leave workspace
+                              {isLeaveBusy ? "Leaving" : "Leave workspace"}
                             </Button>
                           )}
+                          {isArchivedWorkspace && workspace.role !== "owner" && (
+                            <small className="settings-workspace-permission-note">
+                              Only the owner can restore or delete this workspace.
+                            </small>
+                          )}
                         </div>
+                        {isArchivedWorkspace &&
+                          workspace.role === "owner" &&
+                          deleteTargetId === workspace.id && (
+                            <div className="settings-workspace-delete-confirm">
+                              <label>
+                                <span>
+                                  Type <strong>{workspace.name}</strong> to confirm
+                                  permanent deletion
+                                </span>
+                                <input
+                                  value={deleteConfirmText}
+                                  onChange={(event) =>
+                                    setDeleteConfirmText(event.target.value)
+                                  }
+                                  placeholder={workspace.name}
+                                  autoFocus
+                                />
+                              </label>
+                              <div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  type="button"
+                                  onClick={() => toggleDeleteConfirmation(workspace.id)}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  type="button"
+                                  loading={isDeleteBusy}
+                                  disabled={
+                                    Boolean(lifecycleBusy) ||
+                                    deleteConfirmText !== workspace.name
+                                  }
+                                  onClick={() => deleteWorkspace(workspace.id)}
+                                >
+                                  {isDeleteBusy ? "Deleting" : "Delete permanently"}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                       </div>
                     );
                   })}
@@ -2638,29 +2787,40 @@ function SettingsView({
                     </span>
                   </div>
                   {lifecycleError && (
-                    <p className="auth-error" role="alert">
-                      {lifecycleError}
-                    </p>
+                    <SettingsAlert
+                      tone={lifecycleError.tone}
+                      title={lifecycleError.title}
+                      onRetry={lifecycleError.retry}
+                      className="settings-danger-alert"
+                    >
+                      {lifecycleError.message}
+                    </SettingsAlert>
                   )}
                   <div className="settings-danger-actions flex flex-wrap gap-2">
                     {!isArchived && (
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={lifecycleBusy}
+                        loading={lifecycleBusyFor("archive", workspaceId)}
+                        disabled={Boolean(lifecycleBusy)}
                         onClick={archiveWorkspace}
                       >
-                        Archive workspace
+                        {lifecycleBusyFor("archive", workspaceId)
+                          ? "Archiving"
+                          : "Archive workspace"}
                       </Button>
                     )}
                     {isArchived && (
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={lifecycleBusy}
-                        onClick={restoreWorkspace}
+                        loading={lifecycleBusyFor("restore", workspaceId)}
+                        disabled={Boolean(lifecycleBusy)}
+                        onClick={() => restoreWorkspace(workspaceId)}
                       >
-                        Restore workspace
+                        {lifecycleBusyFor("restore", workspaceId)
+                          ? "Restoring"
+                          : "Restore workspace"}
                       </Button>
                     )}
                   </div>
@@ -2680,13 +2840,16 @@ function SettingsView({
                       <Button
                         type="button"
                         variant="destructive"
+                        loading={lifecycleBusyFor("delete", workspaceId)}
                         disabled={
-                          lifecycleBusy ||
+                          Boolean(lifecycleBusy) ||
                           deleteConfirmText !== currentWorkspace?.name
                         }
-                        onClick={deleteWorkspace}
+                        onClick={() => deleteWorkspace(workspaceId)}
                       >
-                        Delete permanently
+                        {lifecycleBusyFor("delete", workspaceId)
+                          ? "Deleting"
+                          : "Delete permanently"}
                       </Button>
                     </div>
                   )}

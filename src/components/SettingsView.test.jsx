@@ -1005,6 +1005,7 @@ it('switches the open workspace without touching the sign-in default', () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
   expect(screen.getByRole('button', { name: 'Open now' })).toBeDisabled()
+  expect(screen.queryByRole('button', { name: 'Opens on sign in' })).not.toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: 'Switch' }))
 
@@ -1036,6 +1037,151 @@ it('opens the team roster of a workspace you manage', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Manage team' }))
 
   expect(onSwitchWorkspace).toHaveBeenCalledWith(2)
+})
+
+it('shows archived workspace recovery and keeps owner-only actions distinct', () => {
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner', status: 'archived' }}
+      defaultWorkspaceId={2}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[
+        { id: 1, name: 'Northstar', role: 'owner', status: 'archived' },
+        { id: 2, name: 'Research Archive', role: 'member', status: 'archived' },
+      ]}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
+  const ownerCard = screen.getByText('Northstar').closest('.settings-workspace-card')
+  const memberCard = screen.getByText('Research Archive').closest('.settings-workspace-card')
+
+  expect(within(ownerCard).getByText('Archived')).toBeInTheDocument()
+  expect(within(ownerCard).getByText('Read-only until restored.')).toBeInTheDocument()
+  expect(within(ownerCard).getByRole('button', { name: 'Restore' })).toBeInTheDocument()
+  expect(within(ownerCard).queryByRole('button', { name: 'Switch' })).not.toBeInTheDocument()
+  expect(within(memberCard).getByText('Only the owner can restore or delete this workspace.')).toBeInTheDocument()
+  expect(within(memberCard).queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument()
+})
+
+it('keeps a pending workspace restore busy, then retries the safe operation', async () => {
+  const api = mockApi({})
+  const originalFetch = api.getMockImplementation()
+  let resolveFirstRestore
+  let restoreRequests = 0
+  const failureResponse = () => ({
+    ok: false,
+    status: 503,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ error: 'Restore service is unavailable.' }),
+    text: async () => '{"error":"Restore service is unavailable."}',
+  })
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/workspaces/9/restore/') && init.method === 'POST') {
+      restoreRequests += 1
+      if (restoreRequests === 1) {
+        return new Promise((resolve) => {
+          resolveFirstRestore = resolve
+        })
+      }
+      return Promise.resolve(failureResponse())
+    }
+    return originalFetch(input, init)
+  })
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member', status: 'active' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[
+        { id: 1, name: 'Northstar', role: 'member', status: 'active' },
+        { id: 9, name: 'Research Archive', role: 'owner', status: 'archived' },
+      ]}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
+  const card = screen.getByText('Research Archive').closest('.settings-workspace-card')
+  fireEvent.click(within(card).getByRole('button', { name: 'Restore' }))
+
+  await waitFor(() => expect(resolveFirstRestore).toBeTypeOf('function'))
+  const pendingRestore = within(card).getByRole('button', { name: 'Restoring' })
+  expect(pendingRestore).toBeDisabled()
+  expect(card).toHaveAttribute('aria-busy', 'true')
+
+  resolveFirstRestore(failureResponse())
+  expect(await screen.findByText('Workspace could not be restored')).toBeInTheDocument()
+  expect(screen.getByText('Restore service is unavailable.')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  await waitFor(() => expect(restoreRequests).toBe(2))
+  expect(screen.getByText('Workspace could not be restored')).toBeInTheDocument()
+})
+
+it('reconfirms a destructive archive before retrying and does not retry permission denial', async () => {
+  const api = mockApi({})
+  const originalFetch = api.getMockImplementation()
+  let archiveRequests = 0
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/archive/') && init.method === 'POST') {
+      archiveRequests += 1
+      if (archiveRequests === 3) {
+        return Promise.resolve({
+          ok: false,
+          status: 403,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Only the workspace owner can archive it.' }),
+          text: async () => '{"error":"Only the workspace owner can archive it."}',
+        })
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 503,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ error: 'Archive service is unavailable.' }),
+        text: async () => '{"error":"Archive service is unavailable."}',
+      })
+    }
+    return originalFetch(input, init)
+  })
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner', status: 'active' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      workspaces={[{ id: 1, name: 'Northstar', role: 'owner', status: 'active' }]}
+      canManageMembers
+      onConfirm={onConfirm}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Archive workspace' }))
+  await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1))
+  expect(await screen.findByText('Workspace could not be archived')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(2))
+  expect(archiveRequests).toBe(2)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Archive workspace' }))
+  await waitFor(() => expect(archiveRequests).toBe(3))
+  const permissionAlert = (await screen.findByText('Workspace action not permitted')).closest('[data-slot="alert"]')
+  expect(within(permissionAlert).getByText('Only the workspace owner can archive it.')).toBeInTheDocument()
+  expect(within(permissionAlert).queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
 })
 
 it('saves the sound style and volume from notification settings', async () => {

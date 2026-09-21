@@ -957,6 +957,49 @@
   min-height: 42px;
 }
 
+.settings-view .settings-workspace-permission-note {
+  flex: 1 0 100%;
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.settings-view .settings-workspace-delete-confirm {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--pencil-border-light);
+}
+
+.settings-view .settings-workspace-delete-confirm label {
+  display: grid;
+  gap: 7px;
+  color: var(--pencil-text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.settings-view .settings-workspace-delete-confirm label strong {
+  color: var(--pencil-text);
+}
+
+.settings-view .settings-workspace-delete-confirm input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--pencil-border);
+  border-radius: 8px;
+  background: var(--pencil-surface);
+  color: var(--pencil-text);
+  font: inherit;
+}
+
+.settings-view .settings-workspace-delete-confirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .settings-view .settings-workspace-create-tile {
   display: grid;
   min-height: 176px;
@@ -1490,6 +1533,10 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.settings-view .settings-state-alert.settings-danger-alert {
+  margin: 0;
 }
 
 .settings-view .settings-danger-panel label {
