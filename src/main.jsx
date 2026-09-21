@@ -3401,7 +3401,7 @@ function App() {
                 onBucketChange={changeTaskBucket}
                 onDelete={deleteTask}
                 onDeletePermanently={deleteTaskPermanently}
-                onAddTask={() => openTaskModal()}
+                onAddTask={openTaskModal}
                 onOpenTask={setSelectedTask}
                 selectedEvent={selectedEvent}
                 setSelectedEvent={setSelectedEvent}
@@ -7994,7 +7994,17 @@ function WorkspaceView({
               <span className="project-detail-meta-line">
                 {selectedProjectWorkspace.due_date ? `Due ${projectDeadline}` : "No deadline set"}
               </span>
-              {canManageMembers && <button type="button" className="project-detail-primary-action" onClick={() => setSelectedProject(selectedProjectWorkspace)}>Edit project</button>}
+              {projectOperation === "tasks" && canManageTasks ? (
+                <button
+                  type="button"
+                  className="project-detail-primary-action"
+                  onClick={() => onAddTask(null, { projectId: selectedProjectWorkspace.id })}
+                >
+                  <Plus size={15} /> New task
+                </button>
+              ) : canManageMembers ? (
+                <button type="button" className="project-detail-primary-action" onClick={() => setSelectedProject(selectedProjectWorkspace)}>Edit project</button>
+              ) : null}
             </div>
           </div>
           <p className="project-detail-description">{selectedProjectWorkspace.description || "Project workspace and delivery controls."}</p>
