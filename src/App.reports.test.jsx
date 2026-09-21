@@ -78,6 +78,16 @@ it('falls back to the workspace summary when the detail report fails', async () 
       pagination: { has_next: false },
     },
     '/api/workspaces/1/reports/summary/': { summary },
+    '/api/workspaces/1/audit-logs/': {
+      audit_logs: [{
+        id: 1,
+        action: 'clocked_in',
+        actor_name: 'Nathaniel Boyo',
+        target_type: 'workspace',
+        target_id: null,
+        created_at: '2026-09-21T10:43:00Z',
+      }],
+    },
     '/api/workspaces/1/reports/': {
       status: 500,
       contentType: 'application/json',
@@ -103,6 +113,9 @@ it('falls back to the workspace summary when the detail report fails', async () 
   expect(screen.getByRole('table', { name: 'Team workload' })).toBeInTheDocument()
   expect(screen.getByRole('table', { name: 'Time clock by team member' })).toBeInTheDocument()
   expect(screen.getByRole('table', { name: 'Recent time clock entries' })).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: 'Audit trail' })).toBeInTheDocument()
+  expect(screen.getByText('Clocked in')).toBeInTheDocument()
+  expect(screen.getByText('Nathaniel Boyo')).toBeInTheDocument()
   // The summary counts still render, proving the fallback is real data not an empty shell.
   expect(screen.getByText('42% complete - 0% average progress')).toBeInTheDocument()
   expect(document.body.innerText).not.toContain('could not render this view')

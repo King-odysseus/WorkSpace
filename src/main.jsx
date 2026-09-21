@@ -231,6 +231,11 @@ const isConversationNotification = (notification) =>
 const notificationBadgeLabel = (count, max = 99) =>
   count > max ? `${max}+` : String(count);
 
+const formatAuditAction = (action = "") =>
+  String(action)
+    .replaceAll("_", " ")
+    .replace(/^./, (character) => character.toUpperCase());
+
 function NotificationIndicator({
   count,
   countKnown,
@@ -5994,23 +5999,30 @@ function WorkspaceView({
             <span>Latest 12 events</span>
           </div>
           {data.auditLogs?.length ? (
-            data.auditLogs.slice(0, 12).map((log) => (
-              <div className="audit-row" key={log.id}>
-                <span className="audit-action">
-                  {log.action.replaceAll("_", " ")}
-                </span>
-                <div>
-                  <strong>{log.actor_name}</strong>
-                  <span>
-                    {log.target_type}
-                    {log.target_id ? ` #${log.target_id}` : ""}
-                  </span>
-                </div>
-                <time dateTime={log.created_at}>
-                  {formatDateTime(log.created_at)}
-                </time>
+            <div className="audit-table" role="table" aria-label="Audit trail">
+              <div className="audit-row audit-header" role="row">
+                <span role="columnheader">Action</span>
+                <span role="columnheader">Actor and target</span>
+                <span role="columnheader">When</span>
               </div>
-            ))
+              {data.auditLogs.slice(0, 12).map((log) => (
+                <div className="audit-row" role="row" key={log.id}>
+                  <span className="audit-action" role="cell">
+                    {formatAuditAction(log.action)}
+                  </span>
+                  <div className="audit-actor" role="cell">
+                    <strong>{log.actor_name}</strong>
+                    <span>
+                      {log.target_type}
+                      {log.target_id ? ` #${log.target_id}` : ""}
+                    </span>
+                  </div>
+                  <time role="cell" dateTime={log.created_at}>
+                    {formatDateTime(log.created_at)}
+                  </time>
+                </div>
+              ))}
+            </div>
           ) : (
             <EmptyState text="No audit events recorded yet." />
           )}
