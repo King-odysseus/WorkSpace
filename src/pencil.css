@@ -496,7 +496,7 @@ header.shell-header {
   margin-left: 23px;
   padding: 0 !important;
 }
-.shell-header-account > span:not(.sr-only) {
+.shell-header-account-name {
   display: none !important;
 }
 @media (min-width: 1024px) and (max-width: 1399px) {
@@ -511,7 +511,7 @@ header.shell-header {
   }
   .shell-header-assistant span { display: none !important; }
   .shell-header-divider,
-  .shell-header-account > span:not(.sr-only) { display: none !important; }
+  .shell-header-account-name { display: none !important; }
   .shell-header-account { width: 36px; flex-basis: 36px; margin-left: 4px; justify-content: center; }
 }
 @media (min-width: 1024px) and (max-width: 1199px) {

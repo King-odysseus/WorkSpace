@@ -3183,7 +3183,7 @@ function App() {
                   presence={currentUserPresence}
                   className="shell-avatar-header"
                 />
-                <span className="hidden max-w-36 truncate text-label font-semibold text-text-primary">
+                <span className="shell-header-account-name hidden max-w-36 truncate text-label font-semibold text-text-primary">
                   {currentUserName}
                 </span>
                 <ChevronDown
