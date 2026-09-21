@@ -600,10 +600,11 @@ function PresentationPlayer({ slides, startIndex = 0, onClose }) {
   </div>
 }
 
-export function FilesWorkspaceView({ workspaceId, currentUserId }) {
+export function FilesWorkspaceView({ workspaceId, currentUserId, notificationDocumentId = null, onNotificationDocumentHandled }) {
   const [documents, setDocuments] = useState([])
   const [files, setFiles] = useState([])
   const [members, setMembers] = useState([])
+  const [resourcesLoaded, setResourcesLoaded] = useState(false)
   const [selected, setSelected] = useState(null)
   const [documentHtml, setDocumentHtml] = useState('')
   const [slides, setSlides] = useState([])
@@ -631,6 +632,8 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [restoreTarget, setRestoreTarget] = useState(null)
   const draggedSlideIndex = useRef(null)
+  const handledNotificationDocumentRef = useRef(null)
+  const documentsRef = useRef([])
 
   const load = useCallback(async () => {
     const [documentResponse, fileResponse, memberResponse] = await Promise.all([
@@ -649,9 +652,11 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
     setDocuments(documentData.documents || [])
     setFiles(fileData.files || [])
     setMembers(memberData.members || [])
+    setResourcesLoaded(true)
   }, [workspaceId])
 
   useEffect(() => { load().catch(() => setStatus('Could not load workspace files.')) }, [load])
+  useEffect(() => { documentsRef.current = documents }, [documents])
   useEffect(() => { localStorage.setItem('workspace-files-view', viewMode) }, [viewMode])
 
   const openDocument = async document => {
@@ -678,6 +683,43 @@ export function FilesWorkspaceView({ workspaceId, currentUserId }) {
       setShares(shareData.shares || [])
     } catch (error) { setStatus(error.message || 'Document opened, but collaboration details could not be loaded.') }
   }
+
+  // A document notification names both Files and the exact document. Wait for
+  // the browser load to finish, then open that record once instead of dropping
+  // the reader on an undifferentiated file list.
+  useEffect(() => {
+    const targetId = String(notificationDocumentId || '')
+    if (!targetId) {
+      handledNotificationDocumentRef.current = null
+      return undefined
+    }
+    if (!resourcesLoaded || handledNotificationDocumentRef.current === targetId) return undefined
+    handledNotificationDocumentRef.current = targetId
+    let cancelled = false
+    const openNotificationDocument = async () => {
+      try {
+        let target = documentsRef.current.find(document => String(document.id) === targetId)
+        if (!target) {
+          const response = await fetch(`/api/workspaces/${workspaceId}/documents/${targetId}/`, { credentials: 'include', headers: headers(workspaceId) })
+          const data = await readJsonResponse(response, 'The document could not be loaded.')
+          if (!response.ok) throw new Error(data.error || 'The document could not be loaded.')
+          target = data.document
+          if (!cancelled) {
+            setDocuments(current => current.some(document => String(document.id) === targetId)
+              ? current.map(document => String(document.id) === targetId ? target : document)
+              : [target, ...current])
+          }
+        }
+        if (!cancelled) await openDocument(target)
+      } catch (error) {
+        if (!cancelled) setStatus(error.message || 'The document could not be opened.')
+      } finally {
+        if (!cancelled) onNotificationDocumentHandled?.()
+      }
+    }
+    openNotificationDocument()
+    return () => { cancelled = true }
+  }, [notificationDocumentId, resourcesLoaded, workspaceId])
 
   const draftContent = useMemo(() => selected ? (selected.kind === 'presentation' ? { ...selected.content, slides } : selected.kind === 'spreadsheet' ? { ...selected.content, sheets: spreadsheetData.sheets } : { ...selected.content, html: cleanHtml(documentHtml), text: cleanHtml(documentHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }) : null, [selected, slides, spreadsheetData, documentHtml])
 

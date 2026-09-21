@@ -7,7 +7,9 @@ export const notificationDestinations = {
   screen_share_session: 'Screen sharing',
   project: 'Projects',
   risk_issue: 'Projects',
+  risk: 'Projects',
   workstream: 'Planner',
+  document: 'Files',
   workspace: 'Today',
 }
 
@@ -68,7 +70,7 @@ export function resolveNotificationTarget(notification, { tasks = [], events = [
     const target = projects.find(item => sameId(item.id, targetId))
     return target ? { action: 'open', targetType, target } : { action: 'pending', targetType, targetId, operation: '' }
   }
-  if (targetType === 'risk_issue') {
+  if (targetType === 'risk_issue' || targetType === 'risk') {
     return { action: 'pending', targetType, targetId, operation: 'risks' }
   }
   if (targetType === 'workstream') {
@@ -76,6 +78,11 @@ export function resolveNotificationTarget(notification, { tasks = [], events = [
     return target ? { action: 'open', targetType, target } : { action: 'pending', targetType, targetId }
   }
   if (targetType === 'screen_share_session') {
+    return { action: 'pending', targetType, targetId }
+  }
+  // Document alerts name the document itself, so Files has to open that exact
+  // record after the view mounts instead of only landing on the browser.
+  if (targetType === 'document') {
     return { action: 'pending', targetType, targetId }
   }
   // A chat alert names the thread itself - a conversation id or a channel name -

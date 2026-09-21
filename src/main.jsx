@@ -407,12 +407,14 @@ function App() {
   // workspace view. Hold the pending targets here so a bell click can switch
   // views first and let the destination load or open the exact record.
   const [pendingCheckInId, setPendingCheckInId] = useState(null);
+  const [pendingDocumentId, setPendingDocumentId] = useState(null);
   const [pendingEventId, setPendingEventId] = useState(null);
   const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
   const [pendingProjectNotification, setPendingProjectNotification] = useState(null);
   const [pendingWorkstreamNotification, setPendingWorkstreamNotification] = useState(null);
   useEffect(() => {
     setPendingCheckInId(null);
+    setPendingDocumentId(null);
     setPendingEventId(null);
     setPendingFollowUpId(null);
     setPendingProjectNotification(null);
@@ -1825,12 +1827,17 @@ function App() {
       setActive("Check-ins");
       return;
     }
+    if (notification.target_type === "document") {
+      setPendingDocumentId(String(notification.target_id));
+      setActive("Files");
+      return;
+    }
     if (notification.target_type === "workstream") {
       setPendingWorkstreamNotification(notification.target_id);
       setActive("Planner");
       return;
     }
-    if (["project", "risk_issue"].includes(notification.target_type)) {
+    if (["project", "risk_issue", "risk"].includes(notification.target_type)) {
       setPendingProjectNotification({
         id: resolved.targetId,
         operation: resolved.operation || "",
@@ -3340,6 +3347,8 @@ function App() {
                 onPendingActivityHandled={clearPendingActivity}
                 pendingCheckInId={pendingCheckInId}
                 setPendingCheckInId={setPendingCheckInId}
+                pendingDocumentId={pendingDocumentId}
+                setPendingDocumentId={setPendingDocumentId}
                 pendingEventId={pendingEventId}
                 setPendingEventId={setPendingEventId}
                 pendingFollowUpId={pendingFollowUpId}
@@ -3780,6 +3789,8 @@ function WorkspaceView({
   onPendingActivityHandled,
   pendingCheckInId,
   setPendingCheckInId,
+  pendingDocumentId,
+  setPendingDocumentId,
   pendingEventId,
   setPendingEventId,
   pendingFollowUpId,
@@ -4243,7 +4254,7 @@ function WorkspaceView({
         }
         if (active === "Projects" && pendingProjectNotification) {
           const { id, operation, targetType } = pendingProjectNotification;
-          if (targetType === "risk_issue") {
+          if (["risk_issue", "risk"].includes(targetType)) {
             const payload = await read(`/api/workspaces/${workspaceId}/risks-issues/`);
             const risk = (payload.records || []).find((item) => String(item.id) === String(id));
             if (!risk?.project_id) return;
@@ -4274,7 +4285,7 @@ function WorkspaceView({
   }, [active, workspaceId, localData.events, localData.followUps, localData.lookupValues, localData.projects, pendingEventId, pendingFollowUpId, pendingProjectNotification, pendingWorkstreamNotification, onActionError]);
 
   useEffect(() => {
-    if (active !== "Projects" || !pendingProjectNotification || pendingProjectNotification.targetType === "risk_issue") return;
+    if (active !== "Projects" || !pendingProjectNotification || ["risk_issue", "risk"].includes(pendingProjectNotification.targetType)) return;
     const targetProject = localData.projects.find(
       (project) => String(project.id) === String(pendingProjectNotification.id),
     );
@@ -8018,7 +8029,12 @@ function WorkspaceView({
   if (active === "Files") {
     return (
       <Suspense fallback={null}>
-        <FilesWorkspaceView workspaceId={workspaceId} currentUserId={currentUserId} />
+        <FilesWorkspaceView
+          workspaceId={workspaceId}
+          currentUserId={currentUserId}
+          notificationDocumentId={pendingDocumentId}
+          onNotificationDocumentHandled={() => setPendingDocumentId(null)}
+        />
       </Suspense>
     );
   }

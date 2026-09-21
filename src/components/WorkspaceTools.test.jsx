@@ -24,6 +24,29 @@ const saveAttempts = fetchMock =>
       String(url).includes('/documents/5/') && init.method === 'PATCH',
   )
 
+it('opens the exact document named by a notification', async () => {
+  const onHandled = vi.fn()
+  mockApi({
+    '/documents/5/comments/': { comments: [] },
+    '/documents/5/shares/': { shares: [] },
+    '/documents/': { documents: [{ ...document, id: 3, title: 'Another file' }, document] },
+    '/files/': { files: [] },
+    '/members/': { members: [] },
+  })
+
+  render(
+    <FilesWorkspaceView
+      workspaceId={4}
+      currentUserId={1}
+      notificationDocumentId={5}
+      onNotificationDocumentHandled={onHandled}
+    />,
+  )
+
+  expect(await screen.findByDisplayValue('Launch brief')).toBeInTheDocument()
+  await waitFor(() => expect(onHandled).toHaveBeenCalledTimes(1))
+})
+
 it('tries a failed autosave once instead of retrying on a loop', async () => {
   // A failed save leaves the document dirty, which re-ran the autosave effect,
   // and every run scheduled the next one, so the endpoint was hammered about

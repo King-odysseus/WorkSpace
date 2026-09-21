@@ -19,11 +19,13 @@ describe('resolveNotificationTarget', () => {
   it('opens projects, preserves risk navigation, and resolves workstream filters', () => {
     expect(resolveNotificationTarget(notification('project', 2), { projects: [{ id: 2 }] })).toMatchObject({ action: 'open', targetType: 'project' })
     expect(resolveNotificationTarget(notification('risk_issue', 7))).toEqual({ action: 'pending', targetType: 'risk_issue', targetId: '7', operation: 'risks' })
+    expect(resolveNotificationTarget(notification('risk', 8))).toEqual({ action: 'pending', targetType: 'risk', targetId: '8', operation: 'risks' })
     expect(resolveNotificationTarget(notification('workstream', 6), { lookupValues: [{ id: 6, kind: 'workstream' }] })).toMatchObject({ action: 'open', targetType: 'workstream' })
     expect(resolveNotificationTarget(notification('workstream', 11))).toMatchObject({ action: 'pending', targetType: 'workstream', targetId: '11' })
   })
 
-  it('routes screen-sharing and workspace notifications to their destinations', () => {
+  it('routes document, screen-sharing, and workspace notifications to their destinations', () => {
+    expect(resolveNotificationTarget(notification('document', 23))).toEqual({ action: 'pending', targetType: 'document', targetId: '23' })
     expect(resolveNotificationTarget(notification('screen_share_session', 'abc'))).toEqual({ action: 'pending', targetType: 'screen_share_session', targetId: 'abc' })
     expect(resolveNotificationTarget(notification('workspace', 1))).toEqual({ action: 'destination', targetType: 'workspace', destination: 'Today' })
   })
