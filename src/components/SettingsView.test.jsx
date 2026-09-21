@@ -346,6 +346,8 @@ it('cancels unsaved AI provider and member access changes', async () => {
     />,
   )
 
+  // Settings now opens on Profile, so this AI panel is reached by name.
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
   const memberSwitch = await screen.findByRole('switch', { name: 'Allow Amara Okafor to use AI' })
   fireEvent.click(screen.getByRole('button', { name: /Configure Anthropic · Claude/ }))
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'claude-4-sonnet' } })
@@ -390,6 +392,8 @@ it('shows AI settings read-only when the API denies management', async () => {
     />,
   )
 
+  // Settings now opens on Profile, so this AI panel is reached by name.
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
   expect(await screen.findByRole('heading', { name: 'AI assistance' })).toBeInTheDocument()
   expect(screen.getByRole('switch', { name: 'Enable AI assistance' })).toBeDisabled()
   expect(screen.getByRole('switch', { name: 'Allow Amara Okafor to use AI' })).toBeDisabled()

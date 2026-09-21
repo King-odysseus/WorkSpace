@@ -184,10 +184,13 @@ function SettingsView({
   onNavigate,
   onSignOut,
 }) {
-  // The P4 frame opens on AI settings for workspace administrators. Members
-  // keep the personal Appearance panel because the AI administration section
-  // is not available to them.
-  const [section, setSection] = useState(() => canManageMembers ? "ai" : "appearance");
+  // Settings opens on Profile for everyone. The P4 frame put administrators on
+  // AI settings, but that lands an owner in workspace administration when they
+  // came to change their own details, and it meant nobody ever arrived on
+  // Profile: members got Appearance instead. Profile is the first item in the
+  // list and is available at every permission level, so it is the one panel
+  // that is always a valid place to start. Deliberate deviation from P4.
+  const [section, setSection] = useState("profile");
   const [mobileSectionOpen, setMobileSectionOpen] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState(null);
   const [notificationVolume, setNotificationVolume] = useState(70);
