@@ -4635,14 +4635,75 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .document-review-panel form { display: grid; gap: 9px; margin-top: 12px; }
 .document-review-panel textarea { min-height: 90px; padding: 10px; }
 
-/* P19 Screen sharing. The existing consent, policy, audit and capture APIs are
-   retained; the page uses the designed resource-card and session-list surfaces. */
+/* P19 Screen sharing. The page mirrors the approved active-session console with
+   the real consent, policy, participant, audit, and capture API fields. */
 .screen-sharing-view { max-width: none; }
 .screen-sharing-view > header { min-height: 101px; }
+.screen-sharing-start { display: inline-flex; min-height: 40px; align-items: center; gap: 8px; padding: 0 15px; font-size: 12px; }
 .screen-sharing-view > [data-slot='card'] { margin: 0 0 16px; padding: 20px; }
-.screen-sharing-view .drawer-section-heading { display: flex; min-height: 26px; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
-.screen-sharing-view .drawer-section-heading h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--pencil-text); font-size: 18px; font-weight: 600; line-height: 24px; }
-.screen-sharing-view .drawer-section-heading > span { color: var(--pencil-text-muted); font-size: 11px; }
+.screen-sharing-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 314px); align-items: start; gap: 16px; margin-top: 24px; }
+.screen-sharing-main-column, .screen-sharing-rail { display: grid; min-width: 0; align-content: start; gap: 16px; }
+.screen-sharing-overview [data-slot='card'], .screen-sharing-admin-grid [data-slot='card'], .screen-sharing-session-card, .screen-sharing-captures { min-width: 0; margin: 0; padding: 20px; }
+.screen-sharing-section-heading { display: flex; min-height: 36px; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.screen-sharing-section-heading > div { display: grid; min-width: 0; gap: 2px; }
+.screen-sharing-section-heading .eyebrow { margin: 0; color: var(--pencil-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.screen-sharing-section-heading h2 { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--pencil-text); font-size: 17px; font-weight: 650; line-height: 23px; }
+.screen-sharing-section-heading > span { max-width: 190px; color: var(--pencil-text-muted); font-size: 10px; line-height: 15px; text-align: right; }
+.screen-sharing-stage-panel { position: relative; display: grid; min-height: 258px; place-items: center; align-content: center; gap: 8px; overflow: hidden; padding: 38px 32px 42px; border-radius: 11px; background: linear-gradient(145deg, var(--pencil-navy) 0%, #00124F 100%); color: #fff; text-align: center; }
+.screen-sharing-stage-panel::before { position: absolute; inset: 0; background: radial-gradient(circle at 50% 12%, rgb(255 255 255 / 10%), transparent 42%); content: ''; pointer-events: none; }
+.screen-sharing-stage-panel.is-pending { background: linear-gradient(145deg, #6F4B2D 0%, #3A281C 100%); }
+.screen-sharing-stage-panel.is-declined, .screen-sharing-stage-panel.is-cancelled, .screen-sharing-stage-panel.is-expired { background: linear-gradient(145deg, #39445A 0%, #1D2637 100%); }
+.screen-sharing-stage-icon { position: relative; display: grid; width: 54px; height: 54px; place-items: center; margin-bottom: 2px; border: 1px solid rgb(255 255 255 / 18%); border-radius: 14px; background: rgb(255 255 255 / 10%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%); }
+.screen-sharing-stage-panel strong, .screen-sharing-stage-panel p, .screen-sharing-stage-note { position: relative; }
+.screen-sharing-stage-panel strong { font-size: 18px; font-weight: 650; line-height: 24px; }
+.screen-sharing-stage-panel p { max-width: 54ch; margin: 0; color: rgb(255 255 255 / 72%); font-size: 12px; line-height: 18px; }
+.screen-sharing-stage-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 9px; border-radius: 999px; background: rgb(255 255 255 / 9%); color: rgb(255 255 255 / 78%); font-size: 10px; }
+.screen-sharing-stage-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 16px; border-top: 1px solid var(--pencil-border-light); }
+.screen-sharing-stage-meta > div { display: grid; gap: 3px; min-width: 0; padding: 14px 12px 0; border-right: 1px solid var(--pencil-border-light); }
+.screen-sharing-stage-meta > div:first-child { padding-left: 0; }
+.screen-sharing-stage-meta > div:last-child { padding-right: 0; border-right: 0; }
+.screen-sharing-stage-meta span { color: var(--pencil-text-muted); font-size: 10px; line-height: 14px; }
+.screen-sharing-stage-meta strong { overflow: hidden; color: var(--pencil-text); font-size: 13px; font-weight: 650; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.screen-sharing-stage-foot { display: flex; align-items: center; gap: 7px; margin-top: 14px; color: var(--pencil-text-muted); font-size: 10px; line-height: 15px; }
+.screen-sharing-participant-list { display: grid; }
+.screen-sharing-participant { display: grid; min-height: 58px; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--pencil-border-light); }
+.screen-sharing-participant:first-child { padding-top: 0; }
+.screen-sharing-participant:last-child { padding-bottom: 0; border-bottom: 0; }
+.screen-sharing-participant > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
+.screen-sharing-participant strong { overflow: hidden; color: var(--pencil-text); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.screen-sharing-participant small { overflow: hidden; color: var(--pencil-text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.screen-sharing-participant em { color: var(--pencil-text-secondary); font-size: 10px; font-style: normal; }
+.screen-sharing-participant b { padding: 4px 8px; border-radius: 999px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); font-size: 9px; font-weight: 600; white-space: nowrap; }
+.screen-sharing-inline-empty { display: flex; min-height: 88px; align-items: center; justify-content: center; gap: 9px; border: 1px dashed var(--pencil-border); border-radius: 10px; color: var(--pencil-text-muted); font-size: 11px; }
+.screen-sharing-status-card, .screen-sharing-consent-card, .screen-sharing-states-card { display: grid; align-content: start; }
+.screen-sharing-status-card .screen-sharing-section-heading { margin-bottom: 12px; }
+.screen-sharing-state-dot { display: inline-block; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 999px; background: var(--pencil-text-muted); box-shadow: 0 0 0 3px rgb(100 116 139 / 12%); }
+.screen-sharing-state-dot.is-active { background: var(--pencil-success); box-shadow: 0 0 0 3px rgb(0 122 85 / 13%); }
+.screen-sharing-state-dot.is-pending, .screen-sharing-state-dot.is-warning { background: var(--pencil-status-review); box-shadow: 0 0 0 3px rgb(196 154 108 / 18%); }
+.screen-sharing-state-title { display: block; margin: -3px 0 6px 17px; color: var(--pencil-text); font-size: 13px; font-weight: 650; line-height: 18px; }
+.screen-sharing-status-card > p { margin: 0 0 15px 17px; color: var(--pencil-text-muted); font-size: 11px; line-height: 17px; }
+.screen-sharing-status-list { display: grid; gap: 0; margin: 0; border-top: 1px solid var(--pencil-border-light); }
+.screen-sharing-status-list > div { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--pencil-border-light); }
+.screen-sharing-status-list > div:last-child { border-bottom: 0; }
+.screen-sharing-status-list dt { display: flex; align-items: center; gap: 7px; color: var(--pencil-text-muted); font-size: 10px; }
+.screen-sharing-status-list dd { margin: 0; color: var(--pencil-text); font-size: 10px; font-weight: 650; text-align: right; }
+.screen-sharing-choice-list { display: grid; gap: 8px; }
+.screen-sharing-choice-list > div { display: grid; min-height: 56px; grid-template-columns: 20px minmax(0, 1fr) 16px; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--pencil-border); border-radius: 9px; color: var(--pencil-text-secondary); }
+.screen-sharing-choice-list > div > span { display: grid; min-width: 0; gap: 2px; }
+.screen-sharing-choice-list strong { color: var(--pencil-text); font-size: 11px; font-weight: 600; }
+.screen-sharing-choice-list small { color: var(--pencil-text-muted); font-size: 9px; line-height: 13px; }
+.screen-sharing-choice-list > div > svg:last-child { color: var(--pencil-success); }
+.screen-sharing-state-list { display: grid; gap: 8px; }
+.screen-sharing-state-list > div { display: grid; min-height: 58px; grid-template-columns: 8px minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px; border: 1px solid var(--pencil-border); border-radius: 9px; background: var(--pencil-surface-muted); }
+.screen-sharing-state-list > div.is-warning { border-color: var(--pencil-danger-soft); background: var(--pencil-danger-soft); }
+.screen-sharing-state-list > div.is-positive { border-color: var(--pencil-success-soft); background: var(--pencil-success-soft); }
+.screen-sharing-state-list .screen-sharing-state-dot { margin-top: 4px; }
+.screen-sharing-state-list > div > span:last-child { display: grid; gap: 2px; }
+.screen-sharing-state-list strong { color: var(--pencil-text); font-size: 11px; font-weight: 650; }
+.screen-sharing-state-list small { color: var(--pencil-text-muted); font-size: 9px; line-height: 13px; }
+.screen-sharing-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px; margin-top: 16px; }
+.screen-sharing-admin-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+.screen-sharing-session-card { margin-top: 16px !important; }
 .screen-sharing-policy-form, .screen-sharing-request-card form { display: grid; gap: 14px; }
 .screen-sharing-policy-form label, .screen-sharing-request-card form > label { display: grid; gap: 6px; color: var(--pencil-text-secondary); font-size: 12px; font-weight: 500; }
 .screen-sharing-policy-form input:not([type='checkbox']), .screen-sharing-policy-form textarea, .screen-sharing-request-card input, .screen-sharing-request-card textarea { width: 100%; min-height: 42px; padding: 9px 11px; }
@@ -4658,7 +4719,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .screen-sharing-session-row strong { color: var(--pencil-text); font-size: 12px; }
 .screen-sharing-session-row span { color: var(--pencil-text-muted); font-size: 10px; }
 .screen-sharing-session-row .secondary-button { min-height: 34px; padding: 0 10px; font-size: 11px; }
-.screen-share-status { width: fit-content; padding: 4px 8px; border-radius: 999px; background: var(--pencil-surface-muted); font-weight: 600; text-transform: capitalize; }
+.screen-share-status { width: fit-content; padding: 4px 8px; border-radius: 999px; background: var(--pencil-surface-muted); color: var(--pencil-text-muted) !important; font-weight: 600; text-transform: capitalize; }
 .screen-share-status.status-active { background: var(--pencil-success-soft); color: var(--pencil-success) !important; }
 .screen-share-status.status-pending { background: var(--pencil-warning-soft); color: var(--pencil-status-review) !important; }
 .screen-capture-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
@@ -4670,6 +4731,39 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .screen-capture-grid .secondary-button { display: inline-flex; height: 32px; align-items: center; gap: 5px; padding: 0 9px; font-size: 10px; }
 .screen-capture-grid .danger { color: var(--pencil-danger) !important; }
 .screen-sharing-view button:focus-visible, .files-browser-view button:focus-visible, .file-editor-view button:focus-visible, .projects-view button:focus-visible, .project-detail-view button:focus-visible, .pencil-reports-view button:focus-visible { outline: 2px solid var(--pencil-navy-focus); outline-offset: 2px; }
+
+@media (max-width: 1080px) {
+  .screen-sharing-overview { grid-template-columns: minmax(0, 1fr) minmax(252px, 278px); }
+  .screen-sharing-stage-panel { min-height: 228px; padding-inline: 24px; }
+  .screen-sharing-participant { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .screen-sharing-participant b { display: none; }
+}
+
+@media (max-width: 900px) {
+  .screen-sharing-overview, .screen-sharing-admin-grid { grid-template-columns: minmax(0, 1fr); }
+  .screen-sharing-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .screen-sharing-status-card { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .screen-sharing-view > header { min-height: 0; }
+  .screen-sharing-start { width: 100%; justify-content: center; }
+  .screen-sharing-overview { margin-top: 18px; }
+  .screen-sharing-overview [data-slot='card'], .screen-sharing-admin-grid [data-slot='card'], .screen-sharing-session-card, .screen-sharing-captures { padding: 16px; }
+  .screen-sharing-section-heading { align-items: flex-start; }
+  .screen-sharing-section-heading > span { max-width: 112px; }
+  .screen-sharing-stage-panel { min-height: 210px; padding: 28px 18px 32px; }
+  .screen-sharing-stage-panel strong { font-size: 16px; line-height: 22px; }
+  .screen-sharing-stage-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .screen-sharing-stage-meta > div:nth-child(2) { border-right: 0; }
+  .screen-sharing-stage-meta > div:nth-child(n + 3) { padding-top: 12px; border-top: 1px solid var(--pencil-border-light); }
+  .screen-sharing-stage-meta > div:nth-child(3) { padding-left: 0; }
+  .screen-sharing-rail { grid-template-columns: minmax(0, 1fr); }
+  .screen-sharing-status-card { grid-column: auto; }
+  .screen-sharing-participant { grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; }
+  .screen-sharing-participant em { font-size: 9px; }
+  .screen-sharing-policy-form .primary-button, .screen-sharing-request-card .primary-button { width: 100%; }
+}
 
 /* P32-P35 project detail subpanels. These surfaces sit below the designed
    project header and tabs, so they reuse its 712 / 376 column rhythm. */
