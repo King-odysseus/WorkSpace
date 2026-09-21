@@ -6684,3 +6684,172 @@ html[data-theme='dark'] .ai-restore-tab {
   background: linear-gradient(145deg, rgb(0 28 98 / 82%) 0%, rgb(0 13 61 / 92%) 100%);
   box-shadow: var(--pencil-glass-shadow-soft);
 }
+
+/* Dark-mode foregrounds. The navy and bronze-soft tokens are surfaces, so
+   they must not be reused as text on the dark canvas. Keep the light palette
+   untouched and remap only foreground usages here. */
+html[data-theme='dark'] :is([class~='text-navy'], [class~='text-primary']) {
+  color: var(--pencil-bronze-muted) !important;
+}
+
+html[data-theme='dark'] :is([class~='hover:text-navy'], [class~='hover:text-primary']):hover {
+  color: var(--pencil-bronze-muted) !important;
+}
+
+html[data-theme='dark'] :is([class~='text-success'], [class~='text-success-soft']) {
+  color: var(--pencil-alert-success-text) !important;
+}
+
+html[data-theme='dark'] :is([class~='text-danger'], [class~='text-danger-soft']) {
+  color: var(--pencil-alert-danger-text) !important;
+}
+
+html[data-theme='dark'] :is([class~='text-warning'], [class~='text-warning-fill']) {
+  color: var(--pencil-alert-warning-text) !important;
+}
+
+html[data-theme='dark'] aside[class*='bg-navy'] nav button[aria-current='page'],
+html[data-theme='dark'] aside[class*='bg-navy'] nav button[aria-current='page'] svg,
+html[data-theme='dark'] .mobile-tabbar button[aria-current='page'] {
+  color: var(--pencil-bronze-muted) !important;
+}
+
+html[data-theme='dark'] :is(
+  .settings-nav-link.active,
+  .planner-mobile-filter-button,
+  .planner-mobile-move-row,
+  .planner-mobile-bucket-tabs button.is-active,
+  .calendar-mobile-tabs button.active,
+  .calendar-mobile-event em,
+  .personal-planner-new,
+  .personal-planner-rail-header button,
+  .whats-new-new,
+  .whats-new-entry footer button,
+  .personal-planner-item.is-active .personal-planner-pick,
+  .personal-planner-layout.is-managing .personal-planner-item.is-active .personal-planner-pick,
+  .personal-task-link:hover,
+  .personal-task-link.is-active,
+  .personal-task-notes-toggle.is-active,
+  .pencil-notifications-view .notification-settings-link,
+  .pencil-notifications-view .notification-list-footer button,
+  .pencil-notifications-view .notification-type-message,
+  .pencil-notifications-view .notification-type-mention,
+  .pencil-checkin-missing button,
+  .chat-workspace-view .chat-browse-channels,
+  .chat-workspace-view .channel-row.active,
+  .chat-workspace-view .channel-row.active svg,
+  .chat-workspace-view .direct-row.active,
+  .chat-workspace-view .direct-row.active strong,
+  .chat-workspace-view .chat-filter-tabs button.active,
+  .chat-workspace-view .chat-reactions button.active,
+  .chat-workspace-view .chat-reply-context strong,
+  .chat-workspace-view .chat-message-bubble a,
+  .chat-workspace-view .chat-new-message-divider,
+  .chat-workspace-view .chat-shared-card > svg:first-child
+) {
+  color: var(--pencil-bronze-muted) !important;
+}
+
+html[data-theme='dark'] :is(
+  .personal-planner-item.is-active .personal-planner-count,
+  .personal-planner-layout.is-managing .personal-planner-item.is-active .personal-planner-count
+) {
+  background: rgb(216 185 150 / 16%) !important;
+  color: var(--pencil-bronze-muted) !important;
+}
+
+html[data-theme='dark'] .avatar.blue {
+  background: var(--pencil-selected);
+  color: var(--pencil-alert-info-text);
+}
+
+html[data-theme='dark'] .avatar.green {
+  color: var(--pencil-alert-success-text);
+}
+
+html[data-theme='dark'] .avatar.navy {
+  color: var(--pencil-bronze-muted);
+}
+
+html[data-theme='dark'] .bg-warning-fill {
+  background-color: #B45309 !important;
+}
+
+html[data-theme='dark'] :is(
+  .due.overdue,
+  .checkin-detail-summary-row.is-blocker .checkin-detail-summary-icon,
+  .checkin-detail-summary-row.is-blocker dt,
+  .planner-task-card-meta-copy.is-overdue,
+  .planner-bucket-menu-item[data-variant='destructive'],
+  .personal-task-flag.is-overdue,
+  .personal-planner-error > span,
+  .pencil-checkins-view .checkin-summary-field.has-blocker p,
+  .pencil-followup-summary strong:nth-child(3),
+  .pencil-reports-view .report-stat.is-warning > em,
+  .pencil-reports-view .report-stat.is-danger > em,
+  .projects-view .project-summary .is-warning small,
+  .projects-view .project-summary .is-warning strong,
+  .projects-view .project-task-stats .risk strong,
+  .projects-view .project-task-stats .danger strong,
+  .project-register-tabs button.active span,
+  .project-health.off-track,
+  .project-resource-status.is-over,
+  .settings-mobile-signout,
+  .calendar-mobile-event.event-type-deadline em,
+  .chat-workspace-view .chat-delete-button:hover
+) {
+  color: var(--pencil-alert-danger-text) !important;
+}
+
+html[data-theme='dark'] :is(
+  .assignee-picker-row em,
+  .checkin-detail-submitted,
+  .checkin-detail-summary-icon.is-completed,
+  .personal-planner-form-check,
+  .pencil-reports-view .report-stat > em,
+  .pencil-reports-view .report-project-status,
+  .projects-view .project-summary small,
+  .project-health.on-track,
+  .project-health.completed,
+  .project-resource-status,
+  .project-expense-state.is-actual,
+  .calendar-mobile-event.event-type-reminder em,
+  .chat-workspace-view .chat-receipt-read
+) {
+  color: var(--pencil-alert-success-text) !important;
+}
+
+html[data-theme='dark'] :is(
+  .calendar-mobile-event.event-type-focus em,
+  .project-expense-state.is-committed
+) {
+  color: var(--pencil-alert-warning-text) !important;
+}
+
+/* Mobile channel rows use a light surface fallback in component CSS. Remap
+   that surface in dark mode without changing the light-mode row treatment. */
+html[data-theme='dark'] :is(
+  .chat-workspace-view .channel-row,
+  .chat-workspace-view .channel-direct-row,
+  .chat-workspace-view .chat-browse-channels
+) {
+  background: var(--pencil-surface) !important;
+}
+
+html[data-theme='dark'] .chat-workspace-view .channel-row:hover {
+  background: var(--pencil-surface-hover) !important;
+}
+
+html[data-theme='dark'] .chat-workspace-view .channel-row-icon {
+  background: var(--pencil-surface-muted) !important;
+}
+
+html[data-theme='dark'] .chat-workspace-view .channel-row.active .channel-row-icon {
+  background: rgb(196 154 108 / 20%) !important;
+  color: var(--pencil-bronze-muted) !important;
+}
+
+html[data-theme='dark'] .planner-dropzone,
+html[data-theme='dark'] .planner-dropzone span {
+  color: var(--pencil-text-secondary) !important;
+}
