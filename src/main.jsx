@@ -2194,6 +2194,18 @@ function App() {
       ...current,
       user: { ...current.user, ...patch },
     }));
+  const updateWorkspaceLogo = (workspaceId, logoUrl) =>
+    setSession((current) => ({
+      ...current,
+      user: {
+        ...current.user,
+        workspaces: (current.user.workspaces || []).map((workspace) =>
+          String(workspace.id) === String(workspaceId)
+            ? { ...workspace, logo_url: logoUrl }
+            : workspace,
+        ),
+      },
+    }));
   const setDefaultWorkspace = async (workspaceId) => {
     try {
       const response = await fetch("/api/auth/me/profile/", {
@@ -2639,6 +2651,7 @@ function App() {
     >
       <Toaster
         position="top-right"
+        containerClassName="workspace-toaster"
         toastOptions={{
           className: "workspace-toast",
           duration: 4000,
@@ -2734,7 +2747,7 @@ function App() {
                 title={currentWorkspace?.name || "Workspace"}
               >
                 <img
-                  src="/tijha-logo.png"
+                  src={currentWorkspace?.logo_url || "/tijha-logo.png"}
                   alt=""
                   className="sidebar-brand-logo size-8 shrink-0 rounded-icon object-contain"
                 />
@@ -2766,12 +2779,20 @@ function App() {
                   aria-haspopup="true"
                   aria-expanded={workspaceMenuOpen}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="flex size-6 shrink-0 items-center justify-center rounded-badge bg-primary text-[12px] font-bold text-primary-foreground"
-                  >
-                    {workspaceInitial}
-                  </span>
+                  {currentWorkspace?.logo_url ? (
+                    <img
+                      src={currentWorkspace.logo_url}
+                      alt=""
+                      className="size-6 shrink-0 rounded-badge object-contain"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex size-6 shrink-0 items-center justify-center rounded-badge bg-primary text-[12px] font-bold text-primary-foreground"
+                    >
+                      {workspaceInitial}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text-primary">
                     {currentWorkspace?.name || "Workspace"}
                   </span>
@@ -3373,6 +3394,9 @@ function App() {
                 onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                 onSwitchWorkspace={setActiveWorkspaceId}
                 onProfileUpdated={updateSessionUser}
+                onWorkspaceLogoUpdated={(logoUrl) =>
+                  updateWorkspaceLogo(currentWorkspace?.id, logoUrl)
+                }
                 onSignOut={logout}
                 canManageMembers={["owner", "manager"].includes(
                   currentWorkspace?.role,
@@ -3824,6 +3848,7 @@ function WorkspaceView({
   onCreateWorkspace,
   onSwitchWorkspace,
   onProfileUpdated,
+  onWorkspaceLogoUpdated,
   onSignOut,
   canManageMembers,
   canManageTasks,
@@ -6726,6 +6751,7 @@ function WorkspaceView({
         currentUserCompany={currentUserCompany}
         currentUserJobRole={currentUserJobRole}
         onProfileUpdated={onProfileUpdated}
+        onWorkspaceLogoUpdated={onWorkspaceLogoUpdated}
         canManageMembers={canManageMembers}
         members={localData.members}
         notifications={localData.notifications}
