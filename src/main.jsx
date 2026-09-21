@@ -89,6 +89,7 @@ import {
   PopoverContent,
 } from "./components/ui/popover.jsx";
 import PlannerBoard from "./components/PlannerBoard.jsx";
+import ProjectKanbanBoard from "./components/ProjectKanbanBoard.jsx";
 import WorkScopeSelector, {
   taskMatchesScope,
 } from "./components/WorkScopeSelector.jsx";
@@ -7557,21 +7558,7 @@ function WorkspaceView({
           {projectOperation === "kanban" && (
             <section className="project-operation-surface project-kanban-surface">
               <div className="project-operation-toolbar"><span className="eyebrow">Project flow</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All owners <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">All priorities <ChevronDown size={14} /></button></div>
-              <div className="project-kanban-columns">
-                {["Backlog", "To do", "In progress", "Review", "Blocked", "On hold", "Done"].map((bucket) => {
-                  const bucketTasks = projectTasks.filter((task) => {
-                    const status = String(task.status || "").toLowerCase().replaceAll("_", "-");
-                    if (bucket === "Done") return status === "done" || status === "completed";
-                    if (bucket === "Blocked") return status === "blocked";
-                    if (bucket === "In progress") return status === "in-progress" || status === "doing";
-                    if (bucket === "Review") return status === "review" || status === "in-review";
-                    if (bucket === "On hold") return status === "on-hold" || status === "paused";
-                    if (bucket === "To do") return status === "planned" || status === "todo";
-                    return status === "backlog" || !status;
-                  });
-                  return <div className="project-kanban-column" key={bucket}><div className="project-kanban-column-heading"><span>{bucket}</span><strong>{bucketTasks.length}</strong></div>{bucketTasks.map((task) => <button type="button" className="project-kanban-task" key={task.id} onClick={() => onOpenTask(task)}><strong>{task.title}</strong><span>{task.priority || "Normal"}</span></button>)}</div>;
-                })}
-              </div>
+              <ProjectKanbanBoard tasks={projectTasks} onOpenTask={onOpenTask} onStatusChange={onStatusChange} canManageTasks={canManageTasks} />
             </section>
           )}
           {projectOperation === "tasks" && (
