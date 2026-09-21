@@ -4229,7 +4229,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .projects-view .project-result-count { margin: 14px 0 17px; color: var(--pencil-text-muted); font-size: 12px; font-weight: 500; line-height: 15px; }
 .projects-view .project-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; }
 .projects-view .project-grid.is-list { grid-template-columns: minmax(0, 1fr); }
-.projects-view .project-card { position: relative; display: block; min-width: 0; height: 304px; min-height: 304px; padding: 0; }
+.projects-view .project-card { position: relative; display: block; min-width: 0; height: 312px; min-height: 312px; padding: 0; }
 .projects-view .project-card-heading { position: absolute; top: 22px; right: 24px; left: 24px; display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .projects-view .project-card-heading h3 { min-width: 0; margin: 0; overflow: hidden; color: var(--pencil-text); font-size: 20px; font-weight: 600; line-height: 24px; letter-spacing: -.2px; text-overflow: ellipsis; white-space: nowrap; }
 .project-health { display: inline-flex; min-width: 82px; min-height: 26px; align-items: center; justify-content: center; gap: 5px; padding: 0 9px; border-radius: 6px; background: var(--pencil-warning-soft); color: var(--pencil-status-review); font-size: 11px; font-weight: 600; text-transform: capitalize; white-space: nowrap; }
@@ -4250,7 +4250,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .projects-view .project-task-stats span { display: grid; height: 44px; align-content: center; gap: 1px; padding: 6px 10px; border: 1px solid var(--pencil-border-light); border-radius: 8px; background: var(--pencil-canvas); color: var(--pencil-text-muted); font-size: 10px; line-height: 13px; }
 .projects-view .project-task-stats strong { color: var(--pencil-text); font-size: 14px; }
 .projects-view .project-task-stats .risk strong, .projects-view .project-task-stats .danger strong { color: var(--pencil-danger); }
-.projects-view .project-footer { position: absolute; top: 252px; right: 24px; left: 24px; display: flex; min-width: 0; height: 32px; align-items: center; gap: 8px; margin-top: 0; }
+.projects-view .project-footer { position: absolute; top: 260px; right: 24px; left: 24px; display: flex; min-width: 0; height: 32px; align-items: center; gap: 8px; margin-top: 0; }
 .projects-view .project-updated { margin-right: auto; color: var(--pencil-text-muted); font-size: 10px; }
 .projects-view .project-open-button { display: inline-flex; height: 32px; min-height: 32px; align-items: center; justify-content: center; gap: 4px; padding: 0 9px; border-radius: 8px !important; font-size: 11px; font-weight: 600; line-height: 14px; letter-spacing: .1px; white-space: nowrap; }
 .projects-view .project-open-button svg { width: 13px; height: 13px; flex: 0 0 13px; }
@@ -5374,8 +5374,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .planner-commandbar { grid-template-columns: minmax(0, 1fr) 40px; }
   .planner-mobile-filter-button { width: 40px; min-width: 40px; gap: 0; padding: 0; font-size: 0; }
   .planner-mobile-filter-button svg { width: 18px; height: 18px; }
-  .projects-view .project-card { height: 328px; min-height: 328px; }
-  .projects-view .project-footer { top: 252px; height: 54px; align-content: start; flex-wrap: wrap; gap: 6px 8px; }
+  .projects-view .project-card { height: 336px; min-height: 336px; }
+  .projects-view .project-footer { top: 260px; height: 54px; align-content: start; flex-wrap: wrap; gap: 6px 8px; }
   .projects-view .project-updated { flex: 0 0 100%; margin-right: 0; line-height: 15px; }
 }
 
