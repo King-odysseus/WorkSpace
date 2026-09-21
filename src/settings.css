@@ -2,6 +2,31 @@
    frames in Workspace.fig. Keep behavior in SettingsView.jsx and presentation
    here so the P4 shell and AI panel can evolve independently. */
 
+.page-content:has(.settings-view) {
+  padding-top: 18px;
+}
+
+.settings-view > [data-slot='page-header'] {
+  min-height: 0;
+  gap: 0;
+}
+
+.settings-view > [data-slot='page-header'] [data-slot='page-header-title'] {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+}
+
+.settings-view > [data-slot='page-header'] [data-slot='page-header-description'] {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.settings-view > [data-slot='page-header'] [data-slot='page-header-divider'] {
+  display: none;
+}
+
 .settings-view .settings-panel {
   padding: 0 !important;
   overflow: hidden;
@@ -10,11 +35,11 @@
 
 .settings-view .settings-panel-heading {
   display: flex;
-  min-height: 104px;
+  min-height: 80px;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  padding: 28px 32px 20px;
+  padding: 20px 32px 16px;
   border-bottom: 1px solid #f3f4f6;
 }
 
@@ -25,27 +50,17 @@
 .settings-view .settings-panel-heading h2 {
   margin: 0;
   color: var(--pencil-text);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
-  line-height: 24px;
+  line-height: 20px;
 }
 
 .settings-view .settings-panel-heading p:last-child {
   max-width: 792px;
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: var(--pencil-text-muted);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.settings-view .settings-panel-heading .eyebrow {
-  margin: 0 0 4px;
-  color: var(--pencil-text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 14px;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .settings-view .settings-panel-heading > .primary-button,
@@ -1307,6 +1322,79 @@ html[data-theme='dark'] .settings-view .settings-working-hours-summary {
 
 html[data-theme='dark'] .settings-view .settings-working-hours-guidance {
   background: rgb(196 154 108 / 12%);
+}
+
+/* Settings detail surfaces use the same dark glass language as the shell.
+   Keep the light frames literal and cover the hard-coded whites that would
+   otherwise invert labels and fields on the navy canvas. */
+html[data-theme='dark'] .settings-view :is(
+  .settings-group-card,
+  .settings-profile-card,
+  .settings-integration-card,
+  .settings-workspace-card,
+  .settings-template-section,
+  .settings-template-row,
+  .settings-template-preview,
+  .settings-stat-grid > div,
+  .settings-theme-card,
+  .settings-sidebar-preview,
+  .settings-webhook-form,
+  .settings-webhook-url-row,
+  .settings-manager-panel,
+  .settings-danger-panel
+) {
+  border-color: var(--pencil-glass-edge) !important;
+  background: linear-gradient(145deg, rgb(0 28 98 / 78%) 0%, rgb(0 13 61 / 92%) 100%) !important;
+  box-shadow: var(--pencil-glass-shadow-soft) !important;
+  color: var(--pencil-text);
+  -webkit-backdrop-filter: blur(16px) saturate(126%);
+  backdrop-filter: blur(16px) saturate(126%);
+}
+
+html[data-theme='dark'] .settings-view .settings-workspace-card.is-current {
+  border-color: rgb(196 154 108 / 44%) !important;
+  background: linear-gradient(145deg, rgb(196 154 108 / 13%) 0%, rgb(0 13 61 / 92%) 100%) !important;
+}
+
+html[data-theme='dark'] .settings-view .settings-panel :is(
+  input[type='text'],
+  input[type='email'],
+  input[type='url'],
+  input[type='number'],
+  textarea,
+  [data-slot='select-trigger']
+) {
+  border-color: var(--pencil-glass-edge) !important;
+  background: rgb(255 255 255 / 8%) !important;
+  color: var(--pencil-text) !important;
+}
+
+html[data-theme='dark'] .settings-view .settings-profile-form label,
+html[data-theme='dark'] .settings-view .settings-template-form label,
+html[data-theme='dark'] .settings-view .settings-danger-panel label {
+  color: var(--pencil-text-secondary);
+}
+
+html[data-theme='dark'] .settings-view :is(
+  .settings-panel-heading,
+  .settings-profile-form,
+  .settings-row,
+  .settings-note,
+  .settings-sidebar-layout,
+  .settings-member-row,
+  .settings-working-hours-row,
+  .settings-working-hours-empty
+) {
+  border-color: var(--pencil-border-light) !important;
+}
+
+html[data-theme='dark'] .settings-view .settings-radio {
+  border-color: var(--pencil-glass-edge);
+  background: rgb(255 255 255 / 8%);
+}
+
+html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-trigger {
+  border-color: var(--pencil-surface);
 }
 
 .settings-view .settings-manager-panel,

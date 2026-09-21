@@ -433,6 +433,18 @@ function SettingsView({
     scrollMobileSettingsToTop();
   };
   const activeSectionLabel = sections.find((item) => item.value === section)?.label || "Settings";
+  const sectionDescriptions = {
+    profile: "Your identity as it appears across the workspace.",
+    appearance: "Choose how WorkSpace looks on this device.",
+    notifications: "Choose what reaches you and when.",
+    workspaces: "Open a workspace, choose which one WorkSpace starts on, or start one of your own.",
+    ai: "Control Zuri providers, member access, and workspace defaults.",
+    integrations: "Send WorkSpace notifications to Microsoft Teams or Slack, and subscribe to the team calendar.",
+    templates: "Create templates for repeatable tasks and projects, then apply them from the create forms.",
+  };
+  const activeSectionDescription = section === "workspace"
+    ? `Review who can access ${currentWorkspace?.name || "this workspace"}.`
+    : sectionDescriptions[section] || "";
   const scrollMobileSettingsToTop = () => {
     if (typeof window === "undefined" || !window.matchMedia?.("(max-width: 700px)").matches) return;
     window.scrollTo?.({ top: 0, behavior: "smooth" });
@@ -1146,8 +1158,9 @@ function SettingsView({
   return (
     <section className="workspace-view settings-view">
       <WorkspaceViewHeading
-        title="Settings"
-        subtitle="Control your workspace, account, and notification preferences."
+        eyebrow="Settings"
+        title={activeSectionLabel}
+        subtitle={activeSectionDescription}
       />
       <div className={`settings-shell ${mobileSectionOpen ? "is-mobile-detail" : "is-mobile-index"}`}>
         <nav className="settings-nav" aria-label="Settings sections">
@@ -1273,7 +1286,6 @@ function SettingsView({
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Personal preferences</p>
                   <h2>Appearance</h2>
                   <p>Choose how WorkSpace looks on this device.</p>
                 </div>
@@ -1367,7 +1379,6 @@ function SettingsView({
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Where you belong</p>
                   <h2>Workspaces</h2>
                   <p>
                     Open a workspace, choose which one WorkSpace starts on, or
@@ -1513,7 +1524,6 @@ function SettingsView({
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Stay informed</p>
                   <h2>Notifications</h2>
                   <p>
                     {unreadCount
@@ -1705,7 +1715,6 @@ function SettingsView({
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Your account</p>
                   <h2>Profile</h2>
                   <p>Your identity as it appears across the workspace.</p>
                 </div>
@@ -1866,7 +1875,6 @@ function SettingsView({
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Reusable setup</p>
                   <h2>Templates</h2>
                   <p>
                     Create templates for repeatable tasks and projects, then
@@ -2178,7 +2186,6 @@ function SettingsView({
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Workspace administration</p>
                   <h2>Workspace access</h2>
                   <p>
                     Review who can access{" "}
@@ -2484,7 +2491,6 @@ function SettingsView({
             <Card className="settings-panel">
               <div className="settings-panel-heading">
                 <div>
-                  <p className="eyebrow">Connect other tools</p>
                   <h2>Integrations</h2>
                   <p>
                     Send WorkSpace notifications to Microsoft Teams or Slack,

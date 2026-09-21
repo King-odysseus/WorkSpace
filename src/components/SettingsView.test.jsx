@@ -70,6 +70,27 @@ it('orders settings by everyday priority with Profile first', () => {
   ])
 })
 
+it('uses the active settings section in the page heading', () => {
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  expect(screen.getByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument()
+  expect(document.querySelector('[data-slot="page-header-eyebrow"]')).toHaveTextContent('Settings')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+  expect(screen.getByRole('heading', { level: 1, name: 'Appearance' })).toBeInTheDocument()
+  expect(screen.queryByText('Your account')).not.toBeInTheDocument()
+})
+
 it('renders the designed appearance, workspace, and template structures', () => {
   const onToggleSidebar = vi.fn()
   render(
