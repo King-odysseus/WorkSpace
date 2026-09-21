@@ -2339,20 +2339,11 @@ function App() {
         { label: "Activity", icon: ActivityIcon },
       ],
     },
-    {
-      heading: "Resources",
-      items: [
-        {
-          label: "What's new",
-          icon: Megaphone,
-          badge: whatsNewUnread ? 1 : 0,
-          badgeTone: "info",
-        },
-        { label: "Install app", icon: Download },
-        { label: "Screen sharing", icon: MonitorUp },
-      ],
-    },
   ];
+  // What's new, Install app and Screen sharing moved to Settings under the same
+  // Resources heading. They are still their own pages and still routed by the
+  // same labels, so notification deep links are unaffected; only the way in
+  // changed.
 
   // -- Mobile TabBar - the design's four destinations along the bottom edge,
   //    with "More" as the fifth. The pages are looked up in navGroups so labels
@@ -3357,6 +3348,7 @@ function App() {
                 onNavigate={setActive}
                 chatThreadRequest={chatThreadRequest}
                 onWhatsNewSeen={markWhatsNewSeen}
+                whatsNewUnread={whatsNewUnread}
                 teamBoardFocus={teamBoardFocus}
                 onTeamBoardFocusChange={setTeamBoardFocus}
                 theme={theme}
@@ -3811,6 +3803,7 @@ function WorkspaceView({
   onNavigate,
   chatThreadRequest,
   onWhatsNewSeen,
+  whatsNewUnread,
   teamBoardFocus,
   onTeamBoardFocusChange,
   theme,
@@ -6718,6 +6711,7 @@ function WorkspaceView({
   if (active === "Settings") {
     return (
       <SettingsView
+        whatsNewUnread={whatsNewUnread}
         theme={theme}
         onSetTheme={onSetTheme || onToggleTheme}
         sidebarCollapsed={sidebarCollapsed}

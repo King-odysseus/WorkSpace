@@ -26,6 +26,9 @@ import {
   Volume2,
   Webhook,
   X,
+  Megaphone,
+  Download,
+  MonitorUp,
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
 import { Card } from "./ui/card.jsx";
@@ -183,6 +186,7 @@ function SettingsView({
   onConfirm,
   onNavigate,
   onSignOut,
+  whatsNewUnread = false,
 }) {
   // Settings opens on Profile for everyone. The P4 frame put administrators on
   // AI settings, but that lands an owner in workspace administration when they
@@ -404,10 +408,21 @@ function SettingsView({
     { value: "help", label: "Help", Icon: CircleHelp, group: "support" },
     { value: "legal", label: "Legal", Icon: FileText, group: "support" },
   ];
+  // These three used to sit in the sidebar under their own Resources heading.
+  // They are whole pages rather than settings panels, so like Help and Legal
+  // they are links out: the label is the page name the shell routes on, which
+  // keeps deep links working - a screen-share notification still opens the
+  // session directly without passing through Settings.
+  const resourceSections = [
+    { value: "whats-new", label: "What's new", Icon: Megaphone, group: "resources" },
+    { value: "install-app", label: "Install app", Icon: Download, group: "resources" },
+    { value: "screen-sharing", label: "Screen sharing", Icon: MonitorUp, group: "resources" },
+  ];
   const navGroups = [
     { id: "preferences", label: "Preferences", sections: sections.filter((item) => item.group === "preferences") },
     { id: "workspace", label: "Workspace", sections: sections.filter((item) => item.group === "workspace") },
-    { id: "support", label: "About and support", sections: supportSections },
+    { id: "resources", label: "Resources", sections: resourceSections, navigates: true },
+    { id: "support", label: "About and support", sections: supportSections, navigates: true },
   ];
   const openSection = (value) => {
     setSection(value);
@@ -1113,12 +1128,14 @@ function SettingsView({
               <div className="settings-nav-group" data-group={group.id} key={group.id}>
                 <span className="settings-nav-label">{group.label}</span>
                 {group.sections.map(({ value, label, Icon }) => {
-                  const isSupport = group.id === "support";
+                  const isSupport = Boolean(group.navigates);
                   const isNotificationToggle = value === "notifications";
                   const isAppearanceToggle = value === "appearance";
                   const notificationsEnabled = Boolean(notificationPrefs?.notification_sound);
                   const appearanceEnabled = theme === "dark";
-                  const meta = value === "workspaces"
+                  const meta = value === "whats-new"
+                    ? (whatsNewUnread ? "1 new" : "")
+                    : value === "workspaces"
                     ? `${workspaces.length} available`
                     : value === "workspace"
                       ? `${members.length} member${members.length === 1 ? "" : "s"}`

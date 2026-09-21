@@ -61,6 +61,10 @@ it('orders settings by everyday priority with Profile first', () => {
     'AI settings',
     'Integrations',
     'Templates',
+    // Moved out of the sidebar: whole pages, reached from here like Help and Legal.
+    "What's new",
+    'Install app',
+    'Screen sharing',
     'Help',
     'Legal',
   ])
@@ -593,4 +597,31 @@ it('saves the sound style and volume from notification settings', async () => {
     expect(updates).toHaveLength(2)
     expect(JSON.parse(updates[1][1].body)).toEqual({ notification_volume: 35 })
   })
+})
+
+it('opens the moved Resources pages instead of swapping the settings panel', () => {
+  // These three left the sidebar for Settings. They are whole pages, so the
+  // entry has to navigate; swapping the panel would strand them here.
+  const onNavigate = vi.fn()
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+      onNavigate={onNavigate}
+      whatsNewUnread
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Screen sharing' }))
+  expect(onNavigate).toHaveBeenCalledWith('Screen sharing')
+
+  fireEvent.click(screen.getByRole('button', { name: "What's new" }))
+  expect(onNavigate).toHaveBeenCalledWith("What's new")
+  // The unread cue the sidebar used to carry survives the move.
+  expect(screen.getByRole('button', { name: "What's new" })).toHaveTextContent('1 new')
 })
