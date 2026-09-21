@@ -99,6 +99,41 @@ it('minimizes the assistant without hiding its launcher', async () => {
   expect(screen.queryByRole('button', { name: 'Hide Zuri button' })).not.toBeInTheDocument()
 })
 
+it('presents the assistant as opposing chat bubbles and exposes window controls', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/ai/chat/': { answer: 'The workspace is on track.' },
+  })
+  const onClose = vi.fn()
+  const onMinimize = vi.fn()
+
+  render(
+    <AssistantFlyout
+      workspaceId={4}
+      onClose={onClose}
+      onMinimize={onMinimize}
+    />,
+  )
+
+  expect(await screen.findByRole('button', { name: 'Minimize Zuri' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Close Zuri' })).toBeInTheDocument()
+
+  const input = await screen.findByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'How are we doing?' } })
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByText('The workspace is on track.')).toBeInTheDocument()
+  expect(screen.getByText('How are we doing?').closest('.ai-chat-row')).toHaveClass('is-user')
+  expect(screen.getByText('The workspace is on track.').closest('.ai-chat-row')).toHaveClass('is-assistant')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Close Zuri' }))
+  expect(onClose).toHaveBeenCalled()
+  expect(onMinimize).not.toHaveBeenCalled()
+})
+
 it('keeps new assistant messages inside the transcript scroller', async () => {
   mockApi({
     '/api/workspaces/4/ai/settings/': {

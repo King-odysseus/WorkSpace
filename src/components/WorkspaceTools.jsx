@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
-import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Alert } from './ui/alert.jsx'
 import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
@@ -1095,7 +1095,7 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
         </div>}
         {turns.map((turn, index) => (
           <div className={`ai-chat-row is-${turn.role}`} key={`${turn.role}-${index}`}>
-            <span className="ai-chat-avatar" aria-hidden="true">{turn.role === 'user' ? 'Y' : <Sparkles size={13} />}</span>
+            <span className="ai-chat-avatar" aria-hidden="true">{turn.role === 'user' ? <UserRound size={13} /> : <Sparkles size={13} />}</span>
             <div className="ai-chat-turn">
               <span className="ai-chat-sender">{turn.role === 'user' ? 'You' : 'Zuri'}</span>
               <div className="ai-chat-bubble">{turn.content}</div>
