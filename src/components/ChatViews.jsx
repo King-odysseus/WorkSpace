@@ -1244,10 +1244,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           <button type="button" onClick={() => { setError(''); mode === 'channels' ? setChannelDialogOpen(true) : setDirectDialogOpen(true) }} aria-label={mode === 'channels' ? 'Create channel' : 'New chat'}><Plus size={15} /></button>
         </div>
         <div className="chat-filter-tabs" role="tablist" aria-label={mode === 'channels' ? 'Filter channels' : 'Filter conversations'}>
-          <button type="button" role="tab" aria-selected={chatFilter === 'all'} className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>All <span>{mode === 'channels' ? channels.length : conversations.length}</span></button>
-          <button type="button" role="tab" aria-selected={chatFilter === 'unread'} className={chatFilter === 'unread' ? 'active' : ''} onClick={() => setChatFilter('unread')}>Unread <span>{unreadTotal}</span></button>
-          {mode === 'channels' && <button type="button" role="tab" aria-selected={chatFilter === 'private'} className={chatFilter === 'private' ? 'active' : ''} onClick={() => setChatFilter('private')}>Private <span>{privateChannelCount}</span></button>}
-          {mode === 'direct' && <button type="button" role="tab" aria-selected={chatFilter === 'archived'} className={chatFilter === 'archived' ? 'active' : ''} onClick={() => setChatFilter('archived')}>Archived <span>{archivedConversations.length}</span></button>}
+          <button type="button" role="tab" aria-selected={chatFilter === 'all'} className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}><span className="chat-filter-label">All</span><span className="chat-filter-count">{mode === 'channels' ? channels.length : conversations.length}</span></button>
+          <button type="button" role="tab" aria-selected={chatFilter === 'unread'} className={chatFilter === 'unread' ? 'active' : ''} onClick={() => setChatFilter('unread')}><span className="chat-filter-label">Unread</span><span className="chat-filter-count">{unreadTotal}</span></button>
+          {mode === 'channels' && <button type="button" role="tab" aria-selected={chatFilter === 'private'} className={chatFilter === 'private' ? 'active' : ''} onClick={() => setChatFilter('private')}><span className="chat-filter-label">Private</span><span className="chat-filter-count">{privateChannelCount}</span></button>}
+          {mode === 'direct' && <button type="button" role="tab" aria-selected={chatFilter === 'archived'} className={chatFilter === 'archived' ? 'active' : ''} onClick={() => setChatFilter('archived')}><span className="chat-filter-label">Archived</span><span className="chat-filter-count">{archivedConversations.length}</span></button>}
         </div>
         <div className="chat-list-scroll" ref={channelListScrollRef}>
           {mode === 'channels'
