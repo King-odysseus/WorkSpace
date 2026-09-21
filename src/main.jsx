@@ -90,6 +90,7 @@ import {
 } from "./components/ui/popover.jsx";
 import PlannerBoard from "./components/PlannerBoard.jsx";
 import ProjectKanbanBoard from "./components/ProjectKanbanBoard.jsx";
+import ProjectTaskTable from "./components/ProjectTaskTable.jsx";
 import WorkScopeSelector, {
   taskMatchesScope,
 } from "./components/WorkScopeSelector.jsx";
@@ -7562,11 +7563,15 @@ function WorkspaceView({
             </section>
           )}
           {projectOperation === "tasks" && (
-            <section className="project-operation-surface project-task-table-surface">
-              <div className="project-operation-toolbar"><span className="eyebrow">Project tasks</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All statuses <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">Sort by due date <ChevronDown size={14} /></button></div>
-              <div className="project-task-table-label">Project tasks</div>
-              <div className="project-task-table" role="table" aria-label="Project tasks"><div className="project-task-table-row project-task-table-head" role="row"><span>Task</span><span>Status</span><span>Priority</span><span>Due date</span><span>Owner</span></div>{projectTasks.slice(0, 8).map((task) => <button type="button" className="project-task-table-row" role="row" key={task.id} onClick={() => onOpenTask(task)}><strong>{task.title}</strong><span>{task.status || "Planned"}</span><span>{task.priority || "Normal"}</span><span>{task.due_date ? formatDay(task.due_date) : "—"}</span><span>{task.assignee_name || task.owner_name || "Unassigned"}</span></button>)}{!projectTasks.length && <p className="project-detail-empty">No tasks are linked to this project.</p>}</div>
-            </section>
+            <ProjectTaskTable
+              tasks={projectTasks}
+              members={localData.members}
+              canManageTasks={canManageTasks}
+              today={today}
+              onOpenTask={onOpenTask}
+              onComplete={onComplete}
+              onStatusChange={onStatusChange}
+            />
           )}
           {projectOperation === "issues" && (
             <ProjectRiskIssuePanel
