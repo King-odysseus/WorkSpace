@@ -162,6 +162,106 @@ it('renders integrations as a calendar card and a webhook connection form', asyn
   expect(document.querySelector('.settings-webhook-form')).toBeInTheDocument()
 })
 
+it('lets an owner save daily and weekly working hours for a member', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/notification-preferences/': {
+      preferences: {
+        mentions: true,
+        direct_messages: true,
+        channel_messages: true,
+        task_updates: true,
+        calendar_reminders: true,
+        manager_activity: true,
+        notification_sound: true,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+      },
+    },
+    '/api/workspaces/1/check-in-settings/': {
+      settings: { check_in_reminder_hour: 9 },
+    },
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: true,
+      settings: {
+        ai_enabled: false,
+        ai_user_ids: [],
+        ai_enabled_providers: [],
+        ai_default_provider: 'openai',
+      },
+      providers: {},
+      provider_config: {},
+    },
+    '/api/workspaces/1/members/2/': {
+      member: {
+        id: 2,
+        email: 'amara@example.test',
+        daily_capacity_minutes: 450,
+        weekly_capacity_minutes: 2250,
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserId={1}
+      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member', daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 }]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Daily hours for Amara Okafor' }), { target: { value: '7.5' } })
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Weekly hours for Amara Okafor' }), { target: { value: '37.5' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save hours for Amara Okafor' }))
+
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH'))
+  const [, request] = expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH')
+  expect(JSON.parse(request.body)).toEqual({ daily_capacity_minutes: 450, weekly_capacity_minutes: 2250 })
+})
+
+it('lets a manager save working hours for a regular member only', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/members/2/': {
+      member: {
+        id: 2,
+        email: 'amara@example.test',
+        daily_capacity_minutes: 420,
+        weekly_capacity_minutes: 2100,
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'manager' }}
+      currentUserName="Morgan"
+      currentUserEmail="morgan@example.test"
+      currentUserId={1}
+      members={[
+        { id: 1, first_name: 'Morgan', last_name: 'Lee', email: 'morgan@example.test', role: 'manager', daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 },
+        { id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member', daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 },
+      ]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  expect(screen.queryByRole('spinbutton', { name: 'Daily hours for Morgan Lee' })).not.toBeInTheDocument()
+
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Daily hours for Amara Okafor' }), { target: { value: '7' } })
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Weekly hours for Amara Okafor' }), { target: { value: '35' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save hours for Amara Okafor' }))
+
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH'))
+  const [, request] = expectRequest(api, '/api/workspaces/1/members/2/', 'PATCH')
+  expect(JSON.parse(request.body)).toEqual({ daily_capacity_minutes: 420, weekly_capacity_minutes: 2100 })
+})
+
 it('renders the P4 AI panel and saves provider and member access changes together', async () => {
   const api = mockApi({
     '/api/workspaces/1/ai/settings/': {

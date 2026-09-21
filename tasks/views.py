@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone as datetime_timezone
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.db import IntegrityError, transaction
-from django.db.models import Case, Count, IntegerField, Max, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
 from django.core.exceptions import ValidationError
 from django.core.paginator import EmptyPage, Paginator
 from django.contrib.auth.models import User
@@ -74,6 +74,12 @@ def task_scope_summary(queryset, today):
             ),
             urgent=Count('id', filter=open_filter & Q(priority='urgent')),
             high=Count('id', filter=open_filter & Q(priority='high')),
+            estimated_minutes=Sum(
+                'estimate_minutes',
+                filter=open_filter & Q(estimate_minutes__isnull=False),
+                default=0,
+            ),
+            estimated_open=Count('id', filter=open_filter & Q(estimate_minutes__isnull=False)),
             completed=Count('id', filter=Q(status='done')),
             tracked=Count('id', filter=~Q(status='cancelled')),
         )
@@ -2888,7 +2894,7 @@ def member_detail(request, workspace_id, user_id):
     membership = Membership.objects.filter(workspace_id=workspace_id, user_id=user_id).select_related('user').first()
     if membership is None:
         return JsonResponse({'error': 'Workspace member was not found.'}, status=404)
-    if membership.role == 'owner':
+    if membership.role == 'owner' and request.method == 'DELETE':
         return JsonResponse({'error': 'The workspace owner cannot be changed here.'}, status=403)
     if actor.role == 'manager' and membership.role != 'member':
         return JsonResponse({'error': 'Managers can only manage regular members.'}, status=403)
@@ -2906,9 +2912,13 @@ def member_detail(request, workspace_id, user_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    unknown_fields = set(payload) - {'role', 'permissions'}
+    if membership.role == 'owner' and (actor.user_id != membership.user_id or actor.role != 'owner'):
+        return JsonResponse({'error': 'Only the owner can update their own working hours.'}, status=403)
+    unknown_fields = set(payload) - {'role', 'permissions', 'daily_capacity_minutes', 'weekly_capacity_minutes'}
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
+    if membership.role == 'owner' and ({'role', 'permissions'} & set(payload)):
+        return JsonResponse({'error': 'The workspace owner role and permissions cannot be changed here.'}, status=403)
     role_changed = False
     if 'role' in payload:
         if payload['role'] not in {'manager', 'member'}:
@@ -2927,7 +2937,24 @@ def member_detail(request, workspace_id, user_id):
             if not isinstance(permissions, list) or not set(permissions).issubset(PERMISSION_KEYS):
                 return JsonResponse({'error': f'permissions must be a list drawn from: {", ".join(PERMISSION_KEYS)}.'}, status=400)
         membership.permissions = permissions
-    membership.save(update_fields=['role', 'permissions'])
+    capacity_fields = (
+        ('daily_capacity_minutes', 'Daily capacity', 1440),
+        ('weekly_capacity_minutes', 'Weekly capacity', 10080),
+    )
+    for field, label, maximum in capacity_fields:
+        if field not in payload:
+            continue
+        raw_value = payload[field]
+        if isinstance(raw_value, bool):
+            return JsonResponse({'error': f'{label} must be a whole number of minutes.'}, status=400)
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            return JsonResponse({'error': f'{label} must be a whole number of minutes.'}, status=400)
+        if not value.is_integer() or value < 0 or value > maximum:
+            return JsonResponse({'error': f'{label} must be between 0 and {maximum} minutes.'}, status=400)
+        setattr(membership, field, int(value))
+    membership.save(update_fields=['role', 'permissions', 'daily_capacity_minutes', 'weekly_capacity_minutes'])
     if role_changed and membership.user_id != request.user.id:
         # Deliberately absent from NOTIFICATION_KIND_PREFERENCE so this is never
         # silenced: the target is still a member and needs to know their access

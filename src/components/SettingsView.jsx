@@ -13,6 +13,7 @@ import {
   ChevronRight,
   CircleHelp,
   ClipboardList,
+  Clock3,
   Copy,
   FileText,
   Layers,
@@ -56,6 +57,49 @@ const PERMISSION_LABELS = [
   ["manage_ai_providers", "Manage Zuri providers"],
   ["view_reports", "View reports"],
 ];
+
+const minutesToHoursInput = (minutes) => {
+  const hours = Number(minutes || 0) / 60;
+  return Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2)));
+};
+
+const memberDisplayName = (member) =>
+  [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email;
+
+function MemberWorkingHoursRow({ member, canEdit, saving, onSave }) {
+  const [dailyHours, setDailyHours] = useState(() => minutesToHoursInput(member.daily_capacity_minutes ?? 480));
+  const [weeklyHours, setWeeklyHours] = useState(() => minutesToHoursInput(member.weekly_capacity_minutes ?? 2400));
+
+  useEffect(() => {
+    setDailyHours(minutesToHoursInput(member.daily_capacity_minutes ?? 480));
+    setWeeklyHours(minutesToHoursInput(member.weekly_capacity_minutes ?? 2400));
+  }, [member.id, member.daily_capacity_minutes, member.weekly_capacity_minutes]);
+
+  const name = memberDisplayName(member);
+  if (!canEdit) {
+    return (
+      <div className="settings-working-hours-row is-readonly">
+        <div className="settings-working-hours-person"><strong>{name}</strong><span>{member.email}</span></div>
+        <span className="settings-working-hours-readonly"><Clock3 size={15} aria-hidden="true" />{minutesToHoursInput(member.daily_capacity_minutes ?? 480)}h daily · {minutesToHoursInput(member.weekly_capacity_minutes ?? 2400)}h weekly</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-working-hours-row">
+      <div className="settings-working-hours-person"><strong>{name}</strong><span>{member.email}</span></div>
+      <label className="settings-working-hours-field">
+        <span>Daily</span>
+        <span className="settings-working-hours-input"><input type="number" min="0" max="24" step="0.5" value={dailyHours} onChange={(event) => setDailyHours(event.target.value)} aria-label={`Daily hours for ${name}`} /><em>hours</em></span>
+      </label>
+      <label className="settings-working-hours-field">
+        <span>Weekly</span>
+        <span className="settings-working-hours-input"><input type="number" min="0" max="168" step="0.5" value={weeklyHours} onChange={(event) => setWeeklyHours(event.target.value)} aria-label={`Weekly hours for ${name}`} /><em>hours</em></span>
+      </label>
+      <Button size="sm" type="button" disabled={saving} onClick={() => onSave(member, dailyHours, weeklyHours)} aria-label={`Save hours for ${name}`}>{saving ? "Saving" : "Save"}</Button>
+    </div>
+  );
+}
 
 function SettingsView({
   theme,
@@ -129,6 +173,8 @@ function SettingsView({
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [permissionsSavingId, setPermissionsSavingId] = useState(null);
   const [permissionsError, setPermissionsError] = useState("");
+  const [workingHoursSavingId, setWorkingHoursSavingId] = useState(null);
+  const [workingHoursError, setWorkingHoursError] = useState("");
   const isOwner = currentWorkspace?.role === "owner";
   const isArchived = currentWorkspace?.status === "archived";
   const toggleManagerPermission = async (member, key) => {
@@ -189,6 +235,47 @@ function SettingsView({
       setPermissionsError(error.message || "Role could not be updated.");
     } finally {
       setPermissionsSavingId(null);
+    }
+  };
+  const saveMemberWorkingHours = async (member, dailyHours, weeklyHours) => {
+    const dailyMinutes = Math.round(Number(dailyHours) * 60);
+    const weeklyMinutes = Math.round(Number(weeklyHours) * 60);
+    if (!Number.isFinite(dailyMinutes) || dailyMinutes < 0 || dailyMinutes > 1440) {
+      setWorkingHoursError("Daily hours must be between 0 and 24.");
+      return;
+    }
+    if (!Number.isFinite(weeklyMinutes) || weeklyMinutes < 0 || weeklyMinutes > 10080) {
+      setWorkingHoursError("Weekly hours must be between 0 and 168.");
+      return;
+    }
+    setWorkingHoursSavingId(member.id);
+    setWorkingHoursError("");
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/members/${member.id}/`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": await getCsrfToken(),
+            "X-Workspace-Id": String(workspaceId),
+          },
+          body: JSON.stringify({
+            daily_capacity_minutes: dailyMinutes,
+            weekly_capacity_minutes: weeklyMinutes,
+          }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Working hours could not be updated.");
+      }
+      onRefresh?.();
+    } catch (error) {
+      setWorkingHoursError(error.message || "Working hours could not be updated.");
+    } finally {
+      setWorkingHoursSavingId(null);
     }
   };
   const runLifecycleAction = async (
@@ -2058,6 +2145,37 @@ function SettingsView({
                     </div>
                   );
                 })}
+              </div>
+              <div className="settings-section-heading settings-working-hours-heading">
+                <div>
+                  <strong>Working hours</strong>
+                  <span>Set the daily and weekly hours Team uses to calculate availability and capacity.</span>
+                </div>
+              </div>
+              {workingHoursError && (
+                <p className="auth-error settings-working-hours-error" role="alert">
+                  {workingHoursError}
+                </p>
+              )}
+              <div className="settings-working-hours-list">
+                {members.length ? (
+                  members.map((member) => {
+                    const canEditHours = member.role === "owner"
+                      ? isOwner && String(member.id) === String(currentUserId)
+                      : isOwner || (canManageMembers && member.role === "member");
+                    return <MemberWorkingHoursRow
+                      key={member.id}
+                      member={member}
+                      canEdit={canEditHours}
+                      saving={workingHoursSavingId === member.id}
+                      onSave={saveMemberWorkingHours}
+                    />;
+                  })
+                ) : (
+                  <p className="settings-working-hours-empty" role="status">
+                    No members are available to configure yet.
+                  </p>
+                )}
               </div>
               {canManageMembers && (
                 <p className="settings-note">

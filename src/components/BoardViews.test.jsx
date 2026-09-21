@@ -131,10 +131,10 @@ it('loads Team task data for the Pencil capacity screen', async () => {
 it('filters the Team capacity table from the availability tabs', () => {
   const lastSeenAt = new Date().toISOString()
   const members = [
-    { id: 1, first_name: 'Ada', last_name: 'Available', role: 'member', presence: 'available', last_seen_at: lastSeenAt },
-    { id: 2, first_name: 'Ben', last_name: 'Capacity', role: 'member', presence: 'busy', last_seen_at: lastSeenAt },
-    { id: 3, first_name: 'Cara', last_name: 'Overloaded', role: 'member', presence: 'busy', last_seen_at: lastSeenAt },
-    { id: 4, first_name: 'Dana', last_name: 'Away', role: 'member', presence: 'away', last_seen_at: lastSeenAt },
+    { id: 1, first_name: 'Ada', last_name: 'Available', role: 'member', presence: 'available', last_seen_at: lastSeenAt, daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 },
+    { id: 2, first_name: 'Ben', last_name: 'Capacity', role: 'member', presence: 'busy', last_seen_at: lastSeenAt, daily_capacity_minutes: 480, weekly_capacity_minutes: 1200 },
+    { id: 3, first_name: 'Cara', last_name: 'Overloaded', role: 'member', presence: 'busy', last_seen_at: lastSeenAt, daily_capacity_minutes: 480, weekly_capacity_minutes: 900 },
+    { id: 4, first_name: 'Dana', last_name: 'Away', role: 'member', presence: 'away', last_seen_at: lastSeenAt, daily_capacity_minutes: 480, weekly_capacity_minutes: 2400 },
   ]
   const tasks = [
     ...Array.from({ length: 6 }, (_, index) => ({
@@ -180,6 +180,101 @@ it('filters the Team capacity table from the availability tabs', () => {
   expect(screen.queryByRole('button', { name: 'Open Ben Capacity profile' })).not.toBeInTheDocument()
 })
 
+it('uses each members configured daily and weekly hours for Team capacity', () => {
+  const members = [{ id: 9, first_name: 'Dana', last_name: 'Reed', role: 'member', daily_capacity_minutes: 360, weekly_capacity_minutes: 1800 }]
+  const tasks = [
+    { id: 1, title: 'Discovery', status: 'todo', assignee_id: 9, member: 'Dana Reed', estimate_minutes: 600, priority: 'normal', tag: 'Ops' },
+    { id: 2, title: 'Delivery', status: 'in progress', assignee_id: 9, member: 'Dana Reed', estimate_minutes: 300, priority: 'normal', tag: 'Ops' },
+  ]
+
+  renderBoard({ tasks, members })
+
+  expect(screen.getAllByText('15h / 30h').length).toBeGreaterThan(0)
+  expect(screen.getByText('1 member · capacity 30h')).toBeInTheDocument()
+  expect(screen.getByText('50% allocated · 15h remaining')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Open Dana Reed profile' }))
+  expect(screen.getByText(/of 6h recorded today/)).toBeInTheDocument()
+  expect(screen.getByText('30h weekly capacity')).toBeInTheDocument()
+})
+
+it('uses server-side estimate totals for paginated Team capacity', async () => {
+  mockApi({
+    '/api/workspaces/5/tasks/': {
+      tasks: [
+        { id: 1, title: 'Page one task', status: 'todo', assignee_id: 9, member: 'Dana Reed', estimate_minutes: 600, priority: 'normal', tag: 'Ops' },
+      ],
+      pagination: {
+        page: 1,
+        page_size: 25,
+        total_items: 3,
+        total_pages: 1,
+        has_next: false,
+        has_previous: false,
+      },
+      summary: {
+        counts: { open: 3, blocked: 0, overdue: 0, unassigned: 0 },
+        by_owner: [
+          {
+            assignee_id: 9,
+            total: 3,
+            open: 3,
+            overdue: 0,
+            blocked: 0,
+            due_soon: 0,
+            urgent: 0,
+            high: 0,
+            completed: 0,
+            tracked: 3,
+            estimated_minutes: 1200,
+            estimated_open: 2,
+          },
+        ],
+      },
+    },
+  })
+
+  renderBoard({
+    tasks: [],
+    workspaceId: 5,
+    members: [{ id: 9, first_name: 'Dana', last_name: 'Reed', role: 'member', daily_capacity_minutes: 480, weekly_capacity_minutes: 1800 }],
+  })
+
+  expect(await screen.findAllByText('23h / 30h')).not.toHaveLength(0)
+  expect(screen.getByText('77% allocated · 7h remaining')).toBeInTheDocument()
+})
+
+it('uses saved fractional weekly hours in My Tasks and preserves zero capacity', () => {
+  const props = {
+    tasks: [],
+    currentUserId: 7,
+    currentUserName: 'Nate Foster',
+    projects: [],
+    buckets: [],
+    onAddTask: noop,
+    onOpenTask: noop,
+    onComplete: noop,
+    onStatusChange: noop,
+    onDelete: noop,
+    canManageTasks: false,
+  }
+  const { rerender } = render(
+    <MyTasksView
+      {...props}
+      members={[{ id: 7, weekly_capacity_minutes: 2250 }]}
+    />,
+  )
+
+  expect(screen.getByText(/This week .* capacity 37\.5h/)).toBeInTheDocument()
+
+  rerender(
+    <MyTasksView
+      {...props}
+      members={[{ id: 7, weekly_capacity_minutes: 0 }]}
+    />,
+  )
+  expect(screen.getByText(/This week .* capacity 0h/)).toBeInTheDocument()
+})
 const todayPanel = name => document.querySelector(`[data-panel="${name}"]`)
 
 it('shows only tasks assigned to the current user today', () => {

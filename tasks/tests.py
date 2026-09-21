@@ -905,6 +905,46 @@ class TaskApiTests(TestCase):
         teammate_member = next(member for member in members_response.json()['members'] if member['id'] == teammate.id)
         self.assertEqual(teammate_member['presence'], 'available')
 
+    def test_owner_can_set_member_daily_and_weekly_working_hours(self):
+        teammate = User.objects.create_user(username='hours-teammate@example.com', email='hours-teammate@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, teammate.id]),
+            data=json.dumps({'daily_capacity_minutes': 450, 'weekly_capacity_minutes': 2250}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['member']['daily_capacity_minutes'], 450)
+        self.assertEqual(response.json()['member']['weekly_capacity_minutes'], 2250)
+
+        member = Membership.objects.get(workspace=self.workspace, user=teammate)
+        self.assertEqual(member.daily_capacity_minutes, 450)
+        self.assertEqual(member.weekly_capacity_minutes, 2250)
+
+        invalid = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, teammate.id]),
+            data=json.dumps({'daily_capacity_minutes': 1441}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_manager_can_set_a_regular_members_working_hours(self):
+        manager = User.objects.create_user(username='hours-manager@example.com', email='hours-manager@example.com', password='secure-pass-123')
+        teammate = User.objects.create_user(username='hours-member@example.com', email='hours-member@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=teammate, role='member')
+        self.client.force_login(manager)
+
+        response = self.client.patch(
+            reverse('member-detail', args=[self.workspace.id, teammate.id]),
+            data=json.dumps({'daily_capacity_minutes': 420, 'weekly_capacity_minutes': 2100}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['member']['daily_capacity_minutes'], 420)
+        self.assertEqual(response.json()['member']['weekly_capacity_minutes'], 2100)
+
     def test_last_seen_is_stamped_on_request_and_throttled_within_the_window(self):
         from django.core.cache import cache
 
@@ -2162,8 +2202,9 @@ class ExecutionFoundationApiTests(TestCase):
             status='blocked',
             blocker_details='Waiting for sign-off',
             due_date=(timezone.localdate() + timedelta(days=2)).isoformat(),
+            estimate_minutes=120,
         ).json()['task']
-        self.create_task(title='Finished', assignee_id=self.member.id, status='done')
+        self.create_task(title='Finished', assignee_id=self.member.id, status='done', estimate_minutes=60)
         self.create_task(title='Cancelled', assignee_id=self.member.id, status='cancelled')
 
         response = self.client.get(
@@ -2187,6 +2228,8 @@ class ExecutionFoundationApiTests(TestCase):
         self.assertEqual(owner_row['blocked'], 1)
         self.assertEqual(owner_row['completed'], 1)
         self.assertEqual(owner_row['tracked'], 2)
+        self.assertEqual(owner_row['estimated_minutes'], 120)
+        self.assertEqual(owner_row['estimated_open'], 1)
         self.assertEqual(unassigned_row['open'], 1)
         self.assertEqual(unassigned_row['overdue'], 1)
 

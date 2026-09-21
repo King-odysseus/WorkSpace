@@ -82,6 +82,9 @@ import { requestDirectMessage } from "../lib/chat-navigation.js";
 const isTerminalTask = (task) =>
   task.status === "done" || task.status === "cancelled";
 const isOpenTask = (task) => !isTerminalTask(task);
+const OPEN_TASK_FALLBACK_MINUTES = 180;
+const formatCapacityMinutes = (minutes) =>
+  formatEstimateMinutes(Math.max(0, Number(minutes) || 0)) || "0h";
 const addDaysToDateKey = (dateKey, days) => {
   const date = new Date(`${dateKey}T12:00:00`);
   date.setDate(date.getDate() + days);
@@ -313,8 +316,9 @@ function MemberProfilePopup({
             <p>
               {formatShiftDuration(
                 shift?.worked_seconds || todayWorkedSeconds || 0,
-              )} recorded today
+              )} of {formatCapacityMinutes(member.daily_capacity_minutes ?? 480)} recorded today
             </p>
+            <p>{formatCapacityMinutes(member.weekly_capacity_minutes ?? 2400)} weekly capacity</p>
           </section>
         </div>
         )}
@@ -659,6 +663,8 @@ function TeamBoardView({
     high: 0,
     completed: 0,
     tracked: 0,
+    estimated_minutes: 0,
+    estimated_open: 0,
   };
   const memberStats = members
     .map((member) => {
@@ -688,6 +694,27 @@ function TeamBoardView({
         summary.due_soon * 2 +
         summary.urgent * 2 +
         summary.high;
+      const dailyCapacityMinutes = Math.max(
+        0,
+        Number(member.daily_capacity_minutes ?? 480) || 0,
+      );
+      const capacityMinutes = Math.max(
+        0,
+        Number(member.weekly_capacity_minutes ?? 2400) || 0,
+      );
+      const plannedMinutes =
+        usesServerTasks && taskSummary
+          ? Math.max(0, Number(summary.estimated_minutes) || 0) +
+            Math.max(
+              0,
+              summary.open - (Number(summary.estimated_open) || 0),
+            ) * OPEN_TASK_FALLBACK_MINUTES
+          : memberOpen.reduce(
+              (total, task) =>
+                total +
+                (Number(task.estimate_minutes) || OPEN_TASK_FALLBACK_MINUTES),
+              0,
+            );
       return {
         member,
         tasks: memberTasks,
@@ -700,6 +727,9 @@ function TeamBoardView({
         completionRate: summary.tracked
           ? Math.round((summary.completed / summary.tracked) * 100)
           : null,
+        dailyCapacityMinutes,
+        capacityMinutes,
+        plannedMinutes,
         risk,
       };
     })
@@ -890,14 +920,27 @@ function TeamBoardView({
   // P9 is a single capacity view, not a second dashboard with internal tabs.
   // Keep the existing profile and invitation actions, but present the same live
   // data in the structure supplied by the Pencil frame.
-  const capacityHours = Math.max(members.length * 24, 1);
-  const allocatedHours = visibleMemberStats.reduce(
-    (total, item) => total + Math.min(24, item.open * 3),
+  const capacityMinutes = visibleMemberStats.reduce(
+    (total, item) => total + item.capacityMinutes,
     0,
   );
+  const allocatedMinutes = visibleMemberStats.reduce(
+    (total, item) => total + item.plannedMinutes,
+    0,
+  );
+  const capacityPercent = capacityMinutes
+    ? Math.round((allocatedMinutes / capacityMinutes) * 100)
+    : allocatedMinutes
+      ? 100
+      : 0;
   const availabilityLabel = (item) => {
-    if (item.open > 8) return "Overloaded";
-    if (item.open > 5) return "At capacity";
+    const workloadPercent = item.capacityMinutes
+      ? Math.round((item.plannedMinutes / item.capacityMinutes) * 100)
+      : item.plannedMinutes
+        ? 100
+        : 0;
+    if (workloadPercent > 100) return "Overloaded";
+    if (workloadPercent >= 90) return "At capacity";
     if (effectivePresence(item.member) === "away") return "Away";
     return "Available";
   };
@@ -950,14 +993,18 @@ function TeamBoardView({
             <div className="pencil-team-table-head" aria-hidden="true"><span>Member</span><span>Availability</span><span>Workload</span><span>Tasks</span><span /></div>
             {availabilityRows.map((item) => {
               const label = availabilityLabel(item);
-              const workload = Math.min(100, Math.round((item.open / 8) * 100));
+              const workload = item.capacityMinutes
+                ? Math.min(100, Math.round((item.plannedMinutes / item.capacityMinutes) * 100))
+                : item.plannedMinutes
+                  ? 100
+                  : 0;
               return <article className="pencil-team-row" role="listitem" key={item.member.id}>
                 <button type="button" className="pencil-team-person" onClick={() => setProfileMember(item.member)} aria-label={`Open ${memberName(item.member)} profile`}>
                   <Avatar name={memberName(item.member)} avatarUrl={item.member.avatar_url} presence={effectivePresence(item.member)} />
                   <span><strong>{memberName(item.member)}</strong><small>{item.member.job_role || item.member.role || "Member"}</small></span>
                 </button>
                 <span className={`pencil-team-status ${label.toLowerCase().replace(" ", "-")}`}>{label}</span>
-                <span className="pencil-team-workload"><small>{Math.min(item.open * 3, 28)}h / 24h</small><i><b style={{ width: `${workload}%` }} /></i></span>
+                <span className="pencil-team-workload"><small>{formatCapacityMinutes(item.plannedMinutes)} / {formatCapacityMinutes(item.capacityMinutes)}</small><i><b style={{ width: `${workload}%` }} /></i></span>
                 <span className="pencil-team-task-count">{item.open} tasks</span>
                 <button type="button" className="pencil-team-message" onClick={() => setProfileMember(item.member)} aria-label={`Message ${memberName(item.member)}`}><MessageSquare size={18} /></button>
               </article>;
@@ -967,10 +1014,10 @@ function TeamBoardView({
         </div>
         <aside className="pencil-team-side">
           <section className="pencil-team-card">
-            <h2>Team capacity</h2><p>{members.length} members · capacity {capacityHours}h</p>
-            <strong>{allocatedHours}h <small>/ {capacityHours}h</small></strong>
-            <div className="pencil-team-capacity"><i style={{ width: `${Math.min(100, Math.round((allocatedHours / capacityHours) * 100))}%` }} /></div>
-            <span>{Math.min(100, Math.round((allocatedHours / capacityHours) * 100))}% allocated · {Math.max(0, capacityHours - allocatedHours)}h remaining</span>
+            <h2>Team capacity</h2><p>{visibleMemberStats.length} {visibleMemberStats.length === 1 ? "member" : "members"} · capacity {formatCapacityMinutes(capacityMinutes)}</p>
+            <strong>{formatCapacityMinutes(allocatedMinutes)} <small>/ {formatCapacityMinutes(capacityMinutes)}</small></strong>
+            <div className="pencil-team-capacity"><i style={{ width: `${Math.min(100, capacityPercent)}%` }} /></div>
+            <span>{capacityPercent}% allocated · {formatCapacityMinutes(Math.max(0, capacityMinutes - allocatedMinutes))} remaining</span>
           </section>
           <section className="pencil-team-card">
             <h2>Availability</h2>
@@ -1379,9 +1426,13 @@ function TeamBoardView({
                     {workedToday > 0 && (
                       <span>
                         <Clock3 size={13} />
-                        {formatShiftDuration(workedToday)} today
+                        {formatShiftDuration(workedToday)} of {formatCapacityMinutes(item.dailyCapacityMinutes)} today
                       </span>
                     )}
+                    <span>
+                      <Clock3 size={13} />
+                      {formatCapacityMinutes(item.dailyCapacityMinutes)} daily capacity
+                    </span>
                   </div>
                   {checkIn?.blockers ? (
                     <p className="team-blocker-note">
@@ -1661,12 +1712,15 @@ function MyTasksView({
   const estimateTotal = (items) =>
     items.reduce((total, task) => total + (task.estimate_minutes || 0), 0);
 
-  // The workload card needs a denominator. It comes from the member's own
-  // profile, and the fallback is the model's default so a workspace that has
-  // never set one still gets a truthful ratio against 40 hours.
+  // The workload card needs a denominator. It comes from the member's
+  // workspace membership, and the fallback is the model default so a workspace
+  // that has never set one still gets a truthful ratio against 40 hours.
   const me = members.find((member) => String(member.id) === String(currentUserId));
-  const capacityMinutes = Number(me?.weekly_capacity_minutes) || 2400;
-  const capacityHours = Math.round(capacityMinutes / 60);
+  const capacityMinutes = Math.max(
+    0,
+    Number(me?.weekly_capacity_minutes ?? 2400) || 0,
+  );
+  const capacityLabel = formatCapacityMinutes(capacityMinutes);
   const weekLoad = openMine.filter(
     (task) => task.due_date && task.due_date <= weekEnd,
   );
@@ -1677,10 +1731,11 @@ function MyTasksView({
   // Nothing estimated is not the same as nothing planned. A bar sitting at 0%
   // would claim the week is clear when the truth is that nobody has said.
   const hasEstimates = weekLoad.some((task) => task.estimate_minutes);
-  const allocatedPercent = Math.min(
-    100,
-    Math.round((plannedMinutes / capacityMinutes) * 100),
-  );
+  const allocatedPercent = capacityMinutes
+    ? Math.min(100, Math.round((plannedMinutes / capacityMinutes) * 100))
+    : plannedMinutes
+      ? 100
+      : 0;
   const remainingMinutes = Math.max(0, capacityMinutes - plannedMinutes);
 
   const statusRows = [
@@ -2100,7 +2155,7 @@ function MyTasksView({
           <section className="my-task-summary rounded-card border border-border bg-card p-5">
             <h2 className="text-subheading text-text-primary">My workload</h2>
             <p className="mt-[5px] text-caption text-text-muted">
-              This week &middot; capacity {capacityHours}h
+              This week &middot; capacity {capacityLabel}
             </p>
             {hasEstimates ? (
               <>
@@ -2109,7 +2164,7 @@ function MyTasksView({
                     {formatEstimateMinutes(plannedMinutes)}
                   </strong>
                   <span className="text-body-compact text-text-muted">
-                    / {capacityHours}h
+                    / {capacityLabel}
                   </span>
                 </p>
                 <div className="mt-[14px] h-2.5 overflow-hidden rounded-full bg-border">

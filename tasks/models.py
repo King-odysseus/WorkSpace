@@ -114,6 +114,11 @@ class Membership(models.Model):
     # None means "use the role default"; a list is an explicit override, only
     # meaningful (and only settable via the API) for role='manager'.
     permissions = models.JSONField(null=True, blank=True, default=None)
+    # Capacity is workspace-scoped: the same person can work different hours in
+    # different teams, and a manager's setting must not leak into another
+    # workspace's workload calculations.
+    daily_capacity_minutes = models.PositiveIntegerField(default=480)
+    weekly_capacity_minutes = models.PositiveIntegerField(default=2400)
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -145,7 +150,8 @@ class Membership(models.Model):
             'company': profile.company if profile else '',
             'job_role': profile.job_role if profile else '',
             'presence': profile.presence if profile else 'available',
-            'weekly_capacity_minutes': profile.weekly_capacity_minutes if profile else 2400,
+            'daily_capacity_minutes': self.daily_capacity_minutes,
+            'weekly_capacity_minutes': self.weekly_capacity_minutes,
             'last_seen_at': profile.last_seen_at.isoformat() if profile and profile.last_seen_at else '',
         }
 
