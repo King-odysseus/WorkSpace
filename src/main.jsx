@@ -2759,7 +2759,7 @@ function App() {
                       title={railCollapsed ? label : undefined}
                       aria-current={active === label ? "page" : undefined}
                       className={cn(
-                        "group relative flex h-[34px] w-full items-center gap-2.5 rounded-icon px-3 text-sm transition-colors",
+                        "group relative flex h-10 w-full items-center gap-2.5 rounded-icon px-3 text-sm leading-5 transition-colors",
                         active === label
                           ? "bg-selected font-semibold text-primary"
                           : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary",
