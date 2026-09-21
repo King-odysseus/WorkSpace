@@ -386,6 +386,7 @@ function TeamBoardView({
 }) {
   const today = toDateKey(new Date());
   const [tab, setTab] = useState("overview");
+  const [availabilityFilter, setAvailabilityFilter] = useState("all");
   const [taskGrouping, setTaskGrouping] = useState("owner");
   const [showTerminal, setShowTerminal] = useState(false);
   const [query, setQuery] = useState("");
@@ -894,18 +895,30 @@ function TeamBoardView({
     (total, item) => total + Math.min(24, item.open * 3),
     0,
   );
-  const availabilityRows = visibleMemberStats.slice(0, 6);
   const availabilityLabel = (item) => {
     if (item.open > 8) return "Overloaded";
     if (item.open > 5) return "At capacity";
     if (effectivePresence(item.member) === "away") return "Away";
     return "Available";
   };
-  const availabilityCounts = availabilityRows.reduce((counts, item) => {
+  const availabilityCounts = visibleMemberStats.reduce((counts, item) => {
     const label = availabilityLabel(item).toLowerCase().replace(" ", "-");
     counts[label] = (counts[label] || 0) + 1;
     return counts;
   }, {});
+  const availabilityTabs = [
+    { id: "all", label: "All", count: visibleMemberStats.length },
+    { id: "available", label: "Available", count: availabilityCounts.available || 0 },
+    { id: "at-capacity", label: "At capacity", count: availabilityCounts["at-capacity"] || 0 },
+    { id: "overloaded", label: "Overloaded", count: availabilityCounts.overloaded || 0 },
+  ];
+  const availabilityRows = visibleMemberStats
+    .filter(
+      (item) =>
+        availabilityFilter === "all" ||
+        availabilityLabel(item).toLowerCase().replace(" ", "-") === availabilityFilter,
+    )
+    .slice(0, 6);
   return (
     <section className="workspace-view pencil-team-view">
       <WorkspaceViewHeading
@@ -917,10 +930,18 @@ function TeamBoardView({
         onAction={onInvite}
       />
       <div className="pencil-team-filters" role="tablist" aria-label="Team capacity filters">
-        <button type="button" className="active" onClick={() => setQuery("")}>All {members.length}</button>
-        <button type="button" onClick={() => setQuery("")}>Available {availabilityCounts.available || 0}</button>
-        <button type="button" onClick={() => setQuery("")}>At capacity {availabilityCounts["at-capacity"] || 0}</button>
-        <button type="button" onClick={() => setQuery("")}>Overloaded {availabilityCounts.overloaded || 0}</button>
+        {availabilityTabs.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            role="tab"
+            aria-selected={availabilityFilter === item.id}
+            className={availabilityFilter === item.id ? "active" : ""}
+            onClick={() => setAvailabilityFilter(item.id)}
+          >
+            {item.label} {item.count}
+          </button>
+        ))}
       </div>
       <div className="pencil-team-layout">
         <div className="pencil-team-main">
@@ -941,7 +962,7 @@ function TeamBoardView({
                 <button type="button" className="pencil-team-message" onClick={() => setProfileMember(item.member)} aria-label={`Message ${memberName(item.member)}`}><MessageSquare size={18} /></button>
               </article>;
             })}
-            {!availabilityRows.length && <EmptyState text="No team members yet." />}
+            {!availabilityRows.length && <EmptyState text={members.length ? "No members match this availability filter." : "No team members yet."} />}
           </div>
         </div>
         <aside className="pencil-team-side">

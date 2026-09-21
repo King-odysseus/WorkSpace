@@ -52,6 +52,7 @@ const renderBoard = ({
   workspaceId,
   currentUserId,
   workspaceRole,
+  members = [{ id: 9, first_name: 'Dana', last_name: 'Reed', role: 'member' }],
 }) =>
   render(
     <TeamBoardView
@@ -59,7 +60,7 @@ const renderBoard = ({
       workspaceId={workspaceId}
       currentUserId={currentUserId}
       workspaceRole={workspaceRole}
-      members={[{ id: 9, first_name: 'Dana', last_name: 'Reed', role: 'member' }]}
+      members={members}
       projects={[]}
       checkIns={checkIns}
       workShifts={workShifts}
@@ -125,6 +126,58 @@ it('loads Team task data for the Pencil capacity screen', async () => {
   expect(container.querySelector('.pencil-team-view')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Open Dana Reed profile' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'Team capacity' })).toBeInTheDocument()
+})
+
+it('filters the Team capacity table from the availability tabs', () => {
+  const lastSeenAt = new Date().toISOString()
+  const members = [
+    { id: 1, first_name: 'Ada', last_name: 'Available', role: 'member', presence: 'available', last_seen_at: lastSeenAt },
+    { id: 2, first_name: 'Ben', last_name: 'Capacity', role: 'member', presence: 'busy', last_seen_at: lastSeenAt },
+    { id: 3, first_name: 'Cara', last_name: 'Overloaded', role: 'member', presence: 'busy', last_seen_at: lastSeenAt },
+    { id: 4, first_name: 'Dana', last_name: 'Away', role: 'member', presence: 'away', last_seen_at: lastSeenAt },
+  ]
+  const tasks = [
+    ...Array.from({ length: 6 }, (_, index) => ({
+      id: index + 1,
+      title: `Ben task ${index + 1}`,
+      status: 'todo',
+      assignee_id: 2,
+      member: 'Ben Capacity',
+      priority: 'normal',
+      tag: 'Ops',
+    })),
+    ...Array.from({ length: 9 }, (_, index) => ({
+      id: index + 20,
+      title: `Cara task ${index + 1}`,
+      status: 'todo',
+      assignee_id: 3,
+      member: 'Cara Overloaded',
+      priority: 'normal',
+      tag: 'Ops',
+    })),
+  ]
+
+  renderBoard({ tasks, members })
+
+  expect(screen.getByRole('tab', { name: 'All 4' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByRole('button', { name: 'Open Ada Available profile' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open Ben Capacity profile' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open Cara Overloaded profile' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open Dana Away profile' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('tab', { name: 'At capacity 1' }))
+  expect(screen.getByRole('tab', { name: 'At capacity 1' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.queryByRole('button', { name: 'Open Ada Available profile' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open Ben Capacity profile' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Open Cara Overloaded profile' })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Overloaded 1' }))
+  expect(screen.queryByRole('button', { name: 'Open Ben Capacity profile' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open Cara Overloaded profile' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Available 1' }))
+  expect(screen.getByRole('button', { name: 'Open Ada Available profile' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Open Ben Capacity profile' })).not.toBeInTheDocument()
 })
 
 const todayPanel = name => document.querySelector(`[data-panel="${name}"]`)
@@ -513,7 +566,7 @@ it('renders the Pencil capacity table from live members', () => {
 it('shows P9 availability filters', () => {
   renderBoard({ tasks: [] })
   expect(screen.getByRole('tablist', { name: 'Team capacity filters' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /At capacity/ })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /At capacity/ })).toBeInTheDocument()
 })
 
 it('does not turn cancelled work into capacity allocation', () => {
