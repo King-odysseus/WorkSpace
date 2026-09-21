@@ -14,6 +14,7 @@ import React, {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -75,6 +76,11 @@ import {
   Moon,
 } from "lucide-react";
 import "./pencil.css";
+import {
+  applyWorkspaceTheme,
+  readWorkspaceTheme,
+  resolveWorkspaceTheme,
+} from "./lib/theme.js";
 import { ThemeInit } from "../.flowbite-react/init.jsx";
 import { ThemeProvider } from "flowbite-react";
 import { flowbiteTheme } from "./lib/flowbite-theme.js";
@@ -379,9 +385,12 @@ function App() {
   const [globalSearchResults, setGlobalSearchResults] = useState([]);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem("workspace-theme") || "light",
+  const [theme, setTheme] = useState(readWorkspaceTheme);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(
+    () =>
+      window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false,
   );
+  const resolvedTheme = resolveWorkspaceTheme(theme, systemPrefersDark);
   const [session, setSession] = useState({
     loading: true,
     user: null,
@@ -680,26 +689,18 @@ function App() {
     setWorkspaceNotice(`${data?.workspace?.name || "Workspace"} created.`);
   };
 
-  useEffect(() => {
-    const resolvedTheme =
-      theme === "system"
-        ? window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light"
-        : theme;
-    document.documentElement.dataset.theme = resolvedTheme;
-    localStorage.setItem("workspace-theme", theme);
-  }, [theme]);
+  useLayoutEffect(() => {
+    applyWorkspaceTheme(theme, { prefersDark: systemPrefersDark });
+  }, [theme, systemPrefersDark]);
 
   useEffect(() => {
-    if (theme !== "system") return undefined;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = (event) => {
-      document.documentElement.dataset.theme = event.matches ? "dark" : "light";
-    };
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) return undefined;
+    const update = (event) => setSystemPrefersDark(event.matches);
+    setSystemPrefersDark(media.matches);
     media.addEventListener?.("change", update);
     return () => media.removeEventListener?.("change", update);
-  }, [theme]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(
@@ -3101,14 +3102,12 @@ function App() {
             <button
               type="button"
               onClick={() =>
-                setTheme((currentTheme) =>
-                  currentTheme === "dark" ? "light" : "dark",
-                )
+                setTheme(resolvedTheme === "dark" ? "light" : "dark")
               }
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
               className="shell-header-icon flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
             >
-              {theme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
+              {resolvedTheme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
             </button>
 
             <button
