@@ -2654,7 +2654,7 @@ function App() {
                 <img
                   src="/tijha-logo.png"
                   alt=""
-                  className="size-8 shrink-0 rounded-icon object-contain"
+                  className="sidebar-brand-logo size-8 shrink-0 rounded-icon object-contain"
                 />
               </button>
               {workspaceMenuOpen && workspaceMenu}
@@ -2669,7 +2669,7 @@ function App() {
                 <img
                   src="/tijha-logo.png"
                   alt="TijhaBooks"
-                  className="size-8 shrink-0 rounded-icon object-contain"
+                  className="sidebar-brand-logo size-8 shrink-0 rounded-icon object-contain"
                 />
                 <span className="truncate text-[15px] font-bold tracking-[-0.2px] text-text-primary">
                   WorkSpace

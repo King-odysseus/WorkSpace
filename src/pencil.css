@@ -615,7 +615,7 @@ aside[class*='bg-navy'] nav button[aria-current='page'] { border-left-color: var
 /* Exact P1 rail: the sidebar is a self-contained navy surface; no light-theme
    text, selector, or divider is allowed to leak into it. */
 aside[class*='bg-navy'] > div:first-child { padding: 20px 20px 0 !important; gap: 12px !important; }
-aside[class*='bg-navy'] > div:first-child > div:first-child > img { width: 32px !important; height: 32px !important; padding: 7px; border-radius: 8px !important; background: var(--pencil-bronze); }
+aside[class*='bg-navy'] .sidebar-brand-logo { width: 32px !important; height: 32px !important; padding: 7px; border-radius: 8px !important; background: #fff; }
 aside[class*='bg-navy'] > div:first-child > div:first-child > span { color: #fff !important; font-size: 15px !important; font-weight: 700 !important; }
 aside[class*='bg-navy'] > div:first-child > div:first-child button { color: #93B4D4 !important; }
 aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] { border-color: rgb(255 255 255 / 12%) !important; background: rgb(255 255 255 / 8%) !important; color: #fff !important; }
