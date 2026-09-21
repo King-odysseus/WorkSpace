@@ -2781,6 +2781,20 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .chat-reactions button { display: inline-flex; height: 24px; min-width: 28px; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); color: var(--pencil-text-secondary); font-size: 11px; line-height: 14px; }
 .chat-workspace-view .chat-reactions button.active { border-color: var(--pencil-navy); background: var(--pencil-selected); color: var(--pencil-navy); }
 .chat-workspace-view .chat-reactions .chat-reaction-add, .chat-workspace-view .chat-reactions .chat-reaction-more { width: 28px; padding: 0; }
+@media (hover: hover) and (pointer: fine) {
+  /* Once a message has a reaction, keep the thread quiet: only the reaction
+     pills are visible until the message is hovered, focused, or the picker is
+     open. Touch devices keep the quick choices visible because they have no
+     hover state to reveal them. */
+  .chat-workspace-view .chat-reactions.has-reactions .chat-reaction-add,
+  .chat-workspace-view .chat-reactions.has-reactions .chat-reaction-more { display: none; }
+  .chat-workspace-view .chat-message:hover .chat-reactions.has-reactions .chat-reaction-add,
+  .chat-workspace-view .chat-message:hover .chat-reactions.has-reactions .chat-reaction-more,
+  .chat-workspace-view .chat-message:focus-within .chat-reactions.has-reactions .chat-reaction-add,
+  .chat-workspace-view .chat-message:focus-within .chat-reactions.has-reactions .chat-reaction-more,
+  .chat-workspace-view .chat-reactions.has-reactions.reaction-picker-open .chat-reaction-add,
+  .chat-workspace-view .chat-reactions.has-reactions.reaction-picker-open .chat-reaction-more { display: inline-flex; }
+}
 .chat-workspace-view .chat-reply-button, .chat-workspace-view .chat-edit-button, .chat-workspace-view .chat-delete-button { min-height: 24px; padding: 0 5px; border: 0; background: transparent; color: var(--pencil-text-muted); font-size: 11px; }
 .chat-workspace-view .chat-reply-button:hover, .chat-workspace-view .chat-edit-button:hover { color: var(--pencil-text); }
 .chat-workspace-view .chat-delete-button:hover { color: var(--pencil-danger); }
