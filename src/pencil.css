@@ -5078,6 +5078,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-notifications-view .notification-history-row:hover { background: var(--pencil-surface-hover); }
 .pencil-notifications-view .notification-history-row:focus-visible { z-index: 1; outline: 2px solid var(--pencil-navy-focus); outline-offset: -2px; }
 .pencil-notifications-view .notification-unread-dot { width: 8px; height: 8px; align-self: start; margin-top: 32px; border-radius: 999px; background: var(--pencil-navy); }
+.pencil-notifications-view .notification-unread-dot.is-hidden { visibility: hidden; }
 .pencil-notifications-view .notification-type-tile { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 8px; }
 .pencil-notifications-view .notification-type-task { background: #DBEAFE; color: var(--pencil-blue); }
 .pencil-notifications-view .notification-type-message,

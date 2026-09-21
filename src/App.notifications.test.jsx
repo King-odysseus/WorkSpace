@@ -26,6 +26,18 @@ const activityNotification = {
   created_at: activityCreatedAt,
 }
 
+const readActivityNotification = {
+  id: 21,
+  kind: 'weekly_summary',
+  title: 'Weekly summary ready',
+  body: 'Your workspace report is available.',
+  target_type: 'workspace',
+  target_id: '1',
+  group_key: 'workspace:1',
+  read: true,
+  created_at: new Date(2026, 8, 13, 9, 30).toISOString(),
+}
+
 const chatNotification = {
   id: 19,
   kind: 'direct_message',
@@ -63,14 +75,14 @@ const mountApp = async () => {
       unread_counts: { channel: 1, direct: 1, conversation: 2, activity: 1 },
     },
     '/api/workspaces/1/notifications/?page=': {
-      notifications: [activityNotification],
+      notifications: [activityNotification, readActivityNotification],
       unread_counts: { channel: 1, direct: 1, conversation: 2, activity: 1 },
       summary: {
         unread_count: 1,
         weekly_total: 4,
         categories: { task_updates: 1, messages_mentions: 0, risks_members: 0 },
       },
-      pagination: { page: 1, page_size: 7, total_items: 1, total_pages: 1, has_next: false, has_previous: false },
+      pagination: { page: 1, page_size: 7, total_items: 2, total_pages: 1, has_next: false, has_previous: false },
     },
     '/api/workspaces/1/notification-preferences/': {
       preferences: {
@@ -147,7 +159,7 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/notifications/?page=1&exclude_chat=1&sort=newest'))).toBe(true)
   await screen.findByText('Everything that needs your attention, newest first.')
   await screen.findByText('1 unread · 4 total this week')
-  expect(screen.getByRole('button', { name: /^All 1$/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: /^All 2$/ })).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByRole('button', { name: /^Unread 1$/ })).toHaveAttribute('aria-pressed', 'false')
   expect(screen.getByRole('button', { name: /^Mentions 0$/ })).toBeInTheDocument()
   const historyRow = screen.getByText('Deployment finished').closest('button')
@@ -157,6 +169,10 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(historyRow.querySelector('.notification-unread-dot')).toBeInTheDocument()
   expect(within(historyRow).getByText(/deployment/)).toBeInTheDocument()
   expect(historyRow.querySelector('time')).toHaveAttribute('dateTime', activityCreatedAt)
+  const readHistoryRow = screen.getByText('Weekly summary ready').closest('button')
+  expect(readHistoryRow).toHaveClass('is-read')
+  expect(readHistoryRow.querySelector('.notification-unread-dot')).toHaveClass('is-hidden')
+  expect(within(readHistoryRow).getByText(/weekly summary/)).toBeInTheDocument()
   expect(screen.getByText('need attention')).toBeInTheDocument()
   expect(screen.getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
   expect(screen.queryByText('New direct message')).not.toBeInTheDocument()

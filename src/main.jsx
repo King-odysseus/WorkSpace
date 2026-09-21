@@ -6429,7 +6429,10 @@ function WorkspaceView({
                         className={`notification-history-row ${notification.read ? "is-read" : "is-unread"}`}
                         aria-label={`Open ${notification.title}`}
                       >
-                        {!notification.read && <span className="notification-unread-dot" aria-hidden="true" />}
+                        <span
+                          className={`notification-unread-dot${notification.read ? " is-hidden" : ""}`}
+                          aria-hidden="true"
+                        />
                         <span className={`notification-type-tile notification-type-${visual.tone}`} aria-hidden="true">
                           <TypeIcon size={18} strokeWidth={1.7} />
                         </span>
