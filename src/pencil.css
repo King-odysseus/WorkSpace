@@ -2760,7 +2760,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .chat-member-name { cursor: pointer; }
 .chat-workspace-view .chat-message-meta > span { color: var(--pencil-text-muted); font-size: 11px; line-height: 13px; }
 .chat-workspace-view .chat-receipt { display: inline-flex; color: var(--pencil-text-muted); }
-.chat-workspace-view .chat-receipt-read { color: var(--pencil-success); }
+.chat-workspace-view .chat-receipt-read { color: var(--pencil-blue); }
 .chat-workspace-view .chat-edited-marker { font-size: 10px !important; font-style: italic; }
 .chat-workspace-view .chat-message-bubble { min-width: 0; max-width: 100%; }
 .chat-workspace-view .chat-message-bubble p { margin: 0; color: var(--pencil-text); font-size: 13px; line-height: 19px; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -6834,10 +6834,13 @@ html[data-theme='dark'] :is(
   .project-health.completed,
   .project-resource-status,
   .project-expense-state.is-actual,
-  .calendar-mobile-event.event-type-reminder em,
-  .chat-workspace-view .chat-receipt-read
+  .calendar-mobile-event.event-type-reminder em
 ) {
   color: var(--pencil-alert-success-text) !important;
+}
+
+html[data-theme='dark'] .chat-workspace-view .chat-receipt-read {
+  color: var(--pencil-alert-info-text) !important;
 }
 
 html[data-theme='dark'] :is(
