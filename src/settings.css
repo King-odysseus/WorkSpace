@@ -304,7 +304,11 @@
 .settings-view .avatar-upload {
   position: relative;
   display: inline-flex;
-  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  align-items: center;
+  justify-content: center;
 }
 
 .settings-view .avatar-upload-trigger {
@@ -336,6 +340,7 @@
 .settings-view .settings-profile-card .avatar {
   width: 64px !important;
   height: 64px !important;
+  flex: 0 0 64px !important;
 }
 
 .settings-view .settings-profile-card .text-button {
