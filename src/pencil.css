@@ -6141,3 +6141,203 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   width: 0;
   height: 0;
 }
+
+/* Legacy modal forms and inline resource forms still stack raw labels and
+   controls. Keep the field-to-field rhythm explicit so adding validation,
+   helper text, or a custom date/select control cannot collapse the spacing. */
+:is(.modal.chat-create-modal, .modal.project-record-modal) {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 18px;
+}
+
+:is(.modal.chat-create-modal, .modal.project-record-modal) > :where(label:not(.chat-privacy-toggle), .modal-field, .drawer-field),
+.project-register-modal form > :where(label, .modal-field, .drawer-field),
+.project-resource-form > :where(label, .modal-field, .drawer-field) {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+}
+
+:is(.modal.chat-create-modal, .modal.project-record-modal) > :where(.modal-grid, .record-form-grid),
+.project-register-modal form > .modal-grid,
+.project-register-modal > form {
+  margin: 0;
+}
+
+.project-register-modal > form {
+  gap: 18px;
+}
+
+.project-register-modal .drawer-section-heading {
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.project-register-modal .drawer-section-heading h3 {
+  margin: 0;
+  color: var(--pencil-text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.project-register-modal .drawer-section-heading .inline-delete {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--pencil-surface-muted);
+  color: var(--pencil-text-secondary);
+}
+
+.project-register-modal .drawer-section-heading .inline-delete:hover {
+  background: var(--pencil-border);
+  color: var(--pencil-text);
+}
+
+.chat-create-modal .chat-member-picker {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--pencil-border);
+  border-radius: 12px;
+  background: var(--pencil-surface-muted);
+}
+
+.chat-create-modal .chat-member-picker > span {
+  padding: 2px 8px 7px;
+  color: var(--pencil-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.chat-create-modal .chat-member-picker label,
+.chat-create-modal .chat-privacy-toggle {
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: var(--pencil-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.chat-create-modal .chat-member-picker label:hover,
+.chat-create-modal .chat-privacy-toggle:hover {
+  background: #fff;
+}
+
+.chat-create-modal .chat-member-picker input[type='checkbox'],
+.chat-create-modal .chat-privacy-toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  accent-color: var(--pencil-navy);
+}
+
+.chat-create-modal .chat-selection-summary,
+.chat-create-modal .chat-selection-error {
+  margin: -10px 0 0;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.chat-create-modal .chat-selection-summary { color: var(--pencil-text-muted); }
+.chat-create-modal .chat-selection-error { color: var(--pencil-danger); }
+
+.project-record-modal .record-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.project-record-modal .record-form-grid > :where(label, .modal-field, .drawer-field) {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+}
+
+.project-resource-form {
+  display: grid;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.project-resource-add-form {
+  gap: 16px;
+}
+
+.project-resource-add-fields {
+  gap: 12px;
+}
+
+.project-stakeholder-add-form {
+  gap: 12px;
+}
+
+.project-resource-form > button {
+  justify-self: start;
+}
+
+/* Scrollable surfaces stay quiet until needed. The track disappears, the
+   thumb is narrow and low contrast, and hover provides a stronger target. */
+* {
+  scrollbar-color: rgb(0 22 102 / 14%) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(0 22 102 / 14%);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 22 102 / 28%);
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@media (max-width: 640px) {
+  .project-record-modal .record-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-resource-add-fields,
+  .project-stakeholder-add-form {
+    gap: 14px;
+  }
+}
