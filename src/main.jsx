@@ -8054,9 +8054,8 @@ function WorkspaceView({
               <span className={`project-status-badge ${selectedProjectWorkspace.status}`}>
                 {selectedProjectWorkspace.status}
               </span>
-              <span className="project-detail-meta-line">
-                {selectedProjectWorkspace.due_date ? `Due ${projectDeadline}` : "No deadline set"}
-              </span>
+              <ClipboardList size={15} />
+              <span className="project-detail-meta-line">{projectTotal} tasks</span>
               {projectOperation === "tasks" && canManageTasks ? (
                 <button
                   type="button"
