@@ -447,7 +447,7 @@ it('clears planner bucket drag state when pointer capture is lost', () => {
   expect(onBucketReorder).not.toHaveBeenCalled()
 })
 
-it('does not offer cross-scope bucket drops in the all-projects view', () => {
+it('orders lanes of different scopes together when one board draws them side by side', () => {
   const onBucketReorder = vi.fn()
   const { container } = renderPlanner({
     buckets: [
@@ -465,10 +465,12 @@ it('does not offer cross-scope bucket drops in the all-projects view', () => {
 
   fireEvent.dragStart(sourceSurface, { dataTransfer })
   fireEvent.dragEnter(targetColumn, { dataTransfer })
+  // A board that draws both lanes has to let them be ordered against each
+  // other. Reordering never changes a lane's scope, only where it sits.
+  expect(targetColumn).toHaveClass('is-bucket-drop-target')
   fireEvent.drop(targetColumn, { dataTransfer })
 
-  expect(targetColumn).not.toHaveClass('is-bucket-drop-target')
-  expect(onBucketReorder).not.toHaveBeenCalled()
+  expect(onBucketReorder).toHaveBeenCalledWith([24, 19], { board: true })
 })
 
 it('keeps the bucket grip decorative and offers keyboard-reachable move actions', async () => {
@@ -534,7 +536,9 @@ it('reorders workstream buckets from the all-operations view', () => {
   fireEvent.dragEnter(targetColumn, { dataTransfer })
   fireEvent.drop(targetColumn, { dataTransfer })
 
-  expect(onBucketReorder).toHaveBeenCalledWith([24, 19], { project_id: null, workstream_id: 7 })
+  // The board shows an unscoped Backlog beside the workstream lanes, so the
+  // whole visible sequence is what gets saved.
+  expect(onBucketReorder).toHaveBeenCalledWith([2, 24, 19], { board: true })
 })
 
 it('can nudge a bucket across the full board and back again', async () => {
@@ -912,4 +916,67 @@ it('opens the archive view and restores an archived bucket', () => {
   expect(screen.getByText('Atlas')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
   expect(onRestoreBucket).toHaveBeenCalledWith(expect.objectContaining({ id: 31 }))
+})
+
+// Daily operations draws workspace lanes beside workstream ones. Ordering used
+// to run per scope, so the move controls described a list the board was not
+// showing: the first workspace lane reported nothing to its left even with a
+// workstream lane drawn there.
+const mixedScopeBuckets = [
+  { id: 41, name: 'Ongoing Tasks', project_id: null, workstream_id: 7 },
+  { id: 42, name: 'Clock-in', project_id: null, workstream_id: null },
+  { id: 43, name: 'Done', project_id: null, workstream_id: null },
+]
+
+it('offers a move left on the second lane of a board that mixes scopes', async () => {
+  const user = userEvent.setup()
+  renderPlanner({
+    buckets: mixedScopeBuckets,
+    lookupValues: [{ id: 7, kind: 'workstream', name: 'Support', is_active: true }],
+    scopeMode: 'operations',
+    projectFilter: 'operations',
+    canManageBuckets: true,
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Open actions for Clock-in' }))
+
+  expect(screen.getByRole('menuitem', { name: 'Move Clock-in left' })).not.toHaveAttribute('aria-disabled', 'true')
+})
+
+it('nudges a lane past a lane of another scope and saves the whole board order', async () => {
+  const user = userEvent.setup()
+  const onBucketReorder = vi.fn()
+  renderPlanner({
+    buckets: mixedScopeBuckets,
+    lookupValues: [{ id: 7, kind: 'workstream', name: 'Support', is_active: true }],
+    scopeMode: 'operations',
+    projectFilter: 'operations',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Open actions for Clock-in' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Move Clock-in left' }))
+
+  expect(onBucketReorder).toHaveBeenCalledWith([42, 41, 43], { board: true })
+})
+
+it('keeps the single-scope payload when every lane shares one scope', async () => {
+  const user = userEvent.setup()
+  const onBucketReorder = vi.fn()
+  renderPlanner({
+    buckets: [
+      { id: 42, name: 'Clock-in', project_id: null, workstream_id: null },
+      { id: 43, name: 'Done', project_id: null, workstream_id: null },
+    ],
+    scopeMode: 'operations',
+    projectFilter: 'operations',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Open actions for Done' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Move Done left' }))
+
+  expect(onBucketReorder).toHaveBeenCalledWith([43, 42], { project_id: null, workstream_id: null })
 })

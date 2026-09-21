@@ -317,7 +317,12 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     sessionStorage.setItem('workspace-new-task-bucket', bucket)
     onAddTask()
   }
-  const reorderableBuckets = buckets.filter(bucket => typeof bucket.id === 'number' || bucket.id === 'backlog')
+  // A legacy lane is one a task names but no bucket row backs yet. It is drawn
+  // like any other column, so it has to be orderable like any other column; the
+  // server materialises it the first time an order names it, exactly as it
+  // already does for the Backlog sentinel.
+  const isLegacyBucketId = id => typeof id === 'string' && id.startsWith('legacy-')
+  const reorderableBuckets = buckets.filter(bucket => typeof bucket.id === 'number' || bucket.id === 'backlog' || isLegacyBucketId(bucket.id))
   const reorderScopeFor = bucket => {
     if (bucket.id === 'backlog' && !bucket.project_id && !bucket.workstream_id) return { project_id: null, workstream_id: null }
     if (bucketScope?.project_id && String(bucket.project_id) === String(bucketScope.project_id)) return bucketScope
@@ -333,12 +338,31 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     return !bucket.project_id && !bucket.workstream_id
   })
   const sameReorderScope = (left, right) => Boolean(left && right && String(left.project_id ?? '') === String(right.project_id ?? '') && String(left.workstream_id ?? '') === String(right.workstream_id ?? ''))
+  // Daily operations and the unfiltered Planner draw workspace lanes next to
+  // workstream and project ones. Reordering within a single scope then means the
+  // controls describe a list the board is not showing: the first workspace lane
+  // reports nothing to its left even with another scope's lane drawn there, and
+  // two neighbouring lanes refuse each other's drops. When the board really is
+  // one scope the payload stays exactly as it was.
+  const boardScopeKeys = new Set(reorderableBuckets.map(item => {
+    const scope = reorderScopeFor(item)
+    return scope ? `${scope.project_id ?? ''}:${scope.workstream_id ?? ''}` : ''
+  }))
+  // Legacy lanes have no position of their own, so their order can only be
+  // written alongside the lanes around them.
+  const isMixedScopeBoard = boardScopeKeys.size > 1 || reorderableBuckets.some(item => isLegacyBucketId(item.id))
+  const reorderListFor = bucket => {
+    if (isMixedScopeBoard) return reorderableBuckets
+    const scope = reorderScopeFor(bucket)
+    return scope ? reorderBucketsFor(scope) : []
+  }
+  const reorderPayloadScopeFor = bucket => isMixedScopeBoard ? { board: true } : reorderScopeFor(bucket)
   const bucketDropPlacementFor = (sourceId, targetId, pointerX, targetElement) => {
     if (!sourceId || !targetId || String(sourceId) === String(targetId)) return null
     const sourceBucket = reorderableBuckets.find(bucket => String(bucket.id) === String(sourceId))
-    const scope = sourceBucket ? reorderScopeFor(sourceBucket) : null
+    const scope = sourceBucket ? reorderPayloadScopeFor(sourceBucket) : null
     if (!scope) return null
-    const currentOrder = reorderBucketsFor(scope).map(bucket => bucket.id)
+    const currentOrder = reorderListFor(sourceBucket).map(bucket => bucket.id)
     const sourceIndex = currentOrder.findIndex(id => String(id) === String(sourceId))
     const targetIndex = currentOrder.findIndex(id => String(id) === String(targetId))
     if (sourceIndex < 0 || targetIndex < 0) return null
@@ -384,7 +408,9 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     if (!canManageBuckets || String(sourceId) === String(targetId)) return false
     const sourceBucket = reorderableBuckets.find(bucket => String(bucket.id) === String(sourceId))
     const targetBucket = reorderableBuckets.find(bucket => String(bucket.id) === String(targetId))
-    return Boolean(sourceBucket && targetBucket && sameReorderScope(reorderScopeFor(sourceBucket), reorderScopeFor(targetBucket)))
+    if (!sourceBucket || !targetBucket) return false
+    if (isMixedScopeBoard) return true
+    return sameReorderScope(reorderScopeFor(sourceBucket), reorderScopeFor(targetBucket))
   }
   const bucketNodeAtPoint = (clientX, clientY) => {
     if (!boardRef.current || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null
@@ -471,10 +497,9 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   }
   const nudgeBucket = (bucketId, direction) => {
     const bucket = reorderableBuckets.find(item => String(item.id) === String(bucketId))
-    const scope = bucket ? reorderScopeFor(bucket) : null
+    const scope = bucket ? reorderPayloadScopeFor(bucket) : null
     if (!scope) return
-    const scopeBuckets = reorderBucketsFor(scope)
-    const next = scopeBuckets.map(item => item.id)
+    const next = reorderListFor(bucket).map(item => item.id)
     const sourceIndex = next.findIndex(id => String(id) === String(bucketId))
     const targetIndex = sourceIndex + direction
     if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= next.length) return
@@ -660,12 +685,10 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     >
       {buckets.map(bucket => {
         const reorderScope = reorderScopeFor(bucket)
-        const reorderLaneBuckets = reorderScope ? reorderBucketsFor(reorderScope) : []
+        const reorderLaneBuckets = reorderListFor(bucket)
         const persistedIndex = reorderLaneBuckets.findIndex(item => item.id === bucket.id)
-        const bucketDraggable = canManageBuckets && Boolean(reorderScope) && (typeof bucket.id === 'number' || bucket.id === 'backlog')
-        const draggedBucket = reorderableBuckets.find(item => String(item.id) === String(draggedBucketId))
-        const draggedBucketScope = draggedBucket ? reorderScopeFor(draggedBucket) : null
-        const bucketDropAllowed = bucketDraggable && Boolean(draggedBucketId) && draggedBucketId !== bucket.id && sameReorderScope(draggedBucketScope, reorderScope)
+        const bucketDraggable = canManageBuckets && Boolean(reorderScope) && (typeof bucket.id === 'number' || bucket.id === 'backlog' || isLegacyBucketId(bucket.id))
+        const bucketDropAllowed = bucketDraggable && Boolean(draggedBucketId) && draggedBucketId !== bucket.id && bucketDropAllowedFor(draggedBucketId, bucket.id)
         const isBucketDropTarget = Boolean(draggedBucketId) && dropBucketId === bucket.id && draggedBucketId !== bucket.id
         const isTaskDropTarget = Boolean(draggedTaskId) && dropTaskBucket === bucket.name
         const laneTasks = orderedFor(bucket.name)

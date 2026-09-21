@@ -1352,6 +1352,8 @@ def plan_bucket_reorder(request, workspace_id):
     order = payload.get('bucket_ids')
     if not isinstance(order, list) or not order:
         return JsonResponse({'error': 'bucket_ids must be a non-empty list.'}, status=400)
+    if payload.get('across_scopes'):
+        return _reorder_buckets_across_scopes(workspace_id, order)
     project_id = payload.get('project_id')
     workstream_id = payload.get('workstream_id')
     if project_id and workstream_id:
@@ -1392,6 +1394,55 @@ def plan_bucket_reorder(request, workspace_id):
             bucket.position = position
             bucket.save(update_fields=['position'])
     return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True, **scope)]})
+
+
+def _reorder_buckets_across_scopes(workspace_id, order):
+    """Order lanes that a single board shows from more than one scope.
+
+    Daily operations and the unfiltered Planner draw workspace-level lanes
+    alongside workstream and project ones. Their on-screen sequence is
+    PlanBucket.position, which is a single column across the whole workspace, so
+    an order that interleaves scopes can only be written by numbering all of them
+    together. The scoped branch above renumbers one scope from zero, which cannot
+    express "this workstream lane sits between those two workspace lanes".
+
+    Lanes the board did not show keep their relative order and follow the ones it
+    did. Position only decides the sequence within whatever subset a board draws,
+    so moving them along changes no other board.
+    """
+    # Two kinds of sentinel name a lane that has no row yet: 'backlog', and
+    # 'legacy-<name>' for a lane that exists only because a task names it. Both
+    # are materialised before the order is written, or the position has nothing
+    # to attach to and the lane keeps drifting back.
+    resolved = []
+    for value in order:
+        if not isinstance(value, str):
+            resolved.append(value)
+            continue
+        text = value.strip()
+        if text.lower() == 'backlog':
+            resolved.append(ensure_bucket_named(workspace_id, 'Backlog').id)
+        elif text.startswith('legacy-') and text[len('legacy-'):].strip():
+            resolved.append(ensure_bucket_named(workspace_id, text[len('legacy-'):].strip()[:80]).id)
+        else:
+            resolved.append(value)
+    active = list(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True))
+    by_id = {bucket.id: bucket for bucket in active}
+    try:
+        ids = [int(value) for value in resolved]
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'bucket_ids must contain valid bucket IDs.'}, status=400)
+    if len(set(ids)) != len(ids):
+        return JsonResponse({'error': 'The bucket order must not repeat a bucket.'}, status=400)
+    if any(bucket_id not in by_id for bucket_id in ids):
+        return JsonResponse({'error': 'The bucket order names a bucket this workspace does not have.'}, status=400)
+    trailing = [bucket.id for bucket in active if bucket.id not in set(ids)]
+    for position, bucket_id in enumerate(ids + trailing):
+        bucket = by_id[bucket_id]
+        if bucket.position != position:
+            bucket.position = position
+            bucket.save(update_fields=['position'])
+    return JsonResponse({'buckets': [bucket.as_dict() for bucket in PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True)]})
 
 
 def ensure_bucket_named(workspace_id, name):

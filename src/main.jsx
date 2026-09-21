@@ -5041,9 +5041,81 @@ function WorkspaceView({
     }
   };
 
+  const reorderBucketsAcrossScopes = async (bucketIds, previousBuckets) => {
+    // Sentinel ids ("backlog", "legacy-<name>") name a lane the server has to
+    // materialise; everything else is a real bucket id.
+    const bucketKey = (value) => {
+      const id = value?.id ?? value;
+      return typeof id === "string" ? id : Number(id);
+    };
+    const ids = bucketIds.map(bucketKey);
+    const byId = new Map(previousBuckets.map((bucket) => [bucketKey(bucket), bucket]));
+    if (new Set(ids).size !== ids.length || ids.some((id) => !byId.has(id))) {
+      setBucketError(
+        "Bucket order could not be saved. Refresh the page and try again.",
+      );
+      return;
+    }
+    // Lanes this board does not draw keep the slots they already hold; only the
+    // ones it ordered are resequenced, in place.
+    const moving = new Set(ids);
+    const reordered = ids.map((id) => byId.get(id));
+    let cursor = 0;
+    const nextBuckets = previousBuckets.map((bucket) =>
+      moving.has(bucketKey(bucket)) ? reordered[cursor++] : bucket,
+    );
+    if (
+      nextBuckets.every((bucket, index) =>
+        String(bucket.id) === String(previousBuckets[index]?.id),
+      )
+    )
+      return;
+    setBucketError("");
+    setLocalData((current) => ({ ...current, buckets: nextBuckets }));
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/plan-buckets/reorder/`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": await getCsrfToken(),
+            "X-Workspace-Id": String(workspaceId),
+          },
+          body: JSON.stringify({ bucket_ids: ids, across_scopes: true }),
+        },
+      );
+      const responseData = await readJsonResponse(
+        response,
+        "Bucket order could not be saved.",
+      );
+      if (!response.ok)
+        throw new Error(
+          responseData.error || "Bucket order could not be saved.",
+        );
+      // This mode returns every active bucket, already in saved order.
+      setLocalData((current) =>
+        responseData.buckets?.length
+          ? { ...current, buckets: responseData.buckets }
+          : current,
+      );
+      window.dispatchEvent(
+        new CustomEvent("workspace:notice", { detail: "Bucket order saved." }),
+      );
+      onRefresh();
+    } catch (error) {
+      setLocalData((current) => ({ ...current, buckets: previousBuckets }));
+      setBucketError(error.message || "Bucket order could not be saved.");
+    }
+  };
   const reorderBuckets = async (bucketIds, scope = {}) => {
     if (!canManageMembers) return;
     const previousBuckets = [...localData.buckets];
+    // A board showing more than one scope orders every lane it draws at once.
+    // Position is one column across the workspace, so an order that interleaves
+    // scopes cannot be written one scope at a time.
+    if (scope.board) return reorderBucketsAcrossScopes(bucketIds, previousBuckets);
     const bucketInScope = (bucket) => {
       if (scope.project_id)
         return String(bucket.project_id) === String(scope.project_id);

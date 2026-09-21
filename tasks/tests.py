@@ -509,6 +509,109 @@ class TaskApiTests(TestCase):
         self.assertEqual(second.position, 0)
         self.assertEqual(backlog.position, 1)
 
+    def test_owner_can_interleave_buckets_of_different_scopes(self):
+        # Daily operations draws workspace lanes beside workstream ones, and the
+        # sequence it shows is PlanBucket.position, one column for the whole
+        # workspace. Numbering a single scope from zero cannot put a workstream
+        # lane between two workspace lanes.
+        workstream = LookupValue.objects.create(workspace=self.workspace, kind='workstream', name='Support')
+        ongoing = PlanBucket.objects.create(workspace=self.workspace, workstream=workstream, name='Ongoing', position=0)
+        clock_in = PlanBucket.objects.create(workspace=self.workspace, name='Clock-in', position=1)
+        done = PlanBucket.objects.create(workspace=self.workspace, name='Done', position=2)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [clock_in.id, ongoing.id, done.id], 'across_scopes': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            [bucket['id'] for bucket in response.json()['buckets']],
+            [clock_in.id, ongoing.id, done.id],
+        )
+        for bucket, expected in ((clock_in, 0), (ongoing, 1), (done, 2)):
+            bucket.refresh_from_db()
+            self.assertEqual(bucket.position, expected)
+
+    def test_a_cross_scope_order_leaves_boards_it_did_not_draw_alone(self):
+        project = Project.objects.create(workspace=self.workspace, name='Atlas')
+        design = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Design', position=0)
+        build = PlanBucket.objects.create(workspace=self.workspace, project=project, name='Build', position=1)
+        clock_in = PlanBucket.objects.create(workspace=self.workspace, name='Clock-in', position=2)
+        done = PlanBucket.objects.create(workspace=self.workspace, name='Done', position=3)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [done.id, clock_in.id], 'across_scopes': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        # The project board still reads Design then Build, wherever its lanes
+        # now sit in the workspace-wide numbering.
+        project_order = list(
+            PlanBucket.objects.filter(workspace=self.workspace, project=project).values_list('id', flat=True)
+        )
+        self.assertEqual(project_order, [design.id, build.id])
+
+    def test_a_cross_scope_order_rejects_a_bucket_from_another_workspace(self):
+        other = Workspace.objects.create(name='Other Co', slug='other-co')
+        outsider = PlanBucket.objects.create(workspace=other, name='Theirs', position=0)
+        mine = PlanBucket.objects.create(workspace=self.workspace, name='Mine', position=0)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [outsider.id, mine.id], 'across_scopes': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        outsider.refresh_from_db()
+        self.assertEqual(outsider.position, 0)
+
+    def test_a_cross_scope_order_rejects_a_repeated_bucket(self):
+        first = PlanBucket.objects.create(workspace=self.workspace, name='First', position=0)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [first.id, first.id], 'across_scopes': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_cross_scope_order_can_materialise_the_default_backlog(self):
+        workstream = LookupValue.objects.create(workspace=self.workspace, kind='workstream', name='Support')
+        ongoing = PlanBucket.objects.create(workspace=self.workspace, workstream=workstream, name='Ongoing', position=0)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [ongoing.id, 'backlog'], 'across_scopes': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        backlog = PlanBucket.objects.get(workspace=self.workspace, name='Backlog', project__isnull=True, workstream__isnull=True)
+        ongoing.refresh_from_db()
+        self.assertEqual(ongoing.position, 0)
+        self.assertEqual(backlog.position, 1)
+
+    def test_a_cross_scope_order_materialises_a_legacy_lane(self):
+        # A lane that exists only because a task names it has no row to carry a
+        # position, so ordering the board has to create one first.
+        Task.objects.create(workspace=self.workspace, title='Stray', bucket='Ongoing Tasks')
+        clock_in = PlanBucket.objects.create(workspace=self.workspace, name='Clock-in', position=0)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [clock_in.id, 'legacy-Ongoing Tasks'], 'across_scopes': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        created = PlanBucket.objects.get(workspace=self.workspace, name='Ongoing Tasks')
+        clock_in.refresh_from_db()
+        self.assertEqual(clock_in.position, 0)
+        self.assertEqual(created.position, 1)
+
+    def test_a_cross_scope_order_rejects_an_empty_legacy_lane_name(self):
+        clock_in = PlanBucket.objects.create(workspace=self.workspace, name='Clock-in', position=0)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [clock_in.id, 'legacy-'], 'across_scopes': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_owner_can_rename_a_plan_bucket(self):
         bucket = PlanBucket.objects.create(workspace=self.workspace, name='Later', position=1)
         response = self.client.patch(
