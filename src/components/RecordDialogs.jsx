@@ -3,16 +3,33 @@
 
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ArrowUpRight, X } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, CircleCheck, MessageCircle, TriangleAlert, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { Alert } from './ui/alert.jsx'
 import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog.jsx'
 import { DateField, DateTimeField, SelectField } from './workspace-ui.jsx'
+import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
 import { formatDay, formatDateTime, getCsrfToken, readJsonResponse, toDateTimeLocal } from '../lib/workspace-format.js'
+
+const CHECK_IN_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const CHECK_IN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+function formatCheckInDetailDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  if (!match) return formatDay(value)
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return `${CHECK_IN_WEEKDAYS[date.getDay()]}, ${date.getDate()} ${CHECK_IN_MONTHS[date.getMonth()]}`
+}
+
+function formatCommentTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
 
 function CalendarEventEditDialog({ event, workspaceId, canEdit = true, onClose, onUpdated }) {
   const [form, setForm] = useState({ title: event.title, description: event.description || '', start_at: toDateTimeLocal(event.start_at), end_at: toDateTimeLocal(event.end_at), event_type: event.event_type, reminder_minutes: event.reminder_minutes })
@@ -142,6 +159,7 @@ function CheckInDetailDialog({ checkIn, workspaceId, members = [], currentUserId
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const author = members.find(member => String(member.id) === String(checkIn.user_id))
 
   const loadComments = async () => {
     setLoading(true)
@@ -187,16 +205,50 @@ function CheckInDetailDialog({ checkIn, workspaceId, members = [], currentUserId
 
   return <Dialog open onOpenChange={openState => !openState && onClose()}>
     <DialogContent className="modal checkin-detail-dialog" showCloseButton={false}>
-      <DialogHeader className="modal-heading flex-row items-start justify-between gap-3 space-y-0">
-        <div><p className="eyebrow">Daily check-in</p><DialogTitle>{checkIn.user_name}</DialogTitle><p className="modal-subtitle">{formatDay(checkIn.date)}</p></div>
-        <div className="flex items-center gap-2"><Button type="button" variant="ghost" size="sm" onClick={onEdit} disabled={!canEdit}>Edit</Button><Button type="button" variant="ghost" size="icon" className="close-button rounded-full" onClick={onClose} aria-label="Close check-in details"><X size={18} /></Button></div>
+      <DialogHeader className="checkin-detail-header">
+        <div className="checkin-detail-author">
+          <Avatar name={checkIn.user_name} avatarUrl={author?.avatar_url} className="checkin-detail-avatar" />
+          <div className="checkin-detail-heading-copy">
+            <DialogTitle>{checkIn.user_name || 'Team member'}</DialogTitle>
+            <p>{formatCheckInDetailDate(checkIn.date)}</p>
+            <span className="checkin-detail-submitted"><i aria-hidden="true" /> Submitted</span>
+          </div>
+        </div>
+        <div className="checkin-detail-header-actions">
+          <Button type="button" variant="ghost" size="sm" className="checkin-detail-edit" onClick={onEdit} disabled={!canEdit}>Edit</Button>
+          <Button type="button" variant="ghost" size="icon" className="checkin-detail-close" onClick={onClose} aria-label="Close check-in details"><X size={18} /></Button>
+        </div>
       </DialogHeader>
-      <div className="checkin-detail-content">
-        <section><h3>Completed</h3><p>{checkIn.completed || 'No update yet.'}</p></section>
-        <section><h3>Next steps</h3><p>{checkIn.next_steps || 'No next step recorded.'}</p></section>
-        <section className={checkIn.blockers ? 'checkin-detail-blockers' : ''}><h3>Blockers</h3><p>{checkIn.blockers || 'None reported.'}</p></section>
+      <div className="checkin-detail-body">
+        <dl className="checkin-detail-summary">
+          <div className="checkin-detail-summary-row">
+            <span className="checkin-detail-summary-icon is-completed" aria-hidden="true"><CircleCheck size={18} /></span>
+            <div><dt>Completed</dt><dd><LinkedText text={checkIn.completed || 'No update yet.'} /></dd></div>
+          </div>
+          <div className="checkin-detail-summary-row">
+            <span className="checkin-detail-summary-icon" aria-hidden="true"><ArrowRight size={18} /></span>
+            <div><dt>Next steps</dt><dd><LinkedText text={checkIn.next_steps || 'No next step recorded.'} /></dd></div>
+          </div>
+          <div className={`checkin-detail-summary-row${checkIn.blockers ? ' is-blocker' : ''}`}>
+            <span className="checkin-detail-summary-icon" aria-hidden="true"><TriangleAlert size={18} /></span>
+            <div><dt>Blockers</dt><dd><LinkedText text={checkIn.blockers || 'None reported.'} /></dd></div>
+          </div>
+        </dl>
+        <section className="checkin-detail-discussion" aria-labelledby="checkin-discussion-heading" aria-busy={loading}>
+          <div className="checkin-detail-discussion-heading">
+            <h3 id="checkin-discussion-heading">Discussion</h3>
+            <span>{comments.length}</span>
+          </div>
+          {loading ? <SkeletonGroup className="checkin-detail-comment-skeleton" label="Loading comments"><Skeleton variant="line" /><Skeleton variant="text" style={{ width: '72%' }} /><Skeleton variant="line" /></SkeletonGroup> : comments.length ? <div className="checkin-detail-comment-list">{comments.map(comment => {
+            const commentAuthor = members.find(member => String(member.id) === String(comment.author_id))
+            return <article className="checkin-detail-comment" key={comment.id}><Avatar name={comment.author_name} avatarUrl={commentAuthor?.avatar_url} small className="checkin-detail-comment-avatar" /><div className="checkin-detail-comment-main"><header><strong>{comment.author_name || 'Team member'}</strong><time dateTime={comment.created_at}>{formatCommentTime(comment.created_at)}</time></header><p><LinkedText text={comment.body} /></p></div></article>
+          })}</div> : <div className="checkin-detail-empty"><MessageCircle size={24} aria-hidden="true" /><strong>No comments yet</strong><p>Add an update or offer help with the blocker.</p></div>}
+          {error && <Alert tone="danger" compact className="checkin-detail-error">{error}</Alert>}
+        </section>
       </div>
-      <section className="checkin-comments" aria-label="Check-in comments"><div className="drawer-section-heading"><h3>Discussion</h3><span>{comments.length}</span></div>{loading ? <SkeletonGroup className="drawer-skeleton" label="Loading comments"><Skeleton variant="line" /><Skeleton variant="text" style={{ width: '72%' }} /><Skeleton variant="line" /></SkeletonGroup> : comments.length ? <div className="checkin-comment-list">{comments.map(comment => <article className="drawer-comment" key={comment.id}><strong>{comment.author_name}</strong><time>{formatDateTime(comment.created_at)}</time><p><LinkedText text={comment.body} /></p></article>)}</div> : <p className="drawer-muted">No comments yet.</p>}{canComment ? <form className="drawer-comment-form" onSubmit={submitComment}><label htmlFor="checkin-comment">Add a comment</label><MentionPicker members={members} value={commentBody} onChange={setCommentBody} currentUserId={currentUserId}>{inputRef => <textarea ref={inputRef} id="checkin-comment" value={commentBody} onChange={event => setCommentBody(event.target.value)} maxLength="2000" placeholder="Share feedback, an update, or help with a blocker." required />}</MentionPicker><Button type="submit" className="primary-button justify-center" disabled={submitting}>{submitting ? 'Posting...' : 'Post comment'}</Button></form> : <p className="drawer-muted">You do not have permission to comment on check-ins.</p>}{error && <Alert tone="danger" compact>{error}</Alert>}</section>
+      <footer className={`checkin-detail-composer${canComment ? '' : ' is-readonly'}`}>
+        {canComment ? <form onSubmit={submitComment}><label htmlFor="checkin-comment">Add a comment</label><MentionPicker members={members} value={commentBody} onChange={setCommentBody} currentUserId={currentUserId}>{inputRef => <textarea ref={inputRef} id="checkin-comment" value={commentBody} onChange={event => setCommentBody(event.target.value)} maxLength="2000" placeholder="Share feedback, an update, or help with a blocker." required />}</MentionPicker><div className="checkin-detail-composer-action"><Button type="submit" className="primary-button" disabled={submitting || !commentBody.trim()}>{submitting ? 'Posting...' : 'Post comment'}</Button></div></form> : <div className="checkin-detail-permission"><MessageCircle size={16} aria-hidden="true" /><span>You do not have permission to comment on check-ins.</span></div>}
+      </footer>
     </DialogContent>
   </Dialog>
 }

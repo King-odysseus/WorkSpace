@@ -1219,6 +1219,108 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .composer-modal .modal-submit { width: 100%; justify-self: stretch; }
 }
 
+/* P62 Check-in detail. The read state is a self-contained dialog with a fixed
+   identity header, scrollable summary/discussion body, and fixed composer. */
+.modal.checkin-detail-dialog {
+  display: grid;
+  width: min(600px, calc(100vw - 32px));
+  height: min(780px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 20px !important;
+  background: #fff;
+  box-shadow: 0 24px 64px rgb(14 42 71 / 14%);
+}
+.modal.checkin-detail-dialog .checkin-detail-header {
+  display: flex;
+  min-width: 0;
+  height: 88px;
+  min-height: 88px;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px 8px;
+  border-bottom: 1px solid var(--pencil-border);
+  background: #fff;
+}
+.checkin-detail-author { display: flex; min-width: 0; flex: 1 1 auto; align-items: flex-start; gap: 12px; }
+.checkin-detail-avatar { width: 40px; height: 40px; flex-basis: 40px; background: var(--pencil-navy); color: #fff; }
+.checkin-detail-heading-copy { display: grid; min-width: 0; align-content: start; gap: 2px; }
+.checkin-detail-heading-copy h2 { margin: 0; overflow: hidden; color: var(--pencil-text); font-size: 15px; font-weight: 700; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.checkin-detail-heading-copy > p { margin: 0; overflow: hidden; color: var(--pencil-text-muted); font-size: 12px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.checkin-detail-submitted { display: inline-flex; width: max-content; height: 20px; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; background: var(--pencil-success-soft); color: var(--pencil-success); font-size: 10px; font-weight: 600; line-height: 12px; }
+.checkin-detail-submitted i { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 999px; background: currentColor; }
+.checkin-detail-header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-top: 8px; }
+.checkin-detail-dialog .checkin-detail-edit { min-width: 64px; min-height: 36px; padding: 0 16px; border: 0 !important; border-radius: 10px !important; background: var(--pencil-surface-muted) !important; color: var(--pencil-text-secondary) !important; font-size: 12px; font-weight: 600; box-shadow: none !important; }
+.checkin-detail-dialog .checkin-detail-edit:hover { background: #E9EDF3 !important; color: var(--pencil-text) !important; }
+.checkin-detail-dialog .checkin-detail-edit:disabled { cursor: not-allowed; opacity: .48; }
+.checkin-detail-dialog .checkin-detail-close { width: 36px; height: 36px; flex: 0 0 36px; padding: 0; border: 0 !important; border-radius: 10px !important; background: var(--pencil-surface-muted) !important; color: var(--pencil-text-secondary) !important; box-shadow: none !important; }
+.checkin-detail-dialog .checkin-detail-close:hover { background: #E9EDF3 !important; color: var(--pencil-text) !important; }
+.checkin-detail-dialog :is(.checkin-detail-edit, .checkin-detail-close):focus-visible { outline: 2px solid var(--pencil-navy-focus); outline-offset: 2px; }
+.checkin-detail-body { min-height: 0; overflow-y: auto; padding: 24px; background: #fff; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.checkin-detail-summary { display: grid; min-width: 0; margin: 0; padding: 0; overflow: hidden; border-radius: 12px; background: #F9FAFB; }
+.checkin-detail-summary-row { display: grid; min-width: 0; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: 12px; padding: 15px 16px 16px; }
+.checkin-detail-summary-row + .checkin-detail-summary-row { border-top: 1px solid var(--pencil-border); }
+.checkin-detail-summary-icon { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; color: var(--pencil-text-secondary); }
+.checkin-detail-summary-icon.is-completed { color: var(--pencil-success); }
+.checkin-detail-summary-row > div { display: grid; min-width: 0; gap: 3px; }
+.checkin-detail-summary dt { color: var(--pencil-text-muted); font-size: 10px; font-weight: 600; line-height: 12px; letter-spacing: 1.1px; text-transform: uppercase; }
+.checkin-detail-summary dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: var(--pencil-text); font-size: 13px; line-height: 20px; white-space: pre-wrap; }
+.checkin-detail-summary-row.is-blocker .checkin-detail-summary-icon, .checkin-detail-summary-row.is-blocker dt { color: var(--pencil-danger); }
+.checkin-detail-discussion { min-width: 0; margin-top: 24px; }
+.checkin-detail-discussion-heading { display: flex; min-height: 22px; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.checkin-detail-discussion-heading h3 { margin: 0; color: var(--pencil-text); font-size: 16px; font-weight: 700; line-height: 22px; }
+.checkin-detail-discussion-heading > span { display: inline-flex; min-width: 24px; height: 22px; align-items: center; justify-content: center; padding: 0 8px; border-radius: 999px; background: var(--pencil-selected); color: var(--pencil-navy); font-size: 10px; font-weight: 700; line-height: 12px; }
+.checkin-detail-comment-list { display: grid; min-width: 0; gap: 16px; }
+.checkin-detail-comment { display: grid; min-width: 0; grid-template-columns: 32px minmax(0, 1fr); align-items: start; gap: 12px; }
+.checkin-detail-comment-avatar { width: 32px; height: 32px; flex-basis: 32px; }
+.checkin-detail-comment-main { display: grid; min-width: 0; gap: 6px; }
+.checkin-detail-comment-main > header { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.checkin-detail-comment-main strong { min-width: 0; overflow: hidden; color: var(--pencil-text); font-size: 12px; font-weight: 600; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.checkin-detail-comment-main time { flex: 0 0 auto; color: #9CA3AF; font-size: 11px; line-height: 14px; }
+.checkin-detail-comment-main > p { min-width: 0; margin: 0; padding: 9px 14px; border-radius: 10px; background: #F9FAFB; color: var(--pencil-text-secondary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.checkin-detail-empty { display: grid; min-height: 148px; place-items: center; align-content: center; gap: 4px; padding: 24px; border-radius: 12px; background: #F9FAFB; color: #9CA3AF; text-align: center; }
+.checkin-detail-empty strong { margin-top: 4px; color: var(--pencil-text); font-size: 13px; font-weight: 600; line-height: 18px; }
+.checkin-detail-empty p { margin: 0; color: var(--pencil-text-muted); font-size: 11px; line-height: 16px; }
+.checkin-detail-comment-skeleton { min-height: 148px; padding: 22px; border-radius: 12px; background: #F9FAFB; }
+.checkin-detail-error { margin-top: 14px; }
+.checkin-detail-composer { padding: 16px 24px 20px; border-top: 1px solid var(--pencil-border); background: #fff; }
+.checkin-detail-composer form { display: grid; min-width: 0; gap: 8px; }
+.checkin-detail-composer label { color: var(--pencil-text-secondary); font-size: 12px; font-weight: 600; line-height: 16px; }
+.checkin-detail-composer form > .relative { position: relative; min-width: 0; }
+.checkin-detail-composer textarea { display: block; width: 100%; height: 64px; min-height: 64px; max-height: 64px; resize: none; padding: 12px 50px 12px 14px; border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; outline: 0; background: #F9FAFB !important; color: var(--pencil-text) !important; font-size: 12px; line-height: 18px; box-shadow: none !important; }
+.checkin-detail-composer textarea::placeholder { color: #9CA3AF; }
+.checkin-detail-composer textarea:focus { border-color: var(--pencil-navy) !important; box-shadow: 0 0 0 2px rgb(14 42 71 / 14%) !important; }
+.checkin-detail-composer .relative > .secondary-button { position: absolute; right: 10px; bottom: 10px; display: grid; width: 32px; min-width: 32px; height: 32px; min-height: 32px; place-items: center; padding: 0; border: 0 !important; border-radius: 8px !important; background: transparent !important; color: var(--pencil-text-secondary) !important; font-size: 15px; font-weight: 700; }
+.checkin-detail-composer .relative > .secondary-button:hover { background: #E9EDF3 !important; color: var(--pencil-text) !important; }
+.checkin-detail-composer .chat-mention-picker { position: absolute; z-index: 5; right: 0; bottom: calc(100% + 8px); display: grid; width: min(280px, 100%); max-height: 220px; gap: 2px; overflow-y: auto; padding: 6px; border: 1px solid var(--pencil-border); border-radius: 12px; background: #fff; box-shadow: 0 18px 40px rgb(2 5 31 / 18%); }
+.checkin-detail-composer .chat-mention-picker button { display: grid; gap: 2px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--pencil-text); text-align: left; }
+.checkin-detail-composer .chat-mention-picker button:hover { background: #F3F4F6; }
+.checkin-detail-composer .chat-mention-picker strong { font-size: 12px; }
+.checkin-detail-composer .chat-mention-picker span { color: var(--pencil-text-muted); font-size: 10px; }
+.checkin-detail-composer-action { display: flex; justify-content: flex-end; }
+.checkin-detail-composer-action .primary-button { width: 108px; height: 36px; min-height: 36px; justify-content: center; }
+.checkin-detail-composer.is-readonly { padding-block: 20px; }
+.checkin-detail-permission { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 10px; background: #F9FAFB; color: var(--pencil-text-muted); font-size: 12px; line-height: 16px; }
+.checkin-detail-permission svg { flex: 0 0 auto; }
+
+@media (max-width: 640px) {
+  .modal.checkin-detail-dialog { top: auto; right: 0; bottom: 0; left: 0; width: 100%; height: min(780px, calc(100dvh - max(16px, env(safe-area-inset-top)))); max-height: calc(100dvh - max(16px, env(safe-area-inset-top))); transform: none; translate: none; border-radius: 20px 20px 0 0 !important; }
+  .modal.checkin-detail-dialog .checkin-detail-header { height: 84px; min-height: 84px; padding: 16px 16px 8px; }
+  .checkin-detail-avatar { width: 38px; height: 38px; flex-basis: 38px; }
+  .checkin-detail-header-actions { gap: 2px; margin-top: 2px; }
+  .checkin-detail-dialog .checkin-detail-edit { min-width: 48px; padding-inline: 10px; }
+  .checkin-detail-body { padding: 16px; }
+  .checkin-detail-summary-row { padding: 15px 14px 16px; }
+  .checkin-detail-discussion { margin-top: 20px; }
+  .checkin-detail-composer { padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); }
+}
+
 /* Task create/edit dialogs use a fixed header and footer around one scrollable
    body so long task details never push the primary action off screen. */
 .task-dialog-backdrop { z-index: 80; background: rgb(14 42 71 / 42%); }
