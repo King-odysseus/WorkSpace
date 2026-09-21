@@ -16,19 +16,25 @@ from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.validators import validate_email
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from . import cloud_storage
 from .models import Membership, PlanBucket, PushSubscription, UserProfile, Workspace, WorkspaceInvitation
 
 AVATAR_MAX_BYTES = 5 * 1024 * 1024
 AVATAR_MAX_DIMENSION = 8192
 AVATAR_MAX_PIXELS = 25_000_000
 AVATAR_OUTPUT_BOUNDS = (512, 512)
+# Sizes the avatar route will ask Cloudinary to deliver. An allowlist rather than
+# a free-form dimension: every distinct size is a transformation that counts
+# against the plan, so callers cannot mint unbounded variants.
+AVATAR_DELIVERY_SIZES = {64, 128, 256, 512}
+AVATAR_DEFAULT_SIZE = 512
 AVATAR_FORMAT_BY_EXTENSION = {
     '.png': 'PNG',
     '.jpg': 'JPEG',
@@ -269,9 +275,11 @@ def user_avatar(request):
         return JsonResponse({'error': 'Authentication is required.'}, status=401)
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if request.method == 'DELETE':
+        cloud_storage.destroy(profile.cloudinary_asset)
         profile.avatar.delete(save=False)
         profile.avatar = None
-        profile.save(update_fields=['avatar', 'updated_at'])
+        profile.cloudinary_asset = {}
+        profile.save(update_fields=['avatar', 'cloudinary_asset', 'updated_at'])
         return JsonResponse({'avatar_url': ''})
     uploaded_file = request.FILES.get('avatar')
     if uploaded_file is None:
@@ -282,10 +290,28 @@ def user_avatar(request):
     if validation_error:
         return JsonResponse({'error': validation_error}, status=400)
     normalized_avatar = _normalized_avatar(uploaded_file)
+    # The replaced photo is removed from Cloudinary too, or the old asset lingers
+    # and is billed for a file nothing can reach any more.
+    cloud_storage.destroy(profile.cloudinary_asset)
     profile.avatar.delete(save=False)
     profile.avatar = normalized_avatar
-    profile.save(update_fields=['avatar', 'updated_at'])
+    # Avatars are the one upload we transform on delivery, so they go in as
+    # images rather than opaque documents.
+    profile.cloudinary_asset = cloud_storage.upload(
+        normalized_avatar, f'avatars/{request.user.id}',
+        resource_type='image', delivery_type=cloud_storage.AUTHENTICATED,
+    )
+    profile.save(update_fields=['avatar', 'cloudinary_asset', 'updated_at'])
     return JsonResponse({'avatar_url': profile.avatar_url})
+
+
+def _requested_avatar_size(request):
+    """Read the caller's requested avatar size, ignoring anything unlisted."""
+    try:
+        size = int(request.GET.get('size', ''))
+    except (TypeError, ValueError):
+        return AVATAR_DEFAULT_SIZE
+    return size if size in AVATAR_DELIVERY_SIZES else AVATAR_DEFAULT_SIZE
 
 
 @require_http_methods(['GET'])
@@ -304,8 +330,18 @@ def user_avatar_download(request, user_id):
         if not shares_workspace:
             return JsonResponse({'error': 'This user is not in any of your workspaces.'}, status=404)
     profile = UserProfile.objects.filter(user_id=user_id).first()
-    if profile is None or not profile.avatar:
+    if profile is None or not (profile.avatar or profile.cloudinary_asset):
         return JsonResponse({'error': 'This user has no profile photo.'}, status=404)
+    if cloud_storage.is_stored(profile.cloudinary_asset):
+        size = _requested_avatar_size(request)
+        signed = cloud_storage.delivery_url(profile.cloudinary_asset, transformation={
+            'width': size, 'height': size, 'crop': 'fill', 'gravity': 'face',
+            'quality': 'auto', 'fetch_format': 'auto',
+        })
+        if signed:
+            return HttpResponseRedirect(signed)
+    if not profile.avatar:
+        return JsonResponse({'error': 'Profile photo is unavailable.'}, status=404)
     # Read the (small, size-capped) image into memory rather than streaming a FileResponse -
     # avoids the file handle outliving the response and blocking a same-request replace/delete.
     try:

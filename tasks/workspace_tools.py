@@ -19,6 +19,8 @@ from openpyxl import Workbook, load_workbook
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from . import cloud_storage
+from .cloud_downloads import cloud_download_redirect
 from .models import AiAction, Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
 from .document_text import clip_text, extract_document_text
 from .file_responses import stored_file_response
@@ -815,17 +817,11 @@ def workspace_file_list(request, workspace_id):
     # Trust the extension we validated, not the client-supplied content type.
     mime_type = mimetypes.guess_type(uploaded.name)[0] or uploaded.content_type or ''
     item = WorkspaceFile.objects.create(workspace_id=workspace_id, file=uploaded, original_name=uploaded.name[:255], mime_type=mime_type[:160], size=uploaded.size, uploaded_by=request.user)
-    cloudinary_url = os.environ.get('CLOUDINARY_URL', '').strip()
-    if cloudinary_url:
-        try:
-            import cloudinary.uploader
-            uploaded.seek(0)
-            result = cloudinary.uploader.upload(uploaded, resource_type='auto', folder=f'workspace/{workspace_id}')
-            item.cloudinary_url = result.get('secure_url', '')
-            item.cloudinary_public_id = result.get('public_id', '')
-            item.save(update_fields=['cloudinary_url', 'cloudinary_public_id'])
-        except Exception:
-            logger.exception('Cloudinary upload failed for workspace file %s', item.id)
+    asset = cloud_storage.upload_stored_file(item.file, f'workspace/{workspace_id}')
+    if asset:
+        item.cloudinary_asset = asset
+        item.cloudinary_public_id = asset['public_id']
+        item.save(update_fields=['cloudinary_asset', 'cloudinary_public_id'])
     return JsonResponse({'file': item.as_dict()}, status=201)
 
 
@@ -836,19 +832,25 @@ def workspace_file_download(request, file_id):
     item = WorkspaceFile.objects.filter(id=file_id, workspace__members=request.user).first()
     if not item:
         return JsonResponse({'error': 'File not found.'}, status=404)
-    if not item.file:
-        # Stored only in Cloudinary. Membership is already checked above, so the
-        # redirect is the one place the public URL is handed out.
-        if item.cloudinary_url:
-            return HttpResponseRedirect(item.cloudinary_url)
-        return JsonResponse({'error': 'File not found.'}, status=404)
-    try:
-        stored = item.file.open('rb')
-    except (FileNotFoundError, OSError):
-        # The row survives a redeploy but the file it names does not: uploads live
-        # on the container's disk unless Cloudinary is configured.
-        return JsonResponse({'error': 'File is no longer stored. Upload it again.'}, status=404)
-    return stored_file_response(request, stored, item.original_name)
+    if item.file:
+        try:
+            stored = item.file.open('rb')
+        except (FileNotFoundError, OSError):
+            # The row survives a redeploy but the file it names does not: uploads
+            # live on the container's disk unless Cloudinary is configured. Fall
+            # through to the durable copy when there is one.
+            stored = None
+        if stored is not None:
+            return stored_file_response(request, stored, item.original_name)
+    cloud_redirect = cloud_download_redirect(request, item.cloudinary_asset, item.original_name)
+    if cloud_redirect:
+        return cloud_redirect
+    if item.cloudinary_url:
+        # Uploaded before assets became private, so this link is public and
+        # permanent. Membership was checked above; there is nothing better to
+        # hand out until the file is re-uploaded.
+        return HttpResponseRedirect(item.cloudinary_url)
+    return JsonResponse({'error': 'File is no longer stored. Upload it again.'}, status=404)
 
 
 @require_http_methods(['DELETE'])
@@ -861,12 +863,7 @@ def workspace_file_detail(request, workspace_id, file_id):
         return JsonResponse({'error': 'File not found.'}, status=404)
     if membership.role not in {'owner', 'manager'} and item.uploaded_by_id != request.user.id:
         return JsonResponse({'error': 'Only the uploader or a workspace leader can delete this file.'}, status=403)
-    if item.cloudinary_public_id:
-        try:
-            import cloudinary.uploader
-            cloudinary.uploader.destroy(item.cloudinary_public_id, invalidate=True)
-        except Exception:
-            logger.exception('Cloudinary delete failed for workspace file %s', item.id)
+    cloud_storage.destroy(item.cloudinary_asset or cloud_storage.legacy_asset(item.cloudinary_public_id))
     if item.file:
         try:
             item.file.delete(save=False)

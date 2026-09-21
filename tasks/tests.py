@@ -23,6 +23,8 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelReadState, ChatChannel, CheckIn, ChatMessage, ChatMessageReaction, DirectConversation, DirectConversationRead, DirectMessage, FollowUp, LookupValue, Membership, NotificationPreference, PersonalPlanner, PersonalTask, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, PushSubscription, RiskIssue, SavedView, ScreenCapture, ScreenShareSession, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, WebhookDelivery, Workspace, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceSetting, WorkspaceWebhook, WorkShift
+from . import cloud_storage
+from .auth_views import AVATAR_DEFAULT_SIZE
 from .automation import run_workspace_automation
 from .ai_actions import PrivacyBoundaryError, PrivacyRegistry
 from .document_text import DOCUMENT_MAX_CHARS, extract_document_text
@@ -6061,3 +6063,201 @@ class DisplayDateTests(TestCase):
     def test_nothing_rather_than_a_broken_date(self):
         self.assertEqual(display_date(None), '')
         self.assertEqual(display_date(''), '')
+
+
+FAKE_ASSET = {
+    'public_id': 'workspace/1/notes',
+    'resource_type': 'raw',
+    'type': 'private',
+    'version': '1730000000',
+    'format': 'txt',
+}
+
+
+@override_settings(WORKSPACE_CLOUD_STORAGE_ENABLED=True)
+class CloudStorageHelperTests(TestCase):
+    """The service module itself, with no real Cloudinary account in reach."""
+
+    def test_the_env_example_placeholder_does_not_count_as_configured(self):
+        # A deployment that copied .env.example without filling it in would
+        # otherwise attempt (and log) a failing upload for every file.
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': cloud_storage.PLACEHOLDER_URL}):
+            self.assertFalse(cloud_storage.is_configured())
+
+    def test_the_suite_never_reaches_cloudinary(self):
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': 'cloudinary://k:s@demo'}):
+            with override_settings(WORKSPACE_CLOUD_STORAGE_ENABLED=False):
+                self.assertFalse(cloud_storage.is_configured())
+
+    def test_unconfigured_environment_stores_nothing(self):
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': ''}):
+            self.assertFalse(cloud_storage.is_configured())
+            self.assertEqual(cloud_storage.upload(io.BytesIO(b'x'), 'folder'), {})
+            self.assertEqual(cloud_storage.download_url(FAKE_ASSET), '')
+            self.assertEqual(cloud_storage.delivery_url(FAKE_ASSET), '')
+            self.assertFalse(cloud_storage.destroy(FAKE_ASSET))
+
+    def test_upload_failure_is_swallowed_so_the_local_copy_still_serves(self):
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': 'cloudinary://k:s@demo'}):
+            with mock.patch('cloudinary.uploader.upload', side_effect=RuntimeError('network down')):
+                with self.assertLogs('tasks.cloud_storage', level='ERROR'):
+                    self.assertEqual(cloud_storage.upload(io.BytesIO(b'x'), 'folder'), {})
+
+    def test_upload_records_what_is_needed_to_find_the_asset_again(self):
+        api_result = {'public_id': 'workspace/3/notes', 'resource_type': 'raw', 'type': 'private', 'version': 1730000001, 'format': ''}
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': 'cloudinary://k:s@demo'}):
+            with mock.patch('cloudinary.uploader.upload', return_value=api_result) as uploader:
+                asset = cloud_storage.upload(io.BytesIO(b'x'), 'workspace/3')
+        self.assertEqual(uploader.call_args.kwargs['folder'], 'workspace/3')
+        # Documents must not be publicly deliverable.
+        self.assertEqual(uploader.call_args.kwargs['type'], 'private')
+        self.assertEqual(asset['public_id'], 'workspace/3/notes')
+        self.assertEqual(asset['version'], '1730000001')
+
+    def test_a_large_upload_is_read_back_from_disk_not_from_the_request(self):
+        # Saving the FileField can move a temporary upload rather than copy it,
+        # so the request object is not a reliable second source of the bytes.
+        stored = SimpleUploadedFile('notes.txt', b'hello', content_type='text/plain')
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': 'cloudinary://k:s@demo'}):
+            with mock.patch('cloudinary.uploader.upload', return_value={'public_id': 'p'}) as uploader:
+                cloud_storage.upload_stored_file(stored, 'workspace/9')
+        self.assertEqual(uploader.call_count, 1)
+
+    def test_an_unreadable_stored_file_does_not_break_the_upload_response(self):
+        unreadable = mock.Mock(open=mock.Mock(side_effect=OSError('gone')))
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': 'cloudinary://k:s@demo'}):
+            with self.assertLogs('tasks.cloud_storage', level='ERROR'):
+                self.assertEqual(cloud_storage.upload_stored_file(unreadable, 'workspace/9'), {})
+
+    def test_download_url_expires_and_delivery_url_carries_the_version(self):
+        with mock.patch.dict('os.environ', {'CLOUDINARY_URL': 'cloudinary://key:secret@demo'}):
+            download = cloud_storage.download_url(FAKE_ASSET, attachment_name='notes.txt')
+            image = dict(FAKE_ASSET, resource_type='image', type='authenticated', format='webp')
+            delivery = cloud_storage.delivery_url(image, transformation={'width': 64, 'crop': 'fill'})
+        self.assertIn('expires_at=', download)
+        self.assertIn('signature=', download)
+        # A version-less delivery URL keeps serving pre-replacement bytes.
+        self.assertIn('/v1730000000/', delivery)
+        self.assertTrue(delivery.startswith('https://'))
+        self.assertIn('/authenticated/s--', delivery)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class CloudBackedDownloadTests(TestCase):
+    """Uploads survive the container disk being wiped, and stay membership-gated."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='cloud-owner@example.com', email='cloud-owner@example.com', password='secure-pass-123')
+        self.outsider = User.objects.create_user(username='cloud-outsider@example.com', email='cloud-outsider@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Cloud Co', slug='cloud-co')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        self.signed = 'https://api.cloudinary.com/v1_1/demo/raw/download?signature=abc&expires_at=1'
+
+    def test_workspace_upload_records_the_asset_and_never_returns_its_link(self):
+        self.client.force_login(self.owner)
+        with mock.patch('tasks.workspace_tools.cloud_storage.upload_stored_file', return_value=FAKE_ASSET):
+            response = self.client.post(
+                reverse('workspace-file-list', args=[self.workspace.id]),
+                {'file': SimpleUploadedFile('notes.txt', b'hello', content_type='text/plain')},
+            )
+        self.assertEqual(response.status_code, 201)
+        item = WorkspaceFile.objects.get()
+        self.assertEqual(item.cloudinary_asset, FAKE_ASSET)
+        self.assertEqual(item.cloudinary_public_id, FAKE_ASSET['public_id'])
+        self.assertNotIn('cloudinary', response.json()['file']['url'])
+
+    def test_workspace_download_falls_back_to_cloudinary_after_a_redeploy(self):
+        item = WorkspaceFile.objects.create(
+            workspace=self.workspace, file='workspace-files/wiped.txt', original_name='wiped.txt',
+            size=5, uploaded_by=self.owner, cloudinary_asset=FAKE_ASSET,
+        )
+        self.client.force_login(self.owner)
+        with mock.patch('tasks.cloud_downloads.cloud_storage.download_url', return_value=self.signed) as signer:
+            response = self.client.get(reverse('workspace-file-download', args=[item.id]))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], self.signed)
+        # A text file is not previewable, so it is delivered as a named download.
+        self.assertEqual(signer.call_args.kwargs['attachment_name'], 'wiped.txt')
+
+    def test_previewable_types_are_still_served_inline_from_cloudinary(self):
+        item = WorkspaceFile.objects.create(
+            workspace=self.workspace, file='', original_name='diagram.png',
+            size=5, uploaded_by=self.owner, cloudinary_asset=dict(FAKE_ASSET, resource_type='image', format='png'),
+        )
+        self.client.force_login(self.owner)
+        with mock.patch('tasks.cloud_downloads.cloud_storage.download_url', return_value=self.signed) as signer:
+            self.client.get(reverse('workspace-file-download', args=[item.id]))
+            self.assertIsNone(signer.call_args.kwargs['attachment_name'])
+            self.client.get(reverse('workspace-file-download', args=[item.id]) + '?download=1')
+            self.assertEqual(signer.call_args.kwargs['attachment_name'], 'diagram.png')
+
+    def test_a_non_member_is_refused_before_any_link_is_minted(self):
+        item = WorkspaceFile.objects.create(
+            workspace=self.workspace, file='', original_name='secret.txt',
+            size=5, uploaded_by=self.owner, cloudinary_asset=FAKE_ASSET,
+        )
+        self.client.force_login(self.outsider)
+        with mock.patch('tasks.cloud_downloads.cloud_storage.download_url', return_value=self.signed) as signer:
+            response = self.client.get(reverse('workspace-file-download', args=[item.id]))
+        self.assertEqual(response.status_code, 404)
+        signer.assert_not_called()
+
+    def test_deleting_a_workspace_file_removes_the_stored_asset(self):
+        item = WorkspaceFile.objects.create(
+            workspace=self.workspace, file='', original_name='notes.txt',
+            size=5, uploaded_by=self.owner, cloudinary_asset=FAKE_ASSET,
+        )
+        self.client.force_login(self.owner)
+        with mock.patch('tasks.workspace_tools.cloud_storage.destroy') as destroyer:
+            self.client.delete(reverse('workspace-file-detail', args=[self.workspace.id, item.id]))
+        destroyer.assert_called_once_with(FAKE_ASSET)
+
+    def test_task_attachment_download_falls_back_to_cloudinary(self):
+        task = Task.objects.create(workspace=self.workspace, title='Cloud task')
+        attachment = TaskAttachment.objects.create(
+            task=task, uploaded_by=self.owner, file='task-attachments/wiped.pdf',
+            original_name='wiped.pdf', cloudinary_asset=FAKE_ASSET,
+        )
+        self.client.force_login(self.owner)
+        with mock.patch('tasks.cloud_downloads.cloud_storage.download_url', return_value=self.signed):
+            response = self.client.get(reverse('task-attachment-download', args=[attachment.id]))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], self.signed)
+
+    def test_task_attachment_without_any_copy_still_reports_unavailable(self):
+        task = Task.objects.create(workspace=self.workspace, title='Cloud task')
+        attachment = TaskAttachment.objects.create(
+            task=task, uploaded_by=self.owner, file='task-attachments/wiped.pdf', original_name='wiped.pdf',
+        )
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse('task-attachment-download', args=[attachment.id]))
+        self.assertEqual(response.status_code, 404)
+
+
+class CloudBackedAvatarTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='avatar-owner@example.com', email='avatar-owner@example.com', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Avatar Co', slug='avatar-co')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='owner')
+        self.image_asset = {'public_id': 'avatars/1/face', 'resource_type': 'image', 'type': 'authenticated', 'version': '1730000000', 'format': 'webp'}
+        self.signed = 'https://res.cloudinary.com/demo/image/authenticated/s--sig--/c_fill,w_128/v1730000000/avatars/1/face.webp'
+
+    def test_avatar_url_is_offered_for_a_cloud_only_profile(self):
+        profile = UserProfile.objects.create(user=self.user, cloudinary_asset=self.image_asset)
+        self.assertEqual(profile.avatar_url, f'/api/users/{self.user.id}/avatar/')
+
+    def test_download_redirects_to_a_resized_signed_image(self):
+        UserProfile.objects.create(user=self.user, cloudinary_asset=self.image_asset)
+        self.client.force_login(self.user)
+        with mock.patch('tasks.auth_views.cloud_storage.delivery_url', return_value=self.signed) as signer:
+            response = self.client.get(reverse('user-avatar-download', args=[self.user.id]) + '?size=128')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], self.signed)
+        self.assertEqual(signer.call_args.kwargs['transformation']['width'], 128)
+
+    def test_an_unlisted_size_falls_back_instead_of_minting_a_new_variant(self):
+        UserProfile.objects.create(user=self.user, cloudinary_asset=self.image_asset)
+        self.client.force_login(self.user)
+        with mock.patch('tasks.auth_views.cloud_storage.delivery_url', return_value=self.signed) as signer:
+            self.client.get(reverse('user-avatar-download', args=[self.user.id]) + '?size=999')
+        self.assertEqual(signer.call_args.kwargs['transformation']['width'], AVATAR_DEFAULT_SIZE)

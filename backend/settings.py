@@ -202,6 +202,16 @@ AXES_VERBOSE = False
 # cover lockout turn it back on with override_settings(AXES_ENABLED=True).
 AXES_ENABLED = os.environ.get('WORKSPACE_AXES_ENABLED', 'true').lower() == 'true' and 'test' not in sys.argv
 
+# Uploads reach Cloudinary only when an account is configured. The suite must
+# never touch the network - the credentials in a checkout are usually the
+# .env.example placeholder, and a real key would upload test fixtures to a real
+# account - so the whole integration is switched off while tests run.
+WORKSPACE_CLOUD_STORAGE_ENABLED = 'test' not in sys.argv
+# How long a signed Cloudinary download link stays valid. Short, because the
+# link is the whole permission: anyone holding it can read the file until it
+# lapses, without passing back through the membership check.
+WORKSPACE_CLOUDINARY_URL_TTL = int(os.environ.get('WORKSPACE_CLOUDINARY_URL_TTL', 300))
+
 # Session lifetime. Django's default is two weeks, which is longer than a team
 # operations tool needs, so this halves it. Deliberately NOT paired with
 # SESSION_SAVE_EVERY_REQUEST: rolling the expiry forward would write the session

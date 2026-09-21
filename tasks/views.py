@@ -22,6 +22,8 @@ from django.utils.text import slugify
 
 from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
+from . import cloud_storage
+from .cloud_downloads import cloud_download_redirect
 from .file_responses import stored_file_response
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
@@ -2456,6 +2458,10 @@ def task_attachment_list(request, task_id):
     if Path(uploaded_file.name).suffix.lower() not in allowed_extensions:
         return JsonResponse({'error': 'This file type is not supported.'}, status=400)
     attachment = TaskAttachment.objects.create(task=task, uploaded_by=request.user, file=uploaded_file, original_name=uploaded_file.name[:255])
+    asset = cloud_storage.upload_stored_file(attachment.file, f'task-attachments/{task.workspace_id}')
+    if asset:
+        attachment.cloudinary_asset = asset
+        attachment.save(update_fields=['cloudinary_asset'])
     record_task_activity(task, request.user, 'task_attachment', f'{request.user.get_full_name() or request.user.email} attached {attachment.original_name} to {task.title}.')
     notify_task_activity(task, request.user, 'task_attachment', f'New attachment on {task.title}', attachment.original_name, immediate=True)
     return JsonResponse({'attachment': attachment.as_dict()}, status=201)
@@ -2481,6 +2487,7 @@ def task_attachment_detail(request, attachment_id):
             f'{request.user.get_full_name() or request.user.email} deleted {attachment.original_name} from {attachment.task.title}.',
             target_type='task', target_id=attachment.task_id,
         )
+    cloud_storage.destroy(attachment.cloudinary_asset)
     attachment.file.delete(save=False)
     attachment.delete()
     return JsonResponse({'deleted': attachment_id})
@@ -2494,13 +2501,19 @@ def task_attachment_download(request, attachment_id):
     attachment = TaskAttachment.objects.filter(id=attachment_id, task__workspace_id__in=user_workspace_ids(request.user)).first()
     if attachment is None:
         return JsonResponse({'error': 'Attachment was not found.'}, status=404)
-    if not attachment.file:
-        return JsonResponse({'error': 'Attachment file is unavailable.'}, status=404)
-    try:
-        attachment_file = attachment.file.open('rb')
-    except FileNotFoundError:
-        return JsonResponse({'error': 'Attachment file is unavailable.'}, status=404)
-    return stored_file_response(request, attachment_file, attachment.original_name)
+    if attachment.file:
+        try:
+            attachment_file = attachment.file.open('rb')
+        except (FileNotFoundError, OSError):
+            # A redeploy wipes the container disk but not the row. Fall through to
+            # the durable copy when the upload also reached Cloudinary.
+            attachment_file = None
+        if attachment_file is not None:
+            return stored_file_response(request, attachment_file, attachment.original_name)
+    cloud_redirect = cloud_download_redirect(request, attachment.cloudinary_asset, attachment.original_name)
+    if cloud_redirect:
+        return cloud_redirect
+    return JsonResponse({'error': 'Attachment file is unavailable.'}, status=404)
 
 
 def record_chat_read_watermark(workspace_id, user, target_type, target_id, read_at):

@@ -1179,6 +1179,9 @@ class TaskAttachment(models.Model):
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='task_attachments')
     file = models.FileField(upload_to='task-attachments/%Y/%m/')
     original_name = models.CharField(max_length=255)
+    # Locates the durable Cloudinary copy: public_id, resource_type, type,
+    # version, format. Empty when the file only ever landed on local disk.
+    cloudinary_asset = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1341,6 +1344,7 @@ class UserProfile(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     avatar = models.ImageField(upload_to='avatars/%Y/%m/', null=True, blank=True)
+    cloudinary_asset = models.JSONField(default=dict, blank=True)
     company = models.CharField(max_length=150, blank=True)
     job_role = models.CharField(max_length=150, blank=True)
     presence = models.CharField(max_length=20, choices=PRESENCE_CHOICES, default='available')
@@ -1357,7 +1361,7 @@ class UserProfile(models.Model):
 
     @property
     def avatar_url(self):
-        return f'/api/users/{self.user_id}/avatar/' if self.avatar else ''
+        return f'/api/users/{self.user_id}/avatar/' if (self.avatar or self.cloudinary_asset) else ''
 
 
 class WorkspaceSetting(models.Model):
@@ -1619,8 +1623,11 @@ class WorkspaceFile(models.Model):
     original_name = models.CharField(max_length=255)
     mime_type = models.CharField(max_length=160, blank=True)
     size = models.PositiveBigIntegerField(default=0)
+    # Legacy columns: rows uploaded before assets became private carry a public
+    # delivery URL here. They stay readable, but nothing new writes them.
     cloudinary_url = models.URLField(max_length=1000, blank=True)
     cloudinary_public_id = models.CharField(max_length=500, blank=True)
+    cloudinary_asset = models.JSONField(default=dict, blank=True)
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='workspace_files')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1628,10 +1635,11 @@ class WorkspaceFile(models.Model):
         ordering = ['-created_at']
 
     def as_dict(self):
-        # Always hand out the membership-checked download route. The Cloudinary
-        # URL is public and unauthenticated, so exposing it would let anyone with
-        # the link - including removed members - keep reading the file.
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'original_name': self.original_name, 'mime_type': self.mime_type, 'size': self.size, 'url': f'/api/workspace-files/{self.id}/download/' if (self.file or self.cloudinary_url) else '', 'uploaded_by_id': self.uploaded_by_id, 'uploaded_by': self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown user', 'created_at': self.created_at.isoformat()}
+        # Always hand out the membership-checked download route. A Cloudinary
+        # link is never exposed here: the legacy ones are public, and the current
+        # ones are signed per request and expire, so neither belongs in a payload
+        # that gets cached or forwarded.
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'original_name': self.original_name, 'mime_type': self.mime_type, 'size': self.size, 'url': f'/api/workspace-files/{self.id}/download/' if (self.file or self.cloudinary_url or self.cloudinary_asset) else '', 'uploaded_by_id': self.uploaded_by_id, 'uploaded_by': self.uploaded_by.get_full_name() if self.uploaded_by else 'Unknown user', 'created_at': self.created_at.isoformat()}
 
 
 class NotificationDelivery(models.Model):
