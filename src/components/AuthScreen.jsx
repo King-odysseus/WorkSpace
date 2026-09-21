@@ -151,7 +151,12 @@ function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
   return (
     <div className="auth-screen auth-layout">
       <aside className="auth-brand-panel">
-        <div className="auth-brand"><span className="auth-brand-mark" aria-hidden="true" /><span>Workspace</span></div>
+        <div className="auth-brand">
+          <span className="auth-brand-mark" aria-hidden="true">
+            <img src="/tijha-logo.png" alt="" />
+          </span>
+          <span>Workspace</span>
+        </div>
         <div className="auth-brand-copy">
           <h2>Team operations, planning and collaboration in one place.</h2>
           <ul>

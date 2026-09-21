@@ -2626,6 +2626,7 @@ function App() {
           "mobile-nav-drawer fixed inset-y-0 left-0 z-50 flex flex-col bg-navy text-white transition-all duration-200 lg:relative",
           "w-[264px]",
           railCollapsed && "lg:w-[4.5rem]",
+          railCollapsed && "is-sidebar-collapsed",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >

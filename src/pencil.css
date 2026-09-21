@@ -637,6 +637,13 @@ aside[class*='bg-navy'] > .sidebar-account > .relative > span .text-text-primary
 aside[class*='bg-navy'] > .sidebar-account > .relative > span .text-text-muted { color: #AAB7DA !important; }
 aside[class*='bg-navy'] > .sidebar-account > .relative > button.text-text-muted { color: #AAB7DA !important; }
 aside[class*='bg-navy'] > .sidebar-account > .relative > button.text-text-muted:hover { background: rgb(255 255 255 / 8%) !important; color: #fff !important; }
+@media (min-width: 1024px) {
+  aside[class*='bg-navy'].is-sidebar-collapsed nav { padding-right: 0 !important; padding-left: 0 !important; }
+  aside[class*='bg-navy'].is-sidebar-collapsed nav button,
+  aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] { justify-content: center !important; padding: 0 !important; border-left: 0 !important; border-radius: 0 !important; }
+  aside[class*='bg-navy'].is-sidebar-collapsed nav button svg { margin-right: auto; margin-left: auto; }
+  aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > span[aria-hidden='true'] { left: 0 !important; }
+}
 .sidebar-expand-flyout {
   position: absolute;
   z-index: 60;
@@ -1816,9 +1823,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .auth-screen.auth-layout { display: grid; min-height: 100vh; grid-template-columns: 70% 30%; background: #F9FAFB; color: var(--pencil-text); }
 .auth-brand-panel { display: flex; min-height: 100vh; flex-direction: column; padding: 96px; background: linear-gradient(rgb(0 22 102 / 80%), rgb(0 22 102 / 80%)), url('/auth-background-pencil.png') center / cover; color: #fff; }
 .auth-layout .auth-brand { display: flex; align-items: center; gap: 16px; margin: 0; color: #fff; font-size: 18px; font-weight: 700; }
-.auth-brand-mark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; background: #fff; color: var(--pencil-navy); }
-.auth-brand-mark img { display: none; }
-.auth-brand-mark::before { content: 'W'; font-size: 16px; font-weight: 700; }
+.auth-brand-mark { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; overflow: hidden; border-radius: 10px; background: #fff; }
+.auth-brand-mark img { display: block; width: calc(100% - 18px); height: calc(100% - 18px); object-fit: contain; }
 .auth-brand-copy { max-width: 700px; margin-top: 158px; }
 .auth-brand-copy h2 { max-width: 700px; margin: 0 0 56px; color: #fff; font-size: 32px; font-weight: 600; line-height: 42px; letter-spacing: -.5px; }
 .auth-brand-copy ul { display: grid; gap: 24px; margin: 0; padding: 0; list-style: none; }
