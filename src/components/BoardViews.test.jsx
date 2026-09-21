@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import { MyTasksView, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
+import { MyTasksView, ProjectRiskIssuePanel, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
 import { takePendingDirectMessage } from '../lib/chat-navigation.js'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
@@ -81,6 +81,34 @@ const renderBoard = ({
       onNavigate={noop}
     />,
   )
+
+it('keeps the legacy risk register heading out of the page and in the toolbar controls', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/1/risks-issues/': { records: [] },
+  })
+  const { container } = render(
+    <ProjectRiskIssuePanel
+      projects={[
+        { id: 42, name: 'Safron Website' },
+        { id: 43, name: 'Billing Migration' },
+      ]}
+      workspaceId={1}
+      canManage
+    />,
+  )
+
+  const toolbar = container.querySelector('.project-register-toolbar')
+  expect(toolbar).not.toBeNull()
+  expect(screen.queryByText('Project controls')).not.toBeInTheDocument()
+  expect(screen.queryByText('Risk register & issue log')).not.toBeInTheDocument()
+  expect(
+    within(toolbar).getByRole('combobox', {
+      name: 'Select project for risk and issue tracking',
+    }),
+  ).toBeInTheDocument()
+  expect(within(toolbar).getByRole('button', { name: 'Add new' })).toBeInTheDocument()
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/risks-issues/'))
+})
 
 it('loads Team task data for the Pencil capacity screen', async () => {
   const fetchMock = mockApi({

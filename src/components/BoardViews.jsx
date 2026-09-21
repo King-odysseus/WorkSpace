@@ -3295,31 +3295,6 @@ function ProjectRiskIssuePanel({
 
   return (
     <section className="project-risk-issues">
-      <div className="project-risk-issues-heading">
-        <div>
-          <p className="eyebrow">Project controls</p>
-          <h2>Risk register & issue log</h2>
-          <p>
-            Track threats, decisions, and problems before they become delivery
-            surprises.
-          </p>
-        </div>
-        <AppSelect
-          value={projectId}
-          onChange={(event) => setProjectId(event.target.value)}
-          aria-label="Select project for risk and issue tracking"
-        >
-          {projects.length ? (
-            projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))
-          ) : (
-            <option value="">No projects yet</option>
-          )}
-        </AppSelect>
-      </div>
       <Card className="project-register-card">
         <div className="project-register-toolbar">
           <div
@@ -3346,16 +3321,34 @@ function ProjectRiskIssuePanel({
               Issue log <span>{issues.length}</span>
             </button>
           </div>
-          {canManage && (
-            <button
-              type="button"
-              className="primary-button project-register-add"
-              onClick={openAddModal}
-              disabled={!projectId}
+          <div className="project-register-actions">
+            <AppSelect
+              value={projectId}
+              onChange={(event) => setProjectId(event.target.value)}
+              className="project-register-project"
+              aria-label="Select project for risk and issue tracking"
             >
-              <Plus size={15} /> Add new
-            </button>
-          )}
+              {projects.length ? (
+                projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))
+              ) : (
+                <option value="">No projects yet</option>
+              )}
+            </AppSelect>
+            {canManage && (
+              <button
+                type="button"
+                className="primary-button project-register-add"
+                onClick={openAddModal}
+                disabled={!projectId}
+              >
+                <Plus size={15} /> Add new
+              </button>
+            )}
+          </div>
         </div>
         <div className="project-register-table-wrap">
           <table className="project-register-table">

@@ -4598,6 +4598,9 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .project-risk-escalation > button { display: inline-flex; min-height: 38px; align-items: center; gap: 7px; padding: 0 14px; border: 1px solid #FFD0A6; border-radius: 10px; background: var(--pencil-surface); color: var(--pencil-alert-warning-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .project-register-card { width: 100%; max-width: 100%; min-width: 0; margin: 0; padding: 0; overflow: hidden; }
 .project-register-toolbar { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px; border-bottom: 1px solid var(--pencil-border); }
+.project-register-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 10px; }
+.project-register-project.app-select-trigger { width: min(220px, 100%); min-width: 0; height: 38px; border-color: var(--pencil-border) !important; border-radius: 8px !important; background: var(--pencil-surface) !important; color: var(--pencil-text-secondary) !important; font-size: 11px; font-weight: 500; }
+.project-register-project.app-select-trigger [data-slot='select-value'] { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-register-tabs { display: flex; align-self: stretch; gap: 24px; }
 .project-register-tabs button { display: inline-flex; height: 64px; align-items: center; gap: 7px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--pencil-text-muted); font-size: 13px; font-weight: 600; }
 .project-register-tabs button span { display: inline-grid; min-width: 23px; height: 22px; place-items: center; border-radius: 999px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); font-size: 10px; }
@@ -5323,6 +5326,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .project-risk-summary-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .project-risk-summary-heading span { text-align: left; }
   .project-register-toolbar { height: auto; min-height: 62px; align-items: flex-start; flex-direction: column; padding: 0 14px 12px; }
+  .project-register-actions { width: 100%; align-items: stretch; flex-direction: column; }
+  .project-register-project.app-select-trigger { width: 100%; }
   .project-register-tabs { width: 100%; min-height: 52px; }
   .project-register-tabs button { height: 52px; }
   .project-register-add { width: 100%; justify-content: center; }
