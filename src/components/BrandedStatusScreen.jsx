@@ -1,4 +1,5 @@
 import { House, LifeBuoy, RefreshCw, TriangleAlert } from "lucide-react";
+import { formatSentenceBreaks } from "../lib/sentence-format.js";
 
 export default function BrandedStatusScreen({
   loading = false,
@@ -66,9 +67,8 @@ export default function BrandedStatusScreen({
             This view could not render
           </span>
         </h1>
-        <p id="branded-status-description" className="branded-status-description">
-          Your data is safe. Reload this view, or return to Today if the same
-          screen keeps failing.
+        <p id="branded-status-description" className="branded-status-description sentence-breaks">
+          {formatSentenceBreaks("Your data is safe. Reload this view, or return to Today if the same screen keeps failing.")}
         </p>
 
         <div className="branded-status-actions">
@@ -92,9 +92,8 @@ export default function BrandedStatusScreen({
 
         <p className="branded-status-support">
           <LifeBuoy aria-hidden="true" />
-          <span>
-            Reloading keeps the current route. Go to Today clears the saved
-            crash route before reloading.
+          <span className="sentence-breaks">
+            {formatSentenceBreaks("Reloading keeps the current route. Go to Today clears the saved crash route before reloading.")}
           </span>
         </p>
       </section>

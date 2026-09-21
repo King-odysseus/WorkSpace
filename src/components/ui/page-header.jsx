@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
+import { formatSentenceBreaks } from '@/lib/sentence-format.js'
 
 // The block that opens every view: an uppercase overline eyebrow, the page
 // title, a one-line support sentence, and the page's primary action, closed by
@@ -38,13 +39,15 @@ function PageHeaderTitle({ className, ...props }) {
   )
 }
 
-function PageHeaderDescription({ className, ...props }) {
+function PageHeaderDescription({ className, children, ...props }) {
   return (
     <p
       data-slot="page-header-description"
-      className={cn('mt-1.5 max-w-[70ch] text-body-small text-muted-foreground', className)}
+      className={cn('sentence-breaks mt-1.5 max-w-[70ch] text-body-small text-muted-foreground', className)}
       {...props}
-    />
+    >
+      {formatSentenceBreaks(children)}
+    </p>
   )
 }
 

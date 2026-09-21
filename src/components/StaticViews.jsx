@@ -14,6 +14,7 @@ import { Card } from './ui/card.jsx'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { formatDay } from '../lib/workspace-format.js'
+import { formatSentenceBreaks } from '../lib/sentence-format.js'
 import { RELEASE_NOTES, latestReleaseDate, markReleaseNotesSeen, releaseNotesUnread } from '../lib/release-notes.js'
 import { getInstallSnapshot, promptToInstall, subscribeToInstallState } from '../lib/install-prompt.js'
 
@@ -608,8 +609,8 @@ function LegalView() {
               </div>
               <span>{current.version}</span>
             </header>
-            <p className="legal-document-summary">{current.summary}</p>
-            <div className="legal-advice-note"><ShieldCheck size={16} /> This summary is not legal advice. The full document is authoritative.</div>
+            <p className="legal-document-summary sentence-breaks">{formatSentenceBreaks(current.summary)}</p>
+            <div className="legal-advice-note sentence-breaks"><ShieldCheck size={16} /> {formatSentenceBreaks('This summary is not legal advice. The full document is authoritative.')}</div>
           </Card>
 
           <Card className="legal-contents-card">
@@ -629,7 +630,7 @@ function LegalView() {
             {current.sections.map(([heading, body]) => (
               <section id={`legal-section-${activeDocument}-${heading.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`} key={heading}>
                 <h3>{heading}</h3>
-                <p>{body}</p>
+                <p className="sentence-breaks">{formatSentenceBreaks(body)}</p>
               </section>
             ))}
           </Card>

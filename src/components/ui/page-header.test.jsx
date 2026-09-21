@@ -19,6 +19,19 @@ describe('PageHeader', () => {
     expect(screen.getByText('Here is what needs your attention.')).toBe(slot('page-header-description'))
   })
 
+  it('starts each new sentence in the support line on its own line', () => {
+    render(
+      <PageHeader
+        title="My planner"
+        description="Plan the day. Keep the work private."
+      />
+    )
+
+    expect(slot('page-header-description').textContent)
+      .toBe('Plan the day.\nKeep the work private.')
+    expect(slot('page-header-description')).toHaveClass('sentence-breaks')
+  })
+
   it('omits the optional slots rather than rendering them empty', () => {
     render(<PageHeader title="Planner" />)
 

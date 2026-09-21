@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Activity as ActivityGlyph, Building2, CheckCircle2, Eye, EyeOff, FileText, Flag, FolderKanban, LoaderCircle, Mail, MessageSquare, Plus, TriangleAlert, Upload, UserPlus } from 'lucide-react'
 import { formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
+import { formatSentenceBreaks } from '../lib/sentence-format.js'
 
 function activityVisual(kind = '') {
   if (kind.includes('risk')) return { Icon: TriangleAlert, tone: 'danger' }
@@ -173,7 +174,7 @@ function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
         <div className="auth-form-inner">
           <p className="eyebrow">{mode === 'login' ? 'Sign in' : 'Create account'}</p>
           <h1>{mode === 'login' ? 'Sign in' : 'Create your workspace'}</h1>
-          <p className="auth-subtitle">{mode === 'login' ? 'Welcome back. Sign in to continue to your workspace.' : 'Bring your team, tasks, and follow-ups into one calm workspace.'}</p>
+          <p className="auth-subtitle sentence-breaks">{formatSentenceBreaks(mode === 'login' ? 'Welcome back. Sign in to continue to your workspace.' : 'Bring your team, tasks, and follow-ups into one calm workspace.')}</p>
           {inviteInfo && <div className="auth-invite-banner"><Mail size={18} /><span><strong>You’ve been invited to {inviteInfo.workspace_name}</strong><small>Sign in with {inviteInfo.email} to review the invitation.</small></span></div>}
           <form onSubmit={submit}>
             {mode === 'signup' && <>
@@ -244,7 +245,7 @@ function InvitationReview({ invitation, currentUserEmail, submitting, error, onA
         <div className="invitation-review-rule" />
         <p className="invitation-review-eyebrow">Your invitation</p>
         <h1 id="invitation-review-title">Join <span>{invitation.workspace_name}</span></h1>
-        <p className="invitation-review-copy">Review the invitation details below. Joining is only completed when you choose Accept invitation.</p>
+        <p className="invitation-review-copy sentence-breaks">{formatSentenceBreaks('Review the invitation details below. Joining is only completed when you choose Accept invitation.')}</p>
 
         <div className="invitation-recipient-box">
           <span>This invitation is for</span>

@@ -2,6 +2,7 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatSentenceBreaks } from '@/lib/sentence-format.js'
 
 function Dialog(props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -127,13 +128,15 @@ function DialogTitle({ className, ...props }) {
   )
 }
 
-function DialogDescription({ className, ...props }) {
+function DialogDescription({ className, children, ...props }) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-muted-foreground text-xs', className)}
+      className={cn('sentence-breaks text-muted-foreground text-xs', className)}
       {...props}
-    />
+    >
+      {formatSentenceBreaks(children)}
+    </DialogPrimitive.Description>
   )
 }
 

@@ -843,6 +843,10 @@ header.shell-header {
 /* Reusable Pencil primitives. */
 .workspace-view { width: 100%; min-width: 0; margin: 0 auto; color: var(--pencil-text); }
 .workspace-view h1, .workspace-view h2, .workspace-view h3, .workspace-view p { font-family: inherit; }
+.sentence-breaks {
+  text-wrap: pretty;
+  white-space: pre-line;
+}
 [data-slot='card'], .workspace-view .card, .workspace-view .report-panel, .workspace-view .project-card, .workspace-view .project-detail-panel {
   border: 1px solid var(--pencil-border) !important;
   border-radius: 12px !important;
