@@ -2543,7 +2543,12 @@ function App() {
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-surface-secondary">
+    <div
+      className={cn(
+        "workspace-app-shell flex h-dvh overflow-hidden bg-surface-secondary",
+        mobileOpen && "is-mobile-nav-open",
+      )}
+    >
       <Toaster
         position="top-right"
         toastOptions={{
@@ -2611,7 +2616,7 @@ function App() {
       {/* ── Sidebar ── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 bg-navy text-white transition-all duration-200 lg:relative",
+          "mobile-nav-drawer fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 bg-navy text-white transition-all duration-200 lg:relative",
           "w-[264px]",
           railCollapsed && "lg:w-[4.5rem]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
@@ -3438,7 +3443,7 @@ function App() {
       <nav
         ref={mobileNavRef}
         className={cn(
-          "fixed inset-x-5 bottom-4 z-30 flex h-16 items-center justify-center rounded-[32px] bg-navy shadow-[0_4px_12px_rgba(0,0,0,0.12)] transition-opacity duration-200 lg:hidden",
+          "mobile-tabbar fixed inset-x-5 bottom-4 z-30 flex h-16 items-center justify-center rounded-[32px] bg-navy shadow-[0_4px_12px_rgba(0,0,0,0.12)] transition-opacity duration-200 lg:hidden",
           mobileOpen && "pointer-events-none opacity-0",
         )}
         aria-label="Primary"

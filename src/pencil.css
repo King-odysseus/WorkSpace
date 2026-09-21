@@ -356,6 +356,32 @@ button { cursor: pointer; }
 /* Keep the desktop shell columns tied to the viewport rather than to the
    intrinsic width of whichever route happens to be mounted. */
 .shell-main { width: 100%; min-width: 0; max-width: none; flex: 1 1 0%; }
+/* Keep the mobile shell and its bottom navigation tied to the visual viewport.
+   The inner main element owns document scrolling, so overscroll cannot move the
+   app shell or pull the floating TabBar away from the bottom edge. */
+.workspace-app-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.workspace-app-shell .main-content { overscroll-behavior-y: contain; }
+@media (max-width: 1023px) {
+  .workspace-app-shell.is-mobile-nav-open .main-content { overflow-y: hidden; }
+  .mobile-nav-drawer > nav { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .mobile-tabbar {
+    position: fixed !important;
+    left: max(20px, env(safe-area-inset-left, 0px));
+    right: max(20px, env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    transform: none !important;
+    translate: none !important;
+    touch-action: none;
+  }
+}
 .page-content { width: 100%; max-width: none; margin: 0; padding: 32px 32px 64px; }
 aside[class*='bg-navy'] {
   border-right: 0 !important;
