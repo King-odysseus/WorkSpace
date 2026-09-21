@@ -25,26 +25,6 @@ workspace gates, and loading/empty/error/offline/session/permission states.
 Those are implementation references, not permission to add unsupported
 production behavior. The backend contract remains unchanged.
 
-## Remaining Whole-Screen Gap
-
-### My planner
-
-`My planner` has no approved OpenPencil frame at any breakpoint. The current
-screen is a production feature, but it is not a 1:1 fidelity target.
-
-A future design needs to cover:
-
-| Area | Missing design scope |
-| --- | --- |
-| Desktop | Page hierarchy, plan list or board, note area, filtering, empty and loading states |
-| Tablet | Column collapse, sticky controls, task and note navigation |
-| Mobile | Screen structure, section switching, scrolling ownership, fixed actions, and safe-area behavior |
-| Create and edit | Plan item form, validation, long text, due-date states, recurrence, save failure, and cancellation |
-| Notes | View, create, edit, delete, empty, loading, error, and permission-denied states |
-| Schedule | Overdue, due today, upcoming, undated, completed, and conflict states |
-| Permissions | Read-only, member change, and unsupported-action states |
-| Destructive flows | Delete confirmation, archive or restore behavior where a backend action already exists |
-
 ## Settings State Coverage
 
 The default Settings shell and panel layouts are covered by P4 and P39-P45,
@@ -71,6 +51,7 @@ action differs from those generic states.
 
 The following are no longer unresolved design gaps:
 
+- My planner: P52-P61 define the populated, empty, management, task-editing, loading, error, long-content, and mobile planner states.
 - Global header, search, notification indicators, account chooser, and avatar fallback: F1.
 - Notification panel states: F2.
 - Presence, identity, account, and workspace menus: F3 and F4.

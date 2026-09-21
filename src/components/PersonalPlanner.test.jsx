@@ -150,6 +150,40 @@ it('opens the notes on a row and saves them', async () => {
   })
 })
 
+it('updates a task due date from the inline editor', async () => {
+  const fetchMock = loadPlanner({
+    '/personal/tasks/8/': { task: { ...tasks[1], due_date: '2026-10-02' } },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Notes' }))
+  const dueDate = screen.getByLabelText('Due date for Book the van')
+  fireEvent.change(dueDate, { target: { value: '2026-10-02' } })
+
+  await waitFor(() => {
+    const patches = fetchMock.mock.calls.filter(([, init = {}]) => init.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(JSON.parse(patches[0][1].body)).toEqual({ due_date: '2026-10-02' })
+  })
+})
+
+it('renames a planner from its management controls', async () => {
+  const fetchMock = loadPlanner({
+    '/personal/planners/3/': { planner: { ...planner, name: 'This week' } },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Manage My day' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Rename My day' }))
+  const name = screen.getByLabelText('Planner name')
+  fireEvent.change(name, { target: { value: 'This week' } })
+  fireEvent.submit(name.closest('form'))
+
+  expect(await screen.findByRole('button', { name: /^This week/ })).toBeInTheDocument()
+  const [, init] = expectRequest(fetchMock, '/personal/planners/3/', 'PATCH')
+  expect(JSON.parse(init.body)).toEqual({ name: 'This week' })
+})
+
 it('deletes a planner only after the confirmation, and takes its tasks with it', async () => {
   const fetchMock = loadPlanner({ '/personal/planners/3/': { deleted: 3 } })
 
