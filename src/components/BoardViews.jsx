@@ -2321,14 +2321,27 @@ function ProjectProgress({ project, tasks }) {
   );
 }
 
-function ProjectOperationsSummary({ project, workspaceId, onOpen }) {
+function ProjectOperationsSummary({
+  project,
+  workspaceId,
+  openTasks = 0,
+  blockedTasks = 0,
+  overdueTasks = 0,
+  onOpen,
+}) {
   const [summary, setSummary] = useState({
     expenses: [],
     resources: [],
     records: [],
   });
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    if (!project?.id || !workspaceId) return;
+    if (!project?.id || !workspaceId) {
+      setLoading(false);
+      return;
+    }
+    let isCurrent = true;
+    setLoading(true);
     Promise.all([
       fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/expenses/`, {
         credentials: "include",
@@ -2346,7 +2359,7 @@ function ProjectOperationsSummary({ project, workspaceId, onOpen }) {
         const payloads = await Promise.all(
           responses.map((response) => response.json()),
         );
-        if (responses.every((response) => response.ok))
+        if (isCurrent && responses.every((response) => response.ok))
           setSummary({
             expenses: payloads[0].expenses || [],
             resources: payloads[1].resources || [],
@@ -2355,7 +2368,13 @@ function ProjectOperationsSummary({ project, workspaceId, onOpen }) {
       })
       .catch((error) => {
         console.warn("Project operational summary could not be loaded.", error);
+      })
+      .finally(() => {
+        if (isCurrent) setLoading(false);
       });
+    return () => {
+      isCurrent = false;
+    };
   }, [project?.id, workspaceId]);
   const actual = summary.expenses
     .filter((item) => !item.is_committed)
@@ -2367,6 +2386,19 @@ function ProjectOperationsSummary({ project, workspaceId, onOpen }) {
     project.budget_amount === null || project.budget_amount === undefined
       ? null
       : Number(project.budget_amount) - actual - committed;
+  const budget =
+    project.budget_amount === null || project.budget_amount === undefined
+      ? null
+      : Number(project.budget_amount);
+  const spent = actual + committed;
+  const spentPercent =
+    budget && budget > 0 ? Math.round((spent / budget) * 100) : 0;
+  const actualPercent =
+    budget && budget > 0 ? Math.min(100, (actual / budget) * 100) : 0;
+  const committedPercent =
+    budget && budget > 0
+      ? Math.min(100 - actualPercent, (committed / budget) * 100)
+      : 0;
   const highRisks = summary.records.filter(
     (item) =>
       item.kind === "risk" &&
@@ -2390,29 +2422,128 @@ function ProjectOperationsSummary({ project, workspaceId, onOpen }) {
     new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
       value || 0,
     );
+  const health = project.health || "on-track";
+  const healthLabel =
+    health === "completed"
+      ? "Complete"
+      : health === "at-risk"
+        ? "At risk"
+        : health === "off-track"
+          ? "Off track"
+          : "On track";
+  const healthTone =
+    health === "completed" || health === "on-track"
+      ? "is-success"
+      : health === "at-risk"
+        ? "is-warning"
+        : "is-danger";
   return (
-    <div className="project-detail-links project-operation-summary">
-      <button type="button" onClick={() => onOpen("budget")}>
-        <strong>Budget & costs</strong>
-        <span>
-          {remaining === null
-            ? `${summary.expenses.length} cost entries`
-            : `${money(remaining)} remaining`}
-        </span>
-      </button>
-      <button type="button" onClick={() => onOpen("resources")}>
-        <strong>Resources</strong>
-        <span>
-          {summary.resources.length} resources, {conflicts} conflicts
-        </span>
-      </button>
-      <button type="button" onClick={() => onOpen("risks")}>
-        <strong>Risks & issues</strong>
-        <span>
-          {highRisks} high risks, {overdueMitigations} overdue mitigations
-        </span>
-      </button>
-    </div>
+    <>
+      <section className="project-detail-card project-overview-budget">
+        <div className="project-detail-card-heading">
+          <h2>Budget</h2>
+          <span className="project-currency-badge">{currency}</span>
+        </div>
+        {loading ? (
+          <p className="project-detail-empty">Loading budget summary...</p>
+        ) : budget === null ? (
+          <div className="project-overview-budget-empty">
+            <p>No budget has been set for this project.</p>
+            <button type="button" onClick={() => onOpen("budget")}>
+              Set budget
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="project-overview-budget-total">
+              <strong>{money(Math.max(0, remaining || 0))}</strong>
+              <span>remaining of {money(budget)}</span>
+            </div>
+            <div
+              className="project-overview-budget-track"
+              role="progressbar"
+              aria-label={`${spentPercent}% of project budget used`}
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={Math.min(100, spentPercent)}
+            >
+              <span
+                className="is-actual"
+                style={{ width: `${actualPercent}%` }}
+              />
+              <span
+                className="is-committed"
+                style={{
+                  left: `${actualPercent}%`,
+                  width: `${committedPercent}%`,
+                }}
+              />
+            </div>
+            <div className="project-overview-budget-legend">
+              <span>
+                <i className="is-actual" />
+                Actual {money(actual)}
+              </span>
+              <span>
+                <i className="is-committed" />
+                Committed {money(committed)}
+              </span>
+            </div>
+            <div className="project-overview-budget-footer">
+              <span>Remaining budget</span>
+              <strong>{money(Math.max(0, remaining || 0))}</strong>
+            </div>
+            <p className="project-overview-budget-note">
+              {spentPercent}% used
+              {summary.expenses.length
+                ? ` across ${summary.expenses.length} cost ${summary.expenses.length === 1 ? "entry" : "entries"}.`
+                : "; no costs recorded yet."}
+            </p>
+          </>
+        )}
+      </section>
+
+      <section className="project-detail-card project-overview-delivery">
+        <div className="project-detail-card-heading">
+          <h2>Delivery</h2>
+        </div>
+        <div className="project-overview-delivery-rows">
+          <div>
+            <span>Schedule</span>
+            <strong className={healthTone}>{healthLabel}</strong>
+          </div>
+          <div>
+            <span>Scope</span>
+            <strong>
+              {openTasks} open {openTasks === 1 ? "task" : "tasks"}
+            </strong>
+          </div>
+          <div>
+            <span>Resources</span>
+            <strong className={conflicts ? "is-warning" : "is-success"}>
+              {conflicts
+                ? `${conflicts} over capacity`
+                : summary.resources.length
+                  ? "Capacity clear"
+                  : "No resources assigned"}
+            </strong>
+          </div>
+          <div>
+            <span>Controls</span>
+            <strong className={blockedTasks + overdueTasks ? "is-danger" : ""}>
+              {blockedTasks + overdueTasks
+                ? `${blockedTasks + overdueTasks} ${blockedTasks + overdueTasks === 1 ? "needs" : "need"} attention`
+                : `${highRisks} high risks`}
+            </strong>
+          </div>
+        </div>
+        <p className="project-overview-delivery-note">
+          {overdueMitigations
+            ? `${overdueMitigations} risk ${overdueMitigations === 1 ? "mitigation is" : "mitigations are"} overdue.`
+            : "No overdue risk mitigations are recorded."}
+        </p>
+      </section>
+    </>
   );
 }
 

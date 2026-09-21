@@ -23,6 +23,7 @@ import { createRoot } from "react-dom/client";
 import {
   Activity as ActivityIcon,
   AlertCircle,
+  AlertTriangle,
   Archive,
   ArrowUpRight,
   BarChart3,
@@ -34,6 +35,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  CircleSlash,
   ClipboardList,
   Clock3,
   Copy,
@@ -3962,6 +3964,7 @@ function WorkspaceView({
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
   const [projectOperation, setProjectOperation] = useState("");
+  const [projectOverviewActivity, setProjectOverviewActivity] = useState([]);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
@@ -4092,6 +4095,54 @@ function WorkspaceView({
     activityDateTo,
     activityReload,
   ]);
+  useEffect(() => {
+    if (active !== "Projects" || !selectedProjectWorkspace || !workspaceId) {
+      setProjectOverviewActivity([]);
+      return undefined;
+    }
+    let isCurrent = true;
+    const projectName = String(selectedProjectWorkspace.name || "").toLowerCase();
+    const taskTitles = tasks
+      .filter(
+        (task) =>
+          String(task.project_id || "") === String(selectedProjectWorkspace.id),
+      )
+      .map((task) => String(task.title || "").trim().toLowerCase())
+      .filter((title) => title.length >= 4);
+    const params = new URLSearchParams({
+      page: "1",
+      page_size: "40",
+      include_filters: "0",
+      include_summary: "0",
+    });
+    fetch(`/api/workspaces/${workspaceId}/activity/?${params.toString()}`, {
+      credentials: "include",
+      headers: { "X-Workspace-Id": String(workspaceId) },
+    })
+      .then((response) =>
+        readJsonResponse(response, "Project activity could not be loaded.").then(
+          (payload) => ({ ok: response.ok, payload }),
+        ),
+      )
+      .then(({ ok, payload }) => {
+        if (!isCurrent) return;
+        if (!ok) throw new Error(payload.error || "Project activity could not be loaded.");
+        const matches = (payload.activity || []).filter((item) => {
+          const message = String(item.message || item.description || "").toLowerCase();
+          return (
+            (projectName && message.includes(projectName)) ||
+            taskTitles.some((title) => message.includes(title))
+          );
+        });
+        setProjectOverviewActivity(matches.slice(0, 3));
+      })
+      .catch(() => {
+        if (isCurrent) setProjectOverviewActivity([]);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [active, workspaceId, selectedProjectWorkspace?.id, selectedProjectWorkspace?.name, tasks]);
   useEffect(() => {
     if (active !== "Notifications") return;
     setNotificationPage(1);
@@ -7952,12 +8003,27 @@ function WorkspaceView({
     };
     if (selectedProjectWorkspace) {
       const projectTasks = tasks.filter((task) => String(task.project_id || "") === String(selectedProjectWorkspace.id));
-      const projectCompleted = projectTasks.filter((task) => task.status === "done").length;
-      const projectBlocked = projectTasks.filter((task) => task.status === "blocked").length;
-      const projectOverdue = projectTasks.filter((task) => task.status !== "done" && task.due_date && task.due_date < today).length;
-      const projectOpen = projectTasks.filter((task) => task.status !== "done").length;
-      const projectProgress = projectTasks.length ? Math.round((projectCompleted / projectTasks.length) * 100) : 0;
+      const projectMetrics = selectedProjectWorkspace.metrics;
+      const projectTotal = projectMetrics?.applicable_tasks ?? projectTasks.length;
+      const projectCompleted = projectMetrics?.completed_tasks ?? projectTasks.filter((task) => task.status === "done").length;
+      const projectBlocked = projectMetrics?.blocked_tasks ?? projectTasks.filter((task) => task.status === "blocked").length;
+      const projectOverdue = projectMetrics?.overdue_tasks ?? projectTasks.filter((task) => task.status !== "done" && task.due_date && task.due_date < today).length;
+      const projectBlockedCount = Math.max(projectBlocked, projectTasks.filter((task) => task.status === "blocked").length);
+      const projectOverdueCount = Math.max(projectOverdue, projectTasks.filter((task) => task.status !== "done" && task.due_date && task.due_date < today).length);
+      const projectAttention = projectBlockedCount + projectOverdueCount;
+      const projectOpen = Math.max(0, projectTotal - projectCompleted);
+      const projectProgress = projectMetrics?.completion_rate ?? (projectTotal ? Math.round((projectCompleted / projectTotal) * 100) : 0);
       const projectDeadline = selectedProjectWorkspace.due_date ? formatDay(selectedProjectWorkspace.due_date) : "No deadline set";
+      const projectBlockers = projectTasks
+        .filter((task) => task.status === "blocked" || (task.status !== "done" && task.due_date && task.due_date < today))
+        .slice(0, 4);
+      const projectDeadlineDays = selectedProjectWorkspace.due_date
+        ? Math.ceil(
+            (new Date(`${selectedProjectWorkspace.due_date}T12:00:00`) -
+              new Date(`${today}T12:00:00`)) /
+              86400000,
+          )
+        : null;
       const openOperation = (operation) => {
         setProjectOperation(operation);
         if (operation === "activity") setProjectActivityFilter("all");
@@ -8033,29 +8099,47 @@ function WorkspaceView({
               <div className="project-detail-overview">
                 <div className="project-detail-main-column">
                   <section className="project-detail-card project-detail-progress-card">
-                    <div className="project-detail-card-heading"><div><p className="eyebrow">Delivery overview</p><h2>Progress summary</h2></div><strong>{projectProgress}%</strong></div>
-                    <div className="project-detail-progress-track"><span style={{ width: `${projectProgress}%` }} /></div>
-                    <div className="project-detail-stat-line"><span>{projectCompleted} of {projectTasks.length} tasks complete</span><span>{projectOpen} open</span></div>
+                    <div className="project-detail-card-heading"><h2>Progress</h2><strong>{projectProgress}%</strong></div>
+                    <p className="project-overview-progress-copy">{projectCompleted} of {projectTotal} tasks complete{selectedProjectWorkspace.due_date ? ` - revised ${projectDeadline}` : ""}</p>
+                    <div className="project-detail-progress-track" role="progressbar" aria-label={`${projectProgress}% of project tasks complete`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={projectProgress}><span style={{ width: `${projectProgress}%` }} /></div>
+                    <div className="project-overview-progress-stats"><span><strong>{projectCompleted}</strong>Completed</span><span><strong>{projectOpen}</strong>Remaining</span><time>{selectedProjectWorkspace.due_date ? `Revised ${projectDeadline}` : "No deadline set"}</time></div>
+                    <span className={`project-overview-health ${selectedProjectWorkspace.health || "on-track"}`}>{(selectedProjectWorkspace.health || "on-track").replace("-", " ")}</span>
                   </section>
-                  <section className="project-detail-card">
-                    <div className="project-detail-card-heading"><div><p className="eyebrow">Workload</p><h2>Task totals</h2></div><button type="button" className="text-button" onClick={() => onNavigate("Planner")}>Open Planner</button></div>
-                    <div className="project-detail-stat-grid"><div><strong>{projectTasks.length}</strong><span>Total tasks</span></div><div><strong>{projectCompleted}</strong><span>Completed</span></div><div><strong className={projectBlocked ? "is-danger" : ""}>{projectBlocked}</strong><span>Blocked</span></div><div><strong className={projectOverdue ? "is-warning" : ""}>{projectOverdue}</strong><span>Overdue</span></div></div>
+                  <section className="project-detail-card project-overview-totals">
+                    <div className="project-detail-card-heading"><h2>Task totals</h2><span>{projectTotal} tasks in this project</span></div>
+                    <div className="project-detail-stat-grid project-overview-stat-grid">
+                      <div className="is-success"><span className="project-overview-stat-icon"><CheckCircle2 size={15} /></span><strong>{projectCompleted}</strong><span>Completed</span></div>
+                      <div><span className="project-overview-stat-icon"><Clock3 size={15} /></span><strong>{projectOpen}</strong><span>Open</span></div>
+                      <div className={projectBlockedCount ? "is-danger" : ""}><span className="project-overview-stat-icon"><CircleSlash size={15} /></span><strong>{projectBlockedCount}</strong><span>Blocked</span></div>
+                      <div className={projectOverdueCount ? "is-warning" : ""}><span className="project-overview-stat-icon"><AlertTriangle size={15} /></span><strong>{projectOverdueCount}</strong><span>Overdue</span></div>
+                    </div>
                   </section>
-                  <section className="project-detail-card">
-                    <div className="project-detail-card-heading"><div><p className="eyebrow">Attention</p><h2>Current blockers</h2></div><span className="project-detail-card-note">{projectBlocked + projectOverdue} open</span></div>
-                    {projectBlocked || projectOverdue ? <div className="project-detail-list">{projectTasks.filter((task) => task.status === "blocked" || (task.status !== "done" && task.due_date && task.due_date < today)).slice(0, 4).map((task) => <button type="button" key={task.id} onClick={() => onOpenTask(task)}><span className={task.status === "blocked" ? "is-danger" : "is-warning"} /><span>{task.title}</span><small>{task.status === "blocked" ? "Blocked" : "Overdue"}</small></button>)}</div> : <p className="project-detail-empty">No blockers or overdue tasks in this project.</p>}
+                  <section className="project-detail-card project-overview-blockers">
+                    <div className="project-detail-card-heading"><h2>Current blockers</h2><span className="project-detail-card-note is-alert">{projectAttention} blocking delivery</span></div>
+                    {projectBlockers.length ? <div className="project-overview-blocker-list">{projectBlockers.map((task) => <button type="button" key={task.id} onClick={() => onOpenTask(task)}><span className={task.status === "blocked" ? "is-danger" : "is-warning"} /><span><strong>{task.title}</strong><small>{task.member || "Unassigned"} - {task.blocker_details || (task.status === "blocked" ? "Blocked task" : `Due ${formatDay(task.due_date)}`)}</small></span><em>{task.status === "blocked" ? "Blocked" : task.due || "Overdue"}</em></button>)}</div> : <p className="project-detail-empty">No blockers or overdue tasks in this project.</p>}
                   </section>
-                  <section className="project-detail-card project-detail-recent-activity">
-                    <div className="project-detail-card-heading"><div><p className="eyebrow">Timeline</p><h2>Recent activity</h2></div></div>
-                    {(localData.activity || []).filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)).slice(0, 3).map((item) => <p className="project-detail-meta-row" key={item.id}><RefreshCw size={16} />{item.description || item.message || "Project activity updated"}</p>)}
-                    {!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && <p className="project-detail-empty">No recent project activity.</p>}
+                  <section className="project-detail-card project-detail-recent-activity project-overview-activity">
+                    <div className="project-detail-card-heading"><h2>Recent activity</h2><button type="button" className="project-overview-activity-link" onClick={() => openOperation("activity")}>View all activity</button></div>
+                    {projectOverviewActivity.length ? <div className="project-overview-activity-list">{projectOverviewActivity.map((item) => <button type="button" key={item.id} onClick={() => openOperation("activity")}><span className="project-overview-activity-avatar" aria-hidden="true">{String(item.actor_name || "S").trim().charAt(0).toUpperCase()}</span><span><strong>{item.message || item.description || "Project activity updated"}</strong><small>{item.actor_name || "System"} - {formatRelativeActivityTime(item.created_at || item.updated_at)}</small></span><ActivityIcon size={16} /></button>)}</div> : <p className="project-detail-empty">No recent project activity is available yet.</p>}
                   </section>
                 </div>
                 <aside className="project-detail-side-column">
-                  <ProjectOperationsSummary project={selectedProjectWorkspace} workspaceId={workspaceId} onOpen={openOperation} />
-                  <section className="project-detail-card"><div className="project-detail-card-heading"><div><p className="eyebrow">Delivery</p><h2>Delivery summary</h2></div></div><p className="project-detail-meta-row"><CalendarDays size={16} />{projectDeadline}</p><p className="project-detail-meta-row"><Users size={16} />{selectedProjectWorkspace.member_count || 0} members assigned</p><p className="project-detail-meta-row"><RefreshCw size={16} />Updated {formatRelativeActivityTime(selectedProjectWorkspace.updated_at)}</p></section>
-                  <section className="project-detail-card"><div className="project-detail-card-heading"><div><p className="eyebrow">Next milestone</p><h2>Upcoming deadline</h2></div></div><p className="project-detail-deadline">{projectDeadline}</p><p className="project-detail-card-note">{projectOpen ? `${projectOpen} open tasks remaining` : "All tasks complete"}</p></section>
-                  <section className="project-detail-card project-detail-quick-actions"><div className="project-detail-card-heading"><div><p className="eyebrow">Next step</p><h2>Quick actions</h2></div></div><button type="button" onClick={() => { window.dispatchEvent(new CustomEvent("planner:project", { detail: String(selectedProjectWorkspace.id) })); onNavigate("Planner"); }}><LayoutGrid size={16} />Open project tasks</button><button type="button" onClick={() => openOperation("risks")}><AlertCircle size={16} />Review risks</button></section>
+                  <ProjectOperationsSummary project={selectedProjectWorkspace} workspaceId={workspaceId} openTasks={projectOpen} blockedTasks={projectBlockedCount} overdueTasks={projectOverdueCount} onOpen={openOperation} />
+                  <section className="project-detail-card project-overview-deadline">
+                    <div className="project-detail-card-heading"><h2>Upcoming deadline</h2><span className={`project-health ${selectedProjectWorkspace.health || "on-track"}`}>{(selectedProjectWorkspace.health || "on-track").replace("-", " ")}</span></div>
+                    <p className="project-detail-deadline">{projectDeadline}</p>
+                    <p className="project-detail-card-note">{projectDeadlineDays === null ? "No deadline has been set." : projectDeadlineDays < 0 ? `${Math.abs(projectDeadlineDays)} days past due.` : projectDeadlineDays === 0 ? "Due today." : `Due in ${projectDeadlineDays} days.`}</p>
+                    <div className="project-overview-deadline-footer"><span>{projectOpen} open {projectOpen === 1 ? "task" : "tasks"} remaining</span><strong>{projectAttention ? `${projectAttention} ${projectAttention === 1 ? "blocker" : "blockers"}` : "No blockers"}</strong></div>
+                  </section>
+                  <section className="project-detail-card project-detail-quick-actions project-overview-quick-actions">
+                    <div className="project-detail-card-heading"><h2>Quick actions</h2></div>
+                    <div className="project-overview-action-grid">
+                      <button type="button" className="is-primary" onClick={() => onAddTask(null, { projectId: selectedProjectWorkspace.id })}><Plus size={16} />New task</button>
+                      <button type="button" onClick={() => openOperation("risks")}><Flag size={16} />Log risk</button>
+                      <button type="button" onClick={() => openOperation("issues")}><AlertCircle size={16} />Log issue</button>
+                      <button type="button" onClick={() => openOperation("activity")}><ActivityIcon size={16} />View activity</button>
+                    </div>
+                  </section>
                 </aside>
               </div>
             </>
