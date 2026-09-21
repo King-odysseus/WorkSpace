@@ -188,7 +188,7 @@
 .settings-view .settings-panel [data-slot='select-trigger']:focus-visible {
   border-color: var(--pencil-navy) !important;
   outline: 0 !important;
-  box-shadow: 0 0 0 3px rgb(14 42 71 / 12%) !important;
+  box-shadow: 0 0 0 3px rgb(0 22 102 / 12%) !important;
 }
 
 .settings-view .settings-switch {
@@ -413,7 +413,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 62px;
-  background: #e7eef6;
+  background: var(--pencil-navy-tint);
   content: '';
 }
 
@@ -433,7 +433,7 @@
 }
 
 .settings-view .settings-theme-card[data-theme='dark'] .settings-theme-preview::before {
-  background: #0b0b45;
+  background: var(--pencil-navy);
 }
 
 .settings-view .settings-theme-card[data-theme='dark'] .settings-theme-preview::after {
@@ -445,7 +445,7 @@
 }
 
 .settings-view .settings-theme-card[data-theme='system'] .settings-theme-preview::before {
-  background: linear-gradient(180deg, #e7eef6 50%, #0b0b45 50%);
+  background: linear-gradient(180deg, var(--pencil-navy-tint) 50%, var(--pencil-navy) 50%);
 }
 
 .settings-view .settings-theme-card strong {
@@ -566,7 +566,7 @@
 
 .settings-view .settings-sidebar-demo i:first-child {
   width: 54px;
-  background: #c49a6c;
+  background: var(--pencil-bronze);
 }
 
 .settings-view .settings-sidebar-arrow {
@@ -593,7 +593,7 @@
 
 .settings-view .settings-sidebar-rail i:first-child {
   width: 24px;
-  background: #c49a6c;
+  background: var(--pencil-bronze);
 }
 
 /* Notifications and integrations */
@@ -639,7 +639,7 @@
   flex: 0 0 32px;
   place-items: center;
   border-radius: 8px;
-  background: #e7eef6;
+  background: var(--pencil-navy-tint);
   color: var(--pencil-navy);
 }
 
@@ -717,7 +717,7 @@
   height: 32px;
   padding: 7px;
   border-radius: 8px;
-  background: #e7eef6;
+  background: var(--pencil-navy-tint);
   color: var(--pencil-navy);
 }
 
@@ -839,7 +839,7 @@
   align-items: center;
   padding: 0 8px;
   border-radius: 6px;
-  background: #e7eef6;
+  background: var(--pencil-navy-tint);
   color: var(--pencil-navy);
   font-size: 11px;
   font-weight: 600;
@@ -889,7 +889,7 @@
   height: 40px;
   place-items: center;
   border-radius: 10px;
-  background: #e7eef6;
+  background: var(--pencil-navy-tint);
   color: var(--pencil-navy);
 }
 

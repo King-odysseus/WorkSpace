@@ -53,7 +53,7 @@ export const flowbiteTheme = {
         'bg-surface-hover text-text-primary hover:bg-border',
       /* The design's destructive fill - #C70036 on white. */
       danger: 'bg-danger text-white hover:brightness-95',
-      /* The brand bronze, kept from the app rather than the design's #B7791F. */
+      /* The branded bronze token used across WorkSpace. */
       gold: 'bg-bronze text-navy hover:bg-bronze-hover',
       outline:
         'border border-border bg-transparent text-text-primary hover:bg-surface-hover',

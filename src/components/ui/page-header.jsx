@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 // values for that reason.
 //
 // The eyebrow is text-primary rather than a fixed navy so it tracks the brand
-// token in both themes, where a literal #0E2A47 would go unreadable on dark.
+// token in both themes, where a literal #001666 would go unreadable on dark.
 
 function PageHeaderEyebrow({ className, ...props }) {
   return (

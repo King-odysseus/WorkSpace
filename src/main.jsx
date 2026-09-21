@@ -2345,7 +2345,7 @@ function App() {
         className={cn(
           "flex h-full min-w-0 max-w-[66px] flex-1 flex-col items-center gap-1 pt-3.5 font-medium transition-colors",
           isItemActive
-            ? "text-[#F4E1BA]"
+            ? "text-[var(--pencil-bronze-soft)]"
             : "text-[#93B4D4] hover:text-white",
         )}
       >
@@ -2623,7 +2623,7 @@ function App() {
       {/* ── Sidebar ── */}
       <aside
         className={cn(
-          "mobile-nav-drawer fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 bg-navy text-white transition-all duration-200 lg:relative",
+          "mobile-nav-drawer fixed inset-y-0 left-0 z-50 flex flex-col bg-navy text-white transition-all duration-200 lg:relative",
           "w-[264px]",
           railCollapsed && "lg:w-[4.5rem]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
@@ -2806,7 +2806,7 @@ function App() {
             rather than on a Settings row. Settings is the first item in this
             menu, so the destination the old row carried is still one click
             away, and the collapse control has moved up to the brand row. */}
-        <div className="px-4 pb-3 pt-3">
+        <div className="sidebar-account px-4 pb-3 pt-3">
           <div className="h-px bg-border" />
           <div className="relative mt-3 flex items-center gap-2.5" ref={sidebarProfileRef}>
             {railCollapsed ? (
@@ -5491,7 +5491,7 @@ function WorkspaceView({
     const reportProjectRows = report.progress_by_project.slice(0, 6);
     const reportStatusColors = {
       todo: "#2563eb",
-      in_progress: "#0e2a47",
+      in_progress: "#001666",
       review: "#ff6900",
       blocked: "#c70036",
       on_hold: "#f59e0b",

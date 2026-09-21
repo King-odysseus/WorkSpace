@@ -21,7 +21,7 @@ const VARIANT_TO_COLOR = {
   outline: 'outline',
   ghost: 'ghost',
   destructive: 'danger',
-  /* The brand bronze, kept from the app rather than the design's #B7791F. */
+  /* The branded bronze token used across WorkSpace. */
   gold: 'gold',
   link: 'link',
 }
