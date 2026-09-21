@@ -2592,7 +2592,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .calendar-upcoming-groups { display: grid; gap: 0; }
 .calendar-upcoming-card { height: 364px; padding: 20px !important; gap: 0 !important; }
 .calendar-calendars-card { height: 296px; padding: 20px !important; gap: 0 !important; }
-.calendar-upcoming-event { position: relative; display: grid; min-width: 0; height: 56px; grid-template-columns: minmax(0, 1fr) 24px 24px; align-items: center; gap: 0; border: 0; border-bottom: 1px solid var(--pencil-border-light); border-radius: 0; background: var(--pencil-surface); }
+.calendar-upcoming-event { position: relative; display: grid; min-width: 0; height: 56px; grid-template-columns: minmax(0, 1fr) 28px 28px; align-items: center; gap: 0; border: 0; border-bottom: 1px solid var(--pencil-border-light); border-radius: 0; background: var(--pencil-surface); }
 .calendar-upcoming-event::before, .calendar-upcoming-task::before { position: absolute; inset: 10px auto 10px 0; width: 3px; border-radius: 2px; background: var(--pencil-navy); content: ''; }
 .calendar-upcoming-event-main, .calendar-upcoming-task { position: relative; display: flex; min-width: 0; height: 100%; align-items: center; gap: 0; padding: 8px 4px 8px 16px; border: 0; background: transparent; color: var(--pencil-text); text-align: left; }
 .calendar-upcoming-event-main > svg, .calendar-upcoming-task > svg { display: none; }
