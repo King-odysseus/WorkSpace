@@ -7663,3 +7663,80 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
     min-width: min(264px, calc(100vw - 56px));
   }
 }
+
+@media (max-width: 760px) {
+  /* The phone drawer is one uninterrupted navy surface. The desktop brand and
+     account rules do not translate to the compact drawer. */
+  .mobile-nav-drawer > div:nth-child(2) {
+    border-bottom: 0 !important;
+  }
+
+  .mobile-nav-drawer > .sidebar-account > .bg-border {
+    display: none !important;
+  }
+
+  .mobile-nav-drawer > .sidebar-account {
+    padding-top: 16px !important;
+  }
+
+  /* Repeated work cards need a visible breathing line between them on phones. */
+  .planner-column-body,
+  .personal-task-list,
+  .import-outcome-list,
+  .screen-sharing-choice-list,
+  .screen-sharing-state-list,
+  .pencil-team-table {
+    gap: 12px !important;
+  }
+
+  .task-list-view {
+    display: grid;
+    gap: 12px !important;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+
+  .pencil-team-row {
+    min-height: 72px;
+    padding: 12px 14px !important;
+  }
+
+  /* Give compact text controls enough inset without changing their hierarchy. */
+  .calendar-mobile-tabs button {
+    height: 32px;
+    padding-inline: 8px !important;
+  }
+
+  .pencil-checkins-view .checkin-range-filter button {
+    min-height: 40px;
+    padding-inline: 12px !important;
+  }
+
+  .pencil-team-status {
+    min-height: 18px;
+    padding: 2px 8px !important;
+  }
+
+  /* Compact status controls still need a readable text inset on phones. Keep
+     their chip hierarchy while lifting the label off the top and bottom. */
+  .my-task-status-slot [data-slot='select-trigger'].task-status-pill,
+  .planner-task-card-details [data-slot='select-trigger'].planner-status-pill,
+  .planner-task-card-details span.planner-status-pill,
+  .projects-view [data-slot='select-trigger'].project-status,
+  .project-kanban-status.app-select-trigger,
+  .project-task-status,
+  .project-task-status-select.app-select-trigger {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding: 0 10px !important;
+    line-height: 14px !important;
+  }
+
+  /* Report cards can wrap onto a third line at 390px. Let the card grow rather
+     than letting the summary text sit against the bottom border. */
+  .pencil-reports-view .report-stat {
+    height: auto !important;
+    min-height: 112px !important;
+    padding: 14px 14px 18px !important;
+  }
+}
