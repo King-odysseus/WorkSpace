@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
-import ProjectKanbanBoard, { normalizeProjectKanbanColumnOrder, projectKanbanColumnForTask } from './ProjectKanbanBoard.jsx'
+import ProjectKanbanBoard, { DEFAULT_PROJECT_KANBAN_COLUMN_ORDER, normalizeProjectKanbanColumnOrder, projectKanbanColumnForTask } from './ProjectKanbanBoard.jsx'
 
 const tasks = [
   { id: 91, title: 'Design UI', status: 'todo', priority: 'High', can_edit: true },
@@ -122,4 +123,88 @@ it('offers keyboard-reachable project lane move controls', async () => {
     'on-hold',
     'done',
   ])
+})
+
+it('can nudge a project lane across the full board and back again', async () => {
+  const user = userEvent.setup()
+  const onColumnReorder = vi.fn()
+
+  function ReorderableBoard() {
+    const [columnOrder, setColumnOrder] = useState(DEFAULT_PROJECT_KANBAN_COLUMN_ORDER)
+    return <ProjectKanbanBoard
+      tasks={tasks}
+      onOpenTask={vi.fn()}
+      onStatusChange={vi.fn()}
+      canManageTasks
+      columnOrder={columnOrder}
+      canReorderColumns
+      onColumnReorder={nextOrder => {
+        onColumnReorder(nextOrder)
+        setColumnOrder(nextOrder)
+      }}
+    />
+  }
+
+  render(<ReorderableBoard />)
+  const laneNames = () => screen.getAllByRole('region').map(region => region.getAttribute('aria-label').replace(' column', ''))
+
+  for (let step = 0; step < 6; step += 1) {
+    await user.click(screen.getByRole('button', { name: 'Move Backlog right' }))
+  }
+  expect(laneNames()).toEqual(['To do', 'In progress', 'Review', 'Blocked', 'On hold', 'Done', 'Backlog'])
+
+  for (let step = 0; step < 6; step += 1) {
+    await user.click(screen.getByRole('button', { name: 'Move Backlog left' }))
+  }
+  expect(laneNames()).toEqual(['Backlog', 'To do', 'In progress', 'Review', 'Blocked', 'On hold', 'Done'])
+})
+
+it('scrolls the project lane board toward the pointer while dragging and reveals the moved lane', async () => {
+  const user = userEvent.setup()
+  const scrolledElements = []
+  const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function scrollIntoViewMock() {
+    scrolledElements.push(this)
+  })
+
+  function ReorderableBoard() {
+    const [columnOrder, setColumnOrder] = useState(DEFAULT_PROJECT_KANBAN_COLUMN_ORDER)
+    return <ProjectKanbanBoard
+      tasks={tasks}
+      onOpenTask={vi.fn()}
+      onStatusChange={vi.fn()}
+      canManageTasks
+      columnOrder={columnOrder}
+      canReorderColumns
+      onColumnReorder={setColumnOrder}
+    />
+  }
+
+  const { container } = render(<ReorderableBoard />)
+  const board = screen.getByLabelText('Project Kanban board')
+  vi.spyOn(board, 'getBoundingClientRect').mockReturnValue({ left: 0, right: 1000, width: 1000, top: 0, bottom: 600, height: 600, x: 0, y: 0, toJSON: () => ({}) })
+  Object.defineProperty(board, 'scrollWidth', { configurable: true, value: 2200 })
+  Object.defineProperty(board, 'clientWidth', { configurable: true, value: 1000 })
+  const sourceHeading = container.querySelector('.project-kanban-column-heading')
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'column:backlog') }
+
+  fireEvent.dragStart(sourceHeading, { dataTransfer })
+  board.scrollLeft = 500
+  const dragOverAt = clientX => {
+    const event = new Event('dragover', { bubbles: true, cancelable: true })
+    Object.defineProperties(event, {
+      clientX: { value: clientX },
+      pageX: { value: clientX },
+      dataTransfer: { value: dataTransfer },
+    })
+    fireEvent(board, event)
+  }
+  dragOverAt(20)
+  expect(board.scrollLeft).toBeLessThan(500)
+  dragOverAt(980)
+  expect(board.scrollLeft).toBeGreaterThan(450)
+  fireEvent.dragEnd(sourceHeading, { dataTransfer })
+
+  await user.click(screen.getByRole('button', { name: 'Move Backlog right' }))
+  await waitFor(() => expect(scrolledElements.some(element => element.dataset.columnId === 'backlog')).toBe(true))
+  scrollIntoView.mockRestore()
 })

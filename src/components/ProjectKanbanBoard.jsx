@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, GripVertical } from 'lucide-react'
 import { AppSelect } from './ui/select.jsx'
 
@@ -36,11 +36,23 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
   const [draggedColumnId, setDraggedColumnId] = useState(null)
   const [dropColumnId, setDropColumnId] = useState(null)
   const [dropTaskColumnId, setDropTaskColumnId] = useState(null)
+  const [revealColumnId, setRevealColumnId] = useState(null)
+  const boardRef = useRef(null)
   const taskById = id => tasks.find(task => String(task.id) === String(id))
   const canMoveTask = task => Boolean(onStatusChange && (canManageTasks || task?.can_edit))
   const draggedTask = draggedTaskId ? taskById(draggedTaskId) : null
   const orderedColumns = normalizeProjectKanbanColumnOrder(columnOrder).map(id => PROJECT_KANBAN_COLUMN_BY_ID.get(id))
   const allowColumnReorder = Boolean(canReorderColumns && onColumnReorder)
+
+  useEffect(() => {
+    if (revealColumnId === null || !boardRef.current) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const target = [...boardRef.current.querySelectorAll('[data-column-id]')].find(node => node.dataset.columnId === String(revealColumnId))
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+      setRevealColumnId(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [columnOrder, revealColumnId])
 
   const moveTask = (task, status) => {
     if (!task || !status || !canMoveTask(task)) return
@@ -57,6 +69,23 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     setDropTaskColumnId(null)
   }
 
+  const scrollColumnBoard = event => {
+    const board = boardRef.current
+    if (!board || !draggedColumnId) return
+    const pointerX = Number.isFinite(event.clientX) ? event.clientX : event.pageX
+    if (!Number.isFinite(pointerX)) return
+    const bounds = board.getBoundingClientRect()
+    const edge = Math.min(96, bounds.width / 4)
+    const distanceFromLeft = pointerX - bounds.left
+    const distanceFromRight = bounds.right - pointerX
+    const direction = distanceFromLeft < edge ? -1 : distanceFromRight < edge ? 1 : 0
+    if (!direction) return
+    const distance = direction < 0 ? edge - distanceFromLeft : edge - distanceFromRight
+    const amount = direction * Math.max(8, Math.ceil(distance / 3))
+    const maximum = Math.max(0, board.scrollWidth - board.clientWidth)
+    board.scrollLeft = Math.max(0, Math.min(maximum, board.scrollLeft + amount))
+  }
+
   const moveColumn = (sourceId, targetId) => {
     if (!allowColumnReorder || !sourceId || !targetId || sourceId === targetId) return
     const currentOrder = orderedColumns.map(column => column.id)
@@ -67,6 +96,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     const [moved] = nextOrder.splice(sourceIndex, 1)
     nextOrder.splice(targetIndex, 0, moved)
     onColumnReorder(nextOrder)
+    setRevealColumnId(sourceId)
   }
 
   const nudgeColumn = (columnId, direction) => {
@@ -78,9 +108,10 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     const [moved] = nextOrder.splice(sourceIndex, 1)
     nextOrder.splice(targetIndex, 0, moved)
     onColumnReorder(nextOrder)
+    setRevealColumnId(columnId)
   }
 
-  return <div className="project-kanban-columns" aria-label="Project Kanban board">
+  return <div ref={boardRef} className="project-kanban-columns" aria-label="Project Kanban board" onDragOver={scrollColumnBoard}>
     {orderedColumns.map((column, columnIndex) => {
       const columnTasks = tasks.filter(task => projectKanbanColumnForTask(task).id === column.id)
       const canDrop = Boolean(draggedTask && column.status && canMoveTask(draggedTask) && projectKanbanColumnForTask(draggedTask).id !== column.id)
@@ -88,6 +119,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
       return <section
         className={`project-kanban-column${canDrop && dropTaskColumnId === column.id ? ' is-drop-target' : ''}${isColumnDropTarget ? ' is-column-drop-target' : ''}${draggedColumnId === column.id ? ' is-column-source' : ''}`}
         key={column.id}
+        data-column-id={column.id}
         aria-label={`${column.label} column`}
         onDragEnter={event => {
           if (draggedColumnId && draggedColumnId !== column.id && allowColumnReorder) {

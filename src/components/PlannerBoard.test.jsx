@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
 import PlannerBoard from './PlannerBoard.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
@@ -384,6 +385,115 @@ it('reorders workstream buckets from the all-operations view', () => {
   fireEvent.drop(targetColumn, { dataTransfer })
 
   expect(onBucketReorder).toHaveBeenCalledWith([24, 19], { project_id: null, workstream_id: 7 })
+})
+
+it('can nudge a bucket across the full board and back again', async () => {
+  const user = userEvent.setup()
+  const onBucketReorder = vi.fn()
+  const initialBuckets = [
+    { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+    { id: 19, name: 'Intake', project_id: null, workstream_id: null },
+    { id: 24, name: 'Review', project_id: null, workstream_id: null },
+    { id: 25, name: 'Done', project_id: null, workstream_id: null },
+  ]
+
+  function ReorderablePlanner() {
+    const [buckets, setBuckets] = useState(initialBuckets)
+    return <PlannerBoard
+      buckets={buckets}
+      tasks={[]}
+      members={[]}
+      searchQuery=""
+      onSearchChange={vi.fn()}
+      onTaskMove={vi.fn()}
+      onAddTask={vi.fn()}
+      onBucketReorder={(ids, scope) => {
+        onBucketReorder(ids, scope)
+        setBuckets(ids.map(id => buckets.find(bucket => String(bucket.id) === String(id))))
+      }}
+      scopeMode="projects"
+      projectFilter="all"
+      canManageBuckets
+      newBucketName=""
+      setNewBucketName={vi.fn()}
+    />
+  }
+
+  render(<ReorderablePlanner />)
+
+  for (let step = 0; step < 3; step += 1) {
+    await user.click(screen.getByRole('button', { name: 'Open actions for Backlog' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Move Backlog right' }))
+  }
+  expect(columnNames(document.body)).toEqual(['Intake', 'Review', 'Done', 'Backlog'])
+
+  for (let step = 0; step < 3; step += 1) {
+    await user.click(screen.getByRole('button', { name: 'Open actions for Backlog' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Move Backlog left' }))
+  }
+  expect(columnNames(document.body)).toEqual(['Backlog', 'Intake', 'Review', 'Done'])
+})
+
+it('scrolls the planner board toward the pointer while dragging a bucket and reveals the moved lane', async () => {
+  const user = userEvent.setup()
+  const scrolledElements = []
+  const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function scrollIntoViewMock() {
+    scrolledElements.push(this)
+  })
+  const initialBuckets = [
+    { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+    { id: 19, name: 'Review', project_id: null, workstream_id: null },
+    { id: 24, name: 'Done', project_id: null, workstream_id: null },
+  ]
+
+  function ReorderablePlanner() {
+    const [buckets, setBuckets] = useState(initialBuckets)
+    return <PlannerBoard
+      buckets={buckets}
+      tasks={[]}
+      members={[]}
+      searchQuery=""
+      onSearchChange={vi.fn()}
+      onTaskMove={vi.fn()}
+      onAddTask={vi.fn()}
+      onBucketReorder={ids => setBuckets(ids.map(id => buckets.find(bucket => String(bucket.id) === String(id))))}
+      scopeMode="projects"
+      projectFilter="all"
+      canManageBuckets
+      newBucketName=""
+      setNewBucketName={vi.fn()}
+    />
+  }
+
+  const { container } = render(<ReorderablePlanner />)
+  const board = screen.getByLabelText('Planner board')
+  vi.spyOn(board, 'getBoundingClientRect').mockReturnValue({ left: 0, right: 1000, width: 1000, top: 0, bottom: 600, height: 600, x: 0, y: 0, toJSON: () => ({}) })
+  Object.defineProperty(board, 'scrollWidth', { configurable: true, value: 2000 })
+  Object.defineProperty(board, 'clientWidth', { configurable: true, value: 1000 })
+  const sourceSurface = container.querySelector('.planner-column-drag-surface')
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:2') }
+
+  fireEvent.dragStart(sourceSurface, { dataTransfer })
+  board.scrollLeft = 500
+  const dragOverAt = clientX => {
+    const event = new Event('dragover', { bubbles: true, cancelable: true })
+    Object.defineProperties(event, {
+      clientX: { value: clientX },
+      pageX: { value: clientX },
+      dataTransfer: { value: dataTransfer },
+    })
+    fireEvent(board, event)
+  }
+  dragOverAt(20)
+  expect(board.scrollLeft).toBeLessThan(500)
+  dragOverAt(980)
+  expect(board.scrollLeft).toBeGreaterThan(450)
+  fireEvent.dragEnd(sourceSurface, { dataTransfer })
+
+  await user.click(screen.getByRole('button', { name: 'Open actions for Backlog' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Move Backlog right' }))
+  await waitFor(() => expect(scrolledElements.some(element => element.dataset.bucketId === '2')).toBe(true))
+  scrollIntoView.mockRestore()
 })
 
 it('uses the same drag state classes for planner task cards', () => {

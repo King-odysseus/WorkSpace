@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, Check, ChevronRight, FolderInput, GripVertical, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
@@ -130,6 +130,8 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [mobileBucketId, setMobileBucketId] = useState(null)
   const [mobileBucketPinned, setMobileBucketPinned] = useState(false)
   const [isMobilePlanner, setIsMobilePlanner] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 760px)').matches)
+  const [revealBucketId, setRevealBucketId] = useState(null)
+  const boardRef = useRef(null)
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
@@ -146,6 +148,16 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     const nextBucketId = firstPopulated?.id ?? buckets[0]?.id ?? null
     if (nextBucketId !== mobileBucketId) setMobileBucketId(nextBucketId)
   }, [buckets, mobileBucketId, mobileBucketPinned, tasks])
+
+  useEffect(() => {
+    if (revealBucketId === null || !boardRef.current) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const target = [...boardRef.current.querySelectorAll('[data-bucket-id]')].find(node => node.dataset.bucketId === String(revealBucketId))
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+      setRevealBucketId(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [buckets, revealBucketId])
 
   // externalFilter carries one filter token in from Reports drill-throughs and
   // saved views (main.jsx's plannerFilter) - it can name a status, a bucket, an
@@ -279,6 +291,22 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   })
   const sameReorderScope = (left, right) => Boolean(left && right && String(left.project_id ?? '') === String(right.project_id ?? '') && String(left.workstream_id ?? '') === String(right.workstream_id ?? ''))
   const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)) && (workstream === 'all' || String(value.name).trim().toLocaleLowerCase() === String(workstream).trim().toLocaleLowerCase()))
+  const scrollBucketBoard = event => {
+    const board = boardRef.current
+    if (!board || !draggedBucketId) return
+    const pointerX = Number.isFinite(event.clientX) ? event.clientX : event.pageX
+    if (!Number.isFinite(pointerX)) return
+    const bounds = board.getBoundingClientRect()
+    const edge = Math.min(96, bounds.width / 4)
+    const distanceFromLeft = pointerX - bounds.left
+    const distanceFromRight = bounds.right - pointerX
+    const direction = distanceFromLeft < edge ? -1 : distanceFromRight < edge ? 1 : 0
+    if (!direction) return
+    const distance = direction < 0 ? edge - distanceFromLeft : edge - distanceFromRight
+    const amount = direction * Math.max(8, Math.ceil(distance / 3))
+    const maximum = Math.max(0, board.scrollWidth - board.clientWidth)
+    board.scrollLeft = Math.max(0, Math.min(maximum, board.scrollLeft + amount))
+  }
   const moveBucket = (sourceId, targetId) => {
     if (!sourceId || !targetId || sourceId === targetId) return
     const sourceBucket = reorderableBuckets.find(bucket => String(bucket.id) === String(sourceId))
@@ -292,6 +320,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     const [moved] = next.splice(sourceIndex, 1)
     next.splice(targetIndex, 0, moved)
     onBucketReorder(next, scope)
+    setRevealBucketId(sourceId)
   }
   const startBucketDrag = (event, bucket) => {
     event.stopPropagation()
@@ -312,6 +341,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     const [moved] = next.splice(sourceIndex, 1)
     next.splice(targetIndex, 0, moved)
     onBucketReorder(next, scope)
+    setRevealBucketId(bucketId)
   }
   const startBucketRename = bucket => {
     setEditingBucketId(bucket.id)
@@ -476,7 +506,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     {createPanel}
     {(bucketError || workstreamError) && <p className="auth-error" role="alert">{bucketError || workstreamError}</p>}
 
-    <div className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`} aria-label="Planner board">
+    <div ref={boardRef} className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`} aria-label="Planner board" onDragOver={scrollBucketBoard}>
       {buckets.map(bucket => {
         const reorderScope = reorderScopeFor(bucket)
         const reorderLaneBuckets = reorderScope ? reorderBucketsFor(reorderScope) : []
@@ -486,7 +516,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
         const draggedBucketScope = draggedBucket ? reorderScopeFor(draggedBucket) : null
         const bucketDropAllowed = bucketDraggable && Boolean(draggedBucketId) && draggedBucketId !== bucket.id && sameReorderScope(draggedBucketScope, reorderScope)
         const isBucketDropTarget = Boolean(draggedBucketId) && dropBucketId === bucket.id && draggedBucketId !== bucket.id
-        return <section className={`planner-column relative flex h-[744px] w-[304px] shrink-0 flex-col rounded-card bg-surface-secondary${isBucketDropTarget ? ' is-bucket-drop-target' : ''}${draggedBucketId === bucket.id ? ' is-bucket-source' : ''}${activeMobileBucketId === bucket.id ? ' is-mobile-active' : ''}`} key={bucket.id}
+        return <section className={`planner-column relative flex h-[744px] w-[304px] shrink-0 flex-col rounded-card bg-surface-secondary${isBucketDropTarget ? ' is-bucket-drop-target' : ''}${draggedBucketId === bucket.id ? ' is-bucket-source' : ''}${activeMobileBucketId === bucket.id ? ' is-mobile-active' : ''}`} key={bucket.id} data-bucket-id={String(bucket.id)}
           onDragEnter={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); setDropBucketId(bucket.id) } else if (draggedBucketId) setDropBucketId(null) }}
           onDragOver={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
           onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) setDropBucketId(null) }}
