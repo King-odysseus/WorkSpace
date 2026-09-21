@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
-import ProjectKanbanBoard, { projectKanbanColumnForTask } from './ProjectKanbanBoard.jsx'
+import ProjectKanbanBoard, { normalizeProjectKanbanColumnOrder, projectKanbanColumnForTask } from './ProjectKanbanBoard.jsx'
 
 const tasks = [
   { id: 91, title: 'Design UI', status: 'todo', priority: 'High', can_edit: true },
@@ -56,4 +56,65 @@ it('keeps read-only tasks fixed in their lane', () => {
 
   expect(screen.getByText('View-only task').closest('.project-kanban-task')).toHaveAttribute('draggable', 'false')
   expect(screen.queryByRole('combobox', { name: 'Change status for View-only task' })).not.toBeInTheDocument()
+})
+
+it('normalizes a persisted column order and appends any missing status lanes', () => {
+  expect(normalizeProjectKanbanColumnOrder(['done', 'backlog', 'done', 'unknown'])).toEqual([
+    'done',
+    'backlog',
+    'todo',
+    'in-progress',
+    'review',
+    'blocked',
+    'on-hold',
+  ])
+})
+
+it('reorders project kanban columns by drag and drop', () => {
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+  const backlogColumn = screen.getByRole('region', { name: 'Backlog column' })
+  const reviewColumn = screen.getByRole('region', { name: 'Review column' })
+  const dataTransfer = {
+    effectAllowed: '',
+    dropEffect: '',
+    setData: vi.fn(),
+    getData: vi.fn(() => 'column:backlog'),
+  }
+
+  fireEvent.dragStart(backlogColumn.querySelector('.project-kanban-column-heading'), { dataTransfer })
+  fireEvent.dragEnter(reviewColumn, { dataTransfer })
+
+  expect(reviewColumn).toHaveClass('is-column-drop-target')
+  expect(backlogColumn).toHaveClass('is-column-source')
+
+  fireEvent.drop(reviewColumn, { dataTransfer })
+
+  expect(onColumnReorder).toHaveBeenCalledWith([
+    'todo',
+    'in-progress',
+    'review',
+    'backlog',
+    'blocked',
+    'on-hold',
+    'done',
+  ])
+})
+
+it('offers keyboard-reachable project lane move controls', async () => {
+  const user = userEvent.setup()
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+
+  await user.click(screen.getByRole('button', { name: 'Move Backlog right' }))
+
+  expect(onColumnReorder).toHaveBeenCalledWith([
+    'todo',
+    'backlog',
+    'in-progress',
+    'review',
+    'blocked',
+    'on-hold',
+    'done',
+  ])
 })

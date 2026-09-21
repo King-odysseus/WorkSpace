@@ -1354,12 +1354,28 @@ def plan_bucket_reorder(request, workspace_id):
         scope = {'project_id': None, 'workstream_id': workstream_id}
     else:
         scope = {'project_id': None, 'workstream_id': None}
+    backlog_requested = any(
+        isinstance(value, str) and value.strip().lower() == 'backlog'
+        for value in order
+    )
+    if backlog_requested and (project_id or workstream_id):
+        return JsonResponse({'error': 'Backlog can only be reordered in the workspace scope.'}, status=400)
+    if backlog_requested:
+        ensure_bucket_named(workspace_id, 'Backlog')
     buckets = list(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True, **scope))
     by_id = {bucket.id: bucket for bucket in buckets}
+    default_backlog = next((bucket for bucket in buckets if bucket.name == 'Backlog'), None)
     try:
-        ids = [int(value) for value in order]
+        ids = [
+            default_backlog.id
+            if isinstance(value, str) and value.strip().lower() == 'backlog'
+            else int(value)
+            for value in order
+        ]
     except (TypeError, ValueError):
         return JsonResponse({'error': 'bucket_ids must contain valid bucket IDs.'}, status=400)
+    if backlog_requested and default_backlog is None:
+        return JsonResponse({'error': 'The default Backlog bucket could not be resolved.'}, status=409)
     if set(ids) != set(by_id) or len(ids) != len(by_id):
         return JsonResponse({'error': 'The bucket order must include every workspace bucket exactly once.'}, status=400)
     for position, bucket_id in enumerate(ids):

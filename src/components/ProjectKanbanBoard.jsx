@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GripVertical } from 'lucide-react'
+import { ChevronLeft, ChevronRight, GripVertical } from 'lucide-react'
 import { AppSelect } from './ui/select.jsx'
 
 const COLUMN_DEFINITIONS = [
@@ -13,6 +13,13 @@ const COLUMN_DEFINITIONS = [
 ]
 
 export const PROJECT_KANBAN_COLUMNS = COLUMN_DEFINITIONS
+const PROJECT_KANBAN_COLUMN_BY_ID = new Map(COLUMN_DEFINITIONS.map(column => [column.id, column]))
+export const DEFAULT_PROJECT_KANBAN_COLUMN_ORDER = COLUMN_DEFINITIONS.map(column => column.id)
+
+export function normalizeProjectKanbanColumnOrder(order) {
+  const requested = Array.isArray(order) ? order.map(String) : []
+  return [...new Set([...requested, ...DEFAULT_PROJECT_KANBAN_COLUMN_ORDER])].filter(id => PROJECT_KANBAN_COLUMN_BY_ID.has(id))
+}
 
 export function normalizeProjectTaskStatus(status) {
   return String(status || '').trim().toLowerCase().replaceAll('_', '-')
@@ -23,12 +30,16 @@ export function projectKanbanColumnForTask(task) {
   return PROJECT_KANBAN_COLUMNS.find(column => column.aliases.includes(status)) || PROJECT_KANBAN_COLUMNS[0]
 }
 
-export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusChange, canManageTasks = false }) {
+export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusChange, canManageTasks = false, columnOrder, onColumnReorder, canReorderColumns = false }) {
   const [draggedTaskId, setDraggedTaskId] = useState(null)
+  const [draggedColumnId, setDraggedColumnId] = useState(null)
   const [dropColumnId, setDropColumnId] = useState(null)
+  const [dropTaskColumnId, setDropTaskColumnId] = useState(null)
   const taskById = id => tasks.find(task => String(task.id) === String(id))
   const canMoveTask = task => Boolean(onStatusChange && (canManageTasks || task?.can_edit))
   const draggedTask = draggedTaskId ? taskById(draggedTaskId) : null
+  const orderedColumns = normalizeProjectKanbanColumnOrder(columnOrder).map(id => PROJECT_KANBAN_COLUMN_BY_ID.get(id))
+  const allowColumnReorder = Boolean(canReorderColumns && onColumnReorder)
 
   const moveTask = (task, status) => {
     if (!task || !status || !canMoveTask(task)) return
@@ -39,31 +50,78 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
 
   const finishDrag = () => {
     setDraggedTaskId(null)
+    setDraggedColumnId(null)
     setDropColumnId(null)
+    setDropTaskColumnId(null)
   }
 
-  return <div className="project-kanban-columns">
-    {PROJECT_KANBAN_COLUMNS.map(column => {
+  const moveColumn = (sourceId, targetId) => {
+    if (!allowColumnReorder || !sourceId || !targetId || sourceId === targetId) return
+    const currentOrder = orderedColumns.map(column => column.id)
+    const sourceIndex = currentOrder.indexOf(sourceId)
+    const targetIndex = currentOrder.indexOf(targetId)
+    if (sourceIndex < 0 || targetIndex < 0) return
+    const nextOrder = [...currentOrder]
+    const [moved] = nextOrder.splice(sourceIndex, 1)
+    nextOrder.splice(targetIndex, 0, moved)
+    onColumnReorder(nextOrder)
+  }
+
+  const nudgeColumn = (columnId, direction) => {
+    const currentOrder = orderedColumns.map(column => column.id)
+    const sourceIndex = currentOrder.indexOf(columnId)
+    const targetIndex = sourceIndex + direction
+    if (!allowColumnReorder || sourceIndex < 0 || targetIndex < 0 || targetIndex >= currentOrder.length) return
+    const nextOrder = [...currentOrder]
+    const [moved] = nextOrder.splice(sourceIndex, 1)
+    nextOrder.splice(targetIndex, 0, moved)
+    onColumnReorder(nextOrder)
+  }
+
+  return <div className="project-kanban-columns" aria-label="Project Kanban board">
+    {orderedColumns.map((column, columnIndex) => {
       const columnTasks = tasks.filter(task => projectKanbanColumnForTask(task).id === column.id)
       const canDrop = Boolean(draggedTask && column.status && canMoveTask(draggedTask) && projectKanbanColumnForTask(draggedTask).id !== column.id)
+      const isColumnDropTarget = Boolean(draggedColumnId && draggedColumnId !== column.id && dropColumnId === column.id && allowColumnReorder)
       return <section
-        className={`project-kanban-column${canDrop && dropColumnId === column.id ? ' is-drop-target' : ''}`}
+        className={`project-kanban-column${canDrop && dropTaskColumnId === column.id ? ' is-drop-target' : ''}${isColumnDropTarget ? ' is-column-drop-target' : ''}${draggedColumnId === column.id ? ' is-column-source' : ''}`}
         key={column.id}
         aria-label={`${column.label} column`}
         onDragEnter={event => {
+          if (draggedColumnId && draggedColumnId !== column.id && allowColumnReorder) {
+            event.preventDefault()
+            setDropColumnId(column.id)
+            setDropTaskColumnId(null)
+            return
+          }
+          setDropColumnId(null)
           if (!canDrop) return
           event.preventDefault()
-          setDropColumnId(column.id)
+          setDropTaskColumnId(column.id)
         }}
         onDragOver={event => {
+          if (draggedColumnId && draggedColumnId !== column.id && allowColumnReorder) {
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'move'
+            return
+          }
           if (!canDrop) return
           event.preventDefault()
           event.dataTransfer.dropEffect = 'move'
         }}
         onDragLeave={event => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setDropColumnId(null)
+          if (event.currentTarget.contains(event.relatedTarget)) return
+          setDropColumnId(null)
+          setDropTaskColumnId(null)
         }}
         onDrop={event => {
+          if (draggedColumnId && draggedColumnId !== column.id && allowColumnReorder) {
+            event.preventDefault()
+            event.stopPropagation()
+            moveColumn(draggedColumnId, column.id)
+            finishDrag()
+            return
+          }
           if (!canDrop) return
           event.preventDefault()
           const plainId = event.dataTransfer.getData('text/plain').replace(/^task:/, '')
@@ -72,7 +130,33 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
           finishDrag()
         }}
       >
-        <div className="project-kanban-column-heading"><span>{column.label}</span><strong>{columnTasks.length}</strong></div>
+        <div
+          className="project-kanban-column-heading"
+          data-reorderable={allowColumnReorder ? 'true' : undefined}
+          draggable={allowColumnReorder}
+          onDragStart={event => {
+            if (!allowColumnReorder || event.target.closest('button')) {
+              event.preventDefault()
+              return
+            }
+            event.stopPropagation()
+            event.dataTransfer.effectAllowed = 'move'
+            event.dataTransfer.setData('application/x-workspace-kanban-column', column.id)
+            event.dataTransfer.setData('text/plain', `column:${column.id}`)
+            setDraggedColumnId(column.id)
+          }}
+          onDragEnd={finishDrag}
+        >
+          <span className="project-kanban-column-heading-label">
+            {allowColumnReorder && <GripVertical className="project-kanban-column-grip" size={15} strokeWidth={1.7} title={`Drag ${column.label} to reorder`} aria-hidden="true" />}
+            <span>{column.label}</span>
+          </span>
+          <span className="project-kanban-column-heading-actions">
+            {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === 0} onClick={() => nudgeColumn(column.id, -1)} aria-label={`Move ${column.label} left`} title={`Move ${column.label} left`}><ChevronLeft size={13} /></button>}
+            <strong>{columnTasks.length}</strong>
+            {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === orderedColumns.length - 1} onClick={() => nudgeColumn(column.id, 1)} aria-label={`Move ${column.label} right`} title={`Move ${column.label} right`}><ChevronRight size={13} /></button>}
+          </span>
+        </div>
         <div className="project-kanban-column-body">
           {columnTasks.map(task => {
             const editable = canMoveTask(task)

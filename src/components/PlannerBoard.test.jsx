@@ -208,17 +208,40 @@ it('offers lifecycle actions on every lane the design draws a menu on', async ()
   expect(screen.getByRole('menuitem', { name: 'Archive Prototyping' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Delete Prototyping' })).toBeInTheDocument()
 
-  // Backlog is an ordinary user-managed bucket with the landing lane's special
-  // case: the design draws its menu like any other column, but it keeps its
-  // place, so the reorder items are the ones that stay away. The open menu hides
-  // the rest of the board from the accessibility tree, so close it first.
+  // Backlog is the default landing lane by name, not by position, so it can be
+  // reordered like every other bucket. The open menu hides the rest of the board
+  // from the accessibility tree, so close it first.
   await user.keyboard('{Escape}')
   await user.click(screen.getByRole('button', { name: 'Open actions for Backlog' }))
   expect(screen.getByRole('menuitem', { name: 'Rename Backlog' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Archive Backlog' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Delete Backlog' })).toBeInTheDocument()
-  expect(screen.queryByRole('menuitem', { name: 'Move Backlog left' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('menuitem', { name: 'Move Backlog right' })).not.toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Move Backlog left' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Move Backlog right' })).toBeInTheDocument()
+})
+
+it('moves Backlog to another lane position without changing its landing role', async () => {
+  const user = userEvent.setup()
+  const onBucketReorder = vi.fn()
+  renderPlanner({
+    buckets: [
+      { id: 'backlog', name: 'Backlog', project_id: null, workstream_id: null },
+      { id: 19, name: 'Discovery', project_id: null, workstream_id: null },
+      { id: 24, name: 'Delivery', project_id: null, workstream_id: null },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Open actions for Backlog' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Move Backlog right' }))
+
+  expect(onBucketReorder).toHaveBeenCalledWith(
+    [19, 'backlog', 24],
+    { project_id: null, workstream_id: null },
+  )
 })
 
 it('shows the designed insertion state while dragging a bucket', () => {

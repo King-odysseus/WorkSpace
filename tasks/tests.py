@@ -492,6 +492,21 @@ class TaskApiTests(TestCase):
         self.assertEqual(second.position, 0)
         self.assertEqual(first.position, 1)
 
+    def test_owner_can_materialise_and_reorder_the_default_backlog(self):
+        second = PlanBucket.objects.create(workspace=self.workspace, name='Review', position=0)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [second.id, 'backlog']}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        returned = response.json()['buckets']
+        self.assertEqual([bucket['name'] for bucket in returned], ['Review', 'Backlog'])
+        backlog = PlanBucket.objects.get(workspace=self.workspace, name='Backlog')
+        second.refresh_from_db()
+        self.assertEqual(second.position, 0)
+        self.assertEqual(backlog.position, 1)
+
     def test_owner_can_rename_a_plan_bucket(self):
         bucket = PlanBucket.objects.create(workspace=self.workspace, name='Later', position=1)
         response = self.client.patch(

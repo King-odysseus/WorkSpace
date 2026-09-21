@@ -4962,10 +4962,25 @@ function WorkspaceView({
       return !bucket.project_id && !bucket.workstream_id;
     };
     const scopedBuckets = previousBuckets.filter(bucketInScope);
+    if (
+      !scope.project_id &&
+      !scope.workstream_id &&
+      bucketIds.includes("backlog") &&
+      !scopedBuckets.some((bucket) => bucket.id === "backlog")
+    ) {
+      scopedBuckets.unshift({
+        id: "backlog",
+        name: "Backlog",
+        project_id: null,
+        workstream_id: null,
+      });
+    }
+    const bucketKey = (bucket) =>
+      bucket.id === "backlog" ? "backlog" : Number(bucket.id);
     const byId = new Map(
-      scopedBuckets.map((bucket) => [Number(bucket.id), bucket]),
+      scopedBuckets.map((bucket) => [bucketKey(bucket), bucket]),
     );
-    const ids = bucketIds.map(Number);
+    const ids = bucketIds.map((id) => (id === "backlog" ? "backlog" : Number(id)));
     if (
       ids.length !== scopedBuckets.length ||
       new Set(ids).size !== ids.length ||
@@ -4977,19 +4992,27 @@ function WorkspaceView({
       return;
     }
     const nextScopedBuckets = ids.map((id) => byId.get(id));
-    const nextBuckets = [];
-    let nextScopedIndex = 0;
-    previousBuckets.forEach((bucket) => {
-      if (bucketInScope(bucket)) {
-        nextBuckets.push(nextScopedBuckets[nextScopedIndex]);
-        nextScopedIndex += 1;
-      } else {
-        nextBuckets.push(bucket);
-      }
-    });
+    const replaceScopedBuckets = (currentBuckets, nextScopedBuckets) => {
+      const merged = [];
+      let inserted = false;
+      currentBuckets.forEach((bucket) => {
+        if (bucketInScope(bucket)) {
+          if (!inserted) {
+            merged.push(...nextScopedBuckets);
+            inserted = true;
+          }
+        } else {
+          merged.push(bucket);
+        }
+      });
+      if (!inserted) merged.push(...nextScopedBuckets);
+      return merged;
+    };
+    const nextBuckets = replaceScopedBuckets(previousBuckets, nextScopedBuckets);
     if (
-      nextBuckets.every(
-        (bucket, index) => bucket.id === previousBuckets[index]?.id,
+      nextBuckets.length === previousBuckets.length &&
+      nextBuckets.every((bucket, index) =>
+        String(bucket.id) === String(previousBuckets[index]?.id),
       )
     )
       return;
@@ -5022,12 +5045,11 @@ function WorkspaceView({
           responseData.error || "Bucket order could not be saved.",
         );
       setLocalData((current) => {
-        const savedScoped = [...(responseData.buckets || [])];
+        const savedScoped = responseData.buckets || [];
+        if (!savedScoped.length) return current;
         return {
           ...current,
-          buckets: current.buckets.map((bucket) =>
-            bucketInScope(bucket) ? savedScoped.shift() || bucket : bucket,
-          ),
+          buckets: replaceScopedBuckets(current.buckets, savedScoped),
         };
       });
       window.dispatchEvent(
@@ -5098,6 +5120,64 @@ function WorkspaceView({
       `${project.name} moved to ${status.charAt(0).toUpperCase() + status.slice(1)}.`,
     );
     onRefresh();
+  };
+  const reorderProjectKanbanColumns = async (project, columnOrder) => {
+    if (!project || !Array.isArray(columnOrder)) return;
+    const previousProject = project;
+    const nextConfiguration = {
+      ...(project.configuration || {}),
+      kanban_column_order: columnOrder,
+    };
+    const optimisticProject = { ...project, configuration: nextConfiguration };
+    setSelectedProjectWorkspace((current) =>
+      current && String(current.id) === String(project.id)
+        ? optimisticProject
+        : current,
+    );
+    setLocalData((current) => ({
+      ...current,
+      projects: current.projects.map((item) =>
+        String(item.id) === String(project.id) ? optimisticProject : item,
+      ),
+    }));
+    const responseData = await runAction(
+      async () =>
+        fetch(`/api/workspaces/${workspaceId}/projects/${project.id}/`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": await getCsrfToken(),
+          },
+          body: JSON.stringify({ configuration: nextConfiguration }),
+        }),
+      "Kanban column order could not be saved.",
+    );
+    if (!responseData?.project) {
+      setSelectedProjectWorkspace((current) =>
+        current && String(current.id) === String(project.id)
+          ? previousProject
+          : current,
+      );
+      setLocalData((current) => ({
+        ...current,
+        projects: current.projects.map((item) =>
+          String(item.id) === String(project.id) ? previousProject : item,
+        ),
+      }));
+      return;
+    }
+    setSelectedProjectWorkspace((current) =>
+      current && String(current.id) === String(project.id)
+        ? responseData.project
+        : current,
+    );
+    setLocalData((current) => ({
+      ...current,
+      projects: current.projects.map((item) =>
+        String(item.id) === String(project.id) ? responseData.project : item,
+      ),
+    }));
   };
   const deleteProject = async (project) => {
     if (
@@ -5240,13 +5320,11 @@ function WorkspaceView({
   }[active];
 
   if (active === "Daily operations") {
-    const persistedBacklog = localData.buckets.find(
+    const configuredBuckets = localData.buckets.some(
       (bucket) => bucket.name === "Backlog",
-    );
-    const configuredBuckets = [
-      persistedBacklog || { id: "backlog", name: "Backlog" },
-      ...localData.buckets.filter((bucket) => bucket.name !== "Backlog"),
-    ];
+    )
+      ? [...localData.buckets]
+      : [{ id: "backlog", name: "Backlog" }, ...localData.buckets];
     const configuredNames = new Set(
       configuredBuckets.map((bucket) => bucket.name),
     );
@@ -5311,13 +5389,11 @@ function WorkspaceView({
   }
 
   if (active === "Planner") {
-    const persistedBacklog = localData.buckets.find(
+    const configuredBuckets = localData.buckets.some(
       (bucket) => bucket.name === "Backlog",
-    );
-    const configuredBuckets = [
-      persistedBacklog || { id: "backlog", name: "Backlog" },
-      ...localData.buckets.filter((bucket) => bucket.name !== "Backlog"),
-    ];
+    )
+      ? [...localData.buckets]
+      : [{ id: "backlog", name: "Backlog" }, ...localData.buckets];
     const configuredNames = new Set(
       configuredBuckets.map((bucket) => bucket.name),
     );
@@ -7595,7 +7671,15 @@ function WorkspaceView({
           {projectOperation === "kanban" && (
             <section className="project-operation-surface project-kanban-surface">
               <div className="project-operation-toolbar"><span className="eyebrow">Project flow</span><strong>{projectTasks.length} tasks</strong><button type="button" className="project-operation-filter">All owners <ChevronDown size={14} /></button><button type="button" className="project-operation-filter">All priorities <ChevronDown size={14} /></button></div>
-              <ProjectKanbanBoard tasks={projectTasks} onOpenTask={onOpenTask} onStatusChange={onStatusChange} canManageTasks={canManageTasks} />
+              <ProjectKanbanBoard
+                tasks={projectTasks}
+                onOpenTask={onOpenTask}
+                onStatusChange={onStatusChange}
+                canManageTasks={canManageTasks}
+                columnOrder={selectedProjectWorkspace.configuration?.kanban_column_order}
+                onColumnReorder={(columnOrder) => reorderProjectKanbanColumns(selectedProjectWorkspace, columnOrder)}
+                canReorderColumns={canManageTasks}
+              />
             </section>
           )}
           {projectOperation === "tasks" && (

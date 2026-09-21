@@ -262,13 +262,14 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     sessionStorage.setItem('workspace-new-task-bucket', bucket)
     onAddTask()
   }
-  const persistedBuckets = buckets.filter(bucket => typeof bucket.id === 'number')
+  const reorderableBuckets = buckets.filter(bucket => typeof bucket.id === 'number' || bucket.id === 'backlog')
   const reorderScopeFor = bucket => {
+    if (bucket.id === 'backlog' && !bucket.project_id && !bucket.workstream_id) return { project_id: null, workstream_id: null }
     if (bucketScope) return bucketScope
     if (!bucket.project_id && !bucket.workstream_id) return { project_id: null, workstream_id: null }
     return null
   }
-  const reorderBucketsFor = scope => persistedBuckets.filter(bucket => {
+  const reorderBucketsFor = scope => reorderableBuckets.filter(bucket => {
     if (scope.project_id) return String(bucket.project_id) === String(scope.project_id)
     if (scope.workstream_id) return String(bucket.workstream_id) === String(scope.workstream_id)
     return !bucket.project_id && !bucket.workstream_id
@@ -277,14 +278,14 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)) && (workstream === 'all' || String(value.name).trim().toLocaleLowerCase() === String(workstream).trim().toLocaleLowerCase()))
   const moveBucket = (sourceId, targetId) => {
     if (!sourceId || !targetId || sourceId === targetId) return
-    const sourceBucket = persistedBuckets.find(bucket => bucket.id === Number(sourceId))
+    const sourceBucket = reorderableBuckets.find(bucket => String(bucket.id) === String(sourceId))
     const scope = sourceBucket ? reorderScopeFor(sourceBucket) : null
     if (!scope) return
     const scopeBuckets = reorderBucketsFor(scope)
     const next = scopeBuckets.map(bucket => bucket.id)
-    const sourceIndex = next.indexOf(Number(sourceId))
-    const targetIndex = next.indexOf(Number(targetId))
-    if (sourceIndex < 0 || targetIndex < 0 || scopeBuckets[targetIndex]?.name === 'Backlog') return
+    const sourceIndex = next.findIndex(id => String(id) === String(sourceId))
+    const targetIndex = next.findIndex(id => String(id) === String(targetId))
+    if (sourceIndex < 0 || targetIndex < 0) return
     const [moved] = next.splice(sourceIndex, 1)
     next.splice(targetIndex, 0, moved)
     onBucketReorder(next, scope)
@@ -297,14 +298,14 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     setDraggedBucketId(bucket.id)
   }
   const nudgeBucket = (bucketId, direction) => {
-    const bucket = persistedBuckets.find(item => item.id === bucketId)
+    const bucket = reorderableBuckets.find(item => String(item.id) === String(bucketId))
     const scope = bucket ? reorderScopeFor(bucket) : null
     if (!scope) return
     const scopeBuckets = reorderBucketsFor(scope)
     const next = scopeBuckets.map(item => item.id)
-    const sourceIndex = next.indexOf(bucketId)
+    const sourceIndex = next.findIndex(id => String(id) === String(bucketId))
     const targetIndex = sourceIndex + direction
-    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= next.length || scopeBuckets[targetIndex]?.name === 'Backlog') return
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= next.length) return
     const [moved] = next.splice(sourceIndex, 1)
     next.splice(targetIndex, 0, moved)
     onBucketReorder(next, scope)
@@ -477,12 +478,12 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
         const reorderScope = reorderScopeFor(bucket)
         const reorderLaneBuckets = reorderScope ? reorderBucketsFor(reorderScope) : []
         const persistedIndex = reorderLaneBuckets.findIndex(item => item.id === bucket.id)
-        const bucketDraggable = canManageBuckets && Boolean(reorderScope) && typeof bucket.id === 'number' && bucket.name !== 'Backlog'
-        const draggedBucket = persistedBuckets.find(item => item.id === Number(draggedBucketId))
+        const bucketDraggable = canManageBuckets && Boolean(reorderScope) && (typeof bucket.id === 'number' || bucket.id === 'backlog')
+        const draggedBucket = reorderableBuckets.find(item => String(item.id) === String(draggedBucketId))
         const draggedBucketScope = draggedBucket ? reorderScopeFor(draggedBucket) : null
         const bucketDropAllowed = bucketDraggable && Boolean(draggedBucketId) && draggedBucketId !== bucket.id && sameReorderScope(draggedBucketScope, reorderScope)
         const isBucketDropTarget = Boolean(draggedBucketId) && dropBucketId === bucket.id && draggedBucketId !== bucket.id
-        return <section className={`planner-column relative flex h-[744px] w-[266px] shrink-0 flex-col rounded-card bg-surface-secondary${isBucketDropTarget ? ' is-bucket-drop-target' : ''}${draggedBucketId === bucket.id ? ' is-bucket-source' : ''}${activeMobileBucketId === bucket.id ? ' is-mobile-active' : ''}`} key={bucket.id}
+        return <section className={`planner-column relative flex h-[744px] w-[304px] shrink-0 flex-col rounded-card bg-surface-secondary${isBucketDropTarget ? ' is-bucket-drop-target' : ''}${draggedBucketId === bucket.id ? ' is-bucket-source' : ''}${activeMobileBucketId === bucket.id ? ' is-mobile-active' : ''}`} key={bucket.id}
           onDragEnter={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); setDropBucketId(bucket.id) } else if (draggedBucketId) setDropBucketId(null) }}
           onDragOver={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
           onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) setDropBucketId(null) }}
@@ -490,7 +491,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
             event.preventDefault()
             event.stopPropagation()
             const plain = event.dataTransfer.getData('text/plain')
-            if ((draggedBucketId || plain.startsWith('bucket:')) && bucketDropAllowed) moveBucket(draggedBucketId || Number(plain.slice(7)), bucket.id)
+            if ((draggedBucketId || plain.startsWith('bucket:')) && bucketDropAllowed) moveBucket(draggedBucketId || plain.slice(7), bucket.id)
             else {
               const taskId = draggedTaskId || Number(event.dataTransfer.getData('application/x-workspace-task') || plain.replace(/^task:/, ''))
               if (taskId) persistMove(taskId, bucket.name, allOrderedFor(bucket.name).length)
@@ -524,7 +525,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
                 <DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Rename ${bucket.name}`} onSelect={() => startBucketRename(bucket)}><Pencil size={13} /><span>Rename</span></DropdownMenuItem>
                 {bucketDraggable && <>
                   <DropdownMenuSeparator className="planner-bucket-menu-separator" />
-                  <DropdownMenuItem className="planner-bucket-menu-item" disabled={persistedIndex <= 1} aria-label={`Move ${bucket.name} left`} onSelect={() => nudgeBucket(bucket.id, -1)}><ArrowLeft size={13} /><span>Move left</span></DropdownMenuItem>
+                  <DropdownMenuItem className="planner-bucket-menu-item" disabled={persistedIndex <= 0} aria-label={`Move ${bucket.name} left`} onSelect={() => nudgeBucket(bucket.id, -1)}><ArrowLeft size={13} /><span>Move left</span></DropdownMenuItem>
                   <DropdownMenuItem className="planner-bucket-menu-item" disabled={persistedIndex < 0 || persistedIndex >= reorderLaneBuckets.length - 1} aria-label={`Move ${bucket.name} right`} onSelect={() => nudgeBucket(bucket.id, 1)}><ArrowRight size={13} /><span>Move right</span></DropdownMenuItem>
                 </>}
                 <DropdownMenuSeparator className="planner-bucket-menu-separator" />
