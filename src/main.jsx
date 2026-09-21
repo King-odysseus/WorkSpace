@@ -242,6 +242,33 @@ const formatAuditAction = (action = "") =>
     .replaceAll("_", " ")
     .replace(/^./, (character) => character.toUpperCase());
 
+const notificationPanelVisual = (notification) => {
+  const kind = notification.kind || "";
+  if (kind === "mention") return { Icon: MessageSquare, tone: "mention" };
+  if (["direct_message", "channel_message"].includes(kind)) {
+    return { Icon: MessageSquare, tone: "message" };
+  }
+  if (
+    [
+      "risk_issue_assigned",
+      "manager_activity",
+      "membership_change",
+      "invitation_response",
+    ].includes(kind)
+  ) {
+    return {
+      Icon: kind === "risk_issue_assigned" ? Flag : Users,
+      tone: "risk",
+    };
+  }
+  if (kind.startsWith("check_in")) return { Icon: CheckCircle2, tone: "complete" };
+  if (kind.startsWith("calendar")) return { Icon: CalendarDays, tone: "calendar" };
+  if (kind.includes("document") || kind.includes("attachment")) {
+    return { Icon: File, tone: "file" };
+  }
+  return { Icon: ClipboardList, tone: "task" };
+};
+
 function NotificationIndicator({
   count,
   countKnown,
@@ -2416,67 +2443,89 @@ function App() {
     <div
       ref={panelRef}
       className={cn(
-        "z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated",
+        "workspace-popup-panel z-[60] mt-2 w-auto max-w-md animate-fade-in",
         positionClass,
       )}
     >
-      <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
-        <p className="text-xs font-bold text-text-primary">
-          Workspace activity
-        </p>
+      <div className="workspace-popup-header">
+        <span className="workspace-popup-mark" aria-hidden="true">
+          <Bell size={18} />
+        </span>
+        <span className="workspace-popup-heading">
+          <h2>Notifications</h2>
+          <p>Workspace updates outside chats and channels.</p>
+        </span>
         <button
           type="button"
           onClick={markNotificationsRead}
-          className="text-[11px] font-medium text-primary hover:underline"
+          className="workspace-popup-action"
+          aria-label="Mark all read"
+          title="Mark all read"
         >
-          Mark all read
+          <Check size={14} aria-hidden="true" />
+          <span className="hidden sm:inline">Mark all read</span>
         </button>
       </div>
-      <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
+      <div className="workspace-popup-list">
         {activityNotifications.length ? (
-          activityNotifications.slice(0, 5).map((notification) => (
-            <button
-              type="button"
-              key={notification.id}
-              onClick={() => openNotification(notification)}
-              aria-label={`Open ${notification.title}`}
-              className={`group flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
-            >
-              <span
-                className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`}
-                aria-hidden="true"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
-                  {notification.title}
-                </span>
-                <span className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-text-muted">
-                  {notification.body || "Workspace update"}
-                </span>
-                <time
-                  className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted"
-                  dateTime={notification.created_at}
+          activityNotifications.slice(0, 5).map((notification) => {
+            const visual = notificationPanelVisual(notification);
+            const TypeIcon = visual.Icon;
+            return (
+              <button
+                type="button"
+                key={notification.id}
+                onClick={() => openNotification(notification)}
+                aria-label={`Open ${notification.title}`}
+                className={`workspace-popup-row ${notification.read ? "is-read" : "is-unread"}`}
+              >
+                <span
+                  className={`workspace-popup-row-icon workspace-popup-icon-${visual.tone}`}
+                  aria-hidden="true"
                 >
-                  <Clock3 size={10} aria-hidden="true" />
-                  {formatDateTime(notification.created_at)}
-                </time>
-              </span>
-            </button>
-          ))
+                  <TypeIcon size={17} strokeWidth={1.8} />
+                </span>
+                <span className="workspace-popup-copy">
+                  <span className="text-xs font-semibold leading-4 text-text-primary">
+                    {notification.title}
+                  </span>
+                  <span className="line-clamp-2 text-[11px] leading-4 text-text-muted">
+                    {notification.body || "Workspace update"}
+                  </span>
+                  <span className="workspace-popup-meta">
+                    <time
+                      className="flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted"
+                      dateTime={notification.created_at}
+                    >
+                      <Clock3 size={10} aria-hidden="true" />
+                      {formatDateTime(notification.created_at)}
+                    </time>
+                    {!notification.read && (
+                      <span className="workspace-popup-state">Unread</span>
+                    )}
+                  </span>
+                </span>
+                <span className="workspace-popup-row-dot" aria-hidden="true" />
+              </button>
+            );
+          })
         ) : (
-          <EmptyState text="No workspace activity yet." />
+          <div className="workspace-popup-empty">
+            <EmptyState text="No workspace activity yet." />
+          </div>
         )}
       </div>
-      <div className="border-t border-border-light px-3.5 py-2">
+      <div className="workspace-popup-footer">
         <button
           type="button"
           onClick={() => {
             setNotificationOpen(false);
             setActive("Notifications");
           }}
-          className="text-[11px] font-semibold text-primary hover:underline"
+          className="workspace-popup-footer-button is-primary"
         >
-          View all workspace activity
+          <span>View all workspace activity</span>
+          <ArrowUpRight size={14} aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -2492,17 +2541,23 @@ function App() {
   const renderMessagesPanel = (position) => (
     <div
       className={cn(
-        "z-[60] animate-fade-in rounded-xl border border-border bg-surface shadow-elevated",
+        "workspace-popup-panel z-[60] animate-fade-in",
         position,
       )}
     >
-      <div className="flex items-center justify-between border-b border-border-light px-3.5 py-2.5">
-        <p className="text-xs font-bold text-text-primary">Messages</p>
-        <span className="text-[11px] font-medium text-text-muted">
+      <div className="workspace-popup-header">
+        <span className="workspace-popup-mark is-messages" aria-hidden="true">
+          <MessageSquare size={18} />
+        </span>
+        <span className="workspace-popup-heading">
+          <h2>Messages</h2>
+          <p>Channel and direct conversations.</p>
+        </span>
+        <span className="workspace-popup-count">
           {unreadConversationCount} unread
         </span>
       </div>
-      <div className="max-h-[340px] divide-y divide-border-light overflow-y-auto">
+      <div className="workspace-popup-list">
         {conversationAlerts.length ? (
           conversationAlerts.slice(0, 6).map((notification) => (
             <button
@@ -2510,41 +2565,58 @@ function App() {
               key={notification.id}
               onClick={() => openNotification(notification)}
               aria-label={`Open ${notification.title}`}
-              className="flex w-full items-start gap-2.5 bg-primary/[0.035] px-3.5 py-2.5 text-left transition-colors hover:bg-surface-secondary"
+              className={`workspace-popup-row ${notification.read ? "is-read" : "is-unread"}`}
             >
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-semibold leading-4 text-text-primary">
+              <span
+                className={`workspace-popup-row-icon workspace-popup-icon-${notification.target_type === "chat_channel" ? "channel" : "direct"}`}
+                aria-hidden="true"
+              >
+                {notification.target_type === "chat_channel" ? (
+                  <Hash size={17} strokeWidth={1.8} />
+                ) : (
+                  <MessageSquare size={17} strokeWidth={1.8} />
+                )}
+              </span>
+              <span className="workspace-popup-copy">
+                <span className="text-xs font-semibold leading-4 text-text-primary">
                   {notification.title}
                 </span>
                 {notification.body && (
-                  <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-text-muted">
+                  <span className="line-clamp-2 text-[11px] leading-4 text-text-muted">
                     {notification.body}
                   </span>
                 )}
-                <time className="mt-1 flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
-                  <Clock3 size={10} aria-hidden="true" />
-                  {formatDateTime(notification.created_at)}
-                </time>
+                <span className="workspace-popup-meta">
+                  <time className="flex items-center gap-1 text-[10px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
+                    <Clock3 size={10} aria-hidden="true" />
+                    {formatDateTime(notification.created_at)}
+                  </time>
+                  <span className="workspace-popup-kind">
+                    {notification.target_type === "chat_channel" ? "Channel" : "Direct"}
+                  </span>
+                </span>
               </span>
+              <span className="workspace-popup-row-dot" aria-hidden="true" />
             </button>
           ))
         ) : (
-          <EmptyState text="No unread messages." />
+          <div className="workspace-popup-empty">
+            <EmptyState text="No unread messages." />
+          </div>
         )}
       </div>
       {/* Both halves of the conversation total get a way out of this panel. A
           channel alert used to be listed with nowhere to go but Chats, which is
           a different screen from the one the alert came from. Each link carries
           what is waiting for it so the two totals stay legible. */}
-      <div className="flex items-center gap-4 border-t border-border-light px-3.5 py-2">
+      <div className="workspace-popup-footer">
         <button
           type="button"
           onClick={() => {
             setMessagesOpen(false);
             setActive("Channels");
           }}
-          className="text-[11px] font-semibold text-primary hover:underline"
+          className="workspace-popup-footer-button"
         >
           Open Channels{unreadChannelCount > 0 ? ` (${unreadChannelCount})` : ""}
         </button>
@@ -2554,7 +2626,7 @@ function App() {
             setMessagesOpen(false);
             setActive("Chats");
           }}
-          className="text-[11px] font-semibold text-primary hover:underline"
+          className="workspace-popup-footer-button"
         >
           Open Chats{unreadDirectCount > 0 ? ` (${unreadDirectCount})` : ""}
         </button>
@@ -3154,7 +3226,7 @@ function App() {
               {messagesOpen &&
                 messagesOrigin === "header" &&
                 renderMessagesPanel(
-                  "fixed left-4 right-4 top-16 mt-2 w-auto max-w-md sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80",
+                  "fixed left-4 right-4 top-16 mt-2 w-auto max-w-md sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-[380px]",
                 )}
             </div>
 
@@ -3180,7 +3252,7 @@ function App() {
               {notificationOpen &&
                 notificationOrigin === "header" &&
                 renderNotificationsPanel(
-                  "fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-80",
+                  "fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:w-[380px]",
                 )}
             </div>
 
@@ -3492,7 +3564,7 @@ function App() {
       {messagesOpen &&
         messagesOrigin === "nav" &&
         <div ref={messagesNavPanelRef}>
-          {renderMessagesPanel("fixed bottom-[88px] left-1/2 w-[min(calc(100vw-1rem),360px)] -translate-x-1/2")}
+          {renderMessagesPanel("fixed bottom-[88px] left-1/2 w-[min(calc(100vw-1rem),380px)] -translate-x-1/2")}
         </div>}
 
       {showModal && (
