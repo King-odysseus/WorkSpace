@@ -8103,7 +8103,6 @@ function WorkspaceView({
                     <p className="project-overview-progress-copy">{projectCompleted} of {projectTotal} tasks complete{selectedProjectWorkspace.due_date ? ` - revised ${projectDeadline}` : ""}</p>
                     <div className="project-detail-progress-track" role="progressbar" aria-label={`${projectProgress}% of project tasks complete`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={projectProgress}><span style={{ width: `${projectProgress}%` }} /></div>
                     <div className="project-overview-progress-stats"><span><strong>{projectCompleted}</strong>Completed</span><span><strong>{projectOpen}</strong>Remaining</span><time>{selectedProjectWorkspace.due_date ? `Revised ${projectDeadline}` : "No deadline set"}</time></div>
-                    <span className={`project-overview-health ${selectedProjectWorkspace.health || "on-track"}`}>{(selectedProjectWorkspace.health || "on-track").replace("-", " ")}</span>
                   </section>
                   <section className="project-detail-card project-overview-totals">
                     <div className="project-detail-card-heading"><h2>Task totals</h2><span>{projectTotal} tasks in this project</span></div>

@@ -4343,9 +4343,6 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .project-overview-progress-stats span { display: grid; gap: 1px; color: var(--pencil-text-muted); font-size: 9px; line-height: 12px; }
 .project-overview-progress-stats strong { color: var(--pencil-text); font-size: 12px; line-height: 15px; }
 .project-overview-progress-stats time { color: var(--pencil-text-muted); font-size: 9px; line-height: 12px; text-align: right; }
-.project-overview-health { display: inline-flex; width: fit-content; min-height: 22px; align-items: center; margin-top: 14px; padding: 0 8px; border-radius: 6px; background: var(--pencil-success-soft); color: var(--pencil-success); font-size: 9px; font-weight: 600; text-transform: capitalize; }
-.project-overview-health.at-risk { background: var(--pencil-warning-soft); color: var(--pencil-warning-fill); }
-.project-overview-health.off-track { background: var(--pencil-danger-soft); color: var(--pencil-danger); }
 .project-overview-totals .project-detail-card-heading > span { color: var(--pencil-text-muted); font-size: 10px; line-height: 14px; }
 .project-overview-stat-grid > div { min-height: 76px; align-content: start; gap: 4px; padding: 10px; }
 .project-overview-stat-grid > div.is-success { background: var(--pencil-success-soft); }

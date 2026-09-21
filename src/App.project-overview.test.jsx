@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { mockApi } from "./test/setup-tests.js";
 
@@ -100,7 +100,10 @@ it("renders the approved P29 project overview hierarchy and actions", async () =
   );
   fireEvent.click(openProject);
 
-  expect(await screen.findByRole("heading", { name: "Progress" })).toBeInTheDocument();
+  const progressHeading = await screen.findByRole("heading", { name: "Progress" });
+  const progressCard = progressHeading.closest(".project-detail-progress-card");
+  expect(progressCard).not.toBeNull();
+  expect(within(progressCard).queryByText(/at risk/i)).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Task totals" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Current blockers" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Recent activity" })).toBeInTheDocument();
