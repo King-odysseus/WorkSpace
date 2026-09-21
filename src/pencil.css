@@ -4616,3 +4616,24 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   [data-slot='dialog-content'].ai-chat-window,
   .ai-minimized-toast { animation: none !important; }
 }
+
+/* Planner and bucket boards remain scrollable, but their scrollbar chrome is
+   intentionally hidden to match the canvas-style surfaces in the design. */
+.planner-board,
+.planner-column-body,
+.project-kanban-board,
+.project-kanban-columns,
+.personal-planner-main [data-slot='card'] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.planner-board::-webkit-scrollbar,
+.planner-column-body::-webkit-scrollbar,
+.project-kanban-board::-webkit-scrollbar,
+.project-kanban-columns::-webkit-scrollbar,
+.personal-planner-main [data-slot='card']::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
