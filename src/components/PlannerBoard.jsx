@@ -423,8 +423,9 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       const targetBucket = targetNode ? buckets.find(bucket => String(bucket.id) === String(targetNode.dataset.bucketId)) : null
       if (targetNode && targetBucket && bucketDropAllowedFor(drag.sourceId, targetBucket.id)) moveBucket(drag.sourceId, targetBucket.id, event.clientX, targetNode)
     }
-    if (event.currentTarget?.hasPointerCapture?.(drag.pointerId)) event.currentTarget.releasePointerCapture(drag.pointerId)
+    const { captureTarget, pointerId } = drag
     bucketPointerDragRef.current = null
+    if (captureTarget?.hasPointerCapture?.(pointerId)) captureTarget.releasePointerCapture(pointerId)
     setDraggedBucketId(null)
     setDropBucketId(null)
     setDropBucketIndex(null)
@@ -450,6 +451,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     bucketPointerDragRef.current = {
       sourceId: bucket.id,
       pointerId: event.pointerId,
+      captureTarget: event.currentTarget,
       startX: event.clientX,
       startY: event.clientY,
       dragging: false,
@@ -644,7 +646,18 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     {createPanel}
     {(bucketError || workstreamError) && <p className="auth-error" role="alert">{bucketError || workstreamError}</p>}
 
-    <div ref={boardRef} className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`} aria-label="Planner board" onDragOver={scrollBucketBoard}>
+    <div
+      ref={boardRef}
+      className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`}
+      aria-label="Planner board"
+      onDragOver={scrollBucketBoard}
+      onPointerMove={moveBucketPointerDrag}
+      onPointerUp={event => finishBucketPointerDrag(event, true)}
+      onPointerCancel={event => finishBucketPointerDrag(event, false)}
+      onLostPointerCapture={event => {
+        if (bucketPointerDragRef.current?.pointerId === event.pointerId) finishBucketPointerDrag(event, false)
+      }}
+    >
       {buckets.map(bucket => {
         const reorderScope = reorderScopeFor(bucket)
         const reorderLaneBuckets = reorderScope ? reorderBucketsFor(reorderScope) : []
@@ -727,9 +740,6 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
                   onDragStart={event => startBucketDrag(event, bucket)}
                   onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null); setDropBucketIndex(null) }}
                   onPointerDown={event => startBucketPointerDrag(event, bucket)}
-                  onPointerMove={moveBucketPointerDrag}
-                  onPointerUp={event => finishBucketPointerDrag(event, true)}
-                  onPointerCancel={event => finishBucketPointerDrag(event, false)}
                 ><span className="planner-column-grip is-draggable" aria-hidden="true"><GripVertical size={16} strokeWidth={1.5} /></span></span>
               : <span className="planner-column-grip" aria-hidden="true"><GripVertical size={16} strokeWidth={1.5} /></span>}
             {editingBucketId === bucket.id

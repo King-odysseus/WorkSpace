@@ -154,8 +154,9 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
       const targetId = targetNode?.dataset.columnId
       if (targetNode && allowColumnReorder && String(drag.sourceId) !== String(targetId)) moveColumn(drag.sourceId, targetId, event.clientX, targetNode)
     }
-    if (event.currentTarget?.hasPointerCapture?.(drag.pointerId)) event.currentTarget.releasePointerCapture(drag.pointerId)
+    const { captureTarget, pointerId } = drag
     columnPointerDragRef.current = null
+    if (captureTarget?.hasPointerCapture?.(pointerId)) captureTarget.releasePointerCapture(pointerId)
     setDraggedColumnId(null)
     setDropColumnId(null)
     setDropColumnIndex(null)
@@ -169,6 +170,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     columnPointerDragRef.current = {
       sourceId: column.id,
       pointerId: event.pointerId,
+      captureTarget: event.currentTarget,
       startX: event.clientX,
       startY: event.clientY,
       dragging: false,
@@ -199,7 +201,18 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     setRevealColumnId(columnId)
   }
 
-  return <div ref={boardRef} className="project-kanban-columns" aria-label="Project Kanban board" onDragOver={scrollColumnBoard}>
+  return <div
+    ref={boardRef}
+    className="project-kanban-columns"
+    aria-label="Project Kanban board"
+    onDragOver={scrollColumnBoard}
+    onPointerMove={moveColumnPointerDrag}
+    onPointerUp={event => finishColumnPointerDrag(event, true)}
+    onPointerCancel={event => finishColumnPointerDrag(event, false)}
+    onLostPointerCapture={event => {
+      if (columnPointerDragRef.current?.pointerId === event.pointerId) finishColumnPointerDrag(event, false)
+    }}
+  >
     {orderedColumns.map((column, columnIndex) => {
       const columnTasks = tasks.filter(task => projectKanbanColumnForTask(task).id === column.id)
       const canDrop = Boolean(draggedTask && column.status && canMoveTask(draggedTask) && projectKanbanColumnForTask(draggedTask).id !== column.id)
@@ -281,9 +294,6 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
           }}
           onDragEnd={finishDrag}
           onPointerDown={event => startColumnPointerDrag(event, column)}
-          onPointerMove={moveColumnPointerDrag}
-          onPointerUp={event => finishColumnPointerDrag(event, true)}
-          onPointerCancel={event => finishColumnPointerDrag(event, false)}
         >
           <span className="project-kanban-column-heading-label">
             {allowColumnReorder && <GripVertical className="project-kanban-column-grip" size={15} strokeWidth={1.7} title={`Drag ${column.label} to reorder`} aria-hidden="true" />}

@@ -382,12 +382,13 @@ it('reorders planner buckets with a touch or pen pointer drag', () => {
   })
   const sourceSurface = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Backlog').closest('.planner-column-heading').querySelector('.planner-column-drag-surface')
   const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Review').closest('.planner-column')
+  const board = container.querySelector('.planner-board')
   vi.spyOn(targetColumn, 'getBoundingClientRect').mockReturnValue({ left: 600, right: 904, width: 304, top: 0, bottom: 744, height: 744, x: 600, y: 0, toJSON: () => ({}) })
 
   fireEvent.pointerDown(sourceSurface, { pointerId: 7, pointerType: 'touch', clientX: 10, clientY: 10 })
-  fireEvent.pointerMove(sourceSurface, { pointerId: 7, pointerType: 'touch', clientX: 850, clientY: 80 })
+  fireEvent.pointerMove(board, { pointerId: 7, pointerType: 'touch', clientX: 850, clientY: 80 })
   expect(targetColumn).toHaveClass('is-bucket-drop-target')
-  fireEvent.pointerUp(sourceSurface, { pointerId: 7, pointerType: 'touch', clientX: 850, clientY: 80 })
+  fireEvent.pointerUp(board, { pointerId: 7, pointerType: 'touch', clientX: 850, clientY: 80 })
 
   expect(onBucketReorder).toHaveBeenCalledWith([19, 24, 2], { project_id: null, workstream_id: null })
 })
@@ -408,13 +409,42 @@ it('moves a planner bucket left with a pointer drag', () => {
   })
   const sourceSurface = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Done').closest('.planner-column-heading').querySelector('.planner-column-drag-surface')
   const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Discovery').closest('.planner-column')
+  const board = container.querySelector('.planner-board')
   vi.spyOn(targetColumn, 'getBoundingClientRect').mockReturnValue({ left: 300, right: 604, width: 304, top: 0, bottom: 744, height: 744, x: 300, y: 0, toJSON: () => ({}) })
 
   fireEvent.pointerDown(sourceSurface, { pointerId: 9, pointerType: 'pen', clientX: 1000, clientY: 10 })
-  fireEvent.pointerMove(sourceSurface, { pointerId: 9, pointerType: 'pen', clientX: 350, clientY: 80 })
-  fireEvent.pointerUp(sourceSurface, { pointerId: 9, pointerType: 'pen', clientX: 350, clientY: 80 })
+  fireEvent.pointerMove(board, { pointerId: 9, pointerType: 'pen', clientX: 350, clientY: 80 })
+  fireEvent.pointerUp(board, { pointerId: 9, pointerType: 'pen', clientX: 350, clientY: 80 })
 
   expect(onBucketReorder).toHaveBeenCalledWith([2, 25, 19, 24], { project_id: null, workstream_id: null })
+})
+
+it('clears planner bucket drag state when pointer capture is lost', () => {
+  const onBucketReorder = vi.fn()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+      { id: 19, name: 'Discovery', project_id: null, workstream_id: null },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+  const sourceColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Backlog').closest('.planner-column')
+  const sourceSurface = sourceColumn.querySelector('.planner-column-drag-surface')
+  const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Discovery').closest('.planner-column')
+  const board = container.querySelector('.planner-board')
+  vi.spyOn(targetColumn, 'getBoundingClientRect').mockReturnValue({ left: 300, right: 604, width: 304, top: 0, bottom: 744, height: 744, x: 300, y: 0, toJSON: () => ({}) })
+
+  fireEvent.pointerDown(sourceSurface, { pointerId: 8, pointerType: 'mouse', clientX: 10, clientY: 10 })
+  fireEvent.pointerMove(board, { pointerId: 8, pointerType: 'mouse', clientX: 350, clientY: 80 })
+  expect(sourceColumn).toHaveClass('is-bucket-source')
+  fireEvent.lostPointerCapture(board, { pointerId: 8 })
+
+  expect(sourceColumn).not.toHaveClass('is-bucket-source')
+  expect(targetColumn).not.toHaveClass('is-bucket-drop-target')
+  expect(onBucketReorder).not.toHaveBeenCalled()
 })
 
 it('does not offer cross-scope bucket drops in the all-projects view', () => {

@@ -166,13 +166,14 @@ it('reorders project kanban lanes with a touch or pen pointer drag', () => {
   const onColumnReorder = vi.fn()
   renderBoard({ onColumnReorder, canReorderColumns: true })
   const backlogHeading = screen.getByRole('region', { name: 'Backlog column' }).querySelector('.project-kanban-column-heading')
+  const board = screen.getByLabelText('Project Kanban board')
   const reviewColumn = screen.getByRole('region', { name: 'Review column' })
   vi.spyOn(reviewColumn, 'getBoundingClientRect').mockReturnValue({ left: 600, right: 904, width: 304, top: 0, bottom: 600, height: 600, x: 600, y: 0, toJSON: () => ({}) })
 
   fireEvent.pointerDown(backlogHeading, { pointerId: 11, pointerType: 'touch', clientX: 10, clientY: 10 })
-  fireEvent.pointerMove(backlogHeading, { pointerId: 11, pointerType: 'touch', clientX: 850, clientY: 40 })
+  fireEvent.pointerMove(board, { pointerId: 11, pointerType: 'touch', clientX: 850, clientY: 40 })
   expect(reviewColumn).toHaveClass('is-column-drop-target')
-  fireEvent.pointerUp(backlogHeading, { pointerId: 11, pointerType: 'touch', clientX: 850, clientY: 40 })
+  fireEvent.pointerUp(board, { pointerId: 11, pointerType: 'touch', clientX: 850, clientY: 40 })
 
   expect(onColumnReorder).toHaveBeenCalledWith([
     'todo',
@@ -189,12 +190,13 @@ it('moves a project kanban lane left with a pointer drag', () => {
   const onColumnReorder = vi.fn()
   renderBoard({ onColumnReorder, canReorderColumns: true })
   const doneHeading = screen.getByRole('region', { name: 'Done column' }).querySelector('.project-kanban-column-heading')
+  const board = screen.getByLabelText('Project Kanban board')
   const todoColumn = screen.getByRole('region', { name: 'To do column' })
   vi.spyOn(todoColumn, 'getBoundingClientRect').mockReturnValue({ left: 300, right: 604, width: 304, top: 0, bottom: 600, height: 600, x: 300, y: 0, toJSON: () => ({}) })
 
   fireEvent.pointerDown(doneHeading, { pointerId: 12, pointerType: 'pen', clientX: 1000, clientY: 10 })
-  fireEvent.pointerMove(doneHeading, { pointerId: 12, pointerType: 'pen', clientX: 350, clientY: 40 })
-  fireEvent.pointerUp(doneHeading, { pointerId: 12, pointerType: 'pen', clientX: 350, clientY: 40 })
+  fireEvent.pointerMove(board, { pointerId: 12, pointerType: 'pen', clientX: 350, clientY: 40 })
+  fireEvent.pointerUp(board, { pointerId: 12, pointerType: 'pen', clientX: 350, clientY: 40 })
 
   expect(onColumnReorder).toHaveBeenCalledWith([
     'backlog',
@@ -205,6 +207,25 @@ it('moves a project kanban lane left with a pointer drag', () => {
     'blocked',
     'on-hold',
   ])
+})
+
+it('clears project lane drag state when pointer capture is lost', () => {
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+  const sourceColumn = screen.getByRole('region', { name: 'Backlog column' })
+  const sourceHeading = sourceColumn.querySelector('.project-kanban-column-heading')
+  const targetColumn = screen.getByRole('region', { name: 'Review column' })
+  const board = screen.getByLabelText('Project Kanban board')
+  vi.spyOn(targetColumn, 'getBoundingClientRect').mockReturnValue({ left: 600, right: 904, width: 304, top: 0, bottom: 600, height: 600, x: 600, y: 0, toJSON: () => ({}) })
+
+  fireEvent.pointerDown(sourceHeading, { pointerId: 13, pointerType: 'mouse', clientX: 10, clientY: 10 })
+  fireEvent.pointerMove(board, { pointerId: 13, pointerType: 'mouse', clientX: 850, clientY: 40 })
+  expect(sourceColumn).toHaveClass('is-column-source')
+  fireEvent.lostPointerCapture(board, { pointerId: 13 })
+
+  expect(sourceColumn).not.toHaveClass('is-column-source')
+  expect(targetColumn).not.toHaveClass('is-column-drop-target')
+  expect(onColumnReorder).not.toHaveBeenCalled()
 })
 
 it('offers keyboard-reachable project lane move controls', async () => {
