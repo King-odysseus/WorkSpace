@@ -111,6 +111,14 @@ it('separates message alerts from workspace activity across the header and mobil
   const mobileNav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   expect(within(mobileNav).getByRole('button', { name: /Chats/ })).toBeInTheDocument()
   expect(within(mobileNav).getByRole('button', { name: /Planner/ })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument()
+
+  const darkModeButtons = screen.getAllByRole('button', { name: 'Switch to dark mode' })
+  expect(darkModeButtons).toHaveLength(2)
+  fireEvent.click(darkModeButtons[0])
+  expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+  fireEvent.click(screen.getAllByRole('button', { name: 'Switch to light mode' })[0])
+  expect(document.documentElement).toHaveAttribute('data-theme', 'light')
 
   const messageButton = await screen.findByRole('button', { name: 'Open messages' }, { timeout: 20000 })
   expect(await within(messageButton).findByLabelText('2 unread messages')).toBeInTheDocument()
@@ -177,4 +185,15 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(screen.getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
   expect(screen.queryByText('New direct message')).not.toBeInTheDocument()
   expect(screen.queryByText('New channel message')).not.toBeInTheDocument()
+
+  fireEvent.click(within(mobileNav).getByRole('button', { name: /Today/ }))
+  await screen.findByRole('heading', { name: 'Today' })
+  fireEvent.click(screen.getByRole('button', { name: 'Open workspace activity' }))
+  const mobileViewAll = await screen.findByRole('button', { name: 'View all workspace activity' })
+  // The activity sheet is mounted outside the header on phones. Its own
+  // mousedown must not dismiss it before the View all click can run.
+  fireEvent.mouseDown(mobileViewAll)
+  expect(mobileViewAll).toBeInTheDocument()
+  fireEvent.click(mobileViewAll)
+  await screen.findByText('Everything that needs your attention, newest first.')
 }, 60000)

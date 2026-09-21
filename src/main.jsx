@@ -322,6 +322,7 @@ function App() {
   const markWhatsNewSeen = useCallback(() => setWhatsNewUnread(false), []);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const notifRef = useRef(null);
+  const notificationPanelRef = useRef(null);
   const messagesRef = useRef(null);
   const messagesNavPanelRef = useRef(null);
   const mobileNavRef = useRef(null);
@@ -711,7 +712,10 @@ function App() {
 
   useEffect(() => {
     const handler = (event) => {
-      if (notifRef.current && !notifRef.current.contains(event.target))
+      if (
+        !notifRef.current?.contains(event.target) &&
+        !notificationPanelRef.current?.contains(event.target)
+      )
         setNotificationOpen(false);
       // The mobile pill nav opens the same panel as the header icon, and when it
       // does the panel renders beside the nav rather than inside the header, so
@@ -2401,8 +2405,9 @@ function App() {
   // Same again for the activity list: the desktop header anchors it under the
   // bell, the mobile AppBar pins it under the bar, and only the position
   // differs. Each caller supplies its own offset.
-  const renderNotificationsPanel = (positionClass) => (
+  const renderNotificationsPanel = (positionClass, panelRef) => (
     <div
+      ref={panelRef}
       className={cn(
         "z-[60] mt-2 w-auto max-w-md animate-fade-in rounded-xl border border-border bg-surface shadow-elevated",
         positionClass,
@@ -2879,23 +2884,11 @@ function App() {
 
       {/* ── Main ── */}
       <div className="shell-main flex flex-1 flex-col min-w-0">
-        {/* ── Mobile AppBar - the design's phone bar. It is one 56px row: a menu
-            button at 16, the page title at 48, and four 28px controls whose
-            right edge lands on 374, which is the 390 frame less its 16 margin.
-            The menu button carries -ml-2 so its 20px glyph sits on 16 while the
-            button itself keeps a 36px hit area, and the title then follows 8px
-            later on 48. Hidden at lg, where the header below takes over. ── */}
+        {/* ── Mobile AppBar - the design's phone bar. It is one 56px row with
+            the page title at 16 and five 28px controls whose right edge lands
+            on 374, which is the 390 frame less its 16 margin. Hidden at lg,
+            where the header below takes over. ── */}
         <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-surface px-4 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            aria-expanded={mobileOpen}
-            aria-haspopup="menu"
-            aria-label="Open navigation"
-            className="-ml-2 flex size-9 shrink-0 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
-          >
-            <Menu size={20} />
-          </button>
           <span className="min-w-0 flex-1 truncate text-[16px] font-semibold text-text-primary">
             {active}
           </span>
@@ -2932,6 +2925,17 @@ function App() {
                 <Sparkles size={20} />
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() =>
+                setTheme(resolvedTheme === "dark" ? "light" : "dark")
+              }
+              aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+              className="flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+            >
+              {resolvedTheme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
+            </button>
 
             <button
               type="button"
@@ -2979,7 +2983,7 @@ function App() {
 
         {/* The revealed search field. Rendered under the bar rather than in it,
             because the design's bar holds an icon at that slot and nothing else
-            - a field dropped in beside it would push all four controls off the
+            - a field dropped in beside it would push all five controls off the
             right edge. The field itself is the design's mobile search: 40 tall,
             radius 12, on #F9FAFB with a hairline stroke, icon at 12 and the
             hint at 40, and 16 of padding either side. */}
@@ -3011,7 +3015,10 @@ function App() {
 
         {notificationOpen &&
           notificationOrigin === "appbar" &&
-          renderNotificationsPanel("fixed left-4 right-4 top-[60px]")}
+          renderNotificationsPanel(
+            "fixed left-4 right-4 top-[60px]",
+            notificationPanelRef,
+          )}
 
         {profileMenuOpen && profileMenuOrigin === "appbar" && (
           <div className="fixed left-4 right-4 top-[60px] z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-auto max-w-[calc(100vw-2rem)] animate-fade-in overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-elevated lg:hidden">
