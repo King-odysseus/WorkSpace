@@ -14,7 +14,7 @@ const STALE_DAYS = 14
 // The design's compact lane card: a completion checkbox and title lead, then
 // owner, workstream/estimate, and status. Status moves between lanes by dragging
 // the card; the overflow menu carries the moves a drag cannot express.
-function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, onDropBefore, draggedTaskId, setDraggedTaskId, dropTaskId, setDropTaskId }) {
+function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter }) {
   const isDone = task.status === 'done'
   const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
   const assignee = task.assignee || {}
@@ -22,8 +22,10 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
   const taskTag = task.tag && task.tag !== 'General' ? task.tag : task.labels?.[0]
   const meta = [taskTag, task.workstream, formatEstimateMinutes(task.estimate_minutes), !isOverdue && task.due_date].filter(Boolean)
   return <article
-    className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors${draggedTaskId === task.id ? ' is-dragging opacity-50' : ''}${dropTaskId === task.id && draggedTaskId !== task.id ? ' is-drop-target border-navy' : ''}`}
+    className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors${String(draggedTaskId) === String(task.id) ? ' is-dragging opacity-50' : ''}${String(dropTaskId) === String(task.id) && String(draggedTaskId) !== String(task.id) ? ' is-drop-target border-navy' : ''}${dropBefore ? ' is-drop-before' : ''}${dropAfter ? ' is-drop-after' : ''}`}
     draggable={canReorder}
+    data-planner-task-id={task.id}
+    data-planner-task-bucket={task.bucket}
     onDragStart={event => {
       event.stopPropagation()
       event.dataTransfer.effectAllowed = 'move'
@@ -32,14 +34,6 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
       setDraggedTaskId(task.id)
     }}
     onDragEnd={() => { setDraggedTaskId(null); setDropTaskId(null) }}
-    onDragOver={event => { if (draggedTaskId) { event.preventDefault(); setDropTaskId(task.id) } }}
-    onDrop={event => {
-      const plainId = event.dataTransfer.getData('text/plain').replace(/^task:/, '')
-      const taskId = draggedTaskId || Number(event.dataTransfer.getData('application/x-workspace-task') || plainId)
-      if (taskId && taskId !== task.id) { event.preventDefault(); event.stopPropagation(); onDropBefore(taskId, task) }
-      setDraggedTaskId(null)
-      setDropTaskId(null)
-    }}
   >
     <div className="planner-task-card-top">
       <GripVertical className="planner-task-card-grip" size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -123,6 +117,8 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [draggedBucketId, setDraggedBucketId] = useState(null)
   const [dropBucketId, setDropBucketId] = useState(null)
   const [dropTaskId, setDropTaskId] = useState(null)
+  const [dropTaskBucket, setDropTaskBucket] = useState(null)
+  const [dropTaskIndex, setDropTaskIndex] = useState(null)
   const [creating, setCreating] = useState(false)
   const [editingBucketId, setEditingBucketId] = useState(null)
   const [bucketNameDraft, setBucketNameDraft] = useState('')
@@ -141,6 +137,13 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     media.addEventListener?.('change', update)
     return () => media.removeEventListener?.('change', update)
   }, [])
+
+  useEffect(() => {
+    if (draggedTaskId !== null) return
+    setDropTaskId(null)
+    setDropTaskBucket(null)
+    setDropTaskIndex(null)
+  }, [draggedTaskId])
 
   useEffect(() => {
     if (mobileBucketPinned && buckets.some(bucket => bucket.id === mobileBucketId)) return
@@ -257,18 +260,56 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
 
   const orderedFor = bucket => visibleTasks.filter(task => task.bucket === bucket).sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
   const allOrderedFor = bucket => tasks.filter(task => task.bucket === bucket).sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
-  const persistMove = (taskId, targetBucket, targetIndex) => {
+  const persistMove = (taskId, targetBucket, targetIndex, anchor = {}) => {
     const next = Object.fromEntries(buckets.map(bucket => [bucket.name, allOrderedFor(bucket.name).filter(task => task.id !== taskId)]))
     const movedTask = tasks.find(task => task.id === taskId)
     if (!movedTask || !next[targetBucket]) return
-    next[targetBucket].splice(Math.max(0, Math.min(targetIndex, next[targetBucket].length)), 0, movedTask)
+    const targetTasks = next[targetBucket]
+    let resolvedIndex = Math.max(0, Math.min(targetIndex, targetTasks.length))
+    if (anchor.beforeTaskId != null) {
+      const beforeIndex = targetTasks.findIndex(task => String(task.id) === String(anchor.beforeTaskId))
+      if (beforeIndex >= 0) resolvedIndex = beforeIndex
+    } else if (anchor.afterTaskId != null) {
+      const afterIndex = targetTasks.findIndex(task => String(task.id) === String(anchor.afterTaskId))
+      if (afterIndex >= 0) resolvedIndex = afterIndex + 1
+    }
+    targetTasks.splice(resolvedIndex, 0, movedTask)
     const columns = buckets.map(bucket => ({ bucket: bucket.name, task_ids: next[bucket.name].map(task => task.id) }))
     onTaskMove(canManageTasks ? columns : columns.map(column => ({ ...column, task_ids: column.task_ids.filter(id => { const item = tasks.find(task => task.id === id); return item && taskIsAssignedTo(item, currentUserId) }) })).filter(column => column.task_ids.length))
   }
   const moveTask = (task, targetBucket) => persistMove(task.id, targetBucket, allOrderedFor(targetBucket).filter(item => item.id !== task.id).length)
-  const dropBefore = (taskId, targetTask) => {
-    const target = allOrderedFor(targetTask.bucket).filter(task => task.id !== taskId)
-    persistMove(taskId, targetTask.bucket, target.findIndex(task => task.id === targetTask.id))
+  const clearTaskDropState = () => {
+    setDropTaskId(null)
+    setDropTaskBucket(null)
+    setDropTaskIndex(null)
+  }
+  const taskDropAnchorFor = (bucketName, insertionIndex) => {
+    const visibleCards = [...(boardRef.current?.querySelectorAll('[data-planner-task-id]') || [])]
+      .filter(node => node.dataset.plannerTaskBucket === bucketName)
+      .filter(node => String(node.dataset.plannerTaskId) !== String(draggedTaskId))
+    const index = Math.max(0, Math.min(insertionIndex, visibleCards.length))
+    return {
+      index,
+      beforeTaskId: visibleCards[index]?.dataset.plannerTaskId ?? null,
+      afterTaskId: visibleCards[index - 1]?.dataset.plannerTaskId ?? null,
+    }
+  }
+  const taskDropTargetFor = (event, bucketName) => {
+    const laneCards = [...(boardRef.current?.querySelectorAll('[data-planner-task-id]') || [])]
+      .filter(node => node.dataset.plannerTaskBucket === bucketName)
+    const visibleCards = laneCards.filter(node => String(node.dataset.plannerTaskId) !== String(draggedTaskId))
+    const pointerY = Number.isFinite(event.clientY) ? event.clientY : null
+    let insertionIndex = 0
+    for (const node of visibleCards) {
+      const bounds = node.getBoundingClientRect()
+      const midpoint = bounds.top + bounds.height / 2
+      if (pointerY === null || pointerY >= midpoint) insertionIndex += 1
+    }
+    const hoveredCard = event.target?.closest?.('[data-planner-task-id]')
+    return {
+      ...taskDropAnchorFor(bucketName, insertionIndex),
+      taskId: hoveredCard?.dataset.plannerTaskId ?? null,
+    }
   }
   const addToBucket = bucket => {
     sessionStorage.setItem('workspace-new-task-bucket', bucket)
@@ -516,10 +557,38 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
         const draggedBucketScope = draggedBucket ? reorderScopeFor(draggedBucket) : null
         const bucketDropAllowed = bucketDraggable && Boolean(draggedBucketId) && draggedBucketId !== bucket.id && sameReorderScope(draggedBucketScope, reorderScope)
         const isBucketDropTarget = Boolean(draggedBucketId) && dropBucketId === bucket.id && draggedBucketId !== bucket.id
-        return <section className={`planner-column relative flex h-[744px] w-[304px] shrink-0 flex-col rounded-card bg-surface-secondary${isBucketDropTarget ? ' is-bucket-drop-target' : ''}${draggedBucketId === bucket.id ? ' is-bucket-source' : ''}${activeMobileBucketId === bucket.id ? ' is-mobile-active' : ''}`} key={bucket.id} data-bucket-id={String(bucket.id)}
-          onDragEnter={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); setDropBucketId(bucket.id) } else if (draggedBucketId) setDropBucketId(null) }}
-          onDragOver={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
-          onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) setDropBucketId(null) }}
+        const isTaskDropTarget = Boolean(draggedTaskId) && dropTaskBucket === bucket.name
+        const laneTasks = orderedFor(bucket.name)
+        return <section className={`planner-column relative flex h-[744px] w-[304px] shrink-0 flex-col rounded-card bg-surface-secondary${isTaskDropTarget ? ' is-task-drop-target' : ''}${isBucketDropTarget ? ' is-bucket-drop-target' : ''}${draggedBucketId === bucket.id ? ' is-bucket-source' : ''}${activeMobileBucketId === bucket.id ? ' is-mobile-active' : ''}`} key={bucket.id} data-bucket-id={String(bucket.id)}
+          onDragEnter={event => {
+            if (draggedTaskId) {
+              event.preventDefault()
+              const target = taskDropTargetFor(event, bucket.name)
+              setDropTaskBucket(bucket.name)
+              setDropTaskIndex(target.index)
+              setDropTaskId(target.taskId)
+              return
+            }
+            if (bucketDropAllowed) { event.preventDefault(); setDropBucketId(bucket.id) }
+            else if (draggedBucketId) setDropBucketId(null)
+          }}
+          onDragOver={event => {
+            if (draggedTaskId) {
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'move'
+              const target = taskDropTargetFor(event, bucket.name)
+              setDropTaskBucket(bucket.name)
+              setDropTaskIndex(target.index)
+              setDropTaskId(target.taskId)
+              return
+            }
+            if (bucketDropAllowed) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' }
+          }}
+          onDragLeave={event => {
+            if (event.currentTarget.contains(event.relatedTarget)) return
+            setDropBucketId(null)
+            if (dropTaskBucket === bucket.name) clearTaskDropState()
+          }}
           onDrop={event => {
             event.preventDefault()
             event.stopPropagation()
@@ -527,9 +596,15 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
             if ((draggedBucketId || plain.startsWith('bucket:')) && bucketDropAllowed) moveBucket(draggedBucketId || plain.slice(7), bucket.id)
             else {
               const taskId = draggedTaskId || Number(event.dataTransfer.getData('application/x-workspace-task') || plain.replace(/^task:/, ''))
-              if (taskId) persistMove(taskId, bucket.name, allOrderedFor(bucket.name).length)
+              if (taskId) {
+                const target = Number.isFinite(event.clientY)
+                  ? taskDropTargetFor(event, bucket.name)
+                  : taskDropAnchorFor(bucket.name, dropTaskBucket === bucket.name && dropTaskIndex != null ? dropTaskIndex : 0)
+                persistMove(taskId, bucket.name, target.index, { beforeTaskId: target.beforeTaskId, afterTaskId: target.afterTaskId })
+              }
             }
             setDraggedTaskId(null); setDraggedBucketId(null); setDropBucketId(null)
+            clearTaskDropState()
           }}>
           <header className="planner-column-heading relative px-4 pt-3.5 pb-3" data-reorderable={bucketDraggable && editingBucketId !== bucket.id ? 'true' : undefined}>
             {bucketDraggable && editingBucketId !== bucket.id
@@ -574,7 +649,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
             <span>{draggedBucketName} lands at position {dropBucketPosition}</span>
           </div>}
           <div className="planner-column-body flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
-            {orderedFor(bucket.name).map(task => <PlannerTaskCard key={task.id} task={task} buckets={buckets} today={today} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} onDropBefore={dropBefore} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} setDropTaskId={setDropTaskId} />)}
+            {laneTasks.map((task, index) => <PlannerTaskCard key={task.id} task={task} buckets={buckets} today={today} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} dropBefore={dropTaskBucket === bucket.name && dropTaskIndex === index} dropAfter={dropTaskBucket === bucket.name && dropTaskIndex === laneTasks.length && index === laneTasks.length - 1} />)}
             {(isDefaultBacklog(bucket) || (isMobilePlanner && activeMobileBucketId === bucket.id)) && <div className="planner-dropzone mt-3 flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-icon bg-border">
               <ArrowDownToLine size={18} className="text-text-muted" aria-hidden="true" />
               <span className="text-caption font-medium text-text-muted">Drop task here</span>

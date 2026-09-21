@@ -2229,7 +2229,12 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-task-card.rounded-card { border-radius: 12px !important; }
 .planner-task-card.opacity-50 { opacity: .5; }
 .planner-task-card.border-navy { border-color: var(--pencil-navy) !important; box-shadow: 0 0 0 3px rgb(0 22 102 / 12%) !important; }
+.planner-task-card.is-drop-before::before,
+.planner-task-card.is-drop-after::after { position: absolute; z-index: 4; right: 0; left: 0; height: 3px; border-radius: 999px; background: var(--pencil-navy); box-shadow: 0 0 0 3px rgb(0 22 102 / 12%); content: ''; pointer-events: none; }
+.planner-task-card.is-drop-before::before { top: -7px; }
+.planner-task-card.is-drop-after::after { bottom: -7px; }
 .planner-task-card button:focus-visible, .planner-task-card [role='combobox']:focus-visible { outline: 0; }
+.planner-column.is-task-drop-target { background: var(--pencil-surface-hover) !important; box-shadow: inset 0 0 0 1px rgb(0 22 102 / 14%); }
 .planner-column.is-bucket-source { z-index: 2; border: 2px solid var(--pencil-navy) !important; background: var(--pencil-surface) !important; box-shadow: 0 8px 16px rgb(0 0 0 / 12%); opacity: .78; transform: translateY(-8px); }
 .planner-column.is-bucket-source .planner-column-heading { background: var(--pencil-surface-hover); }
 .planner-column.is-bucket-drop-target { background: var(--pencil-surface-hover) !important; box-shadow: inset 0 0 0 2px var(--pencil-navy); }

@@ -32,6 +32,15 @@ const renderPlanner = (props = {}) => render(
 const columnNames = container =>
   [...container.querySelectorAll('.planner-column-heading strong')].map(node => node.textContent)
 
+const firePointerDrag = (element, type, dataTransfer, clientY) => {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    clientY: { value: clientY },
+    dataTransfer: { value: dataTransfer },
+  })
+  fireEvent(element, event)
+}
+
 it('exposes accessible names for the planner toolbar', () => {
   renderPlanner()
 
@@ -520,6 +529,68 @@ it('uses the same drag state classes for planner task cards', () => {
   expect(sourceCard).toHaveClass('is-dragging')
   expect(targetCard).toHaveClass('is-drop-target')
   expect(container.querySelectorAll('.planner-task-card.is-drop-target')).toHaveLength(1)
+})
+
+it('moves a planner card right across multiple cards to the pointer position', () => {
+  const onTaskMove = vi.fn()
+  const tasks = [
+    { id: 91, title: 'Design UI', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 0 },
+    { id: 92, title: 'Review copy', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 1 },
+    { id: 93, title: 'Build flow', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 2 },
+    { id: 94, title: 'Ship release', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 3 },
+  ]
+  const { container } = renderPlanner({ tasks, canManageTasks: true, onTaskMove })
+  const sourceCard = screen.getByText('Design UI').closest('.planner-task-card')
+  const column = container.querySelector('.planner-column')
+  const cardBounds = [
+    [0, 80],
+    [90, 80],
+    [180, 80],
+    [270, 80],
+  ]
+  const cards = [...container.querySelectorAll('.planner-task-card')]
+  cards.forEach((card, index) => {
+    const [top, height] = cardBounds[index]
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue({ top, bottom: top + height, height, left: 0, right: 300, width: 300, x: 0, y: top, toJSON: () => ({}) })
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'task:91') }
+
+  fireEvent.dragStart(sourceCard, { dataTransfer })
+  firePointerDrag(column, 'dragover', dataTransfer, 230)
+  firePointerDrag(column, 'drop', dataTransfer, 230)
+
+  expect(onTaskMove).toHaveBeenCalledWith([{ bucket: 'Backlog', task_ids: [92, 93, 91, 94] }])
+})
+
+it('moves a planner card left across multiple cards to the pointer position', () => {
+  const onTaskMove = vi.fn()
+  const tasks = [
+    { id: 91, title: 'Design UI', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 0 },
+    { id: 92, title: 'Review copy', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 1 },
+    { id: 93, title: 'Build flow', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 2 },
+    { id: 94, title: 'Ship release', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal', position: 3 },
+  ]
+  const { container } = renderPlanner({ tasks, canManageTasks: true, onTaskMove })
+  const sourceCard = screen.getByText('Ship release').closest('.planner-task-card')
+  const column = container.querySelector('.planner-column')
+  const cardBounds = [
+    [0, 80],
+    [90, 80],
+    [180, 80],
+    [270, 80],
+  ]
+  const cards = [...container.querySelectorAll('.planner-task-card')]
+  cards.forEach((card, index) => {
+    const [top, height] = cardBounds[index]
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue({ top, bottom: top + height, height, left: 0, right: 300, width: 300, x: 0, y: top, toJSON: () => ({}) })
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'task:94') }
+
+  fireEvent.dragStart(sourceCard, { dataTransfer })
+  firePointerDrag(column, 'dragover', dataTransfer, 100)
+  firePointerDrag(column, 'drop', dataTransfer, 100)
+
+  expect(onTaskMove).toHaveBeenCalledWith([{ bucket: 'Backlog', task_ids: [91, 94, 92, 93] }])
 })
 
 it('opens the mobile filter panel and switches the active bucket tab', async () => {
