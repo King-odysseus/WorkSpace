@@ -395,7 +395,7 @@ aside[class*='bg-navy'] > div:last-child .text-text-muted { color: #93B4D4 !impo
   height: 56px;
   place-items: center;
   border: 0;
-  border-radius: 0;
+  border-radius: 0 8px 8px 0;
   background: var(--pencil-navy);
   color: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 7%);
@@ -419,6 +419,11 @@ button[aria-label='Open Zuri'] { width: 118px !important; height: 36px !importan
 button[aria-label='Open Zuri']:hover { background: #DBEAFE !important; }
 button[aria-label='Open Zuri'] svg { color: #1447E6 !important; }
 header.shell-header {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  align-self: stretch;
+  box-sizing: border-box;
   height: 64px !important;
   gap: 0 !important;
   padding: 0 24px !important;
