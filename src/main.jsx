@@ -307,6 +307,36 @@ function App() {
   useEffect(() => {
     localStorage.setItem("workspace-last-page", active);
   }, [active]);
+  // Where the user has been, so every page can offer a way back. The app moves
+  // between pages by setting state rather than by URL, and there are two dozen
+  // places that do it - a notification opening a task, a card opening a project,
+  // the sidebar. Recording the move here rather than at each call site means a
+  // new one is covered the day it is written.
+  const [pageHistory, setPageHistory] = useState([]);
+  const previousPageRef = useRef(active);
+  // Set while going back, so returning does not itself become a step forward
+  // and trap the user bouncing between two pages.
+  const goingBackRef = useRef(false);
+  useEffect(() => {
+    if (previousPageRef.current === active) return;
+    const cameFrom = previousPageRef.current;
+    previousPageRef.current = active;
+    if (goingBackRef.current) {
+      goingBackRef.current = false;
+      return;
+    }
+    // Capped: this is a breadcrumb for the last few moves, not a session log.
+    setPageHistory((current) => [...current, cameFrom].slice(-20));
+  }, [active]);
+  const goBack = () => {
+    if (!pageHistory.length) return;
+    goingBackRef.current = true;
+    setActive(pageHistory[pageHistory.length - 1]);
+    setPageHistory((current) => current.slice(0, -1));
+  };
+  const backLabel = pageHistory.length
+    ? `Back to ${pageHistory[pageHistory.length - 1]}`
+    : "Back";
   // The board's exception filter lives here rather than in the board because the
   // dashboard's headline cards are what set it - Today and the board are rendered by
   // two different components. Leaving the board clears it, so arriving later from the
@@ -2983,8 +3013,18 @@ function App() {
         {/* -- Mobile AppBar - the design's phone bar. It is one 56px row with
             the page title at 16 and five 28px controls whose right edge lands
             on 374, which is the 390 frame less its 16 margin. Hidden at lg,
-            where the header below takes over. ── */}
+            where the header below takes over. */}
         <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-surface px-4 lg:hidden">
+          {pageHistory.length > 0 && (
+            <button
+              type="button"
+              onClick={goBack}
+              aria-label={backLabel}
+              className="-ml-1 flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+            >
+              <ChevronLeft size={20} />
+            </button>
+          )}
           <span className="min-w-0 flex-1 truncate text-[16px] font-semibold text-text-primary">
             {active}
           </span>
@@ -3130,6 +3170,17 @@ function App() {
               design's 320px, and the utility cluster is pushed right by ml-auto
               rather than by a matching flex-1 on this side. */}
           <div className="shell-header-context min-w-0 items-center gap-2">
+            {pageHistory.length > 0 && (
+              <button
+                type="button"
+                onClick={goBack}
+                aria-label={backLabel}
+                title={backLabel}
+                className="flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+              >
+                <ChevronLeft size={18} />
+              </button>
+            )}
             <span
               aria-hidden="true"
               className="flex size-7 shrink-0 items-center justify-center rounded-badge bg-primary text-body-compact font-bold text-primary-foreground"
