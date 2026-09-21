@@ -3878,6 +3878,7 @@ function WorkspaceView({
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarFilter, setCalendarFilter] = useState("all");
   const [calendarTaskScope, setCalendarTaskScope] = useState("all");
+  const [calendarViewMenuOpen, setCalendarViewMenuOpen] = useState(false);
   const [calendarUpcomingOpen, setCalendarUpcomingOpen] = useState(
     () => localStorage.getItem("workspace-calendar-upcoming-open") !== "false",
   );
@@ -7331,19 +7332,57 @@ function WorkspaceView({
           )}
         </div>
         <div className="calendar-toolbar">
-          <Tabs
-            value={calendarView}
-            onValueChange={setCalendarView}
-            className="calendar-view-switch"
-          >
-            <TabsList aria-label="Calendar view">
-              {["month", "week", "day", "year", "agenda"].map((view) => (
-                <TabsTrigger key={view} value={view}>
-                  {view[0].toUpperCase() + view.slice(1)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className="calendar-view-control">
+            <Tabs
+              value={calendarView}
+              onValueChange={setCalendarView}
+              className="calendar-view-switch"
+            >
+              <TabsList aria-label="Calendar view">
+                {["month", "week", "day"].map((view) => (
+                  <TabsTrigger key={view} value={view}>
+                    {view[0].toUpperCase() + view.slice(1)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <Popover
+              open={calendarViewMenuOpen}
+              onOpenChange={setCalendarViewMenuOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={`calendar-view-more${["year", "agenda"].includes(calendarView) ? " is-active" : ""}`}
+                  aria-label="More calendar views"
+                  aria-pressed={["year", "agenda"].includes(calendarView)}
+                >
+                  <MoreHorizontal size={17} />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                sideOffset={6}
+                className="calendar-view-menu"
+              >
+                {["year", "agenda"].map((view) => (
+                  <button
+                    type="button"
+                    key={view}
+                    className={calendarView === view ? "is-active" : ""}
+                    onClick={() => {
+                      setCalendarView(view);
+                      setCalendarViewMenuOpen(false);
+                    }}
+                  >
+                    {view[0].toUpperCase() + view.slice(1)}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          </div>
           <div className="calendar-toolbar-nav">
             <Button
               type="button"
@@ -7600,7 +7639,7 @@ function WorkspaceView({
                 <div className="calendar-upcoming-content">
                   {upcomingItems.length ? (
                     <div className="calendar-upcoming-groups">
-                      {upcomingItems.slice(0, 5).map((item) =>
+                      {upcomingItems.slice(0, 6).map((item) =>
                         item.kind === "event" ? (
                           renderUpcomingEvent(item)
                         ) : (
