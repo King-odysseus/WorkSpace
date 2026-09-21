@@ -11,6 +11,15 @@ const tasks = [
 
 const renderBoard = (props = {}) => render(<ProjectKanbanBoard tasks={tasks} onOpenTask={vi.fn()} onStatusChange={vi.fn()} canManageTasks {...props} />)
 
+const fireHorizontalPointerDrag = (element, type, dataTransfer, clientX) => {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    clientX: { value: clientX },
+    dataTransfer: { value: dataTransfer },
+  })
+  fireEvent(element, event)
+}
+
 it('classifies API statuses into the designed project lanes', () => {
   expect(projectKanbanColumnForTask({ status: 'in_progress' }).label).toBe('In progress')
   expect(projectKanbanColumnForTask({ status: 'on_hold' }).label).toBe('On hold')
@@ -104,6 +113,52 @@ it('reorders project kanban columns by drag and drop', () => {
     'blocked',
     'on-hold',
     'done',
+  ])
+})
+
+it('moves a project kanban lane forward across multiple lanes to the pointer side', () => {
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+  const backlogColumn = screen.getByRole('region', { name: 'Backlog column' })
+  const reviewColumn = screen.getByRole('region', { name: 'Review column' })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'column:backlog') }
+  vi.spyOn(reviewColumn, 'getBoundingClientRect').mockReturnValue({ left: 600, right: 904, width: 304, top: 0, bottom: 600, height: 600, x: 600, y: 0, toJSON: () => ({}) })
+
+  fireEvent.dragStart(backlogColumn.querySelector('.project-kanban-column-heading'), { dataTransfer })
+  fireHorizontalPointerDrag(reviewColumn, 'dragEnter', dataTransfer, 850)
+  fireHorizontalPointerDrag(reviewColumn, 'drop', dataTransfer, 850)
+
+  expect(onColumnReorder).toHaveBeenCalledWith([
+    'todo',
+    'in-progress',
+    'review',
+    'backlog',
+    'blocked',
+    'on-hold',
+    'done',
+  ])
+})
+
+it('moves a project kanban lane backward across multiple lanes to the pointer side', () => {
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+  const doneColumn = screen.getByRole('region', { name: 'Done column' })
+  const todoColumn = screen.getByRole('region', { name: 'To do column' })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'column:done') }
+  vi.spyOn(todoColumn, 'getBoundingClientRect').mockReturnValue({ left: 300, right: 604, width: 304, top: 0, bottom: 600, height: 600, x: 300, y: 0, toJSON: () => ({}) })
+
+  fireEvent.dragStart(doneColumn.querySelector('.project-kanban-column-heading'), { dataTransfer })
+  fireHorizontalPointerDrag(todoColumn, 'dragEnter', dataTransfer, 550)
+  fireHorizontalPointerDrag(todoColumn, 'drop', dataTransfer, 550)
+
+  expect(onColumnReorder).toHaveBeenCalledWith([
+    'backlog',
+    'todo',
+    'done',
+    'in-progress',
+    'review',
+    'blocked',
+    'on-hold',
   ])
 })
 

@@ -35,6 +35,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
   const [dropTaskId, setDropTaskId] = useState(null)
   const [draggedColumnId, setDraggedColumnId] = useState(null)
   const [dropColumnId, setDropColumnId] = useState(null)
+  const [dropColumnIndex, setDropColumnIndex] = useState(null)
   const [dropTaskColumnId, setDropTaskColumnId] = useState(null)
   const [revealColumnId, setRevealColumnId] = useState(null)
   const boardRef = useRef(null)
@@ -66,6 +67,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     setDropTaskId(null)
     setDraggedColumnId(null)
     setDropColumnId(null)
+    setDropColumnIndex(null)
     setDropTaskColumnId(null)
   }
 
@@ -86,16 +88,31 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
     board.scrollLeft = Math.max(0, Math.min(maximum, board.scrollLeft + amount))
   }
 
-  const moveColumn = (sourceId, targetId) => {
+  const columnOrderForDrop = (sourceId, targetId, pointerX, targetElement) => {
     if (!allowColumnReorder || !sourceId || !targetId || sourceId === targetId) return
     const currentOrder = orderedColumns.map(column => column.id)
     const sourceIndex = currentOrder.indexOf(sourceId)
     const targetIndex = currentOrder.indexOf(targetId)
     if (sourceIndex < 0 || targetIndex < 0) return
-    const nextOrder = [...currentOrder]
-    const [moved] = nextOrder.splice(sourceIndex, 1)
-    nextOrder.splice(targetIndex, 0, moved)
-    onColumnReorder(nextOrder)
+    const nextOrder = currentOrder.filter(id => id !== sourceId)
+    const targetIndexAfterRemoval = nextOrder.indexOf(targetId)
+    if (targetIndexAfterRemoval < 0) return
+    const targetBounds = targetElement?.getBoundingClientRect?.()
+    const targetMidpoint = targetBounds && Number.isFinite(targetBounds.left) && Number.isFinite(targetBounds.width)
+      ? targetBounds.left + targetBounds.width / 2
+      : null
+    const insertAfterTarget = Number.isFinite(pointerX) && targetMidpoint !== null
+      ? pointerX >= targetMidpoint
+      : sourceIndex < targetIndex
+    const insertionIndex = targetIndexAfterRemoval + (insertAfterTarget ? 1 : 0)
+    nextOrder.splice(insertionIndex, 0, sourceId)
+    return { order: nextOrder, position: insertionIndex + 1 }
+  }
+
+  const moveColumn = (sourceId, targetId, pointerX, targetElement) => {
+    const placement = columnOrderForDrop(sourceId, targetId, pointerX, targetElement)
+    if (!placement) return
+    onColumnReorder(placement.order)
     setRevealColumnId(sourceId)
   }
 
@@ -120,15 +137,19 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
         className={`project-kanban-column${canDrop && dropTaskColumnId === column.id ? ' is-drop-target' : ''}${isColumnDropTarget ? ' is-column-drop-target' : ''}${draggedColumnId === column.id ? ' is-column-source' : ''}`}
         key={column.id}
         data-column-id={column.id}
+        data-drop-position={isColumnDropTarget && dropColumnIndex ? String(dropColumnIndex) : undefined}
         aria-label={`${column.label} column`}
         onDragEnter={event => {
           if (draggedColumnId && draggedColumnId !== column.id && allowColumnReorder) {
             event.preventDefault()
+            const placement = columnOrderForDrop(draggedColumnId, column.id, event.clientX, event.currentTarget)
             setDropColumnId(column.id)
+            setDropColumnIndex(placement?.position ?? null)
             setDropTaskColumnId(null)
             return
           }
           setDropColumnId(null)
+          setDropColumnIndex(null)
           if (!canDrop) return
           event.preventDefault()
           setDropTaskColumnId(column.id)
@@ -137,6 +158,9 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
           if (draggedColumnId && draggedColumnId !== column.id && allowColumnReorder) {
             event.preventDefault()
             event.dataTransfer.dropEffect = 'move'
+            const placement = columnOrderForDrop(draggedColumnId, column.id, event.clientX, event.currentTarget)
+            setDropColumnId(column.id)
+            setDropColumnIndex(placement?.position ?? null)
             return
           }
           if (!canDrop) return
@@ -146,13 +170,14 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
         onDragLeave={event => {
           if (event.currentTarget.contains(event.relatedTarget)) return
           setDropColumnId(null)
+          setDropColumnIndex(null)
           setDropTaskColumnId(null)
         }}
         onDrop={event => {
           if (draggedColumnId && draggedColumnId !== column.id && allowColumnReorder) {
             event.preventDefault()
             event.stopPropagation()
-            moveColumn(draggedColumnId, column.id)
+            moveColumn(draggedColumnId, column.id, event.clientX, event.currentTarget)
             finishDrag()
             return
           }

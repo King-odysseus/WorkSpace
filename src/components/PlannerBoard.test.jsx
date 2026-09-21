@@ -41,6 +41,15 @@ const firePointerDrag = (element, type, dataTransfer, clientY) => {
   fireEvent(element, event)
 }
 
+const fireHorizontalPointerDrag = (element, type, dataTransfer, clientX) => {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    clientX: { value: clientX },
+    dataTransfer: { value: dataTransfer },
+  })
+  fireEvent(element, event)
+}
+
 it('exposes accessible names for the planner toolbar', () => {
   renderPlanner()
 
@@ -304,6 +313,58 @@ it('persists a bucket order when the lane heading is dropped on a sibling', () =
   fireEvent.drop(targetColumn, { dataTransfer })
 
   expect(onBucketReorder).toHaveBeenCalledWith([24, 19], { project_id: '2' })
+})
+
+it('moves a planner bucket across multiple lanes to the pointer side', () => {
+  const onBucketReorder = vi.fn()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+      { id: 19, name: 'Discovery', project_id: null, workstream_id: null },
+      { id: 24, name: 'Review', project_id: null, workstream_id: null },
+      { id: 25, name: 'Done', project_id: null, workstream_id: null },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:2') }
+  const sourceSurface = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Backlog').closest('.planner-column-heading').querySelector('.planner-column-drag-surface')
+  const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Review').closest('.planner-column')
+  vi.spyOn(targetColumn, 'getBoundingClientRect').mockReturnValue({ left: 600, right: 904, width: 304, top: 0, bottom: 744, height: 744, x: 600, y: 0, toJSON: () => ({}) })
+
+  fireEvent.dragStart(sourceSurface, { dataTransfer })
+  fireHorizontalPointerDrag(targetColumn, 'dragEnter', dataTransfer, 850)
+  fireHorizontalPointerDrag(targetColumn, 'drop', dataTransfer, 850)
+
+  expect(onBucketReorder).toHaveBeenCalledWith([19, 24, 2, 25], { project_id: null, workstream_id: null })
+})
+
+it('moves a planner bucket left across multiple lanes to the pointer side', () => {
+  const onBucketReorder = vi.fn()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+      { id: 19, name: 'Discovery', project_id: null, workstream_id: null },
+      { id: 24, name: 'Review', project_id: null, workstream_id: null },
+      { id: 25, name: 'Done', project_id: null, workstream_id: null },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:25') }
+  const sourceSurface = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Done').closest('.planner-column-heading').querySelector('.planner-column-drag-surface')
+  const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Discovery').closest('.planner-column')
+  vi.spyOn(targetColumn, 'getBoundingClientRect').mockReturnValue({ left: 300, right: 604, width: 304, top: 0, bottom: 744, height: 744, x: 300, y: 0, toJSON: () => ({}) })
+
+  fireEvent.dragStart(sourceSurface, { dataTransfer })
+  fireHorizontalPointerDrag(targetColumn, 'dragEnter', dataTransfer, 550)
+  fireHorizontalPointerDrag(targetColumn, 'drop', dataTransfer, 550)
+
+  expect(onBucketReorder).toHaveBeenCalledWith([2, 19, 25, 24], { project_id: null, workstream_id: null })
 })
 
 it('does not offer cross-scope bucket drops in the all-projects view', () => {
