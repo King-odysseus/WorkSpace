@@ -1664,9 +1664,14 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-board { display: grid !important; grid-auto-flow: column; grid-auto-columns: minmax(266px, 1fr); gap: 16px !important; margin-top: 17px !important; padding-bottom: 0 !important; }
 .planner-column { width: 100% !important; min-width: 266px; height: 744px !important; overflow: hidden; border: 0 !important; border-radius: 12px !important; background: var(--pencil-surface-muted) !important; }
 .planner-column-heading { height: 60px; padding: 14px 12px 0 34px !important; border: 0 !important; }
+.planner-column-heading[data-reorderable='true'] { cursor: grab; }
+.planner-column-heading[data-reorderable='true']:active { cursor: grabbing; }
+.planner-column-drag-surface { position: absolute; z-index: 1; inset: 0 40px 0 0; display: block; cursor: grab; }
+.planner-column-drag-surface:active { cursor: grabbing; }
 .planner-column-grip { position: absolute; left: 12px; top: 18px; display: grid; width: 16px; height: 16px; place-items: center; color: var(--pencil-text-muted); }
 .planner-column-grip.is-draggable { cursor: grab; }
 .planner-column-heading:active .planner-column-grip.is-draggable { cursor: grabbing; }
+.planner-column-drag-surface:hover .planner-column-grip { color: var(--pencil-navy); }
 .planner-column-name { font-size: 14px; line-height: 17px; }
 .planner-column-summary { margin-top: 3px !important; font-size: 12px; line-height: 15px; }
 .planner-column-menu { top: 16px !important; right: 8px !important; width: 28px; height: 28px; padding: 0 !important; border-radius: 8px !important; background: var(--pencil-surface-muted) !important; color: var(--pencil-text-secondary) !important; }
@@ -1762,7 +1767,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .planner-column { display: none; width: 100% !important; min-width: 0 !important; height: 490px !important; overflow: visible !important; border-radius: 0 !important; background: transparent !important; }
   .planner-column.is-mobile-active { display: flex; }
   .planner-column-heading { height: 44px !important; padding: 7px 44px 0 14px !important; background: var(--pencil-surface-muted); }
-  .planner-column-grip { display: none; }
+  .planner-column-grip,
+  .planner-column-drag-surface { display: none; }
   .planner-column-name { font-size: 14px; line-height: 17px; }
   .planner-column-summary { margin-top: 1px !important; font-size: 10px; line-height: 12px; }
   .planner-column-menu { top: 10px !important; right: 10px !important; width: 24px; height: 24px; background: transparent !important; color: var(--pencil-text-secondary) !important; }

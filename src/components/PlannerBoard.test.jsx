@@ -234,9 +234,12 @@ it('shows the designed insertion state while dragging a bucket', () => {
   })
   const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:19') }
   const sourceHeading = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Review').closest('.planner-column-heading')
+  const sourceSurface = sourceHeading.querySelector('.planner-column-drag-surface')
   const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Done').closest('.planner-column')
 
-  fireEvent.dragStart(sourceHeading, { dataTransfer })
+  expect(sourceHeading).toHaveAttribute('data-reorderable', 'true')
+  expect(sourceSurface).toHaveAttribute('draggable', 'true')
+  fireEvent.dragStart(sourceSurface, { dataTransfer })
   fireEvent.dragEnter(targetColumn, { dataTransfer })
 
   expect(container.querySelector('.planner-board')).toHaveClass('is-bucket-dragging')
@@ -244,6 +247,54 @@ it('shows the designed insertion state while dragging a bucket', () => {
   expect(targetColumn).toHaveClass('is-bucket-drop-target')
   expect(screen.getByText('Drop here')).toBeInTheDocument()
   expect(screen.getByText('Review lands at position 2')).toBeInTheDocument()
+})
+
+it('persists a bucket order when the lane heading is dropped on a sibling', () => {
+  const onBucketReorder = vi.fn()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null },
+      { id: 19, name: 'Review', project_id: 2 },
+      { id: 24, name: 'Done', project_id: 2 },
+    ],
+    scopeMode: 'projects',
+    projectFilter: '2',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:19') }
+  const sourceSurface = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Review').closest('.planner-column-heading').querySelector('.planner-column-drag-surface')
+  const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Done').closest('.planner-column')
+
+  fireEvent.dragStart(sourceSurface, { dataTransfer })
+  fireEvent.dragEnter(targetColumn, { dataTransfer })
+  fireEvent.drop(targetColumn, { dataTransfer })
+
+  expect(onBucketReorder).toHaveBeenCalledWith([24, 19], { project_id: '2' })
+})
+
+it('does not offer cross-scope bucket drops in the all-projects view', () => {
+  const onBucketReorder = vi.fn()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 19, name: 'Review', project_id: null, workstream_id: null },
+      { id: 24, name: 'Design', project_id: 2, workstream_id: null },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:19') }
+  const sourceSurface = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Review').closest('.planner-column-heading').querySelector('.planner-column-drag-surface')
+  const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Design').closest('.planner-column')
+
+  fireEvent.dragStart(sourceSurface, { dataTransfer })
+  fireEvent.dragEnter(targetColumn, { dataTransfer })
+  fireEvent.drop(targetColumn, { dataTransfer })
+
+  expect(targetColumn).not.toHaveClass('is-bucket-drop-target')
+  expect(onBucketReorder).not.toHaveBeenCalled()
 })
 
 it('keeps the bucket grip decorative and offers keyboard-reachable move actions', async () => {

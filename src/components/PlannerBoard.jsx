@@ -273,6 +273,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     if (scope.workstream_id) return String(bucket.workstream_id) === String(scope.workstream_id)
     return !bucket.project_id && !bucket.workstream_id
   })
+  const sameReorderScope = (left, right) => Boolean(left && right && String(left.project_id ?? '') === String(right.project_id ?? '') && String(left.workstream_id ?? '') === String(right.workstream_id ?? ''))
   const activeWorkstreams = lookupValues.filter(value => value.kind === 'workstream' && value.is_active && (isOperations ? !value.project_id : Boolean(value.project_id)) && (workstream === 'all' || String(value.name).trim().toLocaleLowerCase() === String(workstream).trim().toLocaleLowerCase()))
   const moveBucket = (sourceId, targetId) => {
     if (!sourceId || !targetId || sourceId === targetId) return
@@ -287,6 +288,13 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     const [moved] = next.splice(sourceIndex, 1)
     next.splice(targetIndex, 0, moved)
     onBucketReorder(next, scope)
+  }
+  const startBucketDrag = (event, bucket) => {
+    event.stopPropagation()
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('application/x-workspace-bucket', String(bucket.id))
+    event.dataTransfer.setData('text/plain', `bucket:${bucket.id}`)
+    setDraggedBucketId(bucket.id)
   }
   const nudgeBucket = (bucketId, direction) => {
     const bucket = persistedBuckets.find(item => item.id === bucketId)
@@ -470,26 +478,36 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
         const reorderLaneBuckets = reorderScope ? reorderBucketsFor(reorderScope) : []
         const persistedIndex = reorderLaneBuckets.findIndex(item => item.id === bucket.id)
         const bucketDraggable = canManageBuckets && Boolean(reorderScope) && typeof bucket.id === 'number' && bucket.name !== 'Backlog'
+        const draggedBucket = persistedBuckets.find(item => item.id === Number(draggedBucketId))
+        const draggedBucketScope = draggedBucket ? reorderScopeFor(draggedBucket) : null
+        const bucketDropAllowed = bucketDraggable && Boolean(draggedBucketId) && draggedBucketId !== bucket.id && sameReorderScope(draggedBucketScope, reorderScope)
         const isBucketDropTarget = Boolean(draggedBucketId) && dropBucketId === bucket.id && draggedBucketId !== bucket.id
         return <section className={`planner-column relative flex h-[744px] w-[266px] shrink-0 flex-col rounded-card bg-surface-secondary${isBucketDropTarget ? ' is-bucket-drop-target' : ''}${draggedBucketId === bucket.id ? ' is-bucket-source' : ''}${activeMobileBucketId === bucket.id ? ' is-mobile-active' : ''}`} key={bucket.id}
-          onDragEnter={event => { if (draggedTaskId || (draggedBucketId && bucket.name !== 'Backlog')) { event.preventDefault(); setDropBucketId(bucket.id) } }}
-          onDragOver={event => { if (draggedTaskId || (draggedBucketId && bucket.name !== 'Backlog')) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
+          onDragEnter={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); setDropBucketId(bucket.id) } else if (draggedBucketId) setDropBucketId(null) }}
+          onDragOver={event => { if (draggedTaskId || bucketDropAllowed) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
           onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) setDropBucketId(null) }}
           onDrop={event => {
             event.preventDefault()
             event.stopPropagation()
             const plain = event.dataTransfer.getData('text/plain')
-            if (draggedBucketId || plain.startsWith('bucket:')) moveBucket(draggedBucketId || Number(plain.slice(7)), bucket.id)
+            if ((draggedBucketId || plain.startsWith('bucket:')) && bucketDropAllowed) moveBucket(draggedBucketId || Number(plain.slice(7)), bucket.id)
             else {
               const taskId = draggedTaskId || Number(event.dataTransfer.getData('application/x-workspace-task') || plain.replace(/^task:/, ''))
               if (taskId) persistMove(taskId, bucket.name, allOrderedFor(bucket.name).length)
             }
             setDraggedTaskId(null); setDraggedBucketId(null); setDropBucketId(null)
           }}>
-          <header className="planner-column-heading relative px-4 pt-3.5 pb-3" draggable={bucketDraggable}
-            onDragStart={event => { if (!bucketDraggable) return; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', `bucket:${bucket.id}`); setDraggedBucketId(bucket.id) }}
-            onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null) }}>
-            <span className={`planner-column-grip${bucketDraggable ? ' is-draggable' : ''}`} aria-hidden="true"><GripVertical size={16} strokeWidth={1.5} /></span>
+          <header className="planner-column-heading relative px-4 pt-3.5 pb-3" data-reorderable={bucketDraggable && editingBucketId !== bucket.id ? 'true' : undefined}>
+            {bucketDraggable && editingBucketId !== bucket.id
+              ? <span
+                  className="planner-column-drag-surface"
+                  draggable
+                  title={`Drag ${bucket.name} to reorder`}
+                  aria-hidden="true"
+                  onDragStart={event => startBucketDrag(event, bucket)}
+                  onDragEnd={() => { setDraggedBucketId(null); setDropBucketId(null) }}
+                ><span className="planner-column-grip is-draggable" aria-hidden="true"><GripVertical size={16} strokeWidth={1.5} /></span></span>
+              : <span className="planner-column-grip" aria-hidden="true"><GripVertical size={16} strokeWidth={1.5} /></span>}
             {editingBucketId === bucket.id
               ? <form className="flex items-center gap-1" onSubmit={event => submitBucketRename(event, bucket)}>
                   <input autoFocus value={bucketNameDraft} onChange={event => setBucketNameDraft(event.target.value)} aria-label={`Rename ${bucket.name}`} maxLength="80" className="h-7 min-w-0 flex-1 rounded-badge border border-border bg-card px-2 text-body-small text-text-primary outline-none" />
