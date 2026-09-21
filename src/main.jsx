@@ -3910,6 +3910,9 @@ function WorkspaceView({
   const [reportDetail, setReportDetail] = useState(null);
   const [reportDetailLoading, setReportDetailLoading] = useState(false);
   const [reportDetailError, setReportDetailError] = useState("");
+  const [reportProjectQuery, setReportProjectQuery] = useState("");
+  const [reportProjectFilter, setReportProjectFilter] = useState("all");
+  const [reportProjectSort, setReportProjectSort] = useState("progress");
   const [teamBoardScope, setTeamBoardScope] = useState("all");
   const [activitySearch, setActivitySearch] = useState(() => pendingActivity?.search || "");
   const [activityActor, setActivityActor] = useState(() => pendingActivity?.actorId || "all");
@@ -5709,9 +5712,6 @@ function WorkspaceView({
         reportsScope === "operations" ? "Daily operations" : "Planner",
       );
     };
-    const checkInRate = report.members
-      ? Math.round((report.check_ins_today / report.members) * 100)
-      : 0;
     const timeClock = report.time_clock || {
       total_seconds: 0,
       break_seconds: 0,
@@ -5726,7 +5726,116 @@ function WorkspaceView({
     const memberName = (member) =>
       [member.first_name, member.last_name].filter(Boolean).join(" ") ||
       member.email;
-    const reportProjectRows = report.progress_by_project.slice(0, 6);
+    const reportScopedTasks = tasks.filter((task) => {
+      if (reportsScope === "operations") return !task.project_id;
+      if (reportsScope !== "all") {
+        return String(task.project_id || "") === String(reportsScope);
+      }
+      return true;
+    });
+    const reportCompletedTasks = reportScopedTasks.filter(
+      (task) => task.status === "done" && (task.completed_at || task.actual_completion_date),
+    );
+    const reportCompletedCount = report.status_counts.done || reportCompletedTasks.length;
+    const serverWeekBuckets = detailedReport?.completed_by_week;
+    const reportWeekBuckets = Array.isArray(serverWeekBuckets)
+      ? serverWeekBuckets.map((week, index) => ({
+          label: week?.label || `W${index + 1}`,
+          from: week?.from || "",
+          to: week?.to || "",
+          count: Number(week?.count) || 0,
+          current: Boolean(week?.current),
+        }))
+      : Array.from({ length: 8 }, (_, index) => {
+          const weekEnd = new Date();
+          weekEnd.setHours(23, 59, 59, 999);
+          weekEnd.setDate(weekEnd.getDate() - (7 - index) * 7);
+          const weekStart = new Date(weekEnd);
+          weekStart.setHours(0, 0, 0, 0);
+          weekStart.setDate(weekStart.getDate() - 6);
+          const from = toDateKey(weekStart);
+          const to = toDateKey(weekEnd);
+          const count = reportCompletedTasks.filter((task) => {
+            const completedKey = task.completed_at
+              ? toDateKey(task.completed_at)
+              : task.actual_completion_date;
+            return completedKey && completedKey >= from && completedKey <= to;
+          }).length;
+          return { label: `W${index + 1}`, from, to, count, current: index === 7 };
+        });
+    const reportMaxWeekCount = Math.max(
+      ...reportWeekBuckets.map((week) => week.count),
+      1,
+    );
+    const reportProjectOwner = (project) => {
+      const projectTasks = reportScopedTasks.filter((task) => {
+        if (project.filter?.project_id != null) {
+          return String(task.project_id || "") === String(project.filter.project_id);
+        }
+        return !task.project_id;
+      });
+      const ownerCounts = projectTasks.reduce((counts, task) => {
+        if (task.member && task.member !== "Unassigned") {
+          counts.set(task.member, (counts.get(task.member) || 0) + 1);
+        }
+        return counts;
+      }, new Map());
+      return (
+        [...ownerCounts.entries()].sort(
+          (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+        )[0]?.[0] || "Unassigned"
+      );
+    };
+    const reportProjectHealth = (project) => {
+      if (project.blocked) return { label: "At risk", tone: "warning" };
+      if (project.overdue) return { label: "Delayed", tone: "danger" };
+      if (project.completion_rate >= 80) return { label: "On track", tone: "success" };
+      return { label: "In progress", tone: "neutral" };
+    };
+    const reportProjectQueryValue = reportProjectQuery.trim().toLowerCase();
+    const reportProjectRows = report.progress_by_project
+      .map((project) => ({ ...project, owner_name: reportProjectOwner(project) }))
+      .filter((project) => {
+        if (reportProjectFilter === "progress") return project.completed > 0;
+        if (reportProjectFilter === "none") return project.completed === 0;
+        return true;
+      })
+      .filter((project) => {
+        if (!reportProjectQueryValue) return true;
+        return `${project.name} ${project.owner_name}`
+          .toLowerCase()
+          .includes(reportProjectQueryValue);
+      })
+      .sort((left, right) => {
+        if (reportProjectSort === "name") return left.name.localeCompare(right.name);
+        if (reportProjectSort === "attention") {
+          return (
+            right.blocked + right.overdue - (left.blocked + left.overdue) ||
+            left.completion_rate - right.completion_rate
+          );
+        }
+        return (
+          right.completion_rate - left.completion_rate ||
+          left.name.localeCompare(right.name)
+        );
+      })
+      .slice(0, 5);
+    const serverBlockers = detailedReport?.top_blockers;
+    const reportBlockedTasks = Array.isArray(serverBlockers)
+      ? serverBlockers.map((task) => ({
+          ...task,
+          member: task.owner || "Unassigned",
+          due: task.due_date || "",
+          overdue: Boolean(task.overdue),
+        }))
+      : reportScopedTasks
+          .filter((task) => task.status === "blocked")
+          .sort((left, right) =>
+            String(left.due_date || "9999-12-31").localeCompare(
+              String(right.due_date || "9999-12-31"),
+            ),
+          )
+          .slice(0, 5);
     const reportStatusColors = {
       todo: "#2563eb",
       in_progress: "#001666",
@@ -5753,48 +5862,103 @@ function WorkspaceView({
           })
           .join(", ")})`
       : "conic-gradient(#e2e8f0 0 100%)";
+    const exportReportCsv = () => {
+      const rows = [
+        ["Metric", "Value"],
+        ["Scope", reportScopeLabel],
+        ["Period", reportPeriodLabel],
+        ["Total tasks", report.total_tasks],
+        ["Completed", reportCompletedCount],
+        ["Overdue", report.overdue_tasks],
+        ["Blocked", report.blocked_tasks],
+        [],
+        ["Project", "Owner", "Completed", "Total", "Completion rate"],
+        ...reportProjectRows.map((project) => [
+          project.name,
+          project.owner_name,
+          project.completed,
+          project.total,
+          `${project.completion_rate}%`,
+        ]),
+      ];
+      const csv = rows
+        .map((row) =>
+          row
+            .map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`)
+            .join(","),
+        )
+        .join("\n");
+      const url = URL.createObjectURL(
+        new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `workspace-report-${today}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
     return (
       <section className="workspace-view pencil-reports-view" aria-busy={reportDetailLoading}>
-        <WorkspaceViewHeading eyebrow="Insights" title="Reports" subtitle={subtitle} />
-        <div className="report-toolbar">
-          <WorkScopeSelector
-            compact
-            value={reportsScope}
-            onChange={setReportsScope}
-            projects={localData.projects}
-            label="Scope"
-          />
-          <label>
-            Reporting period
-            <AppSelect
-              value={reportRange}
-              onChange={(event) => {
-                setReportRange(event.target.value);
-                setShiftLogPage(1);
-              }}
-            >
-              <option value="all">All time</option>
-              <option value="week">Last 7 days</option>
-              <option value="month">This month</option>
-              <option value="quarter">This quarter</option>
-              <option value="year">This year</option>
-            </AppSelect>
-          </label>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={onRefresh}
-          >
-            {reportDetailLoading ? "Refreshing..." : "Refresh reports"}
-          </button>
-          <span className="report-updated">
-            {reportDetailLoading
-              ? "Loading report data..."
-              : reportLastUpdated
-              ? `Updated ${formatCalendarDate(reportLastUpdated, { timeStyle: "short" })}`
-              : "Waiting for report data"}
-          </span>
-        </div>
+        <WorkspaceViewHeading
+          eyebrow="Insights"
+          title="Reports"
+          subtitle={subtitle}
+          actions={(
+            <div className="report-toolbar">
+              <div className="report-scope-control">
+                <WorkScopeSelector
+                  compact
+                  value={reportsScope}
+                  onChange={setReportsScope}
+                  projects={localData.projects}
+                  label="Scope"
+                />
+              </div>
+              <label className="report-period-control">
+                <span className="sr-only">Reporting period</span>
+                <CalendarDays size={15} aria-hidden="true" />
+                <AppSelect
+                  value={reportRange}
+                  onChange={(event) => {
+                    setReportRange(event.target.value);
+                    setShiftLogPage(1);
+                  }}
+                >
+                  <option value="all">All time</option>
+                  <option value="week">Last 7 days</option>
+                  <option value="month">This month</option>
+                  <option value="quarter">This quarter</option>
+                  <option value="year">This year</option>
+                </AppSelect>
+              </label>
+              <span className="report-updated sr-only" aria-live="polite">
+                {reportDetailLoading
+                  ? "Loading report data..."
+                  : reportLastUpdated
+                  ? `Updated ${formatCalendarDate(reportLastUpdated, { timeStyle: "short" })}`
+                  : "Waiting for report data"}
+              </span>
+              <button
+                type="button"
+                className="report-icon-button"
+                onClick={onRefresh}
+                aria-label={reportDetailLoading ? "Refreshing reports" : "Refresh reports"}
+                title={reportDetailLoading ? "Refreshing reports" : "Refresh reports"}
+                disabled={reportDetailLoading}
+              >
+                <RefreshCw size={16} />
+              </button>
+              <button
+                type="button"
+                className="primary-button report-export-button"
+                onClick={exportReportCsv}
+              >
+                <Download size={15} />
+                Export CSV
+              </button>
+            </div>
+          )}
+        />
         <div className="report-context" aria-live="polite">
           <span><strong>Scope</strong>{reportScopeLabel}</span>
           <span><strong>Period</strong>{reportPeriodLabel}</span>
@@ -5817,6 +5981,15 @@ function WorkspaceView({
           </button>
           <button
             type="button"
+            className="report-stat report-stat-button is-success"
+            onClick={() => openPlannerWithFilter("done")}
+          >
+            <span>Completed</span>
+            <strong>{reportCompletedCount}</strong>
+            <em>{report.completion_rate}% completion rate</em>
+          </button>
+          <button
+            type="button"
             className="report-stat report-stat-button is-warning"
             onClick={() => openPlannerWithFilter("overdue")}
           >
@@ -5833,19 +6006,81 @@ function WorkspaceView({
             <strong>{report.blocked_tasks}</strong>
             <em>{report.unassigned_tasks} unassigned open</em>
           </button>
-          <Card className="report-stat">
-            <span>Check-ins today</span>
-            <strong>{checkInRate}%</strong>
-            <em>
-              {report.check_ins_today} of {report.members} members
-            </em>
-          </Card>
         </div>
         <div className="report-p5-grid">
-          <Card className="report-panel report-projects-panel">
+          <div className="report-p5-top-grid">
+          <Card className="report-panel report-bar-chart-panel">
             <div className="drawer-section-heading">
-              <h3>Projects</h3>
-              <span>{reportProjectRows.length} tracked</span>
+              <h3>Tasks completed per week</h3>
+            </div>
+            <div
+              className="report-week-chart"
+              role="img"
+              aria-label={`Tasks completed per week. ${reportWeekBuckets.map((week) => `${week.label}: ${week.count}`).join(", ")}`}
+            >
+              {reportWeekBuckets.map((week) => (
+                <div
+                  className={`report-week-bar${week.current ? " is-current" : ""}`}
+                  key={week.label}
+                  title={`${week.from} to ${week.to}: ${week.count} completed`}
+                >
+                  <i
+                    style={{
+                      height: `${Math.max((week.count / reportMaxWeekCount) * 100, week.count ? 10 : 3)}%`,
+                    }}
+                  />
+                  <span>{week.label}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card className="report-panel report-donut-panel">
+            <div className="drawer-section-heading">
+              <h3>Status mix</h3>
+            </div>
+            <div className="report-donut-wrap">
+              <div className="report-donut" style={{ background: reportDonutGradient }} aria-label="Task mix chart"><span>{report.completion_rate}%<small>complete</small></span></div>
+              <div className="report-donut-legend">
+                {reportStatusEntries.slice(0, 5).map(([key, count]) => <div key={key}><i style={{ background: reportStatusColors[key] || "#94a3b8" }} /><span>{statusLabels[key] || key}</span><strong>{reportStatusTotal ? Math.round((count / reportStatusTotal) * 100) : 0}%</strong></div>)}
+              </div>
+            </div>
+          </Card>
+          </div>
+          <div className="report-p5-bottom-grid">
+          <Card className="report-panel report-projects-panel" role="region" aria-label="Project progress">
+            <div className="report-project-toolbar">
+              <label className="report-project-search">
+                <Search size={15} aria-hidden="true" />
+                <input
+                  value={reportProjectQuery}
+                  onChange={(event) => setReportProjectQuery(event.target.value)}
+                  placeholder="Search projects"
+                  aria-label="Search projects"
+                />
+              </label>
+              <label className="report-project-filter">
+                <Filter size={14} aria-hidden="true" />
+                <AppSelect
+                  value={reportProjectFilter}
+                  onChange={(event) => setReportProjectFilter(event.target.value)}
+                  aria-label="Filter projects"
+                >
+                  <option value="all">Filter</option>
+                  <option value="progress">With progress</option>
+                  <option value="none">No progress</option>
+                </AppSelect>
+              </label>
+              <AppSelect
+                className="report-project-sort"
+                value={reportProjectSort}
+                onChange={(event) => setReportProjectSort(event.target.value)}
+                aria-label="Sort projects"
+                renderValue={() => "Sort"}
+              >
+                <option value="progress">Progress</option>
+                <option value="attention">Needs attention</option>
+                <option value="name">Project name</option>
+              </AppSelect>
             </div>
             {reportProjectRows.length ? (
               <div className="report-project-table" role="table" aria-label="Project progress">
@@ -5855,58 +6090,49 @@ function WorkspaceView({
                   <span role="columnheader">Progress</span>
                   <span role="columnheader">Status</span>
                 </div>
-                {reportProjectRows.map((project) => (
-                  <div className="report-project-row" role="row" key={project.name}>
-                    <strong role="cell">{project.name}</strong>
-                    <span role="cell">{project.owner_name || "Unassigned"}</span>
-                    <span role="cell" className="report-project-progress">
-                      <i style={{ width: `${project.completion_rate || 0}%` }} />
-                      <span>{project.completion_rate || 0}%</span>
-                    </span>
-                    <span role="cell" className="report-project-status">{project.total ? `${project.completed || 0}/${project.total}` : "No tasks"}</span>
-                  </div>
-                ))}
+                {reportProjectRows.map((project) => {
+                  const health = reportProjectHealth(project);
+                  return (
+                    <div className="report-project-row" role="row" key={project.name}>
+                      <strong role="cell">{project.name}</strong>
+                      <span role="cell">{project.owner_name}</span>
+                      <span role="cell" className="report-project-progress">
+                        <i style={{ width: `${project.completion_rate || 0}%` }} />
+                        <span>{project.completion_rate || 0}%</span>
+                      </span>
+                      <span role="cell" className={`report-project-status is-${health.tone}`}>{health.label}</span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <EmptyState text="No project progress is available for this report." />
+              <EmptyState text="No project progress matches this report." />
             )}
-          </Card>
-          <Card className="report-panel report-bar-chart-panel">
-            <div className="drawer-section-heading">
-              <h3>Task trend</h3>
-              <span>{reportPeriodLabel}</span>
-            </div>
-            <div className="report-chart-bars" aria-label="Task status comparison">
-              {Object.entries(statusLabels).slice(0, 5).map(([key, label]) => {
-                const count = report.status_counts[key] || 0;
-                const max = Math.max(...Object.values(report.status_counts), 1);
-                return <div className="report-chart-bar" key={key} title={`${label}: ${count}`}><span>{label}</span><i style={{ height: `${Math.max((count / max) * 100, count ? 12 : 4)}%`, background: reportStatusColors[key] }} /><strong>{count}</strong></div>;
-              })}
-            </div>
-          </Card>
-          <Card className="report-panel report-donut-panel">
-            <div className="drawer-section-heading">
-              <h3>Task mix</h3>
-              <span>{reportStatusTotal} tasks</span>
-            </div>
-            <div className="report-donut-wrap">
-              <div className="report-donut" style={{ background: reportDonutGradient }} aria-label="Task mix chart"><span>{report.completion_rate}%<small>complete</small></span></div>
-              <div className="report-donut-legend">
-                {reportStatusEntries.slice(0, 5).map(([key, count]) => <div key={key}><i style={{ background: reportStatusColors[key] || "#94a3b8" }} /><span>{statusLabels[key] || key}</span><strong>{reportStatusTotal ? Math.round((count / reportStatusTotal) * 100) : 0}%</strong></div>)}
-              </div>
-            </div>
           </Card>
           <Card className="report-panel report-blockers-panel">
             <div className="drawer-section-heading">
               <h3>Top blockers</h3>
-              <span>{report.blocked_tasks} open</span>
             </div>
-            <div className="report-blocker-list">
-              <button type="button" onClick={() => openPlannerWithFilter("blocked")}><i className="report-blocker-dot is-danger" /><span><strong>Blocked tasks</strong><small>Open Planner to resolve</small></span><b>{report.blocked_tasks}</b></button>
-              <button type="button" onClick={() => openPlannerWithFilter("overdue")}><i className="report-blocker-dot is-warning" /><span><strong>Overdue delivery</strong><small>Needs attention</small></span><b>{report.overdue_tasks}</b></button>
-              <button type="button" onClick={() => openPlannerWithFilter("unassigned")}><i className="report-blocker-dot is-warning" /><span><strong>Unassigned work</strong><small>Needs an owner</small></span><b>{report.unassigned_tasks}</b></button>
-            </div>
+            {reportBlockedTasks.length ? (
+              <div className="report-blocker-list is-rail">
+                {reportBlockedTasks.map((task) => {
+                  const overdue = task.overdue ?? (task.due_date && task.due_date < today);
+                  return (
+                    <button type="button" key={task.id} onClick={() => openPlannerWithFilter("blocked")}>
+                      <i className={`report-blocker-dot ${overdue ? "is-danger" : "is-warning"}`} />
+                      <span>
+                        <strong>{task.title}</strong>
+                        <small>{task.member} - {overdue ? "Overdue" : task.due || "Blocked"}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState text="No blocked tasks in this report." />
+            )}
           </Card>
+          </div>
         </div>
         <div className="report-grid">
           <Card className="report-panel">
@@ -5968,7 +6194,7 @@ function WorkspaceView({
         <div className="report-grid report-breakdown-grid">
           <Card className="report-panel">
             <div className="drawer-section-heading">
-              <h3>Project progress</h3>
+              <h3>Project completion detail</h3>
               <span>{report.progress_by_project.length} groups</span>
             </div>
             {report.progress_by_project.length ? (

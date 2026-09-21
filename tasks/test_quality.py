@@ -102,6 +102,66 @@ class ReportingCalculationTests(TestCase):
         self.assertEqual(report['on_hold']['count'], 1)
         self.assertEqual(report['unassigned']['count'], 2)  # overdue + unassigned (both todo, no assignee)
 
+    def test_report_completion_history_and_blockers_are_server_authoritative(self):
+        today = date(2026, 1, 15)
+        Task.objects.create(
+            workspace=self.workspace,
+            title='Current completion',
+            status='done',
+            progress_percent=100,
+            completed_at=timezone.make_aware(datetime(2026, 1, 15, 12, 0)),
+        )
+        Task.objects.create(
+            workspace=self.workspace,
+            title='Actual date fallback',
+            status='done',
+            progress_percent=100,
+            actual_completion_date=date(2026, 1, 14),
+        )
+        Task.objects.create(
+            workspace=self.workspace,
+            title='Previous week',
+            status='done',
+            progress_percent=100,
+            completed_at=timezone.make_aware(datetime(2026, 1, 8, 12, 0)),
+        )
+        Task.objects.create(
+            workspace=self.workspace,
+            title='Outside history',
+            status='done',
+            progress_percent=100,
+            completed_at=timezone.make_aware(datetime(2025, 1, 1, 12, 0)),
+        )
+        overdue_blocker = Task.objects.create(
+            workspace=self.workspace,
+            title='Overdue blocker',
+            status='blocked',
+            blocker_details='Waiting on legal',
+            assignee=self.owner,
+            due_date=today - timedelta(days=1),
+        )
+        later_blocker = Task.objects.create(
+            workspace=self.workspace,
+            title='Later blocker',
+            status='blocked',
+            blocker_details='Waiting on vendor',
+            assignee=self.owner,
+            due_date=today + timedelta(days=2),
+        )
+
+        report = build_report(self.workspace.id, today=today)
+
+        self.assertEqual(len(report['completed_by_week']), 8)
+        self.assertEqual(report['completed_by_week'][-1]['count'], 2)
+        self.assertEqual(report['completed_by_week'][-2]['count'], 1)
+        self.assertTrue(report['completed_by_week'][-1]['current'])
+        self.assertEqual(report['top_blockers'][0]['id'], overdue_blocker.id)
+        self.assertEqual(report['top_blockers'][0]['owner'], 'Own Er')
+        self.assertEqual(report['top_blockers'][0]['due_date'], '2026-01-14')
+        self.assertEqual(report['top_blockers'][0]['overdue'], True)
+        self.assertEqual(report['top_blockers'][0]['filter'], {'status': 'blocked'})
+        self.assertEqual(report['top_blockers'][1]['id'], later_blocker.id)
+
     def test_average_progress_uses_heuristics(self):
         today = date(2026, 1, 15)
         Task.objects.create(workspace=self.workspace, title='Done', status='done', progress_percent=100, completed_at=timezone.now())

@@ -237,6 +237,66 @@ def _unassigned_filter():
     return {'assignee_id': None}
 
 
+def _completion_date(task):
+    """Return the calendar date a completed task was delivered on."""
+    completed_at = task.completed_at
+    if completed_at:
+        if timezone.is_aware(completed_at):
+            completed_at = timezone.localtime(completed_at)
+        return completed_at.date()
+    return task.actual_completion_date
+
+
+def _completed_by_week(tasks, today, weeks=8):
+    """Count completed tasks in non-overlapping seven-day windows.
+
+    The final bucket always ends on ``today``. This keeps the chart stable when
+    a report is opened part-way through a week and lets historical reports use
+    ``actual_completion_date`` when ``completed_at`` was not recorded.
+    """
+    counts = [0] * weeks
+    earliest_start = today - timedelta(days=(weeks - 1) * 7 + 6)
+    for task in tasks:
+        completed_on = _completion_date(task)
+        if completed_on is None or completed_on < earliest_start or completed_on > today:
+            continue
+        age_in_days = (today - completed_on).days
+        counts[weeks - 1 - (age_in_days // 7)] += 1
+
+    result = []
+    for index, count in enumerate(counts):
+        week_end = today - timedelta(days=(weeks - 1 - index) * 7)
+        week_start = week_end - timedelta(days=6)
+        result.append({
+            'label': f'W{index + 1}',
+            'from': week_start.isoformat(),
+            'to': week_end.isoformat(),
+            'count': count,
+            'current': index == weeks - 1,
+        })
+    return result
+
+
+def _top_blockers(tasks, today, limit=5):
+    blockers = [task for task in tasks if task.status == BLOCKED_STATUS]
+    blockers.sort(key=lambda task: (
+        task.due_date is None,
+        task.due_date or date.max,
+        task.title.casefold(),
+    ))
+    return [
+        {
+            'id': task.id,
+            'title': task.title,
+            'owner': _owner_name(task),
+            'due_date': task.due_date.isoformat() if task.due_date else None,
+            'overdue': bool(task.due_date and task.due_date < today),
+            'filter': {'status': BLOCKED_STATUS},
+        }
+        for task in blockers[:limit]
+    ]
+
+
 def build_report(workspace_id, scope='all', project_id=None, period='all',
                  period_start=None, period_end=None, task_filter=None, today=None):
     """Build the full report for a scope and return plain data.
@@ -248,10 +308,14 @@ def build_report(workspace_id, scope='all', project_id=None, period='all',
     due_soon_days, stale_days, kpi_targets = get_workspace_setting(workspace_id)
     stale_cutoff = timezone.now() - timedelta(days=stale_days)
 
-    queryset = scope_queryset(workspace_id, scope, project_id)
-    queryset = apply_report_period(queryset, period, today, period_start, period_end)
+    scoped_queryset = scope_queryset(workspace_id, scope, project_id)
     if task_filter:
-        queryset = apply_task_filter(queryset, task_filter, today=today, due_soon_days=due_soon_days, stale_days=stale_days, now=timezone.now())
+        scoped_queryset = apply_task_filter(scoped_queryset, task_filter, today=today, due_soon_days=due_soon_days, stale_days=stale_days, now=timezone.now())
+
+    completion_tasks = list(
+        scoped_queryset.filter(status=COMPLETED_STATUS).select_related('assignee')
+    )
+    queryset = apply_report_period(scoped_queryset, period, today, period_start, period_end)
 
     tasks = list(queryset.select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref'))
     subtasks = _subtask_summary(tasks)
@@ -302,6 +366,8 @@ def build_report(workspace_id, scope='all', project_id=None, period='all',
             'average_progress': round(progress_total / applicable_count) if applicable_count else 0,
         },
         'status_counts': status_counts,
+        'completed_by_week': _completed_by_week(completion_tasks, today),
+        'top_blockers': _top_blockers(tasks, today),
         'overdue': {'count': len(overdue), 'filter': _overdue_filter()},
         'due_soon': {'count': len(due_soon), 'threshold_days': due_soon_days, 'filter': {'due': 'soon'}},
         'blocked': {'count': len(blocked), 'filter': {'status': BLOCKED_STATUS}},

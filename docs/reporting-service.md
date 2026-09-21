@@ -40,6 +40,19 @@ files owned by the concurrent execution-foundation work.
     "average_progress": 42
   },
   "status_counts": {"todo": {"count": 2, "filter": {"status": "todo"}}, "": {}},
+  "completed_by_week": [
+    {"label": "W1", "from": "2025-10-31", "to": "2025-11-06", "count": 2, "current": false}
+  ],
+  "top_blockers": [
+    {
+      "id": 41,
+      "title": "Waiting on legal",
+      "owner": "Nate Foster",
+      "due_date": "2026-01-10",
+      "overdue": true,
+      "filter": {"status": "blocked"}
+    }
+  ],
   "overdue": {"count": 1, "filter": {"due": "overdue"}},
   "due_soon": {"count": 1, "threshold_days": 7, "filter": {"due": "soon"}},
   "blocked": {"count": 1, "filter": {"status": "blocked"}},
@@ -74,6 +87,16 @@ files owned by the concurrent execution-foundation work.
 | `cancelled` | all tasks with `status == 'cancelled'` |
 | `unassigned` | applicable non-completed tasks with `assignee_id IS NULL` |
 | `stale` | applicable non-completed tasks with `updated_at < now - stale_days` |
+
+`completed_by_week` is a server-authoritative, fixed eight-week delivery trend.
+The final bucket ends on the report's ``today`` and each bucket covers seven
+days. A completion date is taken from ``completed_at`` when present, otherwise
+from ``actual_completion_date``. The chart uses the scoped and task-filtered
+completion history so pagination in the frontend cannot change the result.
+
+`top_blockers` contains up to five blocked tasks from the period/scope, ordered
+by due date (missing due dates last). Each entry includes the task id, title,
+owner, due date, overdue flag, and a replayable status filter.
 
 `progressable` statuses: `todo`, `in_progress`, `blocked`, `review`. `on_hold` is
 excluded from overdue/due-soon because a parked task is not expected to move.
