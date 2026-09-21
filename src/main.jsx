@@ -3071,7 +3071,7 @@ function App() {
             className="relative z-30 border-b border-border bg-surface px-4 py-4 lg:hidden"
             ref={searchRef}
           >
-            <div className="relative flex h-10 w-full items-center rounded-xl border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
+            <div className="relative flex h-10 w-full items-center rounded-xl border border-border bg-background transition-colors focus-within:border-info">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-muted" />
               <input
                 type="search"
@@ -3137,7 +3137,7 @@ function App() {
                 input in this app is repainted by an !important soft-field rule
                 further down the stylesheet, so an input styled here would look
                 right in the markup and wrong on screen. */}
-            <div className="relative flex h-10 w-full items-center rounded-control border border-border bg-background transition-colors focus-within:border-info focus-within:ring-[3px] focus-within:ring-info/15">
+            <div className="relative flex h-10 w-full items-center rounded-control border border-border bg-background transition-colors focus-within:border-info">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-muted" />
               <input
                 ref={searchInputRef}

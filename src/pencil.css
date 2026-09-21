@@ -1170,6 +1170,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--pencil-blue); ou
 input.shell-search[type='search'] {
   -webkit-appearance: none;
   appearance: none;
+  padding-left: 42px !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
