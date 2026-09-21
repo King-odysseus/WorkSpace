@@ -8357,12 +8357,6 @@ function WorkspaceView({
             />
           )}
         </div>
-        <ProjectRiskIssuePanel
-          projects={localData.projects}
-          workspaceId={workspaceId}
-          tasks={tasks}
-          canManage={canManageMembers}
-        />
         {composerOpen && (
           <WorkspaceComposer
             type="project"
