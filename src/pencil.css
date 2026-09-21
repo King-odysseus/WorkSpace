@@ -4089,6 +4089,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-reports-view .report-blockers-panel { grid-column: 1 / -1; grid-row: 3; }
 .pencil-reports-view .report-grid { display: grid; grid-template-columns: minmax(0, 1fr) 376px; align-items: start; gap: 24px; margin: 24px 0; }
 .pencil-reports-view .report-panel { min-width: 0; padding: 20px !important; border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: var(--pencil-surface) !important; box-shadow: none !important; }
+.pencil-reports-view > .report-panel { margin-top: 24px; }
 .pencil-reports-view .drawer-section-heading { display: flex; min-height: 24px; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .pencil-reports-view .drawer-section-heading h3 { margin: 0; color: var(--pencil-text); font-size: 16px; font-weight: 600; line-height: 22px; }
 .pencil-reports-view .drawer-section-heading > span { color: var(--pencil-text-muted); font-size: 11px; line-height: 16px; }
@@ -4928,6 +4929,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .pending-invitation-actions { grid-column: 1 / -1; justify-content: end; }
   .projects-view .project-grid { grid-template-columns: 1fr; }
   .pencil-reports-view .report-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .pencil-reports-view > .report-panel { margin-top: 16px; }
   .pencil-reports-view .report-toolbar label > div, .pencil-reports-view .report-toolbar label [role='combobox'] { width: 100%; min-width: 0; }
   .pencil-reports-view .report-updated { margin-left: 0; }
   .pencil-reports-view .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
