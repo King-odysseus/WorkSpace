@@ -39,6 +39,8 @@
   --pencil-text: #101828;
   --pencil-text-secondary: #4A5565;
   --pencil-text-muted: #6A7282;
+  --pencil-scrollbar-thumb: rgb(0 22 102 / 18%);
+  --pencil-scrollbar-thumb-hover: rgb(0 22 102 / 34%);
   --pencil-selected: var(--pencil-navy-tint);
   --pencil-blue: #2563EB;
   --pencil-blue-hover: #1D4ED8;
@@ -105,6 +107,8 @@
   --pencil-text: #F8FAFC;
   --pencil-text-secondary: #CBD5E1;
   --pencil-text-muted: #94A3B8;
+  --pencil-scrollbar-thumb: rgb(216 185 150 / 34%);
+  --pencil-scrollbar-thumb-hover: rgb(216 185 150 / 58%);
   --pencil-selected: #082D7A;
   --pencil-blue-soft: #092A72;
   --pencil-success-soft: #0B2E29;
@@ -6196,27 +6200,6 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .ai-minimized-toast { animation: none !important; }
 }
 
-/* Planner and bucket boards remain scrollable, but their scrollbar chrome is
-   intentionally hidden to match the canvas-style surfaces in the design. */
-.planner-board,
-.planner-column-body,
-.project-kanban-board,
-.project-kanban-columns,
-.personal-planner-main [data-slot='card'] {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.planner-board::-webkit-scrollbar,
-.planner-column-body::-webkit-scrollbar,
-.project-kanban-board::-webkit-scrollbar,
-.project-kanban-columns::-webkit-scrollbar,
-.personal-planner-main [data-slot='card']::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
 /* Legacy modal forms and inline resource forms still stack raw labels and
    controls. Keep the field-to-field rhythm explicit so adding validation,
    helper text, or a custom date/select control cannot collapse the spacing. */
@@ -6375,15 +6358,17 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 }
 
 /* Scrollable surfaces stay quiet until needed. The track disappears, the
-   thumb is narrow and low contrast, and hover provides a stronger target. */
+   thumb is narrow and low contrast, and hover provides a stronger target.
+   The dark theme switches to muted bronze so the cue remains visible against
+   the navy canvas without turning the scrollbar into a heavy chrome strip. */
 * {
-  scrollbar-color: rgb(0 22 102 / 14%) transparent;
+  scrollbar-color: var(--pencil-scrollbar-thumb) transparent;
   scrollbar-width: thin;
 }
 
 *::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 *::-webkit-scrollbar-track,
@@ -6393,11 +6378,11 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 
 *::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgb(0 22 102 / 14%);
+  background: var(--pencil-scrollbar-thumb);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgb(0 22 102 / 28%);
+  background: var(--pencil-scrollbar-thumb-hover);
 }
 
 *::-webkit-scrollbar-button {
