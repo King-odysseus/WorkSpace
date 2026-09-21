@@ -1000,8 +1000,8 @@ function TeamBoardView({
                   : 0;
               return <article className="pencil-team-row" role="listitem" key={item.member.id}>
                 <button type="button" className="pencil-team-person" onClick={() => setProfileMember(item.member)} aria-label={`Open ${memberName(item.member)} profile`}>
-                  <Avatar name={memberName(item.member)} avatarUrl={item.member.avatar_url} presence={effectivePresence(item.member)} />
-                  <span><strong>{memberName(item.member)}</strong><small>{item.member.job_role || item.member.role || "Member"}</small></span>
+                  <Avatar name={memberName(item.member)} avatarUrl={item.member.avatar_url} presence={effectivePresence(item.member)} className="pencil-team-avatar" />
+                  <span className="pencil-team-person-copy"><strong>{memberName(item.member)}</strong><small>{item.member.job_role || item.member.role || "Member"}</small></span>
                 </button>
                 <span className={`pencil-team-status ${label.toLowerCase().replace(" ", "-")}`}>{label}</span>
                 <span className="pencil-team-workload"><small>{formatCapacityMinutes(item.plannedMinutes)} / {formatCapacityMinutes(item.capacityMinutes)}</small><i><b style={{ width: `${workload}%` }} /></i></span>

@@ -2467,8 +2467,9 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-team-table-head { height: 40px; padding: 0 20px; color: var(--pencil-text-muted); font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
 .pencil-team-row { min-height: 84px; padding: 0 20px; border-top: 1px solid var(--pencil-border-light); }
 .pencil-team-person { display: flex; min-width: 0; align-items: center; gap: 12px; border: 0; background: transparent; color: var(--pencil-text); text-align: left; }
-.pencil-team-person .avatar { width: 40px; height: 40px; flex: 0 0 auto; }
-.pencil-team-person > span:not(.avatar) { display: grid; min-width: 0; gap: 2px; }
+.pencil-team-person .pencil-team-avatar { width: 40px; height: 40px; flex: 0 0 40px; }
+.pencil-team-person .pencil-team-avatar > .presence-dot { position: absolute; right: -1px; bottom: -1px; display: block; width: 9px; height: 9px; flex: 0 0 9px; }
+.pencil-team-person-copy { display: grid; min-width: 0; gap: 2px; }
 .pencil-team-person strong { overflow: hidden; font-size: 14px; font-weight: 500; line-height: 19px; text-overflow: ellipsis; white-space: nowrap; }
 .pencil-team-person small, .pencil-team-workload small { color: var(--pencil-text-muted); font-size: 12px; line-height: 16px; }
 .pencil-team-status { width: 104px; padding: 5px 8px; border-radius: 6px; background: var(--pencil-alert-success-fill); color: var(--pencil-alert-success-text); font-size: 12px; line-height: 14px; text-align: center; }
@@ -5511,8 +5512,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .pencil-team-row { position: relative; display: grid; min-width: 0; min-height: 68px; grid-template-columns: minmax(0, 1fr) 104px 18px; grid-template-rows: 1fr; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); }
   .pencil-team-row + .pencil-team-row { border-top: 1px solid var(--pencil-border); }
   .pencil-team-person { min-height: 48px; align-items: flex-start; gap: 10px; }
-  .pencil-team-person .avatar { width: 36px; height: 36px; flex-basis: 36px; }
-  .pencil-team-person > span:not(.avatar) { align-self: start; padding-bottom: 18px; gap: 1px; }
+  .pencil-team-person .pencil-team-avatar { width: 36px; height: 36px; flex: 0 0 36px; }
+  .pencil-team-person-copy { align-self: start; padding-bottom: 18px; gap: 1px; }
   .pencil-team-person strong { max-width: 100%; font-size: 12px; line-height: 15px; }
   .pencil-team-person small { max-width: 100%; overflow: hidden; font-size: 10px; line-height: 12px; text-overflow: ellipsis; white-space: nowrap; }
   .pencil-team-status { position: absolute; top: 48px; left: 58px; width: auto; min-width: 0; height: 16px; padding: 1px 8px; border-radius: 4px; font-size: 9px; line-height: 11px; }

@@ -175,7 +175,11 @@ it('loads Team task data for the Pencil capacity screen', async () => {
   expect(url).toContain('page_size=25')
   expect(url).toContain('summary=true')
   expect(container.querySelector('.pencil-team-view')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Open Dana Reed profile' })).toBeInTheDocument()
+  const memberButton = screen.getByRole('button', { name: 'Open Dana Reed profile' })
+  const memberAvatar = memberButton.querySelector('.pencil-team-avatar')
+  expect(memberAvatar).toBeInTheDocument()
+  expect(memberAvatar.querySelector('.presence-dot')).toBeInTheDocument()
+  expect(memberButton.querySelector('.pencil-team-person-copy')).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'Team capacity' })).toBeInTheDocument()
 })
 
