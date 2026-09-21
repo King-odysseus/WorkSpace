@@ -10,7 +10,7 @@ screen-reader pass to confirm, and are not asserted as defects.
 
 | Area | Evidence |
 | --- | --- |
-| Skip link | `skip-link` anchor → `#main-content`; `<main id="main-content" tabIndex="-1">` (main.jsx:666, 982) |
+| Skip link | `skip-link` anchor -> `#main-content`; `<main id="main-content" tabIndex="-1">` (main.jsx:666, 982) |
 | Visible focus | global `:focus-visible` outline (`workspace.css`), plus per-control focus styles |
 | Reduced motion | `@media (prefers-reduced-motion: reduce)` collapses transitions/animations (line 970) |
 | Dialogs | `role="dialog" aria-modal="true" aria-labelledby` on the quick-capture modal (main.jsx:992) |
@@ -26,15 +26,15 @@ screen-reader pass to confirm, and are not asserted as defects.
 
 | Breakpoint | Behavior |
 | --- | --- |
-| ≤ 1050px | shell layout adjustments |
-| ≤ 980px | planner command-bar filters wrap |
-| ≤ 900px | planner board becomes a fixed-width column scroller |
-| ≤ 850px | calendar/chat two-pane collapses to single column |
-| ≤ 800px | report/project grids collapse to 2-col, then 1-col at 520px |
-| ≤ 750px | sidebar hides and a `mobile-pill-nav` bottom bar appears (line 777); planner board uses horizontal scroll-snap (line 1623) |
-| ≤ 700px | settings/team/help/legal collapse to single column |
-| ≤ 620px | planner filters go 2-per-row |
-| ≤ 520px | single-column metric/report grids, stacked controls |
+| <= 1050px | shell layout adjustments |
+| <= 980px | planner command-bar filters wrap |
+| <= 900px | planner board becomes a fixed-width column scroller |
+| <= 850px | calendar/chat two-pane collapses to single column |
+| <= 800px | report/project grids collapse to 2-col, then 1-col at 520px |
+| <= 750px | sidebar hides and a `mobile-pill-nav` bottom bar appears (line 777); planner board uses horizontal scroll-snap (line 1623) |
+| <= 700px | settings/team/help/legal collapse to single column |
+| <= 620px | planner filters go 2-per-row |
+| <= 520px | single-column metric/report grids, stacked controls |
 
 Dark/light theming is driven by `data-theme` and CSS custom properties, so
 responsive and color changes share one token source.

@@ -2349,7 +2349,7 @@ function App() {
     },
   ];
 
-  // ── Mobile TabBar - the design's four destinations along the bottom edge,
+  // -- Mobile TabBar - the design's four destinations along the bottom edge,
   //    with "More" as the fifth. The pages are looked up in navGroups so labels
   //    and icons stay in one place; "More" slides the sidebar in, which is how
   //    the rest of the nav stays reachable on a phone.
@@ -2693,7 +2693,7 @@ function App() {
         Skip to main content
       </a>
 
-      {/* ── Mobile overlay - stays mounted and fades in step with the drawer's
+      {/* -- Mobile overlay - stays mounted and fades in step with the drawer's
         slide (both on the same 200ms timing) instead of popping in/out, so
         the dim and the panel read as one motion rather than two. ── */}
       <div
@@ -2705,7 +2705,7 @@ function App() {
         aria-hidden="true"
       />
 
-      {/* ── Sidebar ── */}
+      {/* -- Sidebar -- */}
       <aside
         className={cn(
           "mobile-nav-drawer fixed inset-y-0 left-0 z-50 flex flex-col bg-navy text-white transition-all duration-200 lg:relative",
@@ -2961,9 +2961,9 @@ function App() {
         )}
       </aside>
 
-      {/* ── Main ── */}
+      {/* -- Main -- */}
       <div className="shell-main flex flex-1 flex-col min-w-0">
-        {/* ── Mobile AppBar - the design's phone bar. It is one 56px row with
+        {/* -- Mobile AppBar - the design's phone bar. It is one 56px row with
             the page title at 16 and five 28px controls whose right edge lands
             on 374, which is the 390 frame less its 16 margin. Hidden at lg,
             where the header below takes over. ── */}
@@ -3530,7 +3530,7 @@ function App() {
           </button>
         </div>
       )}
-      {/* ── Mobile TabBar - the design's five destinations along the bottom
+      {/* -- Mobile TabBar - the design's five destinations along the bottom
         edge, each a fifth of the width, with "More" opening the same drawer as
         the AppBar menu button so the rest of the navigation stays reachable.
         Hidden while that drawer is open so the bar doesn't sit under the

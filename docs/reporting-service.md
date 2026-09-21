@@ -82,10 +82,10 @@ excluded from overdue/due-soon because a parked task is not expected to move.
 
 `task_progress(task)` returns 0-100 in this order:
 
-1. `status == 'done'` → `100`.
-2. an explicit `progress_percent` (canonical field) when non-zero → that value.
+1. `status == 'done'` -> `100`.
+2. an explicit `progress_percent` (canonical field) when non-zero -> that value.
 3. subtask completion ratio (`completed / total * 100`) when the task has subtasks.
-4. the status mapping: `todo`/`blocked`/`on_hold`/`cancelled` → `0`, `in_progress` → `50`, `review` → `75`.
+4. the status mapping: `todo`/`blocked`/`on_hold`/`cancelled` -> `0`, `in_progress` -> `50`, `review` -> `75`.
 
 ### 1.5 Workload and progress groups
 
@@ -127,16 +127,16 @@ accepts any subset of:
 `apply_report_period(queryset, period, today, start, end)`:
 
 * `all` - no constraint.
-* `week` - last 7 days (today-6 … today).
-* `month` - current calendar month (day 1 … today).
+* `week` - last 7 days (today-6 ... today).
+* `month` - current calendar month (day 1 ... today).
 * `quarter` - current calendar quarter (quarter start ... today).
 * `year` - current calendar year (January 1 ... today).
 * `custom` - explicit `start`/`end`.
 
 A task belongs to a period by **delivery/completion date, never creation date**:
 
-* completed task → its `completed_at` date falls in the period;
-* uncompleted progressable task → its `due_date` falls in the period.
+* completed task -> its `completed_at` date falls in the period;
+* uncompleted progressable task -> its `due_date` falls in the period.
 
 Cancelled and `on_hold` tasks are not matched by any period (no delivery signal).
 
@@ -147,15 +147,15 @@ one entry per KPI: `{target, actual, met, score}`.
 
 | KPI | direction | default target |
 | --- | --- | --- |
-| `completion_rate` | ≥ (gte) | 80 |
-| `overdue` | ≤ (lte) | 0 |
-| `blocked` | ≤ (lte) | 0 |
-| `stale` | ≤ (lte) | 0 |
+| `completion_rate` | >= (gte) | 80 |
+| `overdue` | <= (lte) | 0 |
+| `blocked` | <= (lte) | 0 |
+| `stale` | <= (lte) | 0 |
 
 `score` is a 0-100 attainment figure that never divides by zero:
 
-* a zero target with zero actual → `met = true`, `score = 100`;
-* a zero target with non-zero actual (an lte KPI) → `met = false`, `score = 0`;
+* a zero target with zero actual -> `met = true`, `score = 100`;
+* a zero target with non-zero actual (an lte KPI) -> `met = false`, `score = 0`;
 * a zero gte target is treated as "any actual satisfies", `score = 100`.
 
 Targets are stored on `WorkspaceSetting.kpi_targets` and defaulted by
@@ -264,9 +264,9 @@ preview, and commit additionally require an owner or manager.
 
 * `GET /api/workspaces/{id}/reports/?scope=&period=&project_id=&start=&end=&filter=` returns `{"report": ...}`. Scope is `all`, `operations`, or `project`; period is `all`, `week`, `month`, `quarter`, `year`, or `custom`. Custom periods require ISO `start` and `end`. `filter` is a JSON-encoded drill-down filter using the vocabulary in section 1.
 * `GET /api/workspaces/{id}/activity/?page=&page_size=&search=&actor_id=&kind=&date_from=&date_to=` returns `{"activity": [...], "pagination": {...}, "filters": {...}, "summary": {...}}`. The endpoint filters and counts the full workspace history before paginating, accepts `system` as an actor id for events with no user actor, and requires ISO `YYYY-MM-DD` date bounds.
-* `GET /api/workspaces/{id}/reports/project-health/?project_id=` → `{"health": ...}`.
-* `GET /api/workspaces/{id}/integrity/` → `{"checks": [...]}`; leader only.
-* `POST /api/workspaces/{id}/automation/run/` → `{"deliveries": ...}`; leader only and audited.
+* `GET /api/workspaces/{id}/reports/project-health/?project_id=` -> `{"health": ...}`.
+* `GET /api/workspaces/{id}/integrity/` -> `{"checks": [...]}`; leader only.
+* `POST /api/workspaces/{id}/automation/run/` -> `{"deliveries": ...}`; leader only and audited.
 * `POST /api/workspaces/{id}/imports/preview/` accepts multipart `workbook` (`.xlsx`, maximum 20 MB) and optional JSON `column_map`. It returns a safe, serializable preview plus `preview_id` and SHA-256 `checksum`.
 * `POST /api/workspaces/{id}/imports/commit/` requires the same multipart workbook, the same optional `column_map`, `preview_id`, and `preview_checksum`. The server requires a matching workspace preview from the prior hour, locks and consumes it once, rebuilds the plan, rejects workspace drift, then commits transactionally and audits the result.
 

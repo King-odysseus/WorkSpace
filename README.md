@@ -74,7 +74,7 @@ See `.env.example` for the full variable list.
 
 1. Create a Railway project from this repository. Railway detects `railway.json` and builds `Dockerfile.railway` automatically.
 2. Add a **PostgreSQL** plugin to the project. Railway injects `DATABASE_URL` into the service automatically - `backend/settings.py` reads it directly, so no `WORKSPACE_DB_*` variables are needed on Railway.
-3. Set these service variables (Project → Variables):
+3. Set these service variables (Project -> Variables):
    - `WORKSPACE_SECRET_KEY` - a unique random value of at least 50 characters (`python -c "import secrets; print(secrets.token_urlsafe(64))"`).
    - `WORKSPACE_DEBUG=false`
    - `WORKSPACE_SECURE_SSL_REDIRECT=true`, `WORKSPACE_HSTS_SECONDS=31536000` once the Railway domain is serving HTTPS (it is, by default).
