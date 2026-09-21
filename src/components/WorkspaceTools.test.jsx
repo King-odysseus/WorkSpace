@@ -120,6 +120,7 @@ it('presents the assistant as opposing chat bubbles and exposes window controls'
 
   expect(await screen.findByRole('button', { name: 'Minimize Zuri' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Close Zuri' })).toBeInTheDocument()
+  expect(screen.getByRole('dialog')).not.toHaveClass('top-1/2', 'left-1/2', '-translate-x-1/2', '-translate-y-1/2')
 
   const input = await screen.findByLabelText('Message to Zuri')
   fireEvent.change(input, { target: { value: 'How are we doing?' } })

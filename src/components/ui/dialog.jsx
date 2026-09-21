@@ -32,14 +32,17 @@ function DialogOverlay({ className, ...props }) {
   )
 }
 
-function DialogContent({ className, overlayClassName, children, showCloseButton = true, ...props }) {
+function DialogContent({ className, overlayClassName, children, showCloseButton = true, position = 'center', ...props }) {
   return (
     <DialogPortal>
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'bg-card fixed top-1/2 left-1/2 z-50 grid w-[min(440px,calc(100vw-30px))] -translate-x-1/2 -translate-y-1/2 gap-5 rounded-2xl border border-border p-6 shadow-[0_20px_70px_rgb(7_26_45_/31%)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          'bg-card fixed z-50 grid gap-5 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          position === 'dock'
+            ? 'right-0 bottom-0'
+            : 'top-1/2 left-1/2 w-[min(440px,calc(100vw-30px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border p-6 shadow-[0_20px_70px_rgb(7_26_45_/31%)]',
           className
         )}
         {...props}

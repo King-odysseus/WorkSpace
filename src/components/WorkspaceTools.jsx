@@ -1067,7 +1067,7 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
   }
   const providers = data?.providers || {}; const enabled = data?.settings?.ai_enabled_providers || Object.keys(providers).filter(key => providers[key])
   return <Dialog open modal={false} onOpenChange={open => { if (!open) onClose() }}>
-    <DialogContent className="ai-chat-window" overlayClassName="ai-chat-overlay" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
+    <DialogContent position="dock" className="ai-chat-window" overlayClassName="ai-chat-overlay" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
         <div className="ai-chat-heading-copy">
           <span className="ai-chat-title-icon" aria-hidden="true"><Sparkles size={17} /></span>
