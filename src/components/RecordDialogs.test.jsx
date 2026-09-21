@@ -132,7 +132,7 @@ it('posts a comment through the fixed composer and renders it in the discussion'
   fireEvent.submit(screen.getByRole('button', { name: 'Post comment' }).closest('form'))
 
   expect(await screen.findByText(posted.body)).toBeInTheDocument()
-  expect(textarea).toHaveValue('')
+  await waitFor(() => expect(textarea).toHaveValue(''))
   const [, request] = expectRequest(fetchMock, '/api/workspaces/4/check-ins/31/comments/', 'POST')
   expect(JSON.parse(request.body)).toEqual({ body: posted.body })
 })
