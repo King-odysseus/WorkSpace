@@ -8178,16 +8178,46 @@ class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false };
+    this.handleReload = this.handleReload.bind(this);
+    this.handleGoToToday = this.handleGoToToday.bind(this);
   }
 
   static getDerivedStateFromError() {
     return { hasError: true };
   }
 
+  componentDidCatch(error, errorInfo) {
+    console.error("WorkSpace render error", error, errorInfo);
+    if (import.meta.env.VITE_SENTRY_DSN) {
+      Sentry.captureException(error, {
+        contexts: {
+          react: {
+            componentStack: errorInfo?.componentStack,
+          },
+        },
+      });
+    }
+  }
+
+  handleReload() {
+    window.location.reload();
+  }
+
+  handleGoToToday() {
+    localStorage.setItem("workspace-last-page", "Today");
+    const target = new URL(window.location.href);
+    target.search = "?view=Today";
+    target.hash = "";
+    window.location.assign(target);
+  }
+
   render() {
     if (!this.state.hasError) return this.props.children;
     return (
-      <BrandedStatusScreen error="The workspace could not render this view." />
+      <BrandedStatusScreen
+        onReload={this.handleReload}
+        onGoToToday={this.handleGoToToday}
+      />
     );
   }
 }

@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
 
 import BrandedStatusScreen from './BrandedStatusScreen.jsx'
 
@@ -16,10 +17,37 @@ describe('BrandedStatusScreen', () => {
   })
 
   it('keeps the error fallback actionable', () => {
-    render(<BrandedStatusScreen error="The workspace could not render this view." />)
+    render(<BrandedStatusScreen />)
 
     expect(screen.getByRole('alert')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'There was an error' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', {
+        name: 'The workspace could not render this view',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/your data is safe/i),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reload view' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Go to Today' })).toBeInTheDocument()
+  })
+
+  it('calls the recovery actions supplied by the app', async () => {
+    const user = userEvent.setup()
+    const onReload = vi.fn()
+    const onGoToToday = vi.fn()
+
+    render(
+      <BrandedStatusScreen
+        onReload={onReload}
+        onGoToToday={onGoToToday}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Reload view' }))
+    await user.click(screen.getByRole('button', { name: 'Go to Today' }))
+
+    expect(onReload).toHaveBeenCalledTimes(1)
+    expect(onGoToToday).toHaveBeenCalledTimes(1)
   })
 })
