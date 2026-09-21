@@ -625,3 +625,45 @@ it('opens the moved Resources pages instead of swapping the settings panel', () 
   // The unread cue the sidebar used to carry survives the move.
   expect(screen.getByRole('button', { name: "What's new" })).toHaveTextContent('1 new')
 })
+
+const workspaceProps = (logoUrl = '') => ({
+  currentWorkspace: { id: 1, name: 'Northstar', role: 'owner', logo_url: logoUrl },
+  currentUserName: 'Test',
+  currentUserEmail: 'test@example.test',
+  members: [],
+  notifications: [],
+  workspaceId: 1,
+  canManageMembers: true,
+})
+
+it('uploads a workspace logo and cache-busts the unchanged url', async () => {
+  const onWorkspaceLogoUpdated = vi.fn()
+  mockApi({ '/logo/': { logo_url: '/api/workspaces/1/logo/' } })
+  render(<SettingsView {...workspaceProps()} onWorkspaceLogoUpdated={onWorkspaceLogoUpdated} />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  // The aria-label sits on the label that wraps the input, so the change has to
+  // be fired on the input itself.
+  const trigger = screen.getByLabelText('Change workspace logo')
+  fireEvent.change(trigger.querySelector('input[type="file"]') || trigger, {
+    target: { files: [new File(['x'], 'logo.png', { type: 'image/png' })] },
+  })
+
+  await waitFor(() => expect(onWorkspaceLogoUpdated).toHaveBeenCalled())
+  // The logo URL never changes when the image behind it does, so without a
+  // cache buster the browser keeps showing the previous logo.
+  expect(onWorkspaceLogoUpdated.mock.calls[0][0]).toMatch(/^\/api\/workspaces\/1\/logo\/\?t=\d+$/)
+})
+
+it('offers Remove logo only once a workspace has one', () => {
+  mockApi({})
+  const { unmount } = render(<SettingsView {...workspaceProps()} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  expect(screen.queryByRole('button', { name: 'Remove logo' })).not.toBeInTheDocument()
+  unmount()
+
+  mockApi({})
+  render(<SettingsView {...workspaceProps('/api/workspaces/1/logo/')} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  expect(screen.getByRole('button', { name: 'Remove logo' })).toBeInTheDocument()
+})

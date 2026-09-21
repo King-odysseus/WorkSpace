@@ -6364,3 +6364,112 @@ class CloudBackedAvatarTests(TestCase):
         with mock.patch('tasks.auth_views.cloud_storage.delivery_url', return_value=self.signed) as signer:
             self.client.get(reverse('user-avatar-download', args=[self.user.id]) + '?size=999')
         self.assertEqual(signer.call_args.kwargs['transformation']['width'], AVATAR_DEFAULT_SIZE)
+
+
+def _png_bytes(size=(40, 40)):
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new('RGB', size, (11, 11, 69)).save(buffer, format='PNG')
+    return buffer.getvalue()
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class WorkspaceLogoTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='logo-owner@example.test', email='logo-owner@example.test', password='secure-pass-123')
+        self.member = User.objects.create_user(username='logo-member@example.test', email='logo-member@example.test', password='secure-pass-123')
+        self.outsider = User.objects.create_user(username='logo-outsider@example.test', email='logo-outsider@example.test', password='secure-pass-123')
+        self.workspace = Workspace.objects.create(name='Logo Co', slug='logo-co')
+        Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
+        Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
+        self.url = reverse('workspace-logo', args=[self.workspace.id])
+
+    def _upload(self, name='logo.png', content=None):
+        return self.client.post(self.url, {'logo': SimpleUploadedFile(name, content if content is not None else _png_bytes(), content_type='image/png')})
+
+    def test_an_owner_can_upload_a_logo_and_it_is_re_encoded_as_webp(self):
+        self.client.force_login(self.owner)
+        response = self._upload()
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['logo_url'], f'/api/workspaces/{self.workspace.id}/logo/')
+        self.workspace.refresh_from_db()
+        # Re-encoding is what strips metadata, so the stored file must not be
+        # whatever the browser sent.
+        self.assertTrue(self.workspace.logo.name.endswith('.webp'))
+
+    def test_a_member_can_see_the_logo_but_not_change_it(self):
+        self.client.force_login(self.owner)
+        self._upload()
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertEqual(self._upload().status_code, 403)
+        self.assertEqual(self.client.delete(self.url).status_code, 403)
+
+    def test_someone_outside_the_workspace_sees_nothing(self):
+        self.client.force_login(self.owner)
+        self._upload()
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_a_file_that_is_not_the_image_it_claims_is_rejected(self):
+        self.client.force_login(self.owner)
+        response = self._upload(name='logo.png', content=b'MZ this is not a png')
+        self.assertEqual(response.status_code, 400)
+        self.workspace.refresh_from_db()
+        self.assertFalse(self.workspace.logo)
+
+    def test_an_unsupported_extension_is_rejected(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, {'logo': SimpleUploadedFile('logo.svg', b'<svg/>', content_type='image/svg+xml')})
+        self.assertEqual(response.status_code, 400)
+
+    def test_removing_the_logo_clears_the_url(self):
+        self.client.force_login(self.owner)
+        self._upload()
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['logo_url'], '')
+        self.workspace.refresh_from_db()
+        self.assertFalse(self.workspace.logo)
+        self.assertEqual(self.workspace.logo_url, '')
+
+    def test_a_workspace_with_no_logo_reports_no_url(self):
+        self.assertEqual(self.workspace.logo_url, '')
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_the_logo_url_reaches_the_client_through_the_workspace_list(self):
+        self.client.force_login(self.owner)
+        self._upload()
+        payload = self.client.get(reverse('auth-me')).json()
+        entry = next(item for item in payload['user']['workspaces'] if item['id'] == self.workspace.id)
+        self.assertEqual(entry['logo_url'], f'/api/workspaces/{self.workspace.id}/logo/')
+
+    def test_a_cloudinary_backed_logo_is_delivered_by_signed_url(self):
+        self.workspace.cloudinary_asset = {'public_id': 'workspace-logos/1/mark', 'resource_type': 'image', 'type': 'authenticated', 'version': '1730000000', 'format': 'webp'}
+        self.workspace.save(update_fields=['cloudinary_asset'])
+        self.client.force_login(self.member)
+        signed = 'https://res.cloudinary.com/demo/image/authenticated/s--sig--/c_fit,w_64/v1730000000/workspace-logos/1/mark.webp'
+        with mock.patch('tasks.workspace_logo.cloud_storage.delivery_url', return_value=signed) as signer:
+            response = self.client.get(self.url + '?size=64')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], signed)
+        self.assertEqual(signer.call_args.kwargs['transformation']['width'], 64)
+
+    def test_an_unlisted_delivery_size_falls_back(self):
+        self.workspace.cloudinary_asset = {'public_id': 'workspace-logos/1/mark', 'resource_type': 'image', 'type': 'authenticated', 'version': '1730000000', 'format': 'webp'}
+        self.workspace.save(update_fields=['cloudinary_asset'])
+        self.client.force_login(self.member)
+        with mock.patch('tasks.workspace_logo.cloud_storage.delivery_url', return_value='https://example.test/x') as signer:
+            self.client.get(self.url + '?size=4096')
+        self.assertEqual(signer.call_args.kwargs['transformation']['width'], 128)
+
+    def test_replacing_a_logo_removes_the_old_cloudinary_asset(self):
+        old = {'public_id': 'workspace-logos/1/old', 'resource_type': 'image', 'type': 'authenticated', 'version': '1', 'format': 'webp'}
+        self.workspace.cloudinary_asset = old
+        self.workspace.save(update_fields=['cloudinary_asset'])
+        self.client.force_login(self.owner)
+        with mock.patch('tasks.workspace_logo.cloud_storage.destroy') as destroyer:
+            with mock.patch('tasks.workspace_logo.cloud_storage.upload', return_value={}):
+                self._upload()
+        destroyer.assert_called_once_with(old)

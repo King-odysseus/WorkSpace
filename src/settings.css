@@ -301,6 +301,61 @@
   overflow-wrap: anywhere;
 }
 
+/* The workspace logo control. It reuses .avatar-upload-trigger for the camera
+   badge, so only the frame and the fallback initial are defined here. */
+.settings-view .settings-workspace-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 20px;
+}
+
+.settings-view .settings-workspace-logo-frame {
+  position: relative;
+  display: inline-flex;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--pencil-border);
+  border-radius: 12px;
+  background: var(--pencil-surface-muted);
+  overflow: visible;
+}
+
+/* contain, not cover: a logo cropped to fill its frame is a damaged logo. */
+.settings-view .settings-workspace-logo-frame img {
+  width: 100%;
+  height: 100%;
+  border-radius: 11px;
+  object-fit: contain;
+}
+
+.settings-view .settings-workspace-logo-frame > span[aria-hidden] {
+  color: var(--pencil-navy);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.settings-view .settings-workspace-logo > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-view .settings-workspace-logo > div span {
+  color: var(--pencil-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.settings-view .settings-workspace-logo .text-button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
 .settings-view .avatar-upload {
   position: relative;
   display: inline-flex;

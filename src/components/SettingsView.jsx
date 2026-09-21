@@ -187,6 +187,7 @@ function SettingsView({
   onNavigate,
   onSignOut,
   whatsNewUnread = false,
+  onWorkspaceLogoUpdated,
 }) {
   // Settings opens on Profile for everyone. The P4 frame put administrators on
   // AI settings, but that lands an owner in workspace administration when they
@@ -205,6 +206,8 @@ function SettingsView({
     "Notification" in window ? Notification.permission : "unsupported",
   );
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState("");
   const [avatarError, setAvatarError] = useState("");
   const [presenceSaving, setPresenceSaving] = useState(false);
   const [presenceError, setPresenceError] = useState("");
@@ -862,6 +865,53 @@ function SettingsView({
       setAvatarError(error.message || "Photo could not be removed.");
     } finally {
       setAvatarUploading(false);
+    }
+  };
+  const workspaceLogoUrl = currentWorkspace?.logo_url || "";
+  const handleLogoChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setLogoUploading(true);
+    setLogoError("");
+    try {
+      const body = new FormData();
+      body.append("logo", file);
+      const response = await fetch(`/api/workspaces/${workspaceId}/logo/`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-CSRFToken": await getCsrfToken() },
+        body,
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Logo could not be uploaded.");
+      // The URL never changes when a logo is replaced, so without a cache
+      // buster the browser keeps showing the previous one.
+      onWorkspaceLogoUpdated?.(`${data.logo_url}?t=${Date.now()}`);
+    } catch (error) {
+      setLogoError(error.message || "Logo could not be uploaded.");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+  const handleLogoRemove = async () => {
+    setLogoUploading(true);
+    setLogoError("");
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/logo/`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "X-CSRFToken": await getCsrfToken() },
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Logo could not be removed.");
+      onWorkspaceLogoUpdated?.("");
+    } catch (error) {
+      setLogoError(error.message || "Logo could not be removed.");
+    } finally {
+      setLogoUploading(false);
     }
   };
   const handlePresenceChange = async (event) => {
@@ -2136,6 +2186,48 @@ function SettingsView({
                   </p>
                 </div>
               </div>
+              <div className="settings-workspace-logo">
+                <span className="settings-workspace-logo-frame">
+                  {workspaceLogoUrl ? (
+                    <img src={workspaceLogoUrl} alt="" />
+                  ) : (
+                    <span aria-hidden="true">
+                      {(currentWorkspace?.name || "W").trim().charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <label className="avatar-upload-trigger" aria-label="Change workspace logo">
+                    <Camera size={14} />
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      onChange={handleLogoChange}
+                      disabled={logoUploading}
+                    />
+                  </label>
+                </span>
+                <div>
+                  <strong>Workspace logo</strong>
+                  <span>
+                    Shown in the sidebar and the workspace switcher. PNG, JPG,
+                    GIF or WebP, up to 5 MB.
+                  </span>
+                  {workspaceLogoUrl && (
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={handleLogoRemove}
+                      disabled={logoUploading}
+                    >
+                      Remove logo
+                    </button>
+                  )}
+                </div>
+              </div>
+              {logoError && (
+                <p className="auth-error" role="alert">
+                  {logoError}
+                </p>
+              )}
               <div className="settings-stat-grid">
                 <div>
                   <strong>{members.length}</strong>

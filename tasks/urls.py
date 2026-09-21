@@ -7,6 +7,7 @@ from .notification_status import notification_stream, notification_summary
 from .screen_sharing import screen_capture_detail, screen_capture_list, screen_share_heartbeat, screen_share_session_detail, screen_share_session_list, screen_sharing_policy
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .import_templates import import_template
+from .workspace_logo import workspace_logo
 from .workspace_tools import workspace_ai_action, workspace_ai_chat, workspace_ai_settings, workspace_check_in_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
 from .personal_views import personal_planner_detail, personal_planner_list, personal_task_detail, personal_task_list
 
@@ -29,6 +30,7 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/members/', member_list, name='member-list'),
     path('workspaces/<int:workspace_id>/members/<int:user_id>/', member_detail, name='member-detail'),
     path('workspaces/<int:workspace_id>/leave/', workspace_leave, name='workspace-leave'),
+    path('workspaces/<int:workspace_id>/logo/', workspace_logo, name='workspace-logo'),
     path('workspaces/<int:workspace_id>/archive/', workspace_archive, name='workspace-archive'),
     path('workspaces/<int:workspace_id>/restore/', workspace_restore, name='workspace-restore'),
     path('workspaces/<int:workspace_id>/', workspace_delete, name='workspace-delete'),

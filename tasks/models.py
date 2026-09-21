@@ -40,9 +40,17 @@ class Workspace(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     archived_at = models.DateTimeField(null=True, blank=True)
     archived_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    logo = models.ImageField(upload_to='workspace-logos/%Y/%m/', null=True, blank=True)
+    cloudinary_asset = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ['name']
+
+    @property
+    def logo_url(self):
+        # The membership-checked route, never the stored path: a logo is only
+        # for the people in the workspace it belongs to.
+        return f'/api/workspaces/{self.id}/logo/' if (self.logo or self.cloudinary_asset) else ''
 
 
 class PlanBucket(models.Model):
