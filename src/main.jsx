@@ -2864,7 +2864,7 @@ function App() {
       </aside>
 
       {/* ── Main ── */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="shell-main flex flex-1 flex-col min-w-0">
         {/* ── Mobile AppBar - the design's phone bar. It is one 56px row: a menu
             button at 16, the page title at 48, and four 28px controls whose
             right edge lands on 374, which is the 390 frame less its 16 margin.
@@ -6629,6 +6629,13 @@ function WorkspaceView({
       { value: "month", label: "Month" },
       { value: "agenda", label: "Upcoming" },
     ];
+    const calendarLegendOptions = [
+      { value: "all", label: "All events", tone: "navy" },
+      { value: "meeting", label: "Meetings", tone: "blue" },
+      { value: "deadline", label: "Deadlines", tone: "red" },
+      { value: "focus", label: "Focus time", tone: "green" },
+      { value: "reminder", label: "Reminders", tone: "amber" },
+    ];
     const renderMobileCalendarEvent = (event, showDate = false) => {
       const start = new Date(event.start_at);
       const end = new Date(event.end_at || event.start_at);
@@ -6765,181 +6772,106 @@ function WorkspaceView({
             </div>
           )}
         </div>
+        <div className="calendar-toolbar">
+          <Tabs
+            value={calendarView}
+            onValueChange={setCalendarView}
+            className="calendar-view-switch"
+          >
+            <TabsList aria-label="Calendar view">
+              {["month", "week", "day", "year", "agenda"].map((view) => (
+                <TabsTrigger key={view} value={view}>
+                  {view[0].toUpperCase() + view.slice(1)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <div className="calendar-toolbar-nav">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => shiftCalendar(-1)}
+              aria-label="Previous period"
+            >
+              <ChevronLeft size={16} />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="calendar-heading-trigger"
+                >
+                  {calendarHeading}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <DatePicker
+                  mode="single"
+                  selected={calendarDate}
+                  defaultMonth={calendarDate}
+                  onSelect={(date) => date && setCalendarDate(date)}
+                />
+              </PopoverContent>
+            </Popover>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => shiftCalendar(1)}
+              aria-label="Next period"
+            >
+              <ChevronRight size={16} />
+            </Button>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="calendar-today-button"
+            onClick={() => setCalendarDate(new Date())}
+          >
+            Today
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="calendar-upcoming-side-toggle"
+            onClick={toggleCalendarUpcoming}
+            aria-expanded={calendarUpcomingOpen}
+            aria-controls="calendar-upcoming-panel"
+            aria-label={
+              calendarUpcomingOpen
+                ? "Collapse upcoming panel"
+                : "Show upcoming panel"
+            }
+            title={
+              calendarUpcomingOpen
+                ? "Collapse upcoming panel"
+                : "Show upcoming panel"
+            }
+          >
+            {calendarUpcomingOpen ? (
+              <PanelRightClose size={16} />
+            ) : (
+              <PanelRightOpen size={16} />
+            )}
+          </Button>
+        </div>
         <div
           className={`calendar-layout${calendarUpcomingOpen ? "" : " is-upcoming-collapsed"}`}
         >
           <Card
             className={`calendar-week calendar-view-${calendarView} gap-0 py-0 overflow-hidden`}
           >
-            <CardHeader className="calendar-toolbar items-center flex-wrap gap-3 px-5 py-4 border-b border-border">
-              <div className="calendar-toolbar-title flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => shiftCalendar(-1)}
-                  aria-label="Previous period"
-                >
-                  <ChevronLeft size={16} />
-                </Button>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="px-2.5 text-sm font-extrabold text-foreground hover:bg-muted"
-                    >
-                      {calendarHeading}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <DatePicker
-                      mode="single"
-                      selected={calendarDate}
-                      defaultMonth={calendarDate}
-                      onSelect={(date) => date && setCalendarDate(date)}
-                    />
-                  </PopoverContent>
-                </Popover>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => shiftCalendar(1)}
-                  aria-label="Next period"
-                >
-                  <ChevronRight size={16} />
-                </Button>
-              </div>
-              <div className="calendar-toolbar-actions flex items-center gap-2 flex-wrap">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setCalendarDate(new Date())}
-                >
-                  Today
-                </Button>
-                <Tabs value={calendarView} onValueChange={setCalendarView}>
-                  <TabsList aria-label="Calendar view">
-                    {["day", "week", "month", "year", "agenda"].map((view) => (
-                      <TabsTrigger key={view} value={view}>
-                        {view[0].toUpperCase() + view.slice(1)}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
-                <Button
-                  type="button"
-                  variant={calendarUpcomingOpen ? "secondary" : "outline"}
-                  size="sm"
-                  className="calendar-upcoming-side-toggle"
-                  onClick={toggleCalendarUpcoming}
-                  aria-expanded={calendarUpcomingOpen}
-                  aria-controls="calendar-upcoming-panel"
-                  aria-label={
-                    calendarUpcomingOpen
-                      ? "Collapse upcoming panel"
-                      : "Show upcoming panel"
-                  }
-                  title={
-                    calendarUpcomingOpen
-                      ? "Collapse upcoming panel"
-                      : "Show upcoming panel"
-                  }
-                >
-                  {calendarUpcomingOpen ? (
-                    <PanelRightClose size={16} />
-                  ) : (
-                    <PanelRightOpen size={16} />
-                  )}
-                  <span className="calendar-upcoming-side-toggle-label">
-                    {calendarUpcomingOpen ? "Hide upcoming" : "Show upcoming"}
-                  </span>
-                </Button>
-              </div>
-              <div className="calendar-filter-row">
-                <label>
-                  Show
-                  <AppSelect
-                    value={calendarFilter}
-                    onChange={(event) => setCalendarFilter(event.target.value)}
-                    aria-label="Filter calendar events"
-                  >
-                    <option value="all">All events</option>
-                    <option value="meeting">Meetings</option>
-                    <option value="focus">Focus time</option>
-                    <option value="deadline">Deadlines</option>
-                    <option value="reminder">Reminders</option>
-                  </AppSelect>
-                </label>
-                <label>
-                  Work
-                  <AppSelect
-                    value={calendarTaskScope}
-                    onChange={(event) =>
-                      setCalendarTaskScope(event.target.value)
-                    }
-                    aria-label="Filter task deadlines"
-                  >
-                    <option value="all">All work</option>
-                    <option value="operations">Operations</option>
-                    {localData.projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
-                  </AppSelect>
-                </label>
-                {(calendarFilter !== "all" || calendarTaskScope !== "all") && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setCalendarFilter("all");
-                      setCalendarTaskScope("all");
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                )}
-              </div>
-              <div
-                className="calendar-summary-badges"
-                aria-label="Calendar summary"
-              >
-                <span className="calendar-summary-badge">
-                  {visibleCalendarEvents.length} events
-                </span>
-                <span className="calendar-summary-badge">
-                  {
-                    visibleCalendarEvents.filter(
-                      (event) => event.event_type === "meeting",
-                    ).length
-                  }{" "}
-                  meetings
-                </span>
-                <span className="calendar-summary-badge">
-                  {
-                    visibleCalendarEvents.filter(
-                      (event) => event.event_type === "deadline",
-                    ).length
-                  }{" "}
-                  deadlines
-                </span>
-                <span className="calendar-summary-badge">
-                  {upcomingTaskDeadlines.length} task deadlines
-                </span>
-              </div>
-            </CardHeader>
             <CardContent
               className={
                 calendarView === "agenda"
                   ? "calendar-agenda px-5"
                   : calendarView === "day" || calendarView === "week"
                     ? "calendar-time-content px-0"
-                    : "calendar-grid px-0"
+                    : "calendar-month-content px-0"
               }
             >
               {calendarView === "agenda" ? (
@@ -6952,9 +6884,7 @@ function WorkspaceView({
                       onClick={() => setSelectedEvent(event)}
                     >
                       <time>
-                        <strong>
-                          {formatDate(event.start_at)}
-                        </strong>
+                        <strong>{formatDate(event.start_at)}</strong>
                         <span>
                           {formatCalendarDate(new Date(event.start_at), {
                             hour: "numeric",
@@ -6981,132 +6911,138 @@ function WorkspaceView({
               ) : calendarView === "day" || calendarView === "week" ? (
                 timeGrid
               ) : (
-                calendarDays.map((day) => (
-                  <div
-                    className={`calendar-day${toDateKey(day) === today ? " is-today" : ""}`}
-                    key={day.toISOString()}
-                    onClick={(clickEvent) => {
-                      if (clickEvent.target.closest("button, a")) return;
-                      openCalendarComposerForDate(day);
-                    }}
-                    title="Click to add an event"
-                  >
-                    <div className="calendar-day-heading">
-                      <strong>
-                        {calendarView === "year"
-                          ? formatCalendarDate(day, { month: "short" })
-                          : formatCalendarDate(day, {
-                              weekday: "short",
-                              day: "numeric",
-                            })}
-                        {toDateKey(day) === today && (
-                          <Badge variant="info" className="today-badge">
-                            Today
-                          </Badge>
-                        )}
-                      </strong>
-                      {calendarView !== "year" && (
-                        <button
-                          type="button"
-                          className="calendar-day-add"
-                          onClick={() => openCalendarComposerForDate(day)}
-                          aria-label={`Add event on ${formatDate(day)}`}
-                          title="Add event"
-                        >
-                          <Plus size={13} />
-                        </button>
+                <>
+                  {calendarView === "month" && (
+                    <div className="calendar-month-weekdays" aria-hidden="true">
+                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                        (weekday) => (
+                          <span key={weekday}>{weekday}</span>
+                        ),
                       )}
                     </div>
-                    <div className="calendar-slot">
-                      {calendarEventsForDay(day)
-                        .filter(
-                          (event) =>
-                            calendarFilter === "all" ||
-                            event.event_type === calendarFilter,
-                        )
-                        .map((event) => (
-                          <button
-                            type="button"
-                            className={`event-pill event-type-${event.event_type || "meeting"}`}
-                            key={event.id}
-                            onClick={() => setSelectedEvent(event)}
-                            aria-label={`View ${event.title}`}
-                          >
-                            <span>
+                  )}
+                  <div className="calendar-grid">
+                    {calendarDays.map((day) => (
+                      <div
+                        className={`calendar-day${toDateKey(day) === today ? " is-today" : ""}`}
+                        key={day.toISOString()}
+                        onClick={(clickEvent) => {
+                          if (clickEvent.target.closest("button, a")) return;
+                          openCalendarComposerForDate(day);
+                        }}
+                        title="Click to add an event"
+                      >
+                        <div className="calendar-day-heading">
+                          <strong>
+                            <span className="calendar-date-number">
                               {calendarView === "year"
-                                ? formatDayMonth(new Date(event.start_at))
-                                : formatCalendarDate(new Date(event.start_at), {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })}
+                                ? formatCalendarDate(day, {
+                                    month: "short",
+                                    day: "numeric",
+                                  })
+                                : formatCalendarDate(day, { day: "numeric" })}
                             </span>
-                            <span className="event-pill-title">
-                              {event.title}
-                            </span>
-                          </button>
-                        ))}
-                    </div>
+                          </strong>
+                          {calendarView !== "year" && (
+                            <button
+                              type="button"
+                              className="calendar-day-add"
+                              onClick={() => openCalendarComposerForDate(day)}
+                              aria-label={`Add event on ${formatDate(day)}`}
+                              title="Add event"
+                            >
+                              <Plus size={13} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="calendar-slot">
+                          {calendarEventsForDay(day)
+                            .filter(
+                              (event) =>
+                                calendarFilter === "all" ||
+                                event.event_type === calendarFilter,
+                            )
+                            .map((event) => (
+                              <button
+                                type="button"
+                                className={`event-pill event-type-${event.event_type || "meeting"}`}
+                                key={event.id}
+                                onClick={() => setSelectedEvent(event)}
+                                aria-label={`View ${event.title}`}
+                              >
+                                <span>
+                                  {calendarView === "year"
+                                    ? formatDayMonth(new Date(event.start_at))
+                                    : formatCalendarDate(
+                                        new Date(event.start_at),
+                                        {
+                                          hour: "numeric",
+                                          minute: "2-digit",
+                                        },
+                                      )}
+                                </span>
+                                <span className="event-pill-title">
+                                  {event.title}
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))
+                </>
               )}
             </CardContent>
           </Card>
           {calendarUpcomingOpen && (
-            <Card
-              id="calendar-upcoming-panel"
-              className="workspace-side-card py-5 gap-4"
-            >
-            <div className="calendar-side-heading">
-              <h3 className="calendar-upcoming-title">
-                <button
-                  type="button"
-                  className="calendar-upcoming-toggle"
-                  onClick={toggleCalendarUpcoming}
-                  aria-expanded={calendarUpcomingOpen}
-                  aria-controls="calendar-upcoming-panel"
-                  title="Collapse upcoming panel"
-                >
-                  <PanelRightClose size={16} aria-hidden="true" />
-                  <span>Upcoming</span>
-                  <span className="calendar-upcoming-count">
-                    {upcomingItems.length}
+            <div className="calendar-side-stack">
+              <Card
+                id="calendar-upcoming-panel"
+                className="calendar-upcoming-card"
+              >
+                <div className="calendar-side-heading">
+                  <h3 className="calendar-upcoming-title">Upcoming</h3>
+                  <span className="calendar-upcoming-meta">
+                    {formatCalendarDate(new Date(), {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                    })}
                   </span>
-                </button>
-              </h3>
-              <span className="calendar-export-links">
-                <a
-                  className="calendar-export"
-                  href={`/api/workspaces/${workspaceId}/calendar.ics`}
-                  download
-                >
-                  Export ICS
-                </a>
-                <button
-                  type="button"
-                  className="calendar-export"
-                  onClick={() => onNavigate("Settings")}
-                  title="Get a live subscribe link for Outlook or Google Calendar in Settings > Integrations"
-                >
-                  Subscribe
-                </button>
-              </span>
-            </div>
-            <div className="calendar-upcoming-content">
-              {upcomingGroups.length ? (
-                <div className="calendar-upcoming-groups">
-                  {upcomingGroups.map((group) => (
-                    <section
-                      className="calendar-upcoming-group"
-                      key={group.key}
-                      aria-labelledby={`calendar-upcoming-${group.key}`}
+                  <span className="calendar-upcoming-actions">
+                    <a
+                      className="calendar-export"
+                      href={`/api/workspaces/${workspaceId}/calendar.ics`}
+                      download
+                      aria-label="Export calendar as ICS"
+                      title="Export ICS"
                     >
-                      <div className="calendar-upcoming-group-heading">
-                        <h4 id={`calendar-upcoming-${group.key}`}>
-                          {group.label}
-                        </h4>
-                        <span>{group.items.length}</span>
-                      </div>
-                      {group.items.map((item) =>
+                      <Download size={15} />
+                    </a>
+                    <button
+                      type="button"
+                      className="calendar-export"
+                      onClick={() => onNavigate("Settings")}
+                      aria-label="Get a calendar subscribe link"
+                      title="Subscribe in Settings"
+                    >
+                      <Link2 size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className="calendar-export"
+                      onClick={toggleCalendarUpcoming}
+                      aria-label="Collapse upcoming panel"
+                      title="Collapse upcoming panel"
+                    >
+                      <PanelRightClose size={15} />
+                    </button>
+                  </span>
+                </div>
+                <div className="calendar-upcoming-content">
+                  {upcomingItems.length ? (
+                    <div className="calendar-upcoming-groups">
+                      {upcomingItems.slice(0, 5).map((item) =>
                         item.kind === "event" ? (
                           renderUpcomingEvent(item)
                         ) : (
@@ -7118,26 +7054,69 @@ function WorkspaceView({
                           >
                             <CalendarDays size={15} />
                             <span>
+                              <small>{formatDay(item.task.due_date)}</small>
                               <strong>{item.task.title}</strong>
-                              <small>
-                                {formatDay(item.task.due_date)}
-                                {item.task.tag &&
-                                item.task.tag !== "General"
-                                  ? ` · ${item.task.tag}`
-                                  : ""}
-                              </small>
                             </span>
                           </button>
                         ),
                       )}
-                    </section>
-                  ))}
+                    </div>
+                  ) : (
+                    <EmptyState text="No upcoming events or task deadlines match this filter." />
+                  )}
                 </div>
-              ) : (
-                <EmptyState text="No upcoming events or task deadlines match this filter." />
-              )}
+              </Card>
+              <Card className="calendar-calendars-card">
+                <div className="calendar-side-heading">
+                  <h3>Calendars</h3>
+                </div>
+                <div className="calendar-legend-list">
+                  {calendarLegendOptions.map((option) => {
+                    const isOn =
+                      calendarFilter === "all" ||
+                      calendarFilter === option.value;
+                    return (
+                      <button
+                        type="button"
+                        className={`calendar-legend-toggle tone-${option.tone}${isOn ? " is-on" : ""}`}
+                        key={option.value}
+                        aria-pressed={isOn}
+                        onClick={() =>
+                          setCalendarFilter((current) =>
+                            option.value !== "all" && current === option.value
+                              ? "all"
+                              : option.value,
+                          )
+                        }
+                      >
+                        <i aria-hidden="true" />
+                        <span>{option.label}</span>
+                        <b aria-hidden="true" />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="calendar-legend-rule" />
+                <label className="calendar-work-filter">
+                  <span>Task deadlines</span>
+                  <AppSelect
+                    value={calendarTaskScope}
+                    onChange={(event) =>
+                      setCalendarTaskScope(event.target.value)
+                    }
+                    aria-label="Filter task deadlines"
+                  >
+                    <option value="all">All work</option>
+                    <option value="operations">Operations</option>
+                    {localData.projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </AppSelect>
+                </label>
+              </Card>
             </div>
-            </Card>
           )}
         </div>
         {composerOpen && (
@@ -7176,6 +7155,9 @@ function WorkspaceView({
   }
 
   if (active === "Check-ins") {
+    const checkInRangeOptions = ["all", "today", "week", "month"]
+      .map((value) => CHECK_IN_RANGES.find((range) => range.value === value))
+      .filter(Boolean);
     const checkInRangeCounts = Object.fromEntries(
       CHECK_IN_RANGES.map((range) => [
         range.value,
@@ -7211,23 +7193,37 @@ function WorkspaceView({
             role="tablist"
             aria-label="Filter check-ins by date range"
           >
-            {CHECK_IN_RANGES.map((range) => (
+            {checkInRangeOptions.map((range) => (
               <button
                 type="button"
                 role="tab"
                 key={range.value}
                 aria-selected={checkInRange === range.value}
+                aria-label={`${range.label}: ${checkInRangeCounts[range.value]} check-ins`}
                 className={checkInRange === range.value ? "active" : ""}
                 onClick={() => setCheckInRange(range.value)}
               >
-                {range.label}
-                <span>{checkInRangeCounts[range.value]}</span>
+                <span className="checkin-range-label">{range.label}</span>
+                <span className="checkin-range-count">
+                  {checkInRangeCounts[range.value]}
+                </span>
               </button>
             ))}
           </div>
-          <span aria-live="polite">
-            {visibleCheckIns.length} check-in
-            {visibleCheckIns.length === 1 ? "" : "s"} in {activeRangeLabel.toLowerCase()}
+          <span className="checkin-date-chip" aria-live="polite">
+            <CalendarDays size={16} aria-hidden="true" />
+            <span>
+              {formatCalendarDate(new Date(), {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+              })}
+            </span>
+            <span className="sr-only">
+              {visibleCheckIns.length} check-in
+              {visibleCheckIns.length === 1 ? "" : "s"} in{" "}
+              {activeRangeLabel.toLowerCase()}
+            </span>
           </span>
         </div>
         {checkInLoading && (
@@ -7327,7 +7323,7 @@ function WorkspaceView({
           )}
         </div>
         <aside className="pencil-checkin-side">
-          <section className="pencil-checkin-card"><h2>Today&apos;s check-ins</h2><strong>{visibleCheckIns.length} of {localData.members.length}<small>received</small></strong><div className="pencil-checkin-progress"><i style={{ width: `${localData.members.length ? Math.min(100, Math.round((visibleCheckIns.length / localData.members.length) * 100)) : 0}%` }} /></div><p>{Math.max(0, localData.members.length - visibleCheckIns.length)} members still to submit</p><div className="pencil-checkin-missing">{localData.members.filter((member) => !visibleCheckIns.some((item) => String(item.user_id) === String(member.id))).slice(0, 4).map((member) => <div key={member.id}><span>{[member.first_name, member.last_name].filter(Boolean).join(" ") || member.email}</span><button type="button" onClick={() => onNavigate("Chats")}>Nudge</button></div>)}</div></section>
+          <section className="pencil-checkin-card"><h2>Today&apos;s check-ins</h2><strong>{visibleCheckIns.length} of {localData.members.length}<small>received</small></strong><div className="pencil-checkin-progress"><i style={{ width: `${localData.members.length ? Math.min(100, Math.round((visibleCheckIns.length / localData.members.length) * 100)) : 0}%` }} /></div><p>{Math.max(0, localData.members.length - visibleCheckIns.length)} members still to submit</p><div className="pencil-checkin-missing">{localData.members.filter((member) => !visibleCheckIns.some((item) => String(item.user_id) === String(member.id))).slice(0, 4).map((member) => { const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email; return <div key={member.id}><Avatar name={memberName} avatarUrl={member.avatar_url} className="pencil-checkin-missing-avatar" /><span>{memberName}</span><button type="button" onClick={() => onNavigate("Chats")}>Nudge</button></div>; })}</div></section>
           <section className="pencil-checkin-card"><h2>Blockers raised today</h2>{visibleCheckIns.filter((item) => item.blockers).slice(0, 3).map((item) => <div className="pencil-checkin-blocker" key={item.id}><i /> <span>{item.blockers}<small>{item.user_name}</small></span></div>)}{!visibleCheckIns.some((item) => item.blockers) && <p>No blockers reported today.</p>}</section>
         </aside>
         </div>
