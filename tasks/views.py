@@ -1346,9 +1346,14 @@ def plan_bucket_reorder(request, workspace_id):
         return JsonResponse({'error': 'bucket_ids must be a non-empty list.'}, status=400)
     project_id = payload.get('project_id')
     workstream_id = payload.get('workstream_id')
-    if bool(project_id) == bool(workstream_id):
-        return JsonResponse({'error': 'Choose exactly one project or workstream for this bucket order.'}, status=400)
-    scope = {'project_id': project_id, 'workstream_id': None} if project_id else {'project_id': None, 'workstream_id': workstream_id}
+    if project_id and workstream_id:
+        return JsonResponse({'error': 'Choose one project or workstream for this bucket order.'}, status=400)
+    if project_id:
+        scope = {'project_id': project_id, 'workstream_id': None}
+    elif workstream_id:
+        scope = {'project_id': None, 'workstream_id': workstream_id}
+    else:
+        scope = {'project_id': None, 'workstream_id': None}
     buckets = list(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True, **scope))
     by_id = {bucket.id: bucket for bucket in buckets}
     try:

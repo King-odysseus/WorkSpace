@@ -265,6 +265,30 @@ it('keeps the bucket grip decorative and offers keyboard-reachable move actions'
   expect(screen.getByRole('menuitem', { name: 'Move Review right' })).toBeInTheDocument()
 })
 
+it('reorders unscoped buckets in the all-projects view', async () => {
+  const user = userEvent.setup()
+  const onBucketReorder = vi.fn()
+  renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+      { id: 19, name: 'Review', project_id: null, workstream_id: null },
+      { id: 24, name: 'Done', project_id: null, workstream_id: null },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Open actions for Review' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Move Review right' }))
+
+  expect(onBucketReorder).toHaveBeenCalledWith(
+    [2, 24, 19],
+    { project_id: null, workstream_id: null },
+  )
+})
+
 it('opens the mobile filter panel and switches the active bucket tab', async () => {
   const user = userEvent.setup()
   const { container } = renderPlanner({

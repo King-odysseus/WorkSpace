@@ -188,7 +188,7 @@
 .settings-view .settings-panel [data-slot='select-trigger']:focus-visible {
   border-color: var(--pencil-navy) !important;
   outline: 0 !important;
-  box-shadow: 0 0 0 3px rgb(11 11 69 / 12%) !important;
+  box-shadow: 0 0 0 3px rgb(14 42 71 / 12%) !important;
 }
 
 .settings-view .settings-switch {

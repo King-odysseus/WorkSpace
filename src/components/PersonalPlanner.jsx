@@ -187,11 +187,12 @@ function PersonalPlanner({ workspaceId }) {
   }
 
   const commitNotes = (task, input) => patchTask(task, { notes: input.value })
-  const isManaging = Boolean(addingPlanner || renamingId || confirmingPlannerId)
+  const isManaging = Boolean(addingPlanner || managingPlannerId || renamingId || confirmingPlannerId)
+  const compactLayout = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches
 
   return <section className="workspace-view personal-planner-view" aria-busy={loading}>
     <WorkspaceViewHeading title="My planner" subtitle="Your own list for planning the day. Private to you - nobody else in the workspace can see it." />
-    <div className={`personal-planner-layout${isManaging ? ' is-managing' : ''}`}>
+    <div className={`personal-planner-layout${isManaging ? ' is-managing' : ''}${!planners.length && !loading ? ' is-empty' : ''}`}>
       <aside className="personal-planner-rail" aria-label="My planners">
         <header className="personal-planner-rail-header">
           <h2>My planners</h2>
@@ -204,9 +205,21 @@ function PersonalPlanner({ workspaceId }) {
               <button type="submit" className="personal-planner-form-check" aria-label="Save planner name" disabled={saving}><Check size={16} /></button>
               <button type="button" className="personal-planner-form-cancel" aria-label="Cancel rename" onClick={() => { setRenamingId(null); setManagingPlannerId(null) }}><X size={16} /></button>
             </form>
-            : <div className={`personal-planner-item ${planner.id === activeId ? 'is-active' : ''}`} key={planner.id} role="listitem">
+            : <div className={`personal-planner-item${planner.id === activeId ? ' is-active' : ''}${confirmingPlannerId === planner.id ? ' is-confirming' : ''}`} key={planner.id} role="listitem">
               <div className="personal-planner-row">
-                <button type="button" className="personal-planner-pick" onClick={() => setSelectedPlannerId(planner.id)} aria-current={planner.id === activeId ? 'page' : undefined}>
+                <button
+                  type="button"
+                  className="personal-planner-pick"
+                  onClick={() => {
+                    if (compactLayout && planner.id === activeId) {
+                      setManagingPlannerId(current => (current === planner.id ? null : planner.id))
+                      return
+                    }
+                    setSelectedPlannerId(planner.id)
+                  }}
+                  aria-current={planner.id === activeId ? 'page' : undefined}
+                  aria-expanded={compactLayout ? managingPlannerId === planner.id : undefined}
+                >
                   <span className="personal-planner-name">{planner.name}</span>
                   <span className="personal-planner-count" aria-label={`${openCountFor(planner.id)} open items`}>{openCountFor(planner.id)}</span>
                 </button>

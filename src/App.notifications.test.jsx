@@ -65,6 +65,25 @@ const mountApp = async () => {
     '/api/workspaces/1/notifications/?page=': {
       notifications: [activityNotification],
       unread_counts: { channel: 1, direct: 1, conversation: 2, activity: 1 },
+      summary: {
+        unread_count: 1,
+        weekly_total: 4,
+        categories: { task_updates: 1, messages_mentions: 0, risks_members: 0 },
+      },
+      pagination: { page: 1, page_size: 7, total_items: 1, total_pages: 1, has_next: false, has_previous: false },
+    },
+    '/api/workspaces/1/notification-preferences/': {
+      preferences: {
+        mentions: true,
+        direct_messages: true,
+        channel_messages: true,
+        task_updates: true,
+        calendar_reminders: true,
+        notification_sound: true,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+        manager_activity: true,
+      },
     },
     '/api/notifications/summary/': { unread_count: 3, latest_unread_id: channelNotification.id },
     '/api/push/public-key/': { configured: false, public_key: '' },
@@ -126,15 +145,20 @@ it('separates message alerts from workspace activity across the header and mobil
   fireEvent.click(screen.getByRole('button', { name: 'View all workspace activity' }))
 
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/notifications/?page=1&exclude_chat=1&sort=newest'))).toBe(true)
-  await screen.findByText('Notifications outside chats and channels.')
-  await waitFor(() => expect(screen.getAllByText('14-09-26 10:44')).toHaveLength(1))
+  await screen.findByText('Everything that needs your attention, newest first.')
+  await screen.findByText('1 unread · 4 total this week')
+  expect(screen.getByRole('button', { name: /^All 1$/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: /^Unread 1$/ })).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.getByRole('button', { name: /^Mentions 0$/ })).toBeInTheDocument()
   const historyRow = screen.getByText('Deployment finished').closest('button')
-  expect(historyRow).toHaveClass('rounded-none')
   expect(historyRow).toHaveClass('notification-history-row')
+  expect(historyRow).toHaveClass('is-unread')
   expect(historyRow.closest('[data-slot="card"]')).toHaveClass('notification-history')
-  expect(within(historyRow).getByText('Unread')).toHaveClass('rounded-none')
-  expect(historyRow.querySelector('span[aria-hidden="true"]')).toHaveClass('rounded-full')
-  expect(within(historyRow).getByText('14-09-26 10:44')).toHaveAttribute('dateTime', activityCreatedAt)
+  expect(historyRow.querySelector('.notification-unread-dot')).toBeInTheDocument()
+  expect(within(historyRow).getByText(/deployment/)).toBeInTheDocument()
+  expect(historyRow.querySelector('time')).toHaveAttribute('dateTime', activityCreatedAt)
+  expect(screen.getByText('need attention')).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
   expect(screen.queryByText('New direct message')).not.toBeInTheDocument()
   expect(screen.queryByText('New channel message')).not.toBeInTheDocument()
 }, 60000)

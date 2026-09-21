@@ -2225,12 +2225,12 @@ function ProjectProgress({ project, tasks }) {
       aria-label={`${completedTasks} of ${totalTasks} project tasks completed`}
     >
       <div className="project-progress-label">
-        <span>
+        <span>Progress</span>
+        <strong>
           {totalTasks
-            ? `${completedTasks} of ${totalTasks} tasks complete`
-            : "No tasks linked yet"}
-        </span>
-        <strong>{completionPercent}%</strong>
+            ? `${completionPercent}% \u00B7 ${completedTasks} of ${totalTasks}`
+            : "No tasks linked"}
+        </strong>
       </div>
       <div
         className="project-progress-track"

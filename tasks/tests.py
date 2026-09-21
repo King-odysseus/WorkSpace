@@ -477,6 +477,21 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([bucket['id'] for bucket in response.json()['buckets']], [second.id, first.id])
 
+    def test_owner_can_persist_unscoped_bucket_order(self):
+        first = PlanBucket.objects.create(workspace=self.workspace, name='To do', position=0)
+        second = PlanBucket.objects.create(workspace=self.workspace, name='Review', position=1)
+        response = self.client.patch(
+            reverse('plan-bucket-reorder', args=[self.workspace.id]),
+            data=json.dumps({'bucket_ids': [second.id, first.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([bucket['id'] for bucket in response.json()['buckets']], [second.id, first.id])
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(second.position, 0)
+        self.assertEqual(first.position, 1)
+
     def test_owner_can_rename_a_plan_bucket(self):
         bucket = PlanBucket.objects.create(workspace=self.workspace, name='Later', position=1)
         response = self.client.patch(

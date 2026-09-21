@@ -59,6 +59,7 @@ import {
   Pause,
   PanelRightClose,
   PanelRightOpen,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -2549,7 +2550,7 @@ function App() {
           className: "workspace-toast",
           duration: 4000,
           style: {
-            background: "rgba(11, 11, 69, 0.94)",
+            background: "rgba(14, 42, 71, 0.94)",
             color: "#FFFFFF",
             fontSize: "0.875rem",
           },
@@ -3007,11 +3008,11 @@ function App() {
         {/* The design gives phones their own bar - a menu button, the page title,
             and four controls - so this header is desktop only and the AppBar
             above carries the small screens. */}
-        <header className="relative z-30 hidden h-16 shrink-0 items-center border-b border-border bg-surface px-4 lg:flex lg:gap-6 lg:px-6">
+      <header className="shell-header relative z-30 hidden h-16 shrink-0 items-center border-b border-border bg-surface px-4 lg:flex lg:gap-6 lg:px-6">
           {/* The column is a fixed 272px so the search after it starts on the
               design's 320px, and the utility cluster is pushed right by ml-auto
               rather than by a matching flex-1 on this side. */}
-          <div className="hidden min-w-0 flex-1 items-center gap-2 2xl:flex 2xl:w-[272px] 2xl:flex-none">
+          <div className="shell-header-context min-w-0 items-center gap-2">
             <span
               aria-hidden="true"
               className="flex size-7 shrink-0 items-center justify-center rounded-badge bg-primary text-body-compact font-bold text-primary-foreground"
@@ -3031,7 +3032,7 @@ function App() {
             </span>
           </div>
 
-          <div className="relative ml-3 min-w-0 flex-1 lg:ml-0 2xl:w-[400px] 2xl:flex-none" ref={searchRef}>
+          <div className="shell-header-search relative min-w-0" ref={searchRef}>
             {/* The field surface sits on the wrapper, not the input. Every plain
                 input in this app is repainted by an !important soft-field rule
                 further down the stylesheet, so an input styled here would look
@@ -3065,7 +3066,7 @@ function App() {
             </div>
           </div>
 
-          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1 2xl:gap-3">
+          <div className="shell-header-actions ml-auto flex min-w-0 shrink-0 items-center gap-1">
             {/* The design's Assistant lives in the header rather than on a
                 launcher floating over the page, and opens the same flyout. */}
             <button
@@ -3075,13 +3076,13 @@ function App() {
                 setAiLauncherVisibility(false);
                 setAiFlyoutOpen(true);
               }}
-              className="hidden size-9 items-center justify-center gap-2 rounded-[10px] border border-alert-info-stroke bg-alert-info-fill text-body-compact font-medium text-assistant-accent transition-colors hover:bg-alert-info-stroke/40 lg:flex 2xl:w-auto 2xl:px-3"
+              className="shell-header-assistant hidden size-9 items-center justify-center gap-2 rounded-[10px] border border-alert-info-stroke bg-alert-info-fill text-body-compact font-medium text-assistant-accent transition-colors hover:bg-alert-info-stroke/40 lg:flex"
               aria-haspopup="dialog"
               aria-label="Open Zuri"
               title="Ask Zuri"
             >
               <Sparkles size={18} />
-              <span className="hidden 2xl:inline">Assistant</span>
+              <span>Assistant</span>
             </button>
 
             <button
@@ -3092,7 +3093,7 @@ function App() {
                 )
               }
               aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              className="flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+              className="shell-header-icon flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
             >
               {theme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
             </button>
@@ -3100,7 +3101,7 @@ function App() {
             <button
               type="button"
               onClick={() => setActive("Help")}
-              className="hidden size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
+              className="shell-header-icon hidden size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
               aria-label="Help"
               title="Help"
             >
@@ -3111,7 +3112,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => toggleMessages("header")}
-                className="relative hidden size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
+                className="shell-header-icon relative hidden size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary sm:flex"
                 aria-label="Open messages"
                 title="Open chats and channels"
               >
@@ -3138,7 +3139,7 @@ function App() {
                   setNotificationOrigin("header");
                   setNotificationOpen((current) => !current);
                 }}
-                className="relative flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                className="shell-header-icon relative flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
                 aria-label="Open workspace activity notifications"
               >
                 <Bell size={20} />
@@ -3161,7 +3162,7 @@ function App() {
                 the avatar lands on 1096 rather than on the cluster's own gap. */}
             <span
               aria-hidden="true"
-              className="hidden h-7 w-px shrink-0 bg-border 2xl:mr-[7px] 2xl:block"
+              className="shell-header-divider hidden h-7 w-px shrink-0 bg-border 2xl:block"
             />
 
             <div className="relative" ref={profileMenuRef}>
@@ -3174,7 +3175,7 @@ function App() {
                 aria-haspopup="true"
                 aria-expanded={profileMenuOpen}
                 aria-label={`Account menu for ${currentUserName}`}
-                className="flex items-center gap-2 rounded-control py-1 pl-1 transition-colors hover:bg-surface-secondary"
+                className="shell-header-account flex items-center gap-2 rounded-control py-1 pl-1 transition-colors hover:bg-surface-secondary"
               >
                 <Avatar
                   name={currentUserName}
@@ -3182,7 +3183,7 @@ function App() {
                   presence={currentUserPresence}
                   className="shell-avatar-header"
                 />
-                <span className="hidden max-w-36 truncate text-label font-semibold text-text-primary 2xl:block">
+                <span className="hidden max-w-36 truncate text-label font-semibold text-text-primary">
                   {currentUserName}
                 </span>
                 <ChevronDown
@@ -3835,6 +3836,9 @@ function WorkspaceView({
   const [notificationLoadingMore, setNotificationLoadingMore] = useState(false);
   const [notificationError, setNotificationError] = useState("");
   const [notificationReload, setNotificationReload] = useState(0);
+  const [notificationPreferences, setNotificationPreferences] = useState(null);
+  const [notificationPreferencesError, setNotificationPreferencesError] = useState("");
+  const [notificationPreferenceSaving, setNotificationPreferenceSaving] = useState("");
   useEffect(() => {
     const reloadPage = () => {
       setNotificationPage(1);
@@ -3991,6 +3995,60 @@ function WorkspaceView({
     setNotificationPagination(null);
     setNotificationSummary(null);
   }, [active, workspaceId]);
+  useEffect(() => {
+    if (active !== "Notifications" || !workspaceId) return undefined;
+    let current = true;
+    setNotificationPreferencesError("");
+    fetch(`/api/workspaces/${workspaceId}/notification-preferences/`, {
+      credentials: "include",
+      headers: { "X-Workspace-Id": String(workspaceId) },
+    })
+      .then((response) =>
+        readJsonResponse(response, "Notification preferences could not be loaded.").then(
+          (payload) => ({ ok: response.ok, payload }),
+        ),
+      )
+      .then(({ ok, payload }) => {
+        if (!current) return;
+        if (!ok) throw new Error(payload.error || "Notification preferences could not be loaded.");
+        setNotificationPreferences(payload.preferences || null);
+      })
+      .catch((error) => {
+        if (current) setNotificationPreferencesError(error.message || "Notification preferences could not be loaded.");
+      });
+    return () => {
+      current = false;
+    };
+  }, [active, workspaceId]);
+  const updateNotificationPreference = async (key, value) => {
+    if (!workspaceId || !notificationPreferences) return;
+    const previous = notificationPreferences;
+    setNotificationPreferences((current) => ({ ...current, [key]: value }));
+    setNotificationPreferencesError("");
+    setNotificationPreferenceSaving(key);
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/notification-preferences/`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": await getCsrfToken(),
+          },
+          body: JSON.stringify({ [key]: value }),
+        },
+      );
+      const payload = await readJsonResponse(response, "Preference could not be saved.");
+      if (!response.ok) throw new Error(payload.error || "Preference could not be saved.");
+      setNotificationPreferences(payload.preferences || previous);
+    } catch (error) {
+      setNotificationPreferences(previous);
+      setNotificationPreferencesError(error.message || "Preference could not be saved.");
+    } finally {
+      setNotificationPreferenceSaving("");
+    }
+  };
   useEffect(() => {
     if (active !== "Notifications" || !workspaceId) return undefined;
     let current = true;
@@ -4881,15 +4939,23 @@ function WorkspaceView({
     }
   };
 
-  const reorderBuckets = async (bucketIds) => {
+  const reorderBuckets = async (bucketIds, scope = {}) => {
     if (!canManageMembers) return;
     const previousBuckets = [...localData.buckets];
+    const bucketInScope = (bucket) => {
+      if (scope.project_id)
+        return String(bucket.project_id) === String(scope.project_id);
+      if (scope.workstream_id)
+        return String(bucket.workstream_id) === String(scope.workstream_id);
+      return !bucket.project_id && !bucket.workstream_id;
+    };
+    const scopedBuckets = previousBuckets.filter(bucketInScope);
     const byId = new Map(
-      previousBuckets.map((bucket) => [Number(bucket.id), bucket]),
+      scopedBuckets.map((bucket) => [Number(bucket.id), bucket]),
     );
     const ids = bucketIds.map(Number);
     if (
-      ids.length !== previousBuckets.length ||
+      ids.length !== scopedBuckets.length ||
       new Set(ids).size !== ids.length ||
       ids.some((id) => !byId.has(id))
     ) {
@@ -4898,7 +4964,17 @@ function WorkspaceView({
       );
       return;
     }
-    const nextBuckets = ids.map((id) => byId.get(id));
+    const nextScopedBuckets = ids.map((id) => byId.get(id));
+    const nextBuckets = [];
+    let nextScopedIndex = 0;
+    previousBuckets.forEach((bucket) => {
+      if (bucketInScope(bucket)) {
+        nextBuckets.push(nextScopedBuckets[nextScopedIndex]);
+        nextScopedIndex += 1;
+      } else {
+        nextBuckets.push(bucket);
+      }
+    });
     if (
       nextBuckets.every(
         (bucket, index) => bucket.id === previousBuckets[index]?.id,
@@ -4918,7 +4994,11 @@ function WorkspaceView({
             "X-CSRFToken": await getCsrfToken(),
             "X-Workspace-Id": String(workspaceId),
           },
-          body: JSON.stringify({ bucket_ids: ids }),
+          body: JSON.stringify({
+            bucket_ids: ids,
+            project_id: scope.project_id || null,
+            workstream_id: scope.workstream_id || null,
+          }),
         },
       );
       const responseData = await readJsonResponse(
@@ -4929,10 +5009,15 @@ function WorkspaceView({
         throw new Error(
           responseData.error || "Bucket order could not be saved.",
         );
-      setLocalData((current) => ({
-        ...current,
-        buckets: responseData.buckets,
-      }));
+      setLocalData((current) => {
+        const savedScoped = [...(responseData.buckets || [])];
+        return {
+          ...current,
+          buckets: current.buckets.map((bucket) =>
+            bucketInScope(bucket) ? savedScoped.shift() || bucket : bucket,
+          ),
+        };
+      });
       window.dispatchEvent(
         new CustomEvent("workspace:notice", { detail: "Bucket order saved." }),
       );
@@ -6110,11 +6195,68 @@ function WorkspaceView({
     const activityNotificationHistory = notificationHistory.filter(
       (notification) => !isConversationNotification(notification),
     );
+    const summary = notificationSummary || {};
+    const categoryCounts = summary.categories || {};
+    const filterOptions = [
+      ["all", "All", pagination?.total_items ?? activityNotificationHistory.length],
+      ["unread", "Unread", summary.unread_count ?? activityNotificationHistory.filter((notification) => !notification.read).length],
+      ["mentions", "Mentions", categoryCounts.messages_mentions ?? 0],
+    ];
+    const openFilter = (value) => {
+      if (value === notificationFilter) return;
+      setNotificationFilter(value);
+      setNotificationPage(1);
+      setNotificationHistory([]);
+      setNotificationPagination(null);
+      setNotificationSummary(null);
+    };
+    const notificationVisual = (notification) => {
+      const kind = notification.kind || "";
+      if (kind === "mention") return { Icon: MessageSquare, tone: "mention" };
+      if (["direct_message", "channel_message"].includes(kind)) return { Icon: MessageSquare, tone: "message" };
+      if (["risk_issue_assigned", "manager_activity", "membership_change", "invitation_response"].includes(kind)) {
+        return { Icon: kind === "risk_issue_assigned" ? Flag : Users, tone: "risk" };
+      }
+      if (kind.startsWith("check_in")) return { Icon: CheckCircle2, tone: "complete" };
+      if (kind.startsWith("calendar")) return { Icon: CalendarDays, tone: "calendar" };
+      if (kind.includes("document") || kind.includes("attachment")) return { Icon: File, tone: "file" };
+      return { Icon: ClipboardList, tone: "task" };
+    };
+    const notificationMeta = (notification) => {
+      const typeLabel = {
+        mention: "Mention",
+        direct_message: "Direct message",
+        channel_message: "Channel message",
+        task_assigned: "Task assigned",
+        task_status: "Task updated",
+        task_comment: "Task comment",
+        task_created: "Task created",
+        follow_up_assigned: "Follow-up assigned",
+        follow_up_completed: "Follow-up completed",
+        check_in_submitted: "Check-in",
+        check_in_comment: "Check-in comment",
+        calendar_created: "Calendar created",
+        calendar_updated: "Calendar updated",
+        calendar_reminder: "Calendar reminder",
+        risk_issue_assigned: "Risk assigned",
+        manager_activity: "Manager activity",
+        membership_change: "Member update",
+        invitation_response: "Invitation",
+      }[notification.kind];
+      const label = typeLabel || (notification.kind || "Workspace update").replaceAll("_", " ");
+      return [label, notification.body?.trim()].filter(Boolean).join(" · ");
+    };
+    const deliveryPreferences = [
+      ["notification_sound", "Notification sound"],
+      ["calendar_reminders", "Calendar reminders"],
+      ["mentions", "Mentions"],
+    ];
     return (
       <section className="workspace-view pencil-notifications-view">
         <WorkspaceViewHeading
-          title="Workspace activity"
-          subtitle="Notifications outside chats and channels."
+          eyebrow="Workspace"
+          title="Notifications"
+          subtitle="Everything that needs your attention, newest first."
           action="Mark all read"
           icon={CheckCircle2}
           onAction={async () => {
@@ -6127,60 +6269,130 @@ function WorkspaceView({
             );
           }}
         />
-        <Card className="activity-history notification-history">
-          {notificationLoading ? (
-            <p className="p-4 text-sm text-text-muted">Loading notifications...</p>
-          ) : notificationError ? (
-            <div className="workspace-status error" role="alert">
-              <span>{notificationError}</span>
-              <button className="secondary-button" onClick={() => setNotificationReload((current) => current + 1)}>
-                Retry
-              </button>
-            </div>
-          ) : activityNotificationHistory.length ? (
-            <div className="divide-y divide-border-light">
-              {activityNotificationHistory.map((notification) => (
+        <div className="notification-layout">
+          <div className="notification-main-column">
+            <div className="notification-filters" role="group" aria-label="Filter notifications">
+              {filterOptions.map(([value, label, count]) => (
                 <button
                   type="button"
-                  key={notification.id}
-                  onClick={() => onOpenNotification(notification)}
-                  className={`notification-history-row flex w-full items-start gap-3 rounded-none px-4 py-3.5 text-left transition-colors hover:bg-surface-secondary ${notification.read ? "" : "bg-primary/[0.035]"}`}
+                  key={value}
+                  className={notificationFilter === value ? "is-active" : ""}
+                  aria-pressed={notificationFilter === value}
+                  onClick={() => openFilter(value)}
                 >
-                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-primary"}`} aria-hidden="true" />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-sm font-semibold text-text-primary">{notification.title}</span>
-                      <span className={`rounded-none px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${notification.read ? "bg-surface-secondary text-text-muted" : "bg-primary/10 text-primary"}`}>
-                        {notification.read ? "Read" : "Unread"}
-                      </span>
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-text-muted">{notification.body || "Workspace update"}</span>
-                    <time className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-text-muted" dateTime={notification.created_at}>
-                      <Clock3 size={11} aria-hidden="true" />
-                      {formatDateTime(notification.created_at)}
-                    </time>
-                  </span>
+                  {label} {count}
                 </button>
               ))}
             </div>
-          ) : (
-            <EmptyState text="No workspace activity yet." />
-          )}
-        </Card>
-        {pagination && pagination.total_pages > 1 && (
-          <div className="activity-pagination">
-            <span>{`${(pagination.page - 1) * pagination.page_size + 1}-${Math.min(pagination.page * pagination.page_size, pagination.total_items)} of ${pagination.total_items}`}</span>
-            <div>
-              <button type="button" disabled={!pagination.has_previous} onClick={() => setNotificationPage((current) => Math.max(1, current - 1))} aria-label="Previous notifications page">
-                <ChevronLeft size={15} />
-              </button>
-              <span>Page {pagination.page} of {pagination.total_pages}</span>
-              <button type="button" disabled={!pagination.has_next} onClick={() => setNotificationPage((current) => current + 1)} aria-label="Next notifications page">
-                <ChevronRight size={15} />
-              </button>
-            </div>
+            <p className="notification-summary-line">
+              {summary.unread_count ?? 0} unread · {summary.weekly_total ?? 0} total this week
+            </p>
+            <Card className="notification-history">
+              {notificationLoading && !activityNotificationHistory.length ? (
+                <p className="notification-list-status">Loading notifications...</p>
+              ) : notificationError ? (
+                <div className="notification-list-status is-error" role="alert">
+                  <span>{notificationError}</span>
+                  <button className="secondary-button" onClick={() => setNotificationReload((current) => current + 1)}>
+                    Retry
+                  </button>
+                </div>
+              ) : activityNotificationHistory.length ? (
+                <div className="notification-rows">
+                  {activityNotificationHistory.map((notification) => {
+                    const visual = notificationVisual(notification);
+                    const TypeIcon = visual.Icon;
+                    return (
+                      <button
+                        type="button"
+                        key={notification.id}
+                        onClick={() => onOpenNotification(notification)}
+                        className={`notification-history-row ${notification.read ? "is-read" : "is-unread"}`}
+                        aria-label={`Open ${notification.title}`}
+                      >
+                        {!notification.read && <span className="notification-unread-dot" aria-hidden="true" />}
+                        <span className={`notification-type-tile notification-type-${visual.tone}`} aria-hidden="true">
+                          <TypeIcon size={18} strokeWidth={1.7} />
+                        </span>
+                        <span className="notification-row-copy">
+                          <strong>{notification.title}</strong>
+                          <small>{notificationMeta(notification)}</small>
+                        </span>
+                        <time dateTime={notification.created_at}>{formatRelativeActivityTime(notification.created_at)}</time>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState text="No notifications match this filter." />
+              )}
+              <div className="notification-list-footer">
+                <span>
+                  {pagination
+                    ? `Showing ${activityNotificationHistory.length} of ${pagination.total_items}`
+                    : "Showing 0 notifications"}
+                </span>
+                {pagination?.has_next && (
+                  <button
+                    type="button"
+                    disabled={notificationLoadingMore}
+                    onClick={() => setNotificationPage((current) => current + 1)}
+                  >
+                    {notificationLoadingMore ? "Loading..." : "Load more"}
+                  </button>
+                )}
+              </div>
+            </Card>
           </div>
-        )}
+          <aside className="notification-rail" aria-label="Notification summary and delivery settings">
+            <Card className="notification-summary-card">
+              <h2>Unread</h2>
+              <div className="notification-summary-value">
+                <strong>{summary.unread_count ?? 0}</strong>
+                <span>need attention</span>
+              </div>
+              <dl>
+                <div><dt><i className="notification-bar-task" />Task updates</dt><dd>{categoryCounts.task_updates ?? 0}</dd></div>
+                <div><dt><i className="notification-bar-message" />Messages and mentions</dt><dd>{categoryCounts.messages_mentions ?? 0}</dd></div>
+                <div><dt><i className="notification-bar-risk" />Risks and members</dt><dd>{categoryCounts.risks_members ?? 0}</dd></div>
+              </dl>
+              <p>Notifications clear when you open the related item.</p>
+            </Card>
+            <Card className="notification-delivery-card">
+              <h2>Delivery</h2>
+              {notificationPreferences ? (
+                <div className="notification-delivery-options">
+                  {deliveryPreferences.map(([key, label]) => (
+                    <div key={key}>
+                      <span>{label}</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(notificationPreferences[key])}
+                        aria-label={label}
+                        className={notificationPreferences[key] ? "is-on" : ""}
+                        disabled={notificationPreferenceSaving === key}
+                        onClick={() => updateNotificationPreference(key, !notificationPreferences[key])}
+                      >
+                        <span />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="notification-delivery-status">
+                  {notificationPreferencesError || "Loading delivery settings..."}
+                </p>
+              )}
+              {notificationPreferences && notificationPreferencesError && (
+                <p className="notification-delivery-error" role="alert">{notificationPreferencesError}</p>
+              )}
+              <button type="button" className="notification-settings-link" onClick={() => onNavigate("Settings")}>
+                Open notification settings
+              </button>
+            </Card>
+          </aside>
+        </div>
       </section>
     );
   }
@@ -7476,8 +7688,9 @@ function WorkspaceView({
     return (
       <section className="workspace-view projects-view">
         <WorkspaceViewHeading
-          title={title}
-          subtitle={subtitle}
+          eyebrow="Portfolio"
+          title="Projects"
+          subtitle="Ownership, progress, risk and budget across every active initiative."
           action={canManageMembers ? "New project" : undefined}
           onAction={() => openComposer("project")}
         />
@@ -7545,14 +7758,14 @@ function WorkspaceView({
             <option value="updated">Recently updated</option>
             <option value="name">Name</option>
           </AppSelect>
-          <span>
-            {visibleProjects.length} of {withStats.length} projects
-          </span>
           <div className="project-view-toggle" role="group" aria-label="Project view">
             <button type="button" className={projectViewMode === "grid" ? "active" : ""} aria-pressed={projectViewMode === "grid"} onClick={() => setProjectViewMode("grid")} aria-label="Grid view"><LayoutGrid size={16} /></button>
             <button type="button" className={projectViewMode === "list" ? "active" : ""} aria-pressed={projectViewMode === "list"} onClick={() => setProjectViewMode("list")} aria-label="List view"><List size={16} /></button>
           </div>
         </div>
+        <p className="project-result-count">
+          {visibleProjects.length} projects · {summary.attention} need attention · sorted by {projectSort === "updated" ? "last updated" : projectSort}
+        </p>
         <div className={`project-grid ${projectViewMode === "list" ? "is-list" : ""}`}>
           {visibleProjects.length ? (
             visibleProjects.map((project) => (
@@ -7619,11 +7832,11 @@ function WorkspaceView({
                   </button>
                   {canManageMembers && (
                     <>
-                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => setSelectedProject(project)} aria-label={`Edit ${project.name}`}>
-                        <MoreHorizontal size={14} />
+                      <Button type="button" variant="ghost" size="icon-sm" className="project-card-action" onClick={() => setSelectedProject(project)} aria-label={`Edit ${project.name}`}>
+                        <Pencil size={14} />
                       </Button>
-                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => deleteProject(project)} aria-label={`Delete ${project.name}`}>
-                        <X size={14} />
+                      <Button type="button" variant="ghost" size="icon-sm" className="project-card-action" onClick={() => deleteProject(project)} aria-label={`Delete ${project.name}`}>
+                        <MoreHorizontal size={14} />
                       </Button>
                     </>
                   )}
