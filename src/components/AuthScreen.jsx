@@ -197,7 +197,7 @@ function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
           </form>
           <GoogleSignInButton onCredential={submitGoogleCredential} theme="light" mode={mode} />
           <button type="button" className="auth-switch" onClick={() => { setMode(current => current === 'login' ? 'signup' : 'login'); setError('') }}>{mode === 'login' ? 'New to Workspace? Create an account' : 'Already have an account? Sign in'}</button>
-          <p className="auth-subtitle auth-policy-links">Protected by SSO · <a href="/terms-of-service">Terms</a> · <a href="/privacy-policy">Privacy</a></p>
+          <p className="auth-subtitle auth-policy-links"><a href="/terms-of-service">Terms</a> · <a href="/privacy-policy">Privacy</a></p>
         </div>
       </main>
     </div>
