@@ -4,7 +4,7 @@ import { AppSelect } from "./ui/select.jsx";
 // access, reusable templates, and outbound integrations (webhooks + the calendar
 // subscribe link).
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Bell,
   Building2,
@@ -31,6 +31,7 @@ import {
   MonitorUp,
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
+import { Alert } from "./ui/alert.jsx";
 import { Card } from "./ui/card.jsx";
 import { Skeleton, SkeletonGroup } from "./ui/skeleton.jsx";
 import Avatar from "./Avatar.jsx";
@@ -42,6 +43,7 @@ const AISettingsPanel = lazy(() =>
 import { WorkspaceViewHeading } from "./workspace-ui.jsx";
 import { effectivePresence, getCsrfToken } from "../lib/workspace-format.js";
 import { NOTIFICATION_SOUND_OPTIONS, playNotificationSound } from "../lib/notification-sounds.js";
+import { persistWorkspaceTheme } from "../lib/theme.js";
 import "../settings.css";
 
 // Mirrors tasks/models.py PERMISSION_KEYS - keep in sync with the backend list.
@@ -156,6 +158,44 @@ function MemberWorkingHoursRow({ member, canEdit, saving, onSave }) {
   );
 }
 
+function SettingsAlert({
+  tone = "danger",
+  title,
+  children,
+  onRetry,
+  retryLabel = "Try again",
+  secondaryAction,
+  className = "",
+}) {
+  const action = onRetry || secondaryAction ? (
+    <div className="settings-alert-actions">
+      {onRetry && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="settings-alert-retry"
+          onClick={onRetry}
+        >
+          {retryLabel}
+        </Button>
+      )}
+      {secondaryAction}
+    </div>
+  ) : null;
+
+  return (
+    <Alert
+      tone={tone}
+      title={title}
+      action={action}
+      className={`settings-state-alert ${className}`.trim()}
+    >
+      {children}
+    </Alert>
+  );
+}
+
 function SettingsView({
   theme,
   onSetTheme,
@@ -201,16 +241,27 @@ function SettingsView({
   const [notificationVolume, setNotificationVolume] = useState(70);
   const [checkInSettings, setCheckInSettings] = useState(null);
   const [checkInSettingsError, setCheckInSettingsError] = useState("");
+  const [checkInSettingsErrorKind, setCheckInSettingsErrorKind] = useState("");
+  const [checkInRetryValue, setCheckInRetryValue] = useState(null);
   const [prefsError, setPrefsError] = useState("");
   const [browserPermission, setBrowserPermission] = useState(() =>
-    "Notification" in window ? Notification.permission : "unsupported",
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported",
   );
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState("");
   const [avatarError, setAvatarError] = useState("");
+  const [avatarRetry, setAvatarRetry] = useState(null);
+  const avatarInputRef = useRef(null);
+  const profileFormRef = useRef(null);
   const [presenceSaving, setPresenceSaving] = useState(false);
   const [presenceError, setPresenceError] = useState("");
+  const [presenceRetryValue, setPresenceRetryValue] = useState("");
+  const [appearanceError, setAppearanceError] = useState("");
+  const [appearanceRetryValue, setAppearanceRetryValue] = useState("");
+  const [prefsErrorKind, setPrefsErrorKind] = useState("");
+  const [preferenceRetry, setPreferenceRetry] = useState(null);
+  const [pushErrorRetry, setPushErrorRetry] = useState("");
   const [profileForm, setProfileForm] = useState({
     first_name: "",
     last_name: "",
@@ -237,6 +288,9 @@ function SettingsView({
   const [permissionsError, setPermissionsError] = useState("");
   const [workingHoursSavingId, setWorkingHoursSavingId] = useState(null);
   const [workingHoursError, setWorkingHoursError] = useState("");
+  const [notificationPrefsReloadKey, setNotificationPrefsReloadKey] = useState(0);
+  const [checkInSettingsReloadKey, setCheckInSettingsReloadKey] = useState(0);
+  const [pushConfigReloadKey, setPushConfigReloadKey] = useState(0);
   const isOwner = currentWorkspace?.role === "owner";
   const isArchived = currentWorkspace?.status === "archived";
   const toggleManagerPermission = async (member, key) => {
@@ -485,6 +539,9 @@ function SettingsView({
   useEffect(() => {
     if (!workspaceId) return undefined;
     let isCurrent = true;
+    setPrefsError("");
+    setPrefsErrorKind("");
+    setPreferenceRetry(null);
     fetch(`/api/workspaces/${workspaceId}/notification-preferences/`, {
       credentials: "include",
       headers: { "X-Workspace-Id": String(workspaceId) },
@@ -493,22 +550,27 @@ function SettingsView({
         response.json().then((data) => ({ ok: response.ok, data })),
       )
       .then(({ ok, data }) => {
-        if (isCurrent && ok) {
-          setNotificationPrefs(data.preferences);
-          setNotificationVolume(data.preferences.notification_volume ?? 70);
-        }
+        if (!isCurrent) return;
+        if (!ok) throw new Error(data.error || "Notification preferences could not be loaded.");
+        setNotificationPrefs(data.preferences);
+        setNotificationVolume(data.preferences.notification_volume ?? 70);
       })
-      .catch(() => {
-        if (isCurrent)
-          setPrefsError("Notification preferences could not be loaded.");
+      .catch((error) => {
+        if (isCurrent) {
+          setPrefsErrorKind("load");
+          setPrefsError(error.message || "Notification preferences could not be loaded.");
+        }
       });
     return () => {
       isCurrent = false;
     };
-  }, [workspaceId]);
+  }, [workspaceId, notificationPrefsReloadKey]);
   useEffect(() => {
     if (!workspaceId || !canManageMembers) return undefined;
     let isCurrent = true;
+    setCheckInSettingsError("");
+    setCheckInSettingsErrorKind("");
+    setCheckInRetryValue(null);
     fetch(`/api/workspaces/${workspaceId}/check-in-settings/`, { credentials: "include" })
       .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
       .then(({ ok, data }) => {
@@ -517,14 +579,18 @@ function SettingsView({
         setCheckInSettings(data.settings);
       })
       .catch((error) => {
-        if (isCurrent) setCheckInSettingsError(error.message);
+        if (isCurrent) {
+          setCheckInSettingsErrorKind("load");
+          setCheckInSettingsError(error.message);
+        }
       });
     return () => { isCurrent = false; };
-  }, [workspaceId, canManageMembers]);
+  }, [workspaceId, canManageMembers, checkInSettingsReloadKey]);
   const updateCheckInReminderHour = async (value) => {
     const previous = checkInSettings;
     setCheckInSettings((current) => ({ ...current, check_in_reminder_hour: Number(value) }));
     setCheckInSettingsError("");
+    setCheckInSettingsErrorKind("");
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/check-in-settings/`, {
         method: "PATCH",
@@ -535,8 +601,11 @@ function SettingsView({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Check-in settings could not be saved.");
       setCheckInSettings(data.settings);
+      setCheckInRetryValue(null);
     } catch (error) {
       setCheckInSettings(previous);
+      setCheckInSettingsErrorKind("save");
+      setCheckInRetryValue(Number(value));
       setCheckInSettingsError(error.message);
     }
   };
@@ -544,6 +613,8 @@ function SettingsView({
     const previous = notificationPrefs;
     setNotificationPrefs((current) => ({ ...current, [key]: value }));
     setPrefsError("");
+    setPrefsErrorKind("");
+    setPreferenceRetry(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/notification-preferences/`,
@@ -562,9 +633,12 @@ function SettingsView({
         throw new Error(data.error || "Preference could not be saved.");
       setNotificationPrefs(data.preferences);
       setNotificationVolume(data.preferences.notification_volume ?? 70);
+      setPreferenceRetry(null);
       return true;
     } catch (error) {
       setNotificationPrefs(previous);
+      setPrefsErrorKind("save");
+      setPreferenceRetry({ key, value });
       setPrefsError(error.message || "Preference could not be saved.");
       return false;
     }
@@ -586,9 +660,22 @@ function SettingsView({
     const saved = await updatePreference("notification_volume", value);
     if (!saved) setNotificationVolume(previous);
   };
+  const selectTheme = (value) => {
+    setAppearanceError("");
+    setAppearanceRetryValue(value);
+    if (!persistWorkspaceTheme(value)) {
+      setAppearanceError(
+        "Your browser could not save this preference. The previous theme remains active.",
+      );
+      return;
+    }
+    setAppearanceRetryValue("");
+    onSetTheme?.(value);
+  };
   useEffect(() => {
     if (!workspaceId || section !== "integrations") return undefined;
     let isCurrent = true;
+    setWebhooksError("");
     fetch(`/api/workspaces/${workspaceId}/webhooks/?page_size=500`, {
       credentials: "include",
       headers: { "X-Workspace-Id": String(workspaceId) },
@@ -597,10 +684,12 @@ function SettingsView({
         response.json().then((data) => ({ ok: response.ok, data })),
       )
       .then(({ ok, data }) => {
-        if (isCurrent && ok) setWebhooks(data.webhooks);
+        if (!isCurrent) return;
+        if (!ok) throw new Error(data.error || "Webhooks could not be loaded.");
+        setWebhooks(data.webhooks);
       })
-      .catch(() => {
-        if (isCurrent) setWebhooksError("Webhooks could not be loaded.");
+      .catch((error) => {
+        if (isCurrent) setWebhooksError(error.message || "Webhooks could not be loaded.");
       });
     fetch(`/api/workspaces/${workspaceId}/calendar-feed-token/`, {
       credentials: "include",
@@ -717,7 +806,10 @@ function SettingsView({
     if (calendarSubscribeUrl)
       navigator.clipboard?.writeText(calendarSubscribeUrl);
   };
-  const pushSupported = "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+  const pushSupported =
+    typeof Notification !== "undefined" &&
+    "serviceWorker" in navigator &&
+    typeof PushManager !== "undefined";
   const [pushPublicKey, setPushPublicKey] = useState("");
   const [pushConfigured, setPushConfigured] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
@@ -729,6 +821,8 @@ function SettingsView({
     return browserKey.length === configuredKey.length && browserKey.every((value, index) => value === configuredKey[index]);
   };
   useEffect(() => {
+    setPushError("");
+    setPushErrorRetry("");
     fetch("/api/push/public-key/", { credentials: "include" })
       .then(async (response) => {
         const data = await response.json();
@@ -740,8 +834,11 @@ function SettingsView({
         setPushPublicKey(data.public_key || "");
         setPushConfigured(Boolean(data.configured));
       })
-      .catch((error) => setPushError(error.message || "Push notification configuration could not be loaded."));
-  }, []);
+      .catch((error) => {
+        setPushErrorRetry("config");
+        setPushError(error.message || "Push notification configuration could not be loaded.");
+      });
+  }, [pushConfigReloadKey]);
   useEffect(() => {
     if (!pushSupported || !pushConfigured || !pushPublicKey) return;
     let current = true;
@@ -769,6 +866,7 @@ function SettingsView({
       } catch (error) {
         if (current) {
           setPushSubscribed(false);
+          setPushErrorRetry("reconcile");
           setPushError(error.message || "Push notifications could not be verified for this device.");
         }
       }
@@ -779,11 +877,12 @@ function SettingsView({
       current = false;
       window.removeEventListener("workspace:push-changed", reconcilePushSubscription);
     };
-  }, [pushSupported, pushConfigured, pushPublicKey]);
+  }, [pushSupported, pushConfigured, pushPublicKey, pushConfigReloadKey]);
   const togglePushSubscription = async () => {
     if (!pushSupported || !pushConfigured || pushBusy) return;
     setPushBusy(true);
     setPushError("");
+    setPushErrorRetry("");
     try {
       if (!pushPublicKey)
         throw new Error("Push notifications are not configured for this workspace yet.");
@@ -830,15 +929,15 @@ function SettingsView({
     } catch (error) {
       // Leave state as-is so the user can retry from the same button, but do not
       // claim the browser subscription was saved when the API rejected it.
+      setPushErrorRetry("subscription");
       setPushError(error.message || "Push notifications could not be updated.");
     } finally {
       setPushBusy(false);
     }
   };
-  const handleAvatarChange = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const uploadAvatar = async (file) => {
     if (!file) return;
+    setAvatarRetry({ type: "upload", file });
     setAvatarUploading(true);
     setAvatarError("");
     try {
@@ -854,13 +953,20 @@ function SettingsView({
       if (!response.ok)
         throw new Error(data.error || "Photo could not be uploaded.");
       onProfileUpdated({ avatar_url: `${data.avatar_url}?t=${Date.now()}` });
+      setAvatarRetry(null);
     } catch (error) {
       setAvatarError(error.message || "Photo could not be uploaded.");
     } finally {
       setAvatarUploading(false);
     }
   };
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    void uploadAvatar(file);
+  };
   const handleAvatarRemove = async () => {
+    setAvatarRetry({ type: "remove" });
     setAvatarUploading(true);
     setAvatarError("");
     try {
@@ -873,10 +979,18 @@ function SettingsView({
       if (!response.ok)
         throw new Error(data.error || "Photo could not be removed.");
       onProfileUpdated({ avatar_url: "" });
+      setAvatarRetry(null);
     } catch (error) {
       setAvatarError(error.message || "Photo could not be removed.");
     } finally {
       setAvatarUploading(false);
+    }
+  };
+  const retryAvatarUpdate = () => {
+    if (avatarRetry?.type === "upload") {
+      void uploadAvatar(avatarRetry.file);
+    } else if (avatarRetry?.type === "remove") {
+      void handleAvatarRemove();
     }
   };
   const workspaceLogoUrl = currentWorkspace?.logo_url || "";
@@ -928,6 +1042,7 @@ function SettingsView({
   };
   const handlePresenceChange = async (event) => {
     const presence = event.target.value;
+    setPresenceRetryValue(presence);
     setPresenceSaving(true);
     setPresenceError("");
     try {
@@ -1309,7 +1424,7 @@ function SettingsView({
                     aria-checked={theme === value}
                     className={`settings-theme-card ${theme === value ? "is-active" : ""}`}
                     data-theme={value}
-                    onClick={() => onSetTheme(value)}
+                    onClick={() => selectTheme(value)}
                   >
                     <span className="settings-theme-preview" aria-hidden="true" />
                     <span className="settings-theme-choice">
@@ -1322,6 +1437,17 @@ function SettingsView({
                   </button>
                 ))}
               </div>
+              {appearanceError && (
+                <SettingsAlert
+                  className="settings-appearance-alert"
+                  title="Could not save appearance"
+                  onRetry={appearanceRetryValue
+                    ? () => selectTheme(appearanceRetryValue)
+                    : undefined}
+                >
+                  {appearanceError}
+                </SettingsAlert>
+              )}
               <div className="settings-sidebar-layout">
                 <div>
                   <strong>Sidebar</strong>
@@ -1639,6 +1765,15 @@ function SettingsView({
                     </div>
                   </div>
                   </div>
+                  {!notificationPrefs.notification_sound && (
+                    <SettingsAlert
+                      className="settings-notification-alert"
+                      tone="info"
+                      title="Notification sound is disabled"
+                    >
+                      Sound style and volume are still saved. Desktop notification sounds may follow your operating-system settings.
+                    </SettingsAlert>
+                  )}
                   <p className="settings-note">
                     Sound style and volume apply while WorkSpace is focused. When WorkSpace is backgrounded, minimized, or closed, desktop notifications use your operating system's notification sound and system volume.
                   </p>
@@ -1651,11 +1786,31 @@ function SettingsView({
                 </SkeletonGroup>
               )}
               {prefsError && (
-                <p className="auth-error" role="alert">
+                <SettingsAlert
+                  className="settings-notification-alert"
+                  title={prefsErrorKind === "load"
+                    ? "Notification preferences could not be loaded"
+                    : "Preferences were not saved"}
+                  onRetry={prefsErrorKind === "save" && preferenceRetry
+                    ? () => updatePreference(preferenceRetry.key, preferenceRetry.value)
+                    : () => setNotificationPrefsReloadKey((current) => current + 1)}
+                >
                   {prefsError}
-                </p>
+                </SettingsAlert>
               )}
-              {checkInSettingsError && <p className="auth-error" role="alert">{checkInSettingsError}</p>}
+              {checkInSettingsError && (
+                <SettingsAlert
+                  className="settings-notification-alert"
+                  title={checkInSettingsErrorKind === "save"
+                    ? "Check-in reminder was not saved"
+                    : "Check-in reminder settings could not be loaded"}
+                  onRetry={checkInSettingsErrorKind === "save" && checkInRetryValue !== null
+                    ? () => updateCheckInReminderHour(String(checkInRetryValue))
+                    : () => setCheckInSettingsReloadKey((current) => current + 1)}
+                >
+                  {checkInSettingsError}
+                </SettingsAlert>
+              )}
               <div className="settings-group-card settings-device-alerts">
                 {canManageMembers && checkInSettings && (
                   <div className="settings-row settings-control-row">
@@ -1699,7 +1854,37 @@ function SettingsView({
                   )}
                 </div>
               </div>
-              {pushError && <p className="settings-note" role="alert">{pushError}</p>}
+              {browserPermission === "denied" && pushSupported && (
+                <SettingsAlert
+                  className="settings-notification-alert"
+                  tone="warning"
+                  title="Browser permission blocked"
+                  onRetry={togglePushSubscription}
+                  retryLabel="Try again"
+                >
+                  WorkSpace cannot reopen the browser prompt. Allow notifications for this site in your browser settings, then try again.
+                </SettingsAlert>
+              )}
+              {!pushSupported && (
+                <SettingsAlert
+                  className="settings-notification-alert"
+                  tone="info"
+                  title="Desktop notifications are unavailable"
+                >
+                  This browser does not support device notifications. In-app notification categories still work.
+                </SettingsAlert>
+              )}
+              {pushError && (
+                <SettingsAlert
+                  className="settings-notification-alert"
+                  title="Device alerts could not be updated"
+                  onRetry={pushErrorRetry === "subscription"
+                    ? togglePushSubscription
+                    : () => setPushConfigReloadKey((current) => current + 1)}
+                >
+                  {pushError}
+                </SettingsAlert>
+              )}
               {pushSupported && !pushConfigured && !pushError && (
                 <p className="settings-note">
                   Desktop notifications are not configured for this workspace yet.
@@ -1733,6 +1918,7 @@ function SettingsView({
                   >
                     <Camera size={14} />
                     <input
+                      ref={avatarInputRef}
                       type="file"
                       accept="image/png,image/jpeg,image/gif,image/webp"
                       onChange={handleAvatarChange}
@@ -1756,14 +1942,27 @@ function SettingsView({
                 </div>
               </div>
               {avatarError && (
-                <p className="auth-error" role="alert">
+                <SettingsAlert
+                  title="Photo could not be updated"
+                  onRetry={avatarRetry ? retryAvatarUpdate : undefined}
+                  secondaryAction={avatarRetry?.type === "upload" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      Choose file
+                    </Button>
+                  ) : null}
+                >
                   {avatarError}
-                </p>
+                </SettingsAlert>
               )}
               <div className="settings-section-heading settings-profile-section-heading">
                 <div><strong>Personal details</strong></div>
               </div>
-              <form className="settings-profile-form" onSubmit={saveProfile}>
+              <form ref={profileFormRef} className="settings-profile-form" onSubmit={saveProfile}>
                 <div className="modal-grid">
                   <label>
                     First name
@@ -1818,9 +2017,12 @@ function SettingsView({
                   </label>
                 </div>
                 {profileError && (
-                  <p className="auth-error" role="alert">
+                  <SettingsAlert
+                    title="Profile could not be saved"
+                    onRetry={() => profileFormRef.current?.requestSubmit()}
+                  >
                     {profileError}
-                  </p>
+                  </SettingsAlert>
                 )}
                 <button className="secondary-button" disabled={profileSaving}>
                   {profileSaving ? "Saving…" : "Save profile"}
@@ -1855,9 +2057,14 @@ function SettingsView({
                 </span>
               </div>
               {presenceError && (
-                <p className="auth-error" role="alert">
+                <SettingsAlert
+                  title="Availability could not be updated"
+                  onRetry={presenceRetryValue
+                    ? () => handlePresenceChange({ target: { value: presenceRetryValue } })
+                    : undefined}
+                >
                   {presenceError}
-                </p>
+                </SettingsAlert>
               )}
               <div className="settings-row">
                 <div>

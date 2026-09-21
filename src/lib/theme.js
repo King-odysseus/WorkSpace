@@ -9,6 +9,20 @@ export function resolveWorkspaceTheme(theme, prefersDark = false) {
   return theme === "dark" ? "dark" : "light";
 }
 
+export function persistWorkspaceTheme(
+  theme,
+  storage = window.localStorage,
+) {
+  const storedTheme = normalizeWorkspaceTheme(theme);
+
+  try {
+    storage.setItem(WORKSPACE_THEME_STORAGE_KEY, storedTheme);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function readWorkspaceTheme(storage = window.localStorage) {
   try {
     return normalizeWorkspaceTheme(
@@ -34,11 +48,10 @@ export function applyWorkspaceTheme(
   root.classList.toggle("dark", resolvedTheme === "dark");
   root.style.colorScheme = resolvedTheme;
 
-  try {
-    storage.setItem(WORKSPACE_THEME_STORAGE_KEY, storedTheme);
-  } catch {
-    // Storage can be unavailable in private or restricted browser contexts.
-  }
+  // Storage can be unavailable in private or restricted browser contexts. The
+  // caller that needs to block a theme change checks the boolean returned by
+  // persistWorkspaceTheme before updating React state.
+  persistWorkspaceTheme(storedTheme, storage);
 
   return resolvedTheme;
 }

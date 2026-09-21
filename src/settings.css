@@ -278,6 +278,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+.settings-view .settings-state-alert {
+  margin: 0 32px 18px;
+}
+
+.settings-view .settings-state-alert .settings-alert-retry {
+  min-width: 88px;
+  justify-content: center;
+}
+
+.settings-view .settings-state-alert .settings-alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Profile */
 .settings-view .settings-profile-card {
   display: flex;
@@ -1752,6 +1767,10 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
     display: none;
   }
 
+  .settings-view .settings-state-alert {
+    margin: 0 18px 16px;
+  }
+
   .settings-view .settings-note {
     padding: 14px 18px 18px;
   }
@@ -1970,5 +1989,14 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   .settings-view .settings-panel .auth-error {
     margin: 0;
     padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-view .settings-switch-track,
+  .settings-view .settings-switch-track::after,
+  .settings-view .settings-theme-card,
+  .settings-view .settings-segmented button {
+    transition: none;
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyWorkspaceTheme,
   normalizeWorkspaceTheme,
+  persistWorkspaceTheme,
   readWorkspaceTheme,
   resolveWorkspaceTheme,
   WORKSPACE_THEME_STORAGE_KEY,
@@ -54,5 +55,29 @@ describe("workspace theme", () => {
   it("reads only supported persisted values", () => {
     expect(readWorkspaceTheme({ getItem: () => "system" })).toBe("system");
     expect(readWorkspaceTheme({ getItem: () => "sepia" })).toBe("light");
+  });
+
+  it("reports when browser storage rejects a theme preference", () => {
+    const storage = {
+      setItem: vi.fn(() => {
+        throw new Error("storage blocked");
+      }),
+    };
+
+    expect(persistWorkspaceTheme("dark", storage)).toBe(false);
+    expect(storage.setItem).toHaveBeenCalledWith(
+      WORKSPACE_THEME_STORAGE_KEY,
+      "dark",
+    );
+  });
+
+  it("normalizes unsupported theme values before persisting", () => {
+    const storage = { setItem: vi.fn() };
+
+    expect(persistWorkspaceTheme("sepia", storage)).toBe(true);
+    expect(storage.setItem).toHaveBeenCalledWith(
+      WORKSPACE_THEME_STORAGE_KEY,
+      "light",
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import SettingsView from './SettingsView.jsx'
 import { mockApi, expectRequest } from '../test/setup-tests.js'
@@ -128,6 +129,149 @@ it('renders the designed appearance, workspace, and template structures', () => 
   expect(document.querySelector('.settings-template-preview')).toBeInTheDocument()
 })
 
+it('keeps the previous appearance when local persistence fails, then retries', () => {
+  const onSetTheme = vi.fn()
+  const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('storage blocked')
+  })
+  render(
+    <SettingsView
+      theme="light"
+      onSetTheme={onSetTheme}
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+  fireEvent.click(screen.getByRole('radio', { name: /Dark/ }))
+
+  expect(onSetTheme).not.toHaveBeenCalled()
+  expect(screen.getByText('Could not save appearance')).toBeInTheDocument()
+
+  setItem.mockImplementation(() => {})
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  expect(onSetTheme).toHaveBeenCalledWith('dark')
+})
+
+it('keeps the previous profile photo, then retries the failed upload with the same file', async () => {
+  const api = mockApi({})
+  const onProfileUpdated = vi.fn()
+  const originalFetch = api.getMockImplementation()
+  let failUpload = true
+  api.mockImplementation(async (input, init = {}) => {
+    if (String(input).includes('/api/auth/me/avatar/') && init.method === 'POST') {
+      if (failUpload) {
+        failUpload = false
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Photo could not be uploaded.' }),
+          text: async () => '{"error":"Photo could not be uploaded."}',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ avatar_url: '/media/avatar.png' }),
+        text: async () => '{"avatar_url":"/media/avatar.png"}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+  const { container } = render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      onProfileUpdated={onProfileUpdated}
+    />,
+  )
+
+  const file = new File(['avatar'], 'avatar.png', { type: 'image/png' })
+  fireEvent.change(container.querySelector('input[type="file"]'), {
+    target: { files: [file] },
+  })
+
+  expect(await screen.findByText('Photo could not be updated')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Choose file' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(onProfileUpdated).toHaveBeenCalledWith({
+    avatar_url: expect.stringMatching(/^\/media\/avatar\.png\?t=\d+$/),
+  }))
+  const uploads = api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/api/auth/me/avatar/') && init.method === 'POST')
+  expect(uploads).toHaveLength(2)
+  expect(uploads[1][1].body.get('avatar')).toBe(file)
+})
+
+it('retries a failed profile photo removal instead of asking for another file', async () => {
+  const api = mockApi({})
+  const onProfileUpdated = vi.fn()
+  const originalFetch = api.getMockImplementation()
+  let failRemoval = true
+  api.mockImplementation(async (input, init = {}) => {
+    if (String(input).includes('/api/auth/me/avatar/') && init.method === 'DELETE') {
+      if (failRemoval) {
+        failRemoval = false
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Photo could not be removed.' }),
+          text: async () => '{"error":"Photo could not be removed."}',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ avatar_url: '' }),
+        text: async () => '{"avatar_url":""}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserAvatarUrl="/media/avatar.png"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      onProfileUpdated={onProfileUpdated}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove photo' }))
+
+  expect(await screen.findByText('Photo could not be removed.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Choose file' })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(onProfileUpdated).toHaveBeenCalledWith({ avatar_url: '' }))
+  const removals = api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/api/auth/me/avatar/') && init.method === 'DELETE')
+  expect(removals).toHaveLength(2)
+})
+
 it('groups notification categories and exposes switches with pressed state', async () => {
   mockApi({
     '/notification-preferences/': {
@@ -161,6 +305,221 @@ it('groups notification categories and exposes switches with pressed state', asy
   expect(document.querySelectorAll('.settings-group-card')).toHaveLength(3)
   const soundRow = screen.getByText('Notification sound').closest('.settings-row')
   expect(within(soundRow).getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
+})
+
+it('shows explicit guidance when notification sound is disabled', async () => {
+  mockApi({
+    '/notification-preferences/': {
+      preferences: {
+        mentions: true,
+        notification_sound: false,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+      },
+    },
+    '/api/push/public-key/': { configured: false, public_key: '' },
+    '/api/workspaces/1/check-in-settings/': { settings: { check_in_reminder_hour: 9 } },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+
+  expect(await screen.findByText('Notification sound is disabled')).toBeInTheDocument()
+  expect(screen.getByText(/desktop notification sounds may follow/i)).toBeInTheDocument()
+})
+
+it('rolls back a failed notification switch and retries that preference', async () => {
+  const api = mockApi({
+    '/notification-preferences/': {
+      preferences: {
+        mentions: true,
+        direct_messages: true,
+        channel_messages: true,
+        task_updates: true,
+        calendar_reminders: true,
+        notification_sound: true,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+      },
+    },
+    '/api/push/public-key/': { configured: false, public_key: '' },
+    '/api/workspaces/1/check-in-settings/': { settings: { check_in_reminder_hour: 9 } },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+  const mentions = await screen.findByRole('switch', { name: 'Mentions' })
+  const originalFetch = api.getMockImplementation()
+  let failNextSave = true
+  api.mockImplementation(async (input, init = {}) => {
+    if (failNextSave && String(input).includes('/notification-preferences/') && init.method === 'PATCH') {
+      failNextSave = false
+      return {
+        ok: false,
+        status: 503,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ error: 'Preference could not be saved.' }),
+        text: async () => '{"error":"Preference could not be saved."}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+
+  fireEvent.click(mentions)
+
+  expect(await screen.findByText('Preferences were not saved')).toBeInTheDocument()
+  await waitFor(() => expect(mentions).toHaveAttribute('aria-checked', 'true'))
+
+  const saveAlert = screen.getByText('Preferences were not saved').closest('[data-slot="alert"]')
+  fireEvent.click(within(saveAlert).getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(mentions).toHaveAttribute('aria-checked', 'true'))
+  const preferenceWrites = api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/notification-preferences/') && init.method === 'PATCH')
+  expect(preferenceWrites).toHaveLength(2)
+})
+
+it('rolls back a failed check-in reminder save and retries the selected hour', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/notification-preferences/': {
+      preferences: {
+        notification_sound: true,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+      },
+    },
+    '/api/workspaces/1/check-in-settings/': {
+      settings: { check_in_reminder_hour: 9 },
+    },
+    '/api/push/public-key/': { configured: false, public_key: '' },
+  })
+  const originalFetch = api.getMockImplementation()
+  let failNextSave = true
+  api.mockImplementation(async (input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/check-in-settings/') && init.method === 'PATCH') {
+      if (failNextSave) {
+        failNextSave = false
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Check-in reminder could not be saved.' }),
+          text: async () => '{"error":"Check-in reminder could not be saved."}',
+        }
+      }
+      const body = JSON.parse(init.body)
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ settings: { check_in_reminder_hour: body.check_in_reminder_hour } }),
+        text: async () => JSON.stringify({ settings: body }),
+      }
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+  const user = userEvent.setup()
+  const reminder = await screen.findByRole('combobox', { name: 'Daily check-in reminder hour' })
+  await user.click(reminder)
+  await user.click(await screen.findByRole('option', { name: '10:00' }))
+
+  expect(await screen.findByText('Check-in reminder was not saved')).toBeInTheDocument()
+  await waitFor(() => expect(reminder).toHaveTextContent('09:00'))
+
+  const alert = screen.getByText('Check-in reminder was not saved').closest('[data-slot="alert"]')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(reminder).toHaveTextContent('10:00'))
+  const saves = api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/api/workspaces/1/check-in-settings/') && init.method === 'PATCH')
+  expect(saves).toHaveLength(2)
+  expect(JSON.parse(saves[1][1].body)).toEqual({ check_in_reminder_hour: 10 })
+  expect(api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/api/workspaces/1/check-in-settings/') && !init.method)).toHaveLength(1)
+})
+
+it('rolls back a failed presence update and retries the selected value', async () => {
+  const api = mockApi({
+    '/api/auth/me/presence/': {
+      status: 503,
+      body: { error: 'Presence could not be updated.' },
+    },
+  })
+  const onProfileUpdated = vi.fn()
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserPresence="available"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      onProfileUpdated={onProfileUpdated}
+    />,
+  )
+
+  const user = userEvent.setup()
+  const presence = screen.getByRole('combobox', { name: 'Set your presence' })
+  await user.click(presence)
+  await user.click(await screen.findByRole('option', { name: 'Busy' }))
+
+  expect(await screen.findByText('Availability could not be updated')).toBeInTheDocument()
+  await waitFor(() => expect(presence).toHaveTextContent('Available'))
+
+  const originalFetch = api.getMockImplementation()
+  api.mockImplementation(async (input, init = {}) => {
+    if (String(input).includes('/api/auth/me/presence/') && init.method === 'PATCH') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ presence: 'busy' }),
+        text: async () => '{"presence":"busy"}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+
+  const alert = screen.getByText('Availability could not be updated').closest('[data-slot="alert"]')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(onProfileUpdated).toHaveBeenCalledWith({ presence: 'busy' }))
+  const presenceWrites = api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/api/auth/me/presence/') && init.method === 'PATCH')
+  expect(presenceWrites).toHaveLength(2)
 })
 
 it('renders integrations as a calendar card and a webhook connection form', async () => {
@@ -507,7 +866,88 @@ it('does not subscribe when permission is denied', async () => {
   requestPermission.mockResolvedValue('denied')
   fireEvent.click(within(row).getByRole('button', { name: 'Enable' }))
   expect(await screen.findByText(/Blocked - allow notifications/)).toBeInTheDocument()
+  expect(screen.getByText('Browser permission blocked')).toBeInTheDocument()
   expect(subscribe).not.toHaveBeenCalled()
+})
+
+it('retries device notification configuration after it could not load', async () => {
+  const api = mockApi({
+    '/api/push/public-key/': { configured: false, public_key: '' },
+    '/notification-preferences/': {
+      preferences: {
+        notification_sound: true,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+      },
+    },
+  })
+  const originalFetch = api.getMockImplementation()
+  let failNextConfig = true
+  api.mockImplementation(async (input, init = {}) => {
+    if (failNextConfig && String(input).includes('/api/push/public-key/')) {
+      failNextConfig = false
+      return {
+        ok: false,
+        status: 503,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ error: 'Push configuration could not be loaded.' }),
+        text: async () => '{"error":"Push configuration could not be loaded."}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+
+  expect(await screen.findByText('Device alerts could not be updated')).toBeInTheDocument()
+  const alert = screen.getByText('Device alerts could not be updated').closest('[data-slot="alert"]')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => {
+    const configReads = api.mock.calls.filter(([url]) => String(url).includes('/api/push/public-key/'))
+    expect(configReads).toHaveLength(2)
+  })
+  expect(screen.queryByText('Device alerts could not be updated')).not.toBeInTheDocument()
+})
+
+it('explains when this browser cannot receive device notifications', async () => {
+  vi.stubGlobal('Notification', undefined)
+  vi.stubGlobal('PushManager', undefined)
+  mockApi({
+    '/api/push/public-key/': { configured: false, public_key: '' },
+    '/notification-preferences/': {
+      preferences: {
+        notification_sound: true,
+        notification_sound_name: 'chime',
+        notification_volume: 70,
+      },
+    },
+  })
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+
+  expect(await screen.findByText('Desktop notifications are unavailable')).toBeInTheDocument()
+  expect(screen.getByText(/does not support device notifications/i)).toBeInTheDocument()
 })
 
 it('saves the Notification sound choice from notification settings', async () => {

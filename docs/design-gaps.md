@@ -35,9 +35,7 @@ recovery path differs from F13; the following cases remain in that category.
 
 | Settings surface | Missing design scope |
 | --- | --- |
-| Profile | Avatar replacement and removal errors, retry, long identity content, validation failure, and loading state |
-| Appearance | Persisted-error state, reduced-motion behavior, and unsupported-theme fallback |
-| Notifications | Push-permission denied, unsupported browser, subscription failure, disabled-sound state, and save failure |
+| Profile | Long identity content, field-level validation, and panel-level loading state |
 | Workspaces | Busy, lifecycle error, confirmation, archived action, archived workspace, and empty state |
 | Workspace access | Loading, permission denied, role-save failure, invite failure, removal, accepted or expired invite, and empty state |
 | AI settings | Credential rotation, provider removal confirmation, concurrent-update conflict, and desktop/mobile error parity |
@@ -73,6 +71,9 @@ The following are no longer unresolved design gaps:
 - Reports: P5 and P63 define the overview, filters, charts, report tables, empty states, and responsive behavior.
 - Check-in detail: P62 defines desktop and mobile detail treatment.
 - Settings operational states: F13 defines the shared loading, validation, permission, lifecycle, conflict, and recovery states.
+- Appearance operational states: P40 and F13 cover retained-theme persistence failure, retry, unsupported-theme fallback, and reduced-motion behavior.
+- Notification operational states: P41 and F13 cover denied browser permission, unsupported browsers, push configuration and subscription recovery, disabled sound, and notification-preference load/save recovery.
+- Profile media recovery: F13 covers upload and removal failures with retained-photo rollback, operation-specific retry, and the file picker fallback for uploads.
 - Global crash fallback: P65 defines the branded recoverable error screen.
 - Message reactions: P66 defines the reaction picker and overflow behavior.
 - Project index and project controls: P28 defines the Projects index without the duplicated controls panel. Risk register and issue log live in the project detail Risks and Issues tabs, covered by P32 and P33.
