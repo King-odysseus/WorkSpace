@@ -298,7 +298,10 @@ it('opens the full emoji picker from the reaction plus and posts the choice', as
   await openConversation()
 
   fireEvent.click(await screen.findByRole('button', { name: 'More reactions' }))
-  expect(await screen.findByRole('dialog', { name: 'More reactions for Dana Reed' })).toBeInTheDocument()
+  const picker = await screen.findByRole('dialog', { name: 'More reactions for Dana Reed' })
+  expect(picker).toHaveClass('chat-reaction-picker')
+  expect(within(picker).getByRole('tablist')).toHaveClass('chat-emoji-categories')
+  expect(within(picker).getByRole('listbox')).toHaveClass('chat-emoji-grid')
   fireEvent.click(screen.getByRole('option', { name: 'React with 🥳' }))
 
   await screen.findByText('🥳 1')

@@ -2581,6 +2581,122 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .chat-reply-button, .chat-workspace-view .chat-edit-button, .chat-workspace-view .chat-delete-button { min-height: 24px; padding: 0 5px; border: 0; background: transparent; color: var(--pencil-text-muted); font-size: 11px; }
 .chat-workspace-view .chat-reply-button:hover, .chat-workspace-view .chat-edit-button:hover { color: var(--pencil-text); }
 .chat-workspace-view .chat-delete-button:hover { color: var(--pencil-danger); }
+
+/* Reaction and composer emoji popovers share one bounded card. Radix supplies
+   the available viewport space after collision detection; the picker owns the
+   remaining overflow so the emoji grid can never stretch the message row. */
+.chat-reaction-picker,
+.chat-emoji-popup {
+  z-index: 80;
+  width: min(360px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(420px, calc(100dvh - 24px), var(--radix-popover-content-available-height, 420px));
+  overflow: hidden;
+  border: 1px solid var(--pencil-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--pencil-text);
+  box-shadow: 0 18px 44px rgb(15 23 42 / 16%);
+}
+.chat-emoji-picker {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.chat-emoji-categories {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--pencil-border);
+  background: #F9FAFB;
+  scrollbar-width: none;
+}
+.chat-emoji-categories::-webkit-scrollbar { display: none; }
+.chat-emoji-categories button {
+  position: relative;
+  display: grid;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pencil-text-secondary);
+  font-size: 17px;
+  line-height: 1;
+}
+.chat-emoji-categories button:hover { background: var(--pencil-surface-muted); color: var(--pencil-text); }
+.chat-emoji-categories button.active { background: var(--pencil-selected); color: var(--pencil-navy); }
+.chat-emoji-categories button span { display: grid; place-items: center; }
+.chat-emoji-categories button small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.chat-emoji-grid {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 292px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  padding: 10px 12px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.chat-emoji-grid button {
+  display: grid;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+}
+.chat-emoji-grid button:hover,
+.chat-emoji-grid button:focus-visible { background: var(--pencil-surface-hover); }
+.chat-reaction-picker-arrow,
+.chat-emoji-popup-arrow { fill: #fff; }
+
+@media (max-width: 600px) {
+  .chat-reaction-picker,
+  .chat-emoji-popup {
+    width: min(304px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: min(360px, calc(100dvh - 16px), var(--radix-popover-content-available-height, 360px));
+  }
+  .chat-emoji-categories { gap: 0; padding: 6px; }
+  .chat-emoji-categories button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+  .chat-emoji-grid {
+    max-height: 248px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+    padding: 8px 10px 10px;
+  }
+  .chat-emoji-grid button { font-size: 20px; }
+}
+
 .chat-workspace-view .chat-shared-card { display: grid; width: min(260px, 100%); min-height: 56px; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 8px; padding: 9px 12px; border: 1px solid var(--pencil-border); border-radius: 8px; background: #fff; color: var(--pencil-text); text-decoration: none; }
 .chat-workspace-view .chat-shared-card > svg:first-child { width: 36px; height: 36px; padding: 10px; border-radius: 7px; background: var(--pencil-selected); color: var(--pencil-navy); }
 .chat-workspace-view .chat-shared-card span { display: grid; min-width: 0; gap: 2px; }
