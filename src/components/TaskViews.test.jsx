@@ -80,6 +80,30 @@ it('closes the task dialog on Escape and locks page scrolling', async () => {
   expect(onClose).toHaveBeenCalledTimes(1)
 })
 
+it('keeps dependency titles attached to their checkbox labels', async () => {
+  mockApi({
+    '/api/tasks/91/comments/': { comments: [] },
+    '/api/tasks/91/subtasks/': { subtasks: [] },
+    '/api/tasks/91/attachments/': { attachments: [] },
+    '/api/workspaces/1/tasks/': {
+      tasks: [{ id: 92, title: 'Prepare launch checklist', state: 'active', status: 'todo' }],
+    },
+  })
+
+  render(
+    <TaskDetailDrawer
+      task={task}
+      workspaceId={1}
+      onClose={vi.fn()}
+      onTaskUpdated={vi.fn()}
+    />,
+  )
+
+  const dependency = await screen.findByRole('checkbox', { name: 'Prepare launch checklist' })
+  expect(dependency.closest('label')).toHaveClass('dependency-row')
+  expect(dependency.nextElementSibling).toHaveTextContent('Prepare launch checklist')
+})
+
 const members = [
   { id: 1, first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' },
   { id: 2, first_name: 'Grace', last_name: 'Hopper', email: 'grace@example.com' },

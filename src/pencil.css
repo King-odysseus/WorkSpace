@@ -1770,6 +1770,10 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .task-dialog .subtask-row, .task-dialog .dependency-row { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px; border-radius: 8px; }
 .task-dialog .subtask-row label, .task-dialog .dependency-row { grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 12px; font-weight: 400; }
 .task-dialog .subtask-row label { display: grid; width: 100%; }
+.task-dialog .dependency-row { display: grid; width: 100%; justify-content: initial; }
+.task-dialog .dependency-row span { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.task-dialog .dependency-list { display: grid; gap: 8px; }
+.task-dialog .attachment-row + .attachment-row, .task-dialog .subtask-row + .subtask-row { margin-top: 8px; }
 .task-dialog .subtask-row input, .task-dialog .dependency-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--pencil-navy); }
 .task-dialog .completed { color: var(--pencil-text-muted); text-decoration: line-through; }
 .task-dialog .inline-delete { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--pencil-text-muted); }
@@ -1793,7 +1797,11 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .task-dialog-body { padding: 20px; }
   .task-dialog-footer { gap: 12px; padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); }
   .task-dialog-footer button { min-width: 0; min-height: 44px; flex: 1 1 0; }
-  .task-composer-grid, .task-dialog-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .task-composer-grid, .task-dialog-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .task-dialog-section + .task-dialog-section { margin-top: 28px; padding-top: 28px; }
+  .task-dialog .attachment-row + .attachment-row, .task-dialog .subtask-row + .subtask-row { margin-top: 10px; }
+  .task-dialog .dependency-list { gap: 10px; }
+  .task-dialog .subtask-row, .task-dialog .dependency-row { min-height: 44px; padding: 8px 10px; }
   .task-dialog textarea { min-height: 80px; }
 }
 
