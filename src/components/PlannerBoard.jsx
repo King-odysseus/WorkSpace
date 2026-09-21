@@ -22,7 +22,7 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
   const taskTag = task.tag && task.tag !== 'General' ? task.tag : task.labels?.[0]
   const meta = [taskTag, task.workstream, formatEstimateMinutes(task.estimate_minutes), !isOverdue && task.due_date].filter(Boolean)
   return <article
-    className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors ${draggedTaskId === task.id ? 'opacity-50' : ''} ${dropTaskId === task.id && draggedTaskId !== task.id ? 'border-navy' : ''}`}
+    className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors${draggedTaskId === task.id ? ' is-dragging opacity-50' : ''}${dropTaskId === task.id && draggedTaskId !== task.id ? ' is-drop-target border-navy' : ''}`}
     draggable={canReorder}
     onDragStart={event => {
       event.stopPropagation()
@@ -265,7 +265,10 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const reorderableBuckets = buckets.filter(bucket => typeof bucket.id === 'number' || bucket.id === 'backlog')
   const reorderScopeFor = bucket => {
     if (bucket.id === 'backlog' && !bucket.project_id && !bucket.workstream_id) return { project_id: null, workstream_id: null }
-    if (bucketScope) return bucketScope
+    if (bucketScope?.project_id && String(bucket.project_id) === String(bucketScope.project_id)) return bucketScope
+    if (bucketScope?.workstream_id && String(bucket.workstream_id) === String(bucketScope.workstream_id)) return bucketScope
+    if (bucket.project_id) return { project_id: bucket.project_id, workstream_id: null }
+    if (bucket.workstream_id) return { project_id: null, workstream_id: bucket.workstream_id }
     if (!bucket.project_id && !bucket.workstream_id) return { project_id: null, workstream_id: null }
     return null
   }

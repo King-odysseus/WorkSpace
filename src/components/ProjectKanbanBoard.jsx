@@ -32,6 +32,7 @@ export function projectKanbanColumnForTask(task) {
 
 export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusChange, canManageTasks = false, columnOrder, onColumnReorder, canReorderColumns = false }) {
   const [draggedTaskId, setDraggedTaskId] = useState(null)
+  const [dropTaskId, setDropTaskId] = useState(null)
   const [draggedColumnId, setDraggedColumnId] = useState(null)
   const [dropColumnId, setDropColumnId] = useState(null)
   const [dropTaskColumnId, setDropTaskColumnId] = useState(null)
@@ -50,6 +51,7 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
 
   const finishDrag = () => {
     setDraggedTaskId(null)
+    setDropTaskId(null)
     setDraggedColumnId(null)
     setDropColumnId(null)
     setDropTaskColumnId(null)
@@ -161,8 +163,9 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
           {columnTasks.map(task => {
             const editable = canMoveTask(task)
             const currentColumn = projectKanbanColumnForTask(task)
+            const canDropOnTask = Boolean(draggedTask && String(draggedTask.id) !== String(task.id) && canDrop && projectKanbanColumnForTask(draggedTask).id !== currentColumn.id)
             return <article
-              className={`project-kanban-task${draggedTaskId === task.id ? ' is-dragging' : ''}`}
+              className={`project-kanban-task${draggedTaskId === task.id ? ' is-dragging' : ''}${canDropOnTask && dropTaskId === task.id ? ' is-drop-target' : ''}`}
               key={task.id}
               draggable={editable}
               onDragStart={event => {
@@ -174,6 +177,21 @@ export default function ProjectKanbanBoard({ tasks = [], onOpenTask, onStatusCha
                 setDraggedTaskId(task.id)
               }}
               onDragEnd={finishDrag}
+              onDragEnter={event => {
+                if (!canDropOnTask) return
+                event.preventDefault()
+                setDropTaskId(task.id)
+              }}
+              onDragOver={event => {
+                if (!canDropOnTask) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+                setDropTaskId(task.id)
+              }}
+              onDragLeave={event => {
+                if (event.currentTarget.contains(event.relatedTarget)) return
+                setDropTaskId(current => current === task.id ? null : current)
+              }}
             >
               <div className="project-kanban-task-heading">
                 {editable && <GripVertical size={13} strokeWidth={1.7} aria-hidden="true" />}

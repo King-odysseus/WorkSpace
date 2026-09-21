@@ -363,6 +363,55 @@ it('reorders unscoped buckets in the all-projects view', async () => {
   )
 })
 
+it('reorders workstream buckets from the all-operations view', () => {
+  const onBucketReorder = vi.fn()
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+      { id: 19, name: 'Intake', project_id: null, workstream_id: 7 },
+      { id: 24, name: 'Rota', project_id: null, workstream_id: 7 },
+    ],
+    scopeMode: 'operations',
+    canManageBuckets: true,
+    onBucketReorder,
+  })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'bucket:19') }
+  const sourceSurface = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Intake').closest('.planner-column-heading').querySelector('.planner-column-drag-surface')
+  const targetColumn = [...container.querySelectorAll('.planner-column-name')].find(node => node.textContent === 'Rota').closest('.planner-column')
+
+  fireEvent.dragStart(sourceSurface, { dataTransfer })
+  fireEvent.dragEnter(targetColumn, { dataTransfer })
+  fireEvent.drop(targetColumn, { dataTransfer })
+
+  expect(onBucketReorder).toHaveBeenCalledWith([24, 19], { project_id: null, workstream_id: 7 })
+})
+
+it('uses the same drag state classes for planner task cards', () => {
+  const { container } = renderPlanner({
+    buckets: [
+      { id: 2, name: 'Backlog', project_id: null },
+      { id: 3, name: 'New', project_id: null },
+    ],
+    scopeMode: 'projects',
+    projectFilter: 'all',
+    tasks: [
+      { id: 91, title: 'Design UI', bucket: 'Backlog', project_id: '', status: 'todo', priority: 'normal' },
+      { id: 92, title: 'Review copy', bucket: 'New', project_id: '', status: 'todo', priority: 'normal' },
+    ],
+    canManageTasks: true,
+  })
+  const sourceCard = screen.getByText('Design UI').closest('.planner-task-card')
+  const targetCard = screen.getByText('Review copy').closest('.planner-task-card')
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'task:91') }
+
+  fireEvent.dragStart(sourceCard, { dataTransfer })
+  fireEvent.dragOver(targetCard, { dataTransfer })
+
+  expect(sourceCard).toHaveClass('is-dragging')
+  expect(targetCard).toHaveClass('is-drop-target')
+  expect(container.querySelectorAll('.planner-task-card.is-drop-target')).toHaveLength(1)
+})
+
 it('opens the mobile filter panel and switches the active bucket tab', async () => {
   const user = userEvent.setup()
   const { container } = renderPlanner({

@@ -29,12 +29,17 @@ it('moves a task to another status lane by drag and drop', () => {
   }
 
   fireEvent.dragStart(taskCard, { dataTransfer })
+  expect(taskCard).toHaveClass('is-dragging')
+  const targetTaskCard = screen.getByText('Review copy').closest('.project-kanban-task')
   fireEvent.dragEnter(reviewColumn, { dataTransfer })
   expect(reviewColumn).toHaveClass('is-drop-target')
+  fireEvent.dragEnter(targetTaskCard, { dataTransfer })
+  expect(targetTaskCard).toHaveClass('is-drop-target')
   fireEvent.drop(reviewColumn, { dataTransfer })
 
   expect(onStatusChange).toHaveBeenCalledWith(91, 'review')
   expect(container.querySelector('.project-kanban-task.is-dragging')).not.toBeInTheDocument()
+  expect(container.querySelector('.project-kanban-task.is-drop-target')).not.toBeInTheDocument()
 })
 
 it('moves a task to another status from the keyboard-accessible selector', async () => {
