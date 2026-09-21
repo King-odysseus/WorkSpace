@@ -49,6 +49,22 @@ error compositions on F12 define the shell-level treatment. A Settings panel
 still needs its own composition when its content, permission rule, or recovery
 action differs from those generic states.
 
+## Backend-Blocked Design States
+
+These frames contain elements the current production contracts cannot support
+without new backend behavior. They are intentionally not simulated in the UI.
+
+| Surface | Unavailable design scope | Production contract |
+| --- | --- | --- |
+| Import data (P18) | Background preview progress such as `240 of 528 rows`, a cancel action, and resumable processing | Preview and commit are synchronous requests. The UI reports completed counts and validation results only after the server responds. |
+| Screen sharing (P19) | Live video preview, viewer counts, live participant presence, source switching from the leader console, audio controls, stream-quality telemetry, recording controls, and annotation tools | The API stores consent sessions and periodic JPEG/PNG/WebP captures. It never receives a live video stream and has no viewer, audio, quality, recording, or annotation contract. |
+
+The screen-sharing page therefore presents the approved console hierarchy using
+real session state, the employee and requester, consent status, capture cadence,
+policy version, retention, audit history, and consented captures. A future live
+console frame must be paired with an explicit streaming, presence, and control
+contract before those controls can be implemented.
+
 ## Resolved Gaps
 
 The following are no longer unresolved design gaps:
@@ -61,6 +77,7 @@ The following are no longer unresolved design gaps:
 - Message reactions: P66 defines the reaction picker and overflow behavior.
 - Project index and project controls: P28 defines the Projects index without the duplicated controls panel. Risk register and issue log live in the project detail Risks and Issues tabs, covered by P32 and P33.
 - Project Kanban: P30 defines the filterable status board, lane counts and estimates, task metadata, add-task affordances, and responsive horizontal board behavior.
+- Screen sharing: P19 defines the session-first console hierarchy, policy, consent status, participants, session states, history, and capture surfaces now implemented against the existing consent/capture contract.
 - Global header, search, notification indicators, account chooser, and avatar fallback: F1.
 - Notification panel states: F2.
 - Presence, identity, account, and workspace menus: F3 and F4.
