@@ -193,7 +193,8 @@ describe('AuthScreen Google sign-in', () => {
     const id = googleMock()
     const props = { theme: 'light', onToggleTheme: vi.fn(), onAuthenticated: vi.fn() }
     const { rerender } = render(<AuthScreen {...props} />)
-    expect(id.renderButton).toHaveBeenLastCalledWith(expect.any(HTMLElement), expect.objectContaining({ width: 358, theme: 'outline', text: 'signin_with' }))
+    expect(id.renderButton).toHaveBeenLastCalledWith(expect.any(HTMLElement), expect.objectContaining({ width: 358, theme: 'outline', text: 'signin_with', logo_alignment: 'center' }))
+    expect(id.renderButton.mock.calls[0][0]).toHaveClass('is-google-rendered')
     await userEvent.click(screen.getByRole('button', { name: /create an account/i }))
     rerender(<AuthScreen {...props} theme="dark" />)
     expect(id.renderButton).toHaveBeenLastCalledWith(expect.any(HTMLElement), expect.objectContaining({ theme: 'outline', text: 'signup_with' }))

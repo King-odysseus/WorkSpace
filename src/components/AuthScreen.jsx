@@ -48,11 +48,12 @@ function GoogleSignInButton({ onCredential, theme, mode }) {
       const width = Math.min(400, Math.floor(container.getBoundingClientRect().width))
       if (!width || width === renderedWidth) return
       renderedWidth = width
+      container.classList.add('is-google-rendered')
       container.replaceChildren()
       window.google.accounts.id.renderButton(container, {
         type: 'standard', theme: theme === 'dark' ? 'filled_black' : 'outline',
         size: 'large', shape: 'pill', text: mode === 'signup' ? 'signup_with' : 'signin_with',
-        logo_alignment: 'left', width,
+        logo_alignment: 'center', width,
       })
     }
     const initialize = () => {
