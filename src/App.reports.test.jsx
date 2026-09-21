@@ -36,7 +36,31 @@ const summary = {
   check_ins_today: 0,
   members: 2,
   workload: [{ user_id: 7, user_name: 'Nate Foster', total: 12, open: 7, blocked: 1 }],
-  time_clock: null,
+  time_clock: {
+    shift_count: 1,
+    total_seconds: 7200,
+    break_seconds: 1800,
+    average_seconds: 7200,
+    open_shifts: 0,
+    by_member: [{
+      user_id: 7,
+      user_name: 'Nate Foster',
+      worked_seconds: 7200,
+      break_seconds: 1800,
+      day_count: 1,
+    }],
+    recent: [{
+      id: 41,
+      user_name: 'Nate Foster',
+      date: toDateKey(new Date()),
+      started_at: '2026-09-21T09:00:00Z',
+      ended_at: '2026-09-21T11:00:00Z',
+      worked_seconds: 7200,
+      break_seconds_total: 1800,
+      is_open: false,
+      is_on_break: false,
+    }],
+  },
 }
 
 it('falls back to the workspace summary when the detail report fails', async () => {
@@ -76,6 +100,9 @@ it('falls back to the workspace summary when the detail report fails', async () 
 
   expect(await screen.findByText('Priority delivery', {}, { timeout: 20000 })).toBeInTheDocument()
   expect(screen.getByText('Project progress')).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: 'Team workload' })).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: 'Time clock by team member' })).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: 'Recent time clock entries' })).toBeInTheDocument()
   // The summary counts still render, proving the fallback is real data not an empty shell.
   expect(screen.getByText('42% complete - 0% average progress')).toBeInTheDocument()
   expect(document.body.innerText).not.toContain('could not render this view')

@@ -3011,17 +3011,18 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-reports-view .drawer-section-heading { display: flex; min-height: 24px; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .pencil-reports-view .drawer-section-heading h3 { margin: 0; color: var(--pencil-text); font-size: 16px; font-weight: 600; line-height: 22px; }
 .pencil-reports-view .drawer-section-heading > span { color: var(--pencil-text-muted); font-size: 11px; line-height: 16px; }
-.pencil-reports-view .report-project-table { display: grid; overflow: hidden; border: 1px solid var(--pencil-border); border-radius: 10px; }
-.pencil-reports-view .report-project-row { display: grid; min-height: 52px; grid-template-columns: minmax(180px, 1.4fr) minmax(120px, 1fr) minmax(180px, 1.3fr) 90px; align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--pencil-border-light); }
+.pencil-reports-view .report-project-table { display: grid; max-width: 100%; overflow: hidden; border: 1px solid var(--pencil-border); border-radius: 10px; background: #fff; }
+.pencil-reports-view .report-project-row { display: grid; min-width: 0; min-height: 56px; grid-template-columns: minmax(200px, 1.55fr) minmax(120px, 1fr) minmax(190px, 1.45fr) minmax(80px, auto); align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--pencil-border-light); }
 .pencil-reports-view .report-project-row:last-child { border-bottom: 0; }
-.pencil-reports-view .report-project-row > strong { color: var(--pencil-text); font-size: 13px; font-weight: 500; }
-.pencil-reports-view .report-project-row > span { color: var(--pencil-text-secondary); font-size: 12px; }
+.pencil-reports-view .report-project-row > strong { min-width: 0; overflow: hidden; color: var(--pencil-text); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.pencil-reports-view .report-project-row > span { min-width: 0; color: var(--pencil-text-secondary); font-size: 12px; }
 .pencil-reports-view .report-project-header { min-height: 38px; background: var(--pencil-canvas); color: var(--pencil-text-muted); font-size: 10px; font-weight: 600; letter-spacing: .7px; text-transform: uppercase; }
 .pencil-reports-view .report-project-header > span { color: var(--pencil-text-muted); font-size: 10px; font-weight: 600; }
-.pencil-reports-view .report-project-progress { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: center; gap: 9px; }
-.pencil-reports-view .report-project-progress::before { height: 7px; border-radius: 999px; background: #E5E7EB; content: ''; }
-.pencil-reports-view .report-project-progress i { display: none; }
-.pencil-reports-view .report-project-status { justify-self: end; padding: 5px 9px; border-radius: 999px; background: var(--pencil-success-soft); color: var(--pencil-success) !important; font-weight: 600; }
+.pencil-reports-view .report-project-progress { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.pencil-reports-view .report-project-progress::before { height: 8px; grid-column: 1; grid-row: 1; border-radius: 999px; background: #E5E7EB; content: ''; }
+.pencil-reports-view .report-project-progress i { position: relative; z-index: 1; display: block; width: 100%; height: 8px; grid-column: 1; grid-row: 1; border-radius: 999px; background: var(--pencil-navy); }
+.pencil-reports-view .report-project-progress > span { grid-column: 2; grid-row: 1; }
+.pencil-reports-view .report-project-status { min-width: 48px; justify-self: end; padding: 5px 9px; border-radius: 999px; background: var(--pencil-success-soft); color: var(--pencil-success) !important; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
 .pencil-reports-view .report-chart-bars { display: grid; height: 234px; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end; gap: 18px; padding: 18px 6px 0; border-bottom: 1px solid var(--pencil-border); }
 .pencil-reports-view .report-chart-bar { display: grid; height: 100%; grid-template-rows: 18px minmax(0, 1fr) 20px; align-items: end; justify-items: center; gap: 4px; color: var(--pencil-text-muted); font-size: 10px; }
 .pencil-reports-view .report-chart-bar > span { align-self: start; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
@@ -3051,15 +3052,21 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-reports-view .report-bar-row > div i { display: block; height: 100%; border-radius: inherit; background: var(--pencil-navy); }
 .pencil-reports-view .report-bar-row strong { color: var(--pencil-text); font-size: 12px; text-align: right; }
 .pencil-reports-view .report-bar-row small { color: var(--pencil-text-muted); font-size: 10px; text-align: right; }
-.pencil-reports-view .report-member-row { display: grid; min-height: 48px; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border-top: 1px solid var(--pencil-border-light); color: var(--pencil-text-secondary); font-size: 12px; }
-.pencil-reports-view .report-member-row strong { color: var(--pencil-text); font-size: 11px; }
-.pencil-reports-view .report-member-row em { color: var(--pencil-text-muted); font-size: 10px; font-style: normal; }
-.pencil-reports-view .report-progress-row { display: grid; min-height: 56px; grid-template-columns: minmax(0, 1fr) 170px 44px; align-items: center; gap: 14px; border-top: 1px solid var(--pencil-border-light); }
-.pencil-reports-view .report-progress-row > div:first-child { display: grid; gap: 2px; }
+.pencil-reports-view .report-data-table, .pencil-reports-view .report-progress-table, .pencil-reports-view .time-clock-table, .pencil-reports-view .time-clock-members { min-width: 0; }
+.pencil-reports-view .report-member-row { display: grid; min-width: 0; min-height: 50px; grid-template-columns: minmax(0, 1fr) minmax(40px, auto) minmax(56px, auto); align-items: center; gap: 12px; padding: 0 4px; border-top: 1px solid var(--pencil-border-light); color: var(--pencil-text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pencil-reports-view .report-member-row > span:first-child { min-width: 0; overflow: hidden; color: var(--pencil-text); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.pencil-reports-view .report-member-row strong { color: var(--pencil-text); font-size: 12px; text-align: right; }
+.pencil-reports-view .report-member-row em { color: var(--pencil-text-muted); font-size: 10px; font-style: normal; text-align: right; }
+.pencil-reports-view .report-member-header { min-height: 36px; margin-bottom: 2px; padding: 0 10px; border-top: 0; border-radius: 8px; background: var(--pencil-canvas); color: var(--pencil-text-muted); font-size: 10px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; }
+.pencil-reports-view .report-member-header > span { color: var(--pencil-text-muted); font-size: 10px; font-weight: 600; }
+.pencil-reports-view .report-member-header > span:nth-child(2), .pencil-reports-view .report-member-header > span:nth-child(3) { text-align: right; }
+.pencil-reports-view .time-clock-member-header, .pencil-reports-view .time-clock-members .report-member-row { grid-template-columns: minmax(0, 1fr) 80px minmax(150px, auto); }
+.pencil-reports-view .report-progress-row { display: grid; min-width: 0; min-height: 62px; grid-template-columns: minmax(140px, 1fr) minmax(72px, .72fr) 42px; align-items: center; gap: 14px; border-top: 1px solid var(--pencil-border-light); }
+.pencil-reports-view .report-progress-row > div:first-child { display: grid; min-width: 0; gap: 2px; }
 .pencil-reports-view .report-progress-row strong { color: var(--pencil-text); font-size: 12px; }
-.pencil-reports-view .report-progress-row span { color: var(--pencil-text-muted); font-size: 10px; }
-.pencil-reports-view .report-progress-row em { color: var(--pencil-text-secondary); font-size: 11px; font-style: normal; text-align: right; }
-.pencil-reports-view .report-progress-track { overflow: hidden; height: 7px; border-radius: 999px; background: #E5E7EB; }
+.pencil-reports-view .report-progress-row span { overflow: hidden; color: var(--pencil-text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.pencil-reports-view .report-progress-row em { color: var(--pencil-text-secondary); font-size: 11px; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
+.pencil-reports-view .report-progress-track { min-width: 0; overflow: hidden; height: 8px; border-radius: 999px; background: #E5E7EB; }
 .pencil-reports-view .report-progress-track i { display: block; height: 100%; border-radius: inherit; background: var(--pencil-navy); }
 .pencil-reports-view .report-risk-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .pencil-reports-view .report-risk-list button { display: grid; min-height: 78px; align-content: center; gap: 3px; padding: 12px; border: 1px solid var(--pencil-border); border-radius: 9px; background: var(--pencil-canvas); color: var(--pencil-text); text-align: left; }
@@ -3070,11 +3077,20 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-reports-view .time-clock-totals > div { display: grid; gap: 4px; padding: 12px; border-radius: 9px; background: var(--pencil-canvas); }
 .pencil-reports-view .time-clock-totals strong { color: var(--pencil-text); font-size: 18px; }
 .pencil-reports-view .time-clock-totals span { color: var(--pencil-text-muted); font-size: 10px; }
-.pencil-reports-view .time-clock-row { display: grid; min-height: 54px; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 12px; border-top: 1px solid var(--pencil-border-light); }
-.pencil-reports-view .time-clock-row > div { display: grid; gap: 2px; }
+.pencil-reports-view .time-clock-row { display: grid; min-width: 0; min-height: 56px; grid-template-columns: 68px minmax(0, 1fr) minmax(110px, auto); align-items: center; gap: 12px; padding: 0 4px; border-top: 1px solid var(--pencil-border-light); font-variant-numeric: tabular-nums; }
+.pencil-reports-view .time-clock-row > div { display: grid; min-width: 0; gap: 2px; }
 .pencil-reports-view .time-clock-row strong { font-size: 12px; }
 .pencil-reports-view .time-clock-row span, .pencil-reports-view .time-clock-row em { color: var(--pencil-text-muted); font-size: 10px; font-style: normal; }
-.pencil-reports-view .clock-state { width: fit-content; padding: 4px 7px; border-radius: 999px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary) !important; font-weight: 600; }
+.pencil-reports-view .time-clock-row > div > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pencil-reports-view .time-clock-row em { text-align: right; white-space: nowrap; }
+.pencil-reports-view .time-clock-header { min-height: 36px; margin-bottom: 2px; padding: 0 10px; border-top: 0; border-radius: 8px; background: var(--pencil-canvas); }
+.pencil-reports-view .time-clock-header > span { color: var(--pencil-text-muted); font-size: 10px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; }
+.pencil-reports-view .time-clock-header > span:nth-child(2) { text-align: left; }
+.pencil-reports-view .time-clock-header > span:nth-child(3) { text-align: right; }
+.pencil-reports-view .clock-state { width: fit-content; padding: 4px 8px; border-radius: 999px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary) !important; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.pencil-reports-view .time-clock-panel .empty-workspace { display: flex; min-height: 64px; align-items: center; justify-content: center; gap: 10px; padding: 8px 0; }
+.pencil-reports-view .time-clock-panel .empty-workspace p { font-size: 12px; line-height: 18px; }
+.pencil-reports-view .time-clock-panel .empty-workspace-icon { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 8px; }
 
 /* P28-P36 Projects. */
 .projects-view > header { min-height: 100px; }
@@ -3809,13 +3825,31 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .pencil-reports-view .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .pencil-reports-view .report-stat { min-height: 96px; padding: 14px; }
   .pencil-reports-view .report-stat > strong { font-size: 26px; line-height: 30px; }
-  .pencil-reports-view .report-project-row { min-width: 640px; }
+  .pencil-reports-view .report-project-table { overflow: visible; border: 0; border-radius: 0; }
+  .pencil-reports-view .report-project-header { display: none; }
+  .pencil-reports-view .report-project-row:not(.report-project-header) { min-width: 0; min-height: 0; grid-template-areas: 'name status' 'owner status' 'progress progress'; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; padding: 14px 0; }
+  .pencil-reports-view .report-project-row:not(.report-project-header) > strong { grid-area: name; white-space: normal; overflow-wrap: anywhere; }
+  .pencil-reports-view .report-project-row:not(.report-project-header) > span:nth-child(2) { grid-area: owner; }
+  .pencil-reports-view .report-project-row:not(.report-project-header) .report-project-progress { grid-area: progress; margin-top: 7px; }
+  .pencil-reports-view .report-project-row:not(.report-project-header) .report-project-status { grid-area: status; align-self: start; }
   .pencil-reports-view .report-chart-bars { gap: 9px; }
   .pencil-reports-view .report-donut-wrap { grid-template-columns: 112px minmax(0, 1fr); gap: 14px; }
   .pencil-reports-view .report-donut { width: 112px; height: 112px; }
   .pencil-reports-view .report-donut::before { width: 70px; height: 70px; }
   .pencil-reports-view .report-blocker-list, .pencil-reports-view .report-risk-list { grid-template-columns: minmax(0, 1fr); }
-  .pencil-reports-view .report-progress-row { grid-template-columns: minmax(0, 1fr) 96px 38px; gap: 9px; }
+  .pencil-reports-view .report-progress-row { grid-template-columns: minmax(104px, 1fr) minmax(72px, .7fr) 38px; gap: 9px; }
+  .pencil-reports-view .time-clock-member-header { display: none; }
+  .pencil-reports-view .time-clock-members .report-member-row { min-height: 64px; grid-template-areas: 'name worked' 'detail detail'; grid-template-columns: minmax(0, 1fr) 64px; gap: 2px 12px; padding: 8px 4px; }
+  .pencil-reports-view .time-clock-members .report-member-row > span:first-child { grid-area: name; }
+  .pencil-reports-view .time-clock-members .report-member-row > strong { grid-area: worked; }
+  .pencil-reports-view .time-clock-members .report-member-row > em { grid-area: detail; text-align: left; }
+  .pencil-reports-view .time-clock-header { display: none; }
+  .pencil-reports-view .time-clock-row:not(.time-clock-header) { min-height: 72px; grid-template-areas: 'state entry' 'duration duration'; grid-template-columns: 64px minmax(0, 1fr); gap: 5px 12px; padding: 8px 4px; }
+  .pencil-reports-view .time-clock-row:not(.time-clock-header) > .clock-state { grid-area: state; }
+  .pencil-reports-view .time-clock-row:not(.time-clock-header) > div { grid-area: entry; }
+  .pencil-reports-view .time-clock-row:not(.time-clock-header) > em { grid-area: duration; text-align: left; }
+  .pencil-reports-view .time-clock-log .drawer-section-heading { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 8px; }
+  .pencil-reports-view .time-clock-log .drawer-section-heading label { width: 100%; justify-content: space-between; }
   .pencil-reports-view .time-clock-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .projects-view .project-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .projects-view .project-summary > div { min-height: 96px; padding: 14px; }

@@ -5618,7 +5618,7 @@ function WorkspaceView({
                     <span role="cell">{project.owner_name || "Unassigned"}</span>
                     <span role="cell" className="report-project-progress">
                       <i style={{ width: `${project.completion_rate || 0}%` }} />
-                      {project.completion_rate || 0}%
+                      <span>{project.completion_rate || 0}%</span>
                     </span>
                     <span role="cell" className="report-project-status">{project.total ? `${project.completed || 0}/${project.total}` : "No tasks"}</span>
                   </div>
@@ -5703,13 +5703,20 @@ function WorkspaceView({
               <span>{report.members} members</span>
             </div>
             {report.workload.length ? (
-              report.workload.map((member) => (
-                <div className="report-member-row" key={member.user_id}>
-                  <span>{member.user_name}</span>
-                  <strong>{member.open} open</strong>
-                  <em>{member.blocked} blocked</em>
+              <div className="report-data-table report-workload-table" role="table" aria-label="Team workload">
+                <div className="report-member-row report-member-header" role="row">
+                  <span role="columnheader">Member</span>
+                  <span role="columnheader">Open</span>
+                  <span role="columnheader">Blocked</span>
                 </div>
-              ))
+                {report.workload.map((member) => (
+                  <div className="report-member-row" role="row" key={member.user_id}>
+                    <span role="cell">{member.user_name}</span>
+                    <strong role="cell">{member.open}</strong>
+                    <em role="cell">{member.blocked}</em>
+                  </div>
+                ))}
+              </div>
             ) : (
               <EmptyState text="No team workload yet." />
             )}
@@ -5722,18 +5729,20 @@ function WorkspaceView({
               <span>{report.progress_by_project.length} groups</span>
             </div>
             {report.progress_by_project.length ? (
-              report.progress_by_project.slice(0, 6).map((group) => (
-                <div className="report-progress-row" key={group.name}>
-                  <div>
-                    <strong>{group.name}</strong>
-                    <span>{group.completed} of {group.total} complete</span>
+              <div className="report-progress-table" role="table" aria-label="Project progress">
+                {report.progress_by_project.slice(0, 6).map((group) => (
+                  <div className="report-progress-row" role="row" key={group.name}>
+                    <div role="cell">
+                      <strong>{group.name}</strong>
+                      <span>{group.completed} of {group.total} complete</span>
+                    </div>
+                    <div className="report-progress-track" role="cell" aria-label={`${group.name} ${group.completion_rate}% complete`}>
+                      <i style={{ width: `${group.completion_rate}%` }} />
+                    </div>
+                    <em role="cell">{group.completion_rate}%</em>
                   </div>
-                  <div className="report-progress-track" aria-label={`${group.name} ${group.completion_rate}% complete`}>
-                    <i style={{ width: `${group.completion_rate}%` }} />
-                  </div>
-                  <em>{group.completion_rate}%</em>
-                </div>
-              ))
+                ))}
+              </div>
             ) : (
               <EmptyState text="No project progress is available for this report." />
             )}
@@ -5744,18 +5753,20 @@ function WorkspaceView({
               <span>Workload mix</span>
             </div>
             {report.progress_by_priority.length ? (
-              report.progress_by_priority.map((group) => (
-                <div className="report-progress-row" key={group.name}>
-                  <div>
-                    <strong>{group.name}</strong>
-                    <span>{group.overdue} overdue - {group.blocked} blocked</span>
+              <div className="report-progress-table" role="table" aria-label="Priority delivery">
+                {report.progress_by_priority.map((group) => (
+                  <div className="report-progress-row" role="row" key={group.name}>
+                    <div role="cell">
+                      <strong>{group.name}</strong>
+                      <span>{group.overdue} overdue - {group.blocked} blocked</span>
+                    </div>
+                    <div className="report-progress-track" role="cell" aria-label={`${group.name} ${group.average_progress}% average progress`}>
+                      <i style={{ width: `${group.average_progress}%` }} />
+                    </div>
+                    <em role="cell">{group.average_progress}%</em>
                   </div>
-                  <div className="report-progress-track" aria-label={`${group.name} ${group.average_progress}% average progress`}>
-                    <i style={{ width: `${group.average_progress}%` }} />
-                  </div>
-                  <em>{group.average_progress}%</em>
-                </div>
-              ))
+                ))}
+              </div>
             ) : (
               <EmptyState text="No priority progress is available for this report." />
             )}
@@ -5848,12 +5859,17 @@ function WorkspaceView({
             </div>
           </div>
           {timeClock.by_member.length ? (
-            <div className="time-clock-members">
+            <div className="time-clock-members" role="table" aria-label="Time clock by team member">
+              <div className="report-member-row report-member-header time-clock-member-header" role="row">
+                <span role="columnheader">Team member</span>
+                <span role="columnheader">Worked</span>
+                <span role="columnheader">Days and breaks</span>
+              </div>
               {timeClock.by_member.map((member) => (
-                <div className="report-member-row" key={member.user_id}>
-                  <span>{member.user_name}</span>
-                  <strong>{formatHoursLabel(member.worked_seconds)}</strong>
-                  <em>
+                <div className="report-member-row" role="row" key={member.user_id}>
+                  <span role="cell">{member.user_name}</span>
+                  <strong role="cell">{formatHoursLabel(member.worked_seconds)}</strong>
+                  <em role="cell">
                     {member.day_count} {member.day_count === 1 ? "day" : "days"}{" "}
                     · {formatHoursLabel(member.break_seconds)} break
                   </em>
@@ -5893,34 +5909,42 @@ function WorkspaceView({
               </label>
             </div>
             {timeClock.recent.length ? (
-              timeClock.recent.map((shift) => (
-                <div className="time-clock-row" key={shift.id}>
-                  <span
-                    className={`clock-state clock-state-${shift.is_open ? (shift.is_on_break ? "break" : "active") : "idle"}`}
-                  >
-                    {shift.is_open
-                      ? shift.is_on_break
-                        ? "Break"
-                        : "Active"
-                      : "Done"}
-                  </span>
-                  <div>
-                    <strong>{shift.user_name}</strong>
-                    <span>
-                      {formatDay(shift.date)} · {formatShiftClock(shift.started_at)}
-                      {shift.ended_at
-                        ? ` - ${formatShiftClock(shift.ended_at)}`
-                        : " - now"}
-                    </span>
-                  </div>
-                  <em>
-                    {formatHoursLabel(shift.worked_seconds)}
-                    {shift.break_seconds_total
-                      ? ` · ${formatHoursLabel(shift.break_seconds_total)} break`
-                      : ""}
-                  </em>
+              <div className="time-clock-table" role="table" aria-label="Recent time clock entries">
+                <div className="time-clock-row time-clock-header" role="row">
+                  <span role="columnheader">State</span>
+                  <span role="columnheader">Entry</span>
+                  <span role="columnheader">Worked</span>
                 </div>
-              ))
+                {timeClock.recent.map((shift) => (
+                  <div className="time-clock-row" role="row" key={shift.id}>
+                    <span
+                      role="cell"
+                      className={`clock-state clock-state-${shift.is_open ? (shift.is_on_break ? "break" : "active") : "idle"}`}
+                    >
+                      {shift.is_open
+                        ? shift.is_on_break
+                          ? "Break"
+                          : "Active"
+                        : "Done"}
+                    </span>
+                    <div role="cell">
+                      <strong>{shift.user_name}</strong>
+                      <span>
+                        {formatDay(shift.date)} · {formatShiftClock(shift.started_at)}
+                        {shift.ended_at
+                          ? ` - ${formatShiftClock(shift.ended_at)}`
+                          : " - now"}
+                      </span>
+                    </div>
+                    <em role="cell">
+                      {formatHoursLabel(shift.worked_seconds)}
+                      {shift.break_seconds_total
+                        ? ` · ${formatHoursLabel(shift.break_seconds_total)} break`
+                        : ""}
+                    </em>
+                  </div>
+                ))}
+              </div>
             ) : (
               <EmptyState
                 text={
