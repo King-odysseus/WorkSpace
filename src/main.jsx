@@ -8106,7 +8106,7 @@ function WorkspaceView({
                     }}
                     aria-label={`Open ${project.name}`}
                   >
-                    Open project <ArrowUpRight size={15} />
+                    Open <ArrowUpRight size={13} />
                   </button>
                   {canManageMembers && (
                     <>
