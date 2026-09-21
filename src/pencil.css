@@ -4505,15 +4505,26 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 /* Zuri assistant. The window is a docked chat surface rather than a centered
    dialog: it is attached to the bottom-right on desktop and to the bottom edge
    on mobile, with user and assistant turns rendered as opposing bubbles. */
+.dialog-dock-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: clip;
+  pointer-events: none;
+}
+
 [data-slot='dialog-content'].ai-chat-window {
+  position: absolute !important;
   top: auto !important;
-  right: 0 !important;
-  bottom: 0 !important;
+  right: 16px !important;
+  bottom: 16px !important;
   left: auto !important;
   z-index: 80;
   display: flex;
   width: min(430px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 32px));
   height: min(680px, calc(100dvh - 16px));
+  max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 16px);
   flex-direction: column;
   gap: 0;
@@ -4526,8 +4537,11 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   border-radius: 20px 20px 0 0;
   background: var(--pencil-surface) !important;
   box-shadow: 0 -20px 55px rgb(8 28 49 / 18%) !important;
+  transform-origin: 100% 100%;
   animation: ai-chat-dock-in 180ms ease-out both;
 }
+
+.dialog-dock-layer > [data-slot='dialog-content'] { pointer-events: auto; }
 
 .ai-chat-overlay { background: rgb(8 28 49 / 24%) !important; backdrop-filter: blur(2px); }
 
@@ -4840,19 +4854,25 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .ai-restore-tab:focus-visible { outline: 2px solid var(--pencil-navy-focus); outline-offset: 2px; }
 
 @keyframes ai-chat-dock-in {
-  from { opacity: 0; transform: translateY(12px) scale(.99); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: scale(.985); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 1023px) {
   [data-slot='dialog-content'].ai-chat-window {
-    inset: auto 0 0;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
     width: 100%;
+    height: min(82vh, 720px);
     height: min(82dvh, 720px);
+    max-height: calc(100vh - 8px);
     max-height: calc(100dvh - 8px);
     border-right: 0;
     border-left: 0;
     border-radius: 22px 22px 0 0;
+    transform-origin: 50% 100%;
   }
 
   [data-slot='dialog-content'].ai-chat-window::before {

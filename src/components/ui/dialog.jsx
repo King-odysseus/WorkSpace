@@ -32,29 +32,73 @@ function DialogOverlay({ className, ...props }) {
   )
 }
 
+function readDockViewport() {
+  if (typeof window === 'undefined' || !window.visualViewport) return undefined
+  const viewport = window.visualViewport
+  return {
+    left: viewport.offsetLeft,
+    top: viewport.offsetTop,
+    width: viewport.width,
+    height: viewport.height,
+    right: 'auto',
+    bottom: 'auto',
+  }
+}
+
+function useDockViewport(enabled) {
+  const [style, setStyle] = React.useState(() => enabled ? readDockViewport() : undefined)
+
+  React.useEffect(() => {
+    if (!enabled) return undefined
+    const update = () => setStyle(readDockViewport())
+    update()
+    const viewport = window.visualViewport
+    window.addEventListener('resize', update)
+    viewport?.addEventListener('resize', update)
+    viewport?.addEventListener('scroll', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      viewport?.removeEventListener('resize', update)
+      viewport?.removeEventListener('scroll', update)
+    }
+  }, [enabled])
+
+  return enabled ? style : undefined
+}
+
 function DialogContent({ className, overlayClassName, children, showCloseButton = true, position = 'center', ...props }) {
+  const docked = position === 'dock'
+  const dockViewportStyle = useDockViewport(docked)
+  const content = (
+    <DialogPrimitive.Content
+      data-slot="dialog-content"
+      className={cn(
+        'bg-card z-50 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+        docked
+          ? 'pointer-events-auto absolute right-0 bottom-0'
+          : 'fixed top-1/2 left-1/2 grid w-[min(440px,calc(100vw-30px))] -translate-x-1/2 -translate-y-1/2 gap-5 rounded-2xl border border-border p-6 shadow-[0_20px_70px_rgb(7_26_45_/31%)]',
+        className
+      )}
+      {...props}
+    >
+      {children}
+      {showCloseButton && (
+        <DialogPrimitive.Close className="absolute top-4 right-4 grid size-8 place-items-center rounded-full bg-secondary text-secondary-foreground opacity-90 transition-opacity hover:bg-muted hover:opacity-100 focus:outline-none">
+          <X className="size-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      )}
+    </DialogPrimitive.Content>
+  )
+
   return (
     <DialogPortal>
       <DialogOverlay className={overlayClassName} />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          'bg-card fixed z-50 grid gap-5 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-          position === 'dock'
-            ? 'right-0 bottom-0'
-            : 'top-1/2 left-1/2 w-[min(440px,calc(100vw-30px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border p-6 shadow-[0_20px_70px_rgb(7_26_45_/31%)]',
-          className
-        )}
-        {...props}
-      >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close className="absolute top-4 right-4 grid size-8 place-items-center rounded-full bg-secondary text-secondary-foreground opacity-90 transition-opacity hover:bg-muted hover:opacity-100 focus:outline-none">
-            <X className="size-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Content>
+      {docked ? (
+        <div data-slot="dialog-dock-layer" className="dialog-dock-layer" style={dockViewportStyle}>
+          {content}
+        </div>
+      ) : content}
     </DialogPortal>
   )
 }
