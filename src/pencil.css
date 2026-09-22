@@ -7902,3 +7902,72 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
   padding: 0 5px;
   line-height: 16px;
 }
+
+/* Final edge-inset pass. Keep dense labels inside their visible surface
+   without changing the surrounding layout geometry. */
+.calendar-view-month .event-pill {
+  padding-right: 14px;
+}
+
+.calendar-view-month .event-pill-title {
+  padding-right: 2px;
+}
+
+/* The activity history is a transparent section, not a glass card. In dark
+   mode the shared card treatment was wrapping the section heading flush to a
+   visible gradient edge. */
+html[data-theme='dark'] .pencil-activity-view .activity-history {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+@media (max-width: 900px) {
+  .pencil-reports-view .report-project-row:not(.report-project-header) {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .projects-view .project-summary > div {
+    height: auto;
+    min-height: 108px;
+    padding: 14px 14px 18px;
+  }
+
+  .personal-planner-header {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .pencil-followup-filters,
+  .pencil-team-filters,
+  .files-categories {
+    padding-right: 12px;
+    scroll-padding-right: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .pencil-followup-filters {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .pencil-followup-filters button {
+    width: 100%;
+    min-width: 0;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .pencil-followup-filters select {
+    width: 100%;
+    grid-column: 1 / -1;
+  }
+}
