@@ -14,9 +14,9 @@ The approved sources are:
 - `03 Pages`: `0:3994`
 - `04 Mobile`: `0:9758`
 - `05 Project States`: `0:11925`
-- `06 Feature Coverage`: `0:1346436` (F1-F13)
+- `06 Feature Coverage`: `0:1346436` (F1-F15)
 
-The F1-F12 Feature Coverage boards close the previously undocumented gaps for
+The F1-F15 Feature Coverage boards close the previously undocumented gaps for
 the global shell, notification panels, presence and identity, account menus,
 mobile app bar, mobile operational routes, mobile work routes, mobile insight
 and resource routes, AI settings, task create/edit dialogs, authentication and
@@ -33,9 +33,10 @@ permission, lifecycle, conflict, and recovery patterns for those panels. A
 panel still needs a dedicated frame only where its content, permission rule, or
 recovery path differs from F13; the following cases remain in that category.
 
-| Settings surface | Missing design scope |
-| --- | --- |
-| Profile | Long identity content, field-level validation, and panel-level loading state |
+Profile is covered by P39 and F15 for long identity content, field-level
+validation, save-in-progress, and recoverable save failure with retry. The
+current contract has no independent profile read, so a panel-level loading
+state is listed with the backend-blocked states instead of being simulated.
 
 The shared loading, empty, offline, expired-session, permission, and recoverable
 error compositions on F12 define the shell-level treatment. A Settings panel
@@ -52,6 +53,7 @@ without new backend behavior. They are intentionally not simulated in the UI.
 | Project activity (P36) | Project-scoped activity rows, per-item deep links, and a complete actor/action history for one project | `ActivityEvent` stores workspace, actor, kind, message, and timestamp only. It has no project, task, risk, budget, resource, or stakeholder relation, so project attribution cannot be derived without changing the backend contract. The Activity tab reports this limitation instead of guessing from message text. |
 | Import data (P18) | Background preview progress such as `240 of 528 rows`, a cancel action, and resumable processing | Preview and commit are synchronous requests. The UI reports completed counts and validation results only after the server responds. |
 | Screen sharing (P19) | Live video preview, viewer counts, live participant presence, source switching from the leader console, audio controls, stream-quality telemetry, recording controls, and annotation tools | The API stores consent sessions and periodic JPEG/PNG/WebP captures. It never receives a live video stream and has no viewer, audio, quality, recording, or annotation contract. |
+| Settings profile panel loading | A skeleton while identity fields are fetched | The authenticated session, including profile fields, is loaded before the app shell mounts. There is no independent profile read or refresh request, so a panel loading state cannot represent a real backend state. |
 
 The screen-sharing page therefore presents the approved console hierarchy using
 real session state, the employee and requester, consent status, capture cadence,
@@ -67,6 +69,7 @@ The following are no longer unresolved design gaps:
 - Reports: P5 and P63 define the overview, filters, charts, report tables, empty states, and responsive behavior.
 - Check-in detail: P62 defines desktop and mobile detail treatment.
 - Settings operational states: F13 defines the shared loading, validation, permission, lifecycle, conflict, and recovery states.
+- Settings profile identity: P39 and F15 define normal, long-content, field-validation, save-in-progress, and save-failure recovery states.
 - Appearance operational states: P40 and F13 cover retained-theme persistence failure, retry, unsupported-theme fallback, and reduced-motion behavior.
 - Notification operational states: P41 and F13 cover denied browser permission, unsupported browsers, push configuration and subscription recovery, disabled sound, and notification-preference load/save recovery.
 - Profile media recovery: F13 covers upload and removal failures with retained-photo rollback, operation-specific retry, and the file picker fallback for uploads.

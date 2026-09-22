@@ -632,8 +632,65 @@ it('validates profile fields locally and focuses the first invalid field', () =>
   expect(screen.getByText('Enter your first name.')).toBeInTheDocument()
   expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument()
   expect(firstName).toHaveFocus()
+  expect(firstName).toHaveAttribute('aria-errormessage', 'profile-first-name-error')
+  expect(document.querySelector('[name="email"]')).toHaveAttribute(
+    'aria-errormessage',
+    'profile-email-error',
+  )
+  expect(document.getElementById('settings-profile-form')).toHaveAttribute('novalidate')
   expect(api.mock.calls.filter(([url, init = {}]) =>
     String(url).includes('/api/auth/me/profile/') && init.method === 'PATCH')).toHaveLength(0)
+})
+
+it('marks the profile panel and fields busy while the save request is pending', async () => {
+  const api = mockApi({})
+  const onProfileUpdated = vi.fn()
+  const originalFetch = api.getMockImplementation()
+  let resolveProfileSave
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/auth/me/profile/') && init.method === 'PATCH') {
+      return new Promise((resolve) => {
+        resolveProfileSave = () => resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ user: { first_name: 'Alexandria' } }),
+          text: async () => '{"user":{"first_name":"Alexandria"}}',
+        })
+      })
+    }
+    return originalFetch(input, init)
+  })
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Alexandria Montgomery"
+      currentUserEmail="alexandria@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      onProfileUpdated={onProfileUpdated}
+    />,
+  )
+
+  fireEvent.change(screen.getByLabelText('First name'), {
+    target: { value: 'Alexandria' },
+  })
+  fireEvent.submit(document.getElementById('settings-profile-form'))
+
+  await waitFor(() => expect(resolveProfileSave).toBeTypeOf('function'))
+  expect(screen.getByLabelText('First name')).toBeDisabled()
+  expect(screen.getByLabelText('Email address')).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
+  expect(document.querySelector('.settings-profile-card')).toHaveAttribute('aria-busy', 'true')
+  expect(document.getElementById('settings-profile-form')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.getByText('Saving profile.')).toBeInTheDocument()
+
+  resolveProfileSave()
+
+  await waitFor(() => expect(screen.getByLabelText('First name')).not.toBeDisabled())
+  expect(onProfileUpdated).toHaveBeenCalledWith({ first_name: 'Alexandria' })
 })
 
 it('keeps a duplicate profile email on the field and focuses it', async () => {
@@ -660,7 +717,7 @@ it('keeps a duplicate profile email on the field and focuses it', async () => {
   fireEvent.submit(document.getElementById('settings-profile-form'))
 
   expect(await screen.findByText('That email address is already in use.')).toBeInTheDocument()
-  expect(email).toHaveFocus()
+  await waitFor(() => expect(email).toHaveFocus())
   expect(email).toHaveAttribute('aria-invalid', 'true')
 })
 

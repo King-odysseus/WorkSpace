@@ -1624,6 +1624,7 @@ function SettingsView({
   };
   const saveProfile = async (event) => {
     event.preventDefault();
+    if (profileSaving) return;
     const normalizedProfile = Object.fromEntries(
       Object.entries(profileForm).map(([key, value]) => [key, String(value || "").trim()]),
     );
@@ -1656,6 +1657,7 @@ function SettingsView({
         ?.focus();
       return;
     }
+    let focusEmailAfterSave = false;
     setProfileSaving(true);
     try {
       const response = await fetch("/api/auth/me/profile/", {
@@ -1672,7 +1674,7 @@ function SettingsView({
         setProfileFieldErrors({
           email: "That email address is already in use.",
         });
-        profileFormRef.current?.querySelector('[name="email"]')?.focus();
+        focusEmailAfterSave = true;
         return;
       }
       if (!response.ok)
@@ -1686,6 +1688,11 @@ function SettingsView({
       setProfileError(error.message || "Profile could not be updated.");
     } finally {
       setProfileSaving(false);
+      if (focusEmailAfterSave) {
+        window.setTimeout(() => {
+          profileFormRef.current?.querySelector('[name="email"]')?.focus();
+        }, 0);
+      }
     }
   };
   const [taskTemplateForm, setTaskTemplateForm] = useState({
@@ -2650,8 +2657,11 @@ function SettingsView({
                 </div>
               </div>
               <div
-                className="settings-profile-card"
-                aria-busy={avatarUploading && avatarRetry?.type === "upload"}
+                className={`settings-profile-card${profileSaving ? " is-saving" : ""}`}
+                aria-busy={
+                  profileSaving ||
+                  (avatarUploading && avatarRetry?.type === "upload")
+                }
               >
                 <span className="avatar-upload">
                   <Avatar
@@ -2724,7 +2734,14 @@ function SettingsView({
               <div className="settings-section-heading settings-profile-section-heading">
                 <div><strong>Personal details</strong></div>
               </div>
-              <form id="settings-profile-form" ref={profileFormRef} className="settings-profile-form" onSubmit={saveProfile}>
+              <form
+                id="settings-profile-form"
+                ref={profileFormRef}
+                className="settings-profile-form"
+                onSubmit={saveProfile}
+                aria-busy={profileSaving}
+                noValidate
+              >
                 <div className="modal-grid">
                   <label>
                     First name
@@ -2734,8 +2751,10 @@ function SettingsView({
                       onChange={(event) => updateProfileField("first_name", event.target.value)}
                       maxLength="150"
                       autoComplete="given-name"
+                      disabled={profileSaving}
                       aria-invalid={Boolean(profileFieldErrors.first_name)}
                       aria-describedby={profileFieldErrors.first_name ? "profile-first-name-error" : undefined}
+                      aria-errormessage={profileFieldErrors.first_name ? "profile-first-name-error" : undefined}
                       required
                     />
                     {profileFieldErrors.first_name && (
@@ -2752,8 +2771,10 @@ function SettingsView({
                       onChange={(event) => updateProfileField("last_name", event.target.value)}
                       maxLength="150"
                       autoComplete="family-name"
+                      disabled={profileSaving}
                       aria-invalid={Boolean(profileFieldErrors.last_name)}
                       aria-describedby={profileFieldErrors.last_name ? "profile-last-name-error" : undefined}
+                      aria-errormessage={profileFieldErrors.last_name ? "profile-last-name-error" : undefined}
                     />
                     {profileFieldErrors.last_name && (
                       <small id="profile-last-name-error" className="settings-field-error">
@@ -2770,8 +2791,10 @@ function SettingsView({
                     value={profileForm.email}
                     onChange={(event) => updateProfileField("email", event.target.value)}
                     autoComplete="email"
+                    disabled={profileSaving}
                     aria-invalid={Boolean(profileFieldErrors.email)}
                     aria-describedby={profileFieldErrors.email ? "profile-email-error" : undefined}
+                    aria-errormessage={profileFieldErrors.email ? "profile-email-error" : undefined}
                     required
                   />
                   {profileFieldErrors.email && (
@@ -2789,8 +2812,10 @@ function SettingsView({
                       onChange={(event) => updateProfileField("company", event.target.value)}
                       maxLength="150"
                       autoComplete="organization"
+                      disabled={profileSaving}
                       aria-invalid={Boolean(profileFieldErrors.company)}
                       aria-describedby={profileFieldErrors.company ? "profile-company-error" : undefined}
+                      aria-errormessage={profileFieldErrors.company ? "profile-company-error" : undefined}
                     />
                     {profileFieldErrors.company && (
                       <small id="profile-company-error" className="settings-field-error">
@@ -2806,8 +2831,10 @@ function SettingsView({
                       onChange={(event) => updateProfileField("job_role", event.target.value)}
                       maxLength="150"
                       autoComplete="organization-title"
+                      disabled={profileSaving}
                       aria-invalid={Boolean(profileFieldErrors.job_role)}
                       aria-describedby={profileFieldErrors.job_role ? "profile-job-role-error" : undefined}
+                      aria-errormessage={profileFieldErrors.job_role ? "profile-job-role-error" : undefined}
                     />
                     {profileFieldErrors.job_role && (
                       <small id="profile-job-role-error" className="settings-field-error">
@@ -2824,6 +2851,9 @@ function SettingsView({
                     {profileError}
                   </SettingsAlert>
                 )}
+                <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                  {profileSaving ? "Saving profile." : ""}
+                </p>
               </form>
               <div className="settings-section-heading settings-profile-section-heading">
                 <div><strong>Availability</strong></div>

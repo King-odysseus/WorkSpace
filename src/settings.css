@@ -298,7 +298,7 @@
   display: grid;
   min-width: 0;
   grid-template-columns: 64px minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 16px;
   margin: 20px 32px 0;
   padding: 16px 20px;
@@ -310,6 +310,7 @@
 .settings-view .settings-profile-identity-copy {
   display: grid;
   min-width: 0;
+  align-content: start;
   gap: 2px;
 }
 
@@ -527,6 +528,16 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 15px;
+}
+
+.settings-view .settings-profile-form :is(input, textarea)[aria-invalid='true'] {
+  border-color: var(--pencil-danger) !important;
+  box-shadow: 0 0 0 3px rgb(199 0 54 / 12%);
+}
+
+.settings-view .settings-profile-form[aria-busy='true'] :is(input, textarea) {
+  cursor: wait;
+  opacity: .72;
 }
 
 .settings-view .settings-profile-footer {
