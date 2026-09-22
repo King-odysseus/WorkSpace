@@ -4205,7 +4205,6 @@ function WorkspaceView({
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
   const [projectOperation, setProjectOperation] = useState("");
-  const [projectOverviewActivity, setProjectOverviewActivity] = useState([]);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
@@ -4336,54 +4335,6 @@ function WorkspaceView({
     activityDateTo,
     activityReload,
   ]);
-  useEffect(() => {
-    if (active !== "Projects" || !selectedProjectWorkspace || !workspaceId) {
-      setProjectOverviewActivity([]);
-      return undefined;
-    }
-    let isCurrent = true;
-    const projectName = String(selectedProjectWorkspace.name || "").toLowerCase();
-    const taskTitles = tasks
-      .filter(
-        (task) =>
-          String(task.project_id || "") === String(selectedProjectWorkspace.id),
-      )
-      .map((task) => String(task.title || "").trim().toLowerCase())
-      .filter((title) => title.length >= 4);
-    const params = new URLSearchParams({
-      page: "1",
-      page_size: "40",
-      include_filters: "0",
-      include_summary: "0",
-    });
-    fetch(`/api/workspaces/${workspaceId}/activity/?${params.toString()}`, {
-      credentials: "include",
-      headers: { "X-Workspace-Id": String(workspaceId) },
-    })
-      .then((response) =>
-        readJsonResponse(response, "Project activity could not be loaded.").then(
-          (payload) => ({ ok: response.ok, payload }),
-        ),
-      )
-      .then(({ ok, payload }) => {
-        if (!isCurrent) return;
-        if (!ok) throw new Error(payload.error || "Project activity could not be loaded.");
-        const matches = (payload.activity || []).filter((item) => {
-          const message = String(item.message || item.description || "").toLowerCase();
-          return (
-            (projectName && message.includes(projectName)) ||
-            taskTitles.some((title) => message.includes(title))
-          );
-        });
-        setProjectOverviewActivity(matches.slice(0, 3));
-      })
-      .catch(() => {
-        if (isCurrent) setProjectOverviewActivity([]);
-      });
-    return () => {
-      isCurrent = false;
-    };
-  }, [active, workspaceId, selectedProjectWorkspace?.id, selectedProjectWorkspace?.name, tasks]);
   useEffect(() => {
     if (active !== "Notifications") return;
     setNotificationPage(1);
@@ -8370,6 +8321,9 @@ function WorkspaceView({
               86400000,
           )
         : null;
+      const projectActivityItems = (localData.activity || []).filter(
+        (item) => String(item.project_id || "") === String(selectedProjectWorkspace.id),
+      );
       const openOperation = (operation) => {
         setProjectOperation(operation);
         if (operation === "activity") setProjectActivityFilter("all");
@@ -8464,7 +8418,7 @@ function WorkspaceView({
                   </section>
                   <section className="project-detail-card project-detail-recent-activity project-overview-activity">
                     <div className="project-detail-card-heading"><h2>Recent activity</h2><button type="button" className="project-overview-activity-link" onClick={() => openOperation("activity")}>View all activity</button></div>
-                    {projectOverviewActivity.length ? <div className="project-overview-activity-list">{projectOverviewActivity.map((item) => <button type="button" key={item.id} onClick={() => openOperation("activity")}><span className="project-overview-activity-avatar" aria-hidden="true">{String(item.actor_name || "S").trim().charAt(0).toUpperCase()}</span><span><strong>{item.message || item.description || "Project activity updated"}</strong><small>{item.actor_name || "System"} - {formatRelativeActivityTime(item.created_at || item.updated_at)}</small></span><ActivityIcon size={16} /></button>)}</div> : <p className="project-detail-empty">No recent project activity is available yet.</p>}
+                    <p className="project-detail-empty" role="status">Project activity isn&apos;t available yet.</p>
                   </section>
                 </div>
                 <aside className="project-detail-side-column">
@@ -8565,23 +8519,26 @@ function WorkspaceView({
           )}
           {projectOperation === "activity" && (
             <section className="project-activity-surface">
-              <div className="project-activity-filter-label">Filter activity</div>
-              <div className="project-activity-chips" role="group" aria-label="Filter project activity">
-                {["All", "Tasks", "Risks", "Issues", "Budget", "Resources", "Stakeholders", "Comments"].map((label) => (
-                  <button
-                    type="button"
-                    className={projectActivityFilter === label.toLowerCase() ? "active" : ""}
-                    aria-pressed={projectActivityFilter === label.toLowerCase()}
-                    key={label}
-                    onClick={() => setProjectActivityFilter(label.toLowerCase())}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              {projectActivityItems.length > 0 && (
+                <>
+                  <div className="project-activity-filter-label">Filter activity</div>
+                  <div className="project-activity-chips" role="group" aria-label="Filter project activity">
+                    {["All", "Tasks", "Risks", "Issues", "Budget", "Resources", "Stakeholders", "Comments"].map((label) => (
+                      <button
+                        type="button"
+                        className={projectActivityFilter === label.toLowerCase() ? "active" : ""}
+                        aria-pressed={projectActivityFilter === label.toLowerCase()}
+                        key={label}
+                        onClick={() => setProjectActivityFilter(label.toLowerCase())}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               <div className="project-activity-list">
-                {(localData.activity || [])
-                  .filter((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id))
+                {projectActivityItems
                   .filter((item) => {
                     if (projectActivityFilter === "all") return true;
                     const kind = String(item.kind || "").toLowerCase();
@@ -8604,8 +8561,8 @@ function WorkspaceView({
                       <ArrowUpRight size={16} aria-hidden="true" />
                     </div>
                   ))}
-                {!(localData.activity || []).some((item) => String(item.project_id || "") === String(selectedProjectWorkspace.id)) && (
-                  <p className="project-detail-empty">Project-scoped activity is not available from the current activity API.</p>
+                {projectActivityItems.length === 0 && (
+                  <p className="project-detail-empty" role="status">Project activity isn&apos;t available yet.</p>
                 )}
               </div>
             </section>

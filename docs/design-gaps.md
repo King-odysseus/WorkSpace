@@ -49,6 +49,7 @@ without new backend behavior. They are intentionally not simulated in the UI.
 
 | Surface | Unavailable design scope | Production contract |
 | --- | --- | --- |
+| Project activity (P36) | Project-scoped activity rows, per-item deep links, and a complete actor/action history for one project | `ActivityEvent` stores workspace, actor, kind, message, and timestamp only. It has no project, task, risk, budget, resource, or stakeholder relation, so project attribution cannot be derived without changing the backend contract. The Activity tab reports this limitation instead of guessing from message text. |
 | Import data (P18) | Background preview progress such as `240 of 528 rows`, a cancel action, and resumable processing | Preview and commit are synchronous requests. The UI reports completed counts and validation results only after the server responds. |
 | Screen sharing (P19) | Live video preview, viewer counts, live participant presence, source switching from the leader console, audio controls, stream-quality telemetry, recording controls, and annotation tools | The API stores consent sessions and periodic JPEG/PNG/WebP captures. It never receives a live video stream and has no viewer, audio, quality, recording, or annotation contract. |
 

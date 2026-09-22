@@ -53,7 +53,7 @@ const projectTask = {
 };
 
 it("renders the approved P29 project overview hierarchy and actions", async () => {
-  mockApi({
+  const fetchMock = mockApi({
     "/api/auth/me/": session,
     "/api/tasks/?page=1&page_size=200": {
       tasks: [projectTask],
@@ -116,6 +116,26 @@ it("renders the approved P29 project overview hierarchy and actions", async () =
   expect(screen.queryByText("Progress summary")).not.toBeInTheDocument();
   expect(screen.queryByText("Workload")).not.toBeInTheDocument();
   expect(screen.queryByText("Next milestone")).not.toBeInTheDocument();
+  expect(screen.getByText("Project activity isn't available yet.")).toBeInTheDocument();
+  expect(
+    fetchMock.mock.calls.some(([url]) =>
+      String(url).includes("/api/workspaces/1/activity/") &&
+      String(url).includes("page_size=40") &&
+      String(url).includes("include_summary=0"),
+    ),
+  ).toBe(false);
+
+  fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
+  expect(
+    await screen.findByText("Project activity isn't available yet."),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(/current activity API/i),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("group", { name: "Filter project activity" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
 
   fireEvent.click(screen.getByRole("button", { name: "New task" }));
   const dialog = await screen.findByRole("dialog", { name: "Add a task" });
