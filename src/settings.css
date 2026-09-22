@@ -102,7 +102,7 @@
   overflow: hidden;
   border: 1px solid #f3f4f6;
   border-radius: 10px;
-  background: #fff;
+  background: var(--pencil-surface);
 }
 
 .settings-view .settings-section-label {
@@ -180,7 +180,7 @@
 .settings-view .settings-panel [data-slot='select-trigger'] {
   border: 1px solid #d1d5db !important;
   border-radius: 10px !important;
-  background: #fff !important;
+  background: var(--pencil-surface) !important;
   color: var(--pencil-text) !important;
   font-size: 13px;
 }
@@ -478,7 +478,7 @@
   padding: 12px;
   border: 1px solid var(--pencil-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--pencil-surface);
   color: var(--pencil-text);
   cursor: pointer;
   font: inherit;
@@ -711,7 +711,7 @@
   padding: 16px;
   border: 1px solid #d1d5db;
   border-radius: 12px;
-  background: #fff;
+  background: var(--pencil-surface);
 }
 
 .settings-view .settings-integration-inline-alert {
@@ -776,7 +776,7 @@
   padding: 0 8px 0 12px;
   border: 1px solid #d1d5db;
   border-radius: 10px;
-  background: #fff;
+  background: var(--pencil-surface);
 }
 
 .settings-view .settings-webhook-url-row code {
@@ -958,7 +958,7 @@
   padding: 16px;
   border: 1px solid var(--pencil-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--pencil-surface);
 }
 
 .settings-view .settings-workspace-card > header > strong,
@@ -1829,7 +1829,7 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   padding: 14px;
   border: 1px solid var(--pencil-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--pencil-surface);
 }
 
 .settings-view .settings-manager-card > strong {
@@ -1893,7 +1893,7 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   padding: 16px;
   border: 1px solid var(--pencil-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--pencil-surface);
 }
 
 .settings-view .settings-template-section h3 {
