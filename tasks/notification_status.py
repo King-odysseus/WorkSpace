@@ -51,12 +51,20 @@ def notification_stream(request):
         since = max(int(request.GET.get('since', 0)), 0)
     except (TypeError, ValueError):
         since = 0
+    try:
+        unread = max(int(request.GET.get('unread', -1)), 0)
+    except (TypeError, ValueError):
+        unread = -1
 
     def events():
         deadline = time.monotonic() + 25
         while time.monotonic() < deadline:
             summary = _notification_summary(request.user)
-            if summary['latest_notification_id'] > since:
+            # A read action changes the unread count without creating a new row.
+            # Clients that provide their last count are woken for that change too,
+            # while older callers keep the original latest-id behavior.
+            read_state_changed = unread >= 0 and summary['unread_count'] != unread
+            if summary['latest_notification_id'] > since or read_state_changed:
                 yield f"id: {summary['latest_notification_id']}\ndata: {json.dumps(summary)}\n\n"
                 return
             yield ': keep-alive\n\n'

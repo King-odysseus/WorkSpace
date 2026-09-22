@@ -14,6 +14,7 @@ import LinkedText from './LinkedText.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { PRESENCE_LABEL, effectivePresence, formatDate, formatDay, formatRelativeActivityTime, getCsrfToken, isImageFileName, toDateKey } from '../lib/workspace-format.js'
 import { requestChatThread, takePendingChatThread, takePendingDirectMessage } from '../lib/chat-navigation.js'
+import { announceNotificationChange } from '../lib/notification-events.js'
 
 const EMOJI_CATEGORIES = [
   ['Smileys', '😀', ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😋', '😛', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '🥺', '😢', '😭', '😤', '😠', '😡', '🤯', '😳', '🥵', '🥶', '😱', '😨', '🤗', '🤔', '🫡', '🤭', '🫢', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😴', '🤤', '😷', '🤒', '🤕']],
@@ -812,7 +813,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         body: JSON.stringify({ target_type: targetType, target_id: String(targetId) }),
       })
       if (response.ok) {
-        window.dispatchEvent(new Event('workspace:notifications-changed'))
+        announceNotificationChange('chat-read')
         onRefresh()
       }
     } catch (readError) { console.warn('Chat notifications could not be marked read.', readError) }

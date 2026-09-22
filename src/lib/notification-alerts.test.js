@@ -69,6 +69,26 @@ it('asks listeners to re-read the notification list when a new one arrives', asy
   window.removeEventListener('workspace:notifications-changed', onChanged)
 })
 
+it('fetches a fresh summary after a change arrives during an in-flight refresh', async () => {
+  let resolveFirst
+  fetch.mockReturnValueOnce(new Promise(resolve => { resolveFirst = resolve }))
+  fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ unread_count: 0, latest_unread_id: 0, latest_notification_id: 27 }) })
+  stop = startNotificationAlerts(() => {}, playSound)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(fetch).toHaveBeenCalledTimes(1)
+
+  window.dispatchEvent(new Event('workspace:notifications-changed'))
+  expect(fetch).toHaveBeenCalledTimes(1)
+
+  resolveFirst({ ok: true, json: async () => summary })
+  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(document.title).toBe('WorkSpace')
+  expect(navigator.clearAppBadge).toHaveBeenCalled()
+})
+
 it('ignores an outstanding response after logout and cleans up sound and badge', async () => {
   let resolve
   fetch.mockReturnValue(new Promise(done => { resolve = done }))
@@ -129,4 +149,5 @@ it('opens a notification stream and reconnects from the newest notification ID',
   FakeEventSource.instances[0].onmessage({ data: JSON.stringify({ unread_count: 26, latest_unread_id: 26, latest_notification_id: 26 }) })
   expect(onSummary).toHaveBeenLastCalledWith({ unread_count: 26, latest_unread_id: 26, latest_notification_id: 26 })
   expect(FakeEventSource.instances.at(-1).url).toContain('since=26')
+  expect(FakeEventSource.instances.at(-1).url).toContain('unread=26')
 })

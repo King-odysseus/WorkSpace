@@ -306,3 +306,24 @@ class NotificationSummaryTests(TestCase):
         self.assertIn(f'id: {notification.id}', body)
         self.assertIn('"unread_count": 0', body)
         self.assertIn(f'"latest_notification_id": {notification.id}', body)
+
+    def test_stream_emits_when_unread_count_changes_without_a_new_notification(self):
+        user = User.objects.create_user(username='read-state-stream-user')
+        workspace = Workspace.objects.create(name='Read State Stream', slug='read-state-stream')
+        Membership.objects.create(workspace=workspace, user=user)
+        notification = WorkspaceNotification.objects.create(
+            workspace=workspace,
+            recipient=user,
+            kind='mention',
+            title='Already read',
+            read_at=timezone.now(),
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(
+            f"{reverse('notification-stream')}?since={notification.id}&unread=1"
+        )
+        body = b''.join(response.streaming_content).decode()
+
+        self.assertIn(f'id: {notification.id}', body)
+        self.assertIn('"unread_count": 0', body)

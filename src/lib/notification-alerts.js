@@ -1,5 +1,6 @@
 import { playNotificationSound, primeNotificationAudio } from './notification-sounds.js'
 import { signalAuthenticationRequired } from './auth-events.js'
+import { announceNotificationChange, startNotificationChangeBridge } from './notification-events.js'
 
 // A separate lightweight poll keeps badges current without loading every workspace
 // collection. Push wakes this poll immediately, including while minimized.
@@ -15,9 +16,12 @@ export async function updateAppBadge(count) {
 export function startNotificationAlerts(onSummary = () => {}, playSound = playNotificationSound, primeAudio = primeNotificationAudio) {
   let stopped = false
   let pending = false
+  let refreshQueued = false
+  let refreshSequence = 0
   let stream = null
   let streamReconnect = null
   let latestNotificationId = 0
+  let latestUnreadCount = null
   let hasBaseline = false
   let lastPlayedId = 0
   let audioPrimed = false
@@ -36,15 +40,21 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     // This poll reads an account-wide count, but the bell reads one workspace's
     // history and is fetched separately, so a new arrival has to say so or the
     // open popout keeps showing the list it loaded with.
-    if (arrived) window.dispatchEvent(new Event('workspace:notifications-changed'))
+    if (arrived) announceNotificationChange('alert-arrival')
     latestNotificationId = nextNotificationId
+    latestUnreadCount = Number(data.unread_count) || 0
     hasBaseline = true
     onSummary(data)
     document.title = data.unread_count ? `(${data.unread_count}) ${originalTitle}` : originalTitle
     updateAppBadge(data.unread_count)
   }
   const refresh = async () => {
-    if (stopped || pending) return
+    if (stopped) return
+    const requestSequence = ++refreshSequence
+    if (pending) {
+      refreshQueued = true
+      return
+    }
     pending = true
     try {
       const response = await fetch('/api/notifications/summary/', { credentials: 'include', cache: 'no-store' })
@@ -54,18 +64,24 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
       }
       if (!response.ok) throw new Error(`Notification summary returned ${response.status}`)
       const data = await response.json()
-      if (stopped) return
+      if (stopped || requestSequence !== refreshSequence) return
       applySummary(data)
     } catch (error) {
       if (!stopped) console.warn('Notification alerts could not be refreshed.', error)
     } finally {
       pending = false
+      if (refreshQueued && !stopped) {
+        refreshQueued = false
+        void refresh()
+      }
     }
   }
   const openStream = () => {
     if (stopped || !window.EventSource) return
     stream?.close()
-    stream = new EventSource(`/api/notifications/stream/?since=${latestNotificationId}`, { withCredentials: true })
+    const params = new URLSearchParams({ since: String(latestNotificationId) })
+    if (latestUnreadCount !== null) params.set('unread', String(latestUnreadCount))
+    stream = new EventSource(`/api/notifications/stream/?${params.toString()}`, { withCredentials: true })
     stream.onmessage = event => {
       try {
         const data = JSON.parse(event.data)
@@ -82,6 +98,9 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
   }
   const onMessage = event => {
     if (event.data?.type === 'NOTIFICATIONS_CHANGED') refresh()
+  }
+  const onNotificationChange = event => {
+    if (event.detail?.source !== 'alert-arrival') refresh()
   }
   const removeAudioUnlockListeners = () => {
     document.removeEventListener('pointerdown', unlockAudio, true)
@@ -110,7 +129,8 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
   document.addEventListener('keydown', unlockAudio, true)
   document.addEventListener('touchstart', unlockAudio, { capture: true, passive: true })
   document.addEventListener('visibilitychange', refresh)
-  window.addEventListener('workspace:notifications-changed', refresh)
+  window.addEventListener('workspace:notifications-changed', onNotificationChange)
+  const stopNotificationChangeBridge = startNotificationChangeBridge()
   navigator.serviceWorker?.addEventListener('message', onMessage)
   const timer = window.setInterval(refresh, 15000)
   refresh()
@@ -122,7 +142,8 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     stream?.close()
     removeAudioUnlockListeners()
     document.removeEventListener('visibilitychange', refresh)
-    window.removeEventListener('workspace:notifications-changed', refresh)
+    window.removeEventListener('workspace:notifications-changed', onNotificationChange)
+    stopNotificationChangeBridge()
     navigator.serviceWorker?.removeEventListener('message', onMessage)
     document.title = originalTitle
     updateAppBadge(0)

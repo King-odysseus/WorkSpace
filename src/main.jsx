@@ -182,6 +182,7 @@ import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import BrandedStatusScreen from "./components/BrandedStatusScreen.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts } from "./lib/notification-alerts.js";
+import { announceNotificationChange } from "./lib/notification-events.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
 import { startInstallPromptCapture } from "./lib/install-prompt.js";
@@ -1849,7 +1850,7 @@ function App() {
       );
       if (!response.ok)
         return toast.error("Notifications could not be marked as read.");
-      window.dispatchEvent(new Event("workspace:notifications-changed"));
+      announceNotificationChange("activity-read");
       setWorkspaceData((current) => ({
         ...current,
         notifications: current.notifications.map((notification) => ({
@@ -1888,7 +1889,7 @@ function App() {
       );
       if (!response.ok)
         return toast.error("Notification could not be marked as read.");
-      window.dispatchEvent(new Event("workspace:notifications-changed"));
+      announceNotificationChange("notification-read");
       setWorkspaceData((current) => {
         const cleared = current.notifications.find(
           (notification) => notification.id === notificationId,
