@@ -8196,12 +8196,47 @@ html:not([data-theme='dark']) .settings-view .avatar-initials {
   color: var(--pencil-text-secondary);
 }
 
-/* Flowbite can emit its own white surface utilities even when the component
+/* Flowbite can emit its own light surface utilities even when the component
    call site uses the WorkSpace semantic tokens. Keep those utilities from
-   punching light cards, popovers, or striped table rows through dark mode. */
+   punching light cards, popovers, menus, or striped rows through dark mode.
+   The semantic surfaces preserve the app's navy glass hierarchy and always
+   win over an unpaired utility class. */
 :is(html[data-theme='dark'], html.dark) :is(
   [class~='bg-white'],
-  [class~='odd:bg-white']
+  [class~='odd:bg-white'],
+  [class~='bg-gray-50'],
+  [class~='bg-gray-100'],
+  [class~='bg-slate-50'],
+  [class~='bg-slate-100'],
+  [class~='bg-neutral-50'],
+  [class~='bg-neutral-100'],
+  [class~='bg-zinc-50'],
+  [class~='bg-zinc-100'],
+  [class~='bg-stone-50'],
+  [class~='bg-stone-100']
 ) {
+  border-color: var(--pencil-glass-edge);
   background-color: var(--pencil-surface) !important;
+}
+
+:is(html[data-theme='dark'], html.dark) :is(
+  [class~='hover:bg-white']:hover,
+  [class~='hover:bg-gray-50']:hover,
+  [class~='hover:bg-gray-100']:hover,
+  [class~='hover:bg-slate-50']:hover,
+  [class~='hover:bg-slate-100']:hover,
+  [class~='hover:bg-neutral-50']:hover,
+  [class~='hover:bg-neutral-100']:hover,
+  [class~='hover:bg-zinc-50']:hover,
+  [class~='hover:bg-zinc-100']:hover,
+  [class~='hover:bg-stone-50']:hover,
+  [class~='hover:bg-stone-100']:hover
+) {
+  background-color: var(--pencil-surface-hover) !important;
+}
+
+:is(html[data-theme='dark'], html.dark) .project-owner-avatar,
+:is(html[data-theme='dark'], html.dark) .project-resource-avatar {
+  background: var(--pencil-selected) !important;
+  color: var(--pencil-bronze-muted) !important;
 }
