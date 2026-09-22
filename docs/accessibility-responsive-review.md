@@ -1,19 +1,19 @@
 # Accessibility and responsive review
 
 Scope: the React/Vite frontend under `src/` (shell in `src/main.jsx`, planner
-in `src/components/PlannerBoard.jsx`, shared UI in `src/components/ui/`, theme
-tokens in `src/workspace.css`). This is a static review; items marked
-"verify" need an automated audit (e.g. axe-core / Lighthouse) or a manual
-screen-reader pass to confirm, and are not asserted as defects.
+in `src/components/PlannerBoard.jsx`, shared UI in `src/components/ui/`, and
+theme tokens in `src/pencil.css`, `src/settings.css`, and `src/chat-mobile.css`).
+Items marked "verify" still need a manual screen-reader, axe-core, or
+Lighthouse pass and are not asserted as defects.
 
 ## Passes (verified in source)
 
 | Area | Evidence |
 | --- | --- |
 | Skip link | `skip-link` anchor -> `#main-content`; `<main id="main-content" tabIndex="-1">` (main.jsx:666, 982) |
-| Visible focus | global `:focus-visible` outline (`workspace.css`), plus per-control focus styles |
+| Visible focus | global `:focus-visible` outline (`pencil.css`), plus per-control focus styles |
 | Reduced motion | `@media (prefers-reduced-motion: reduce)` collapses transitions/animations (line 970) |
-| Dialogs | `role="dialog" aria-modal="true" aria-labelledby` on the quick-capture modal (main.jsx:992) |
+| Dialogs | `role="dialog" aria-modal="true" aria-labelledby` on the quick-capture modal, plus Escape close, Tab containment, and focus return (main.jsx:390-420) |
 | Live regions | errors use `role="alert"`, loading uses `role="status"` (main.jsx:985-986, 992) |
 | Icon-only buttons | aria-labels on drag/archive/move/pagination/close buttons (PlannerBoard.jsx:34-51, 188) |
 | Current page | `aria-current="page"` on active nav items (main.jsx:720, 758) |
@@ -22,6 +22,9 @@ screen-reader pass to confirm, and are not asserted as defects.
 | Keyboard drag fallback | planner cards expose Move up/down/left/right buttons (PlannerBoard.jsx:47-51) |
 | Semantic structure | `<table>` for planner table view, `<nav aria-label>` for settings/legal sections |
 | File uploads | Chat attachment, profile photo, and workspace logo inputs carry names on the file control itself; a live audit across 23 routes reports no unnamed interactive controls. |
+| Route containment | Automated Playwright audit across 23 top-level routes, 8 Settings panels, and 8 project tabs at 320, 390, 768, 1024, and 1440 widths reports 190 checks and 0 width, crash, page-error, or uncontained-overflow failures. |
+| Named visible controls | Automated visible-control audit across 23 routes reports 0 unnamed inputs, textareas, selects, or buttons. |
+| Native control theming | `color-scheme: light` and `color-scheme: dark` are declared with their matching theme tokens (pencil.css:89-96). |
 
 ## Responsive coverage (verified)
 
@@ -44,10 +47,6 @@ responsive and color changes share one token source.
 
 | Severity | Finding | Recommendation |
 | --- | --- | --- |
-| minor | Planner search input relies on a wrapping `<label>` with only an icon and no text (PlannerBoard.jsx:195); its accessible name may be empty. | Add `aria-label="Search tasks"` to the input. |
-| minor | Planner view toggle uses `role="group"` but buttons signal state only via `.active` class, not `aria-pressed`/`aria-checked` (PlannerBoard.jsx:194). | Use `role="radiogroup"` with `role="radio"` + `aria-checked`, mirroring the theme switcher pattern. |
-| minor | Quick-capture modal has no focus trap, Escape-to-close, or focus return to the trigger. | Add a focus trap and `onKeyDown` Escape handling; restore focus on close. |
 | verify | Color contrast for `mobile-pill-nav` text `#B9CCDD` on `#0B223AEE`, and priority/scope badge colors, is not computed here. | Run axe-core / Lighthouse contrast checks; adjust tokens if below 4.5:1 (normal text). |
-| verify | Dark theme should set `color-scheme` so native controls (date/select scrollbars) render correctly. | Confirm `color-scheme: light dark` (or per-theme) is declared; add if missing. |
 | verify | Drag-and-drop only works by pointer; keyboard users rely on the Move buttons, which is acceptable but confirm each move is announced to screen readers. | Add `aria-live="polite"` to the bulk-action bar / column counts if not present. |
 | verify | Gantt and board views have no obvious table/region semantics for screen readers. | Confirm Gantt content exposes a labelled region (`aria-label`) and column headers. |
