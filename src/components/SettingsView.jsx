@@ -145,6 +145,52 @@ const lifecycleFailure = (action, status, message) => {
   };
 };
 
+const validateWebhookForm = (form) => {
+  const errors = {};
+  const url = form.url.trim();
+  const label = form.label.trim();
+
+  if (!url) {
+    errors.url = "Enter the incoming webhook URL.";
+  } else if (!url.startsWith("https://")) {
+    errors.url = "Webhook URLs must start with https://.";
+  } else if (url.length > 500) {
+    errors.url = "Webhook URLs must be 500 characters or fewer.";
+  }
+
+  if (label.length > 120) {
+    errors.label = "Labels must be 120 characters or fewer.";
+  }
+
+  return errors;
+};
+
+const integrationRequestError = (response, data, fallback) => {
+  const error = new Error(data?.error || fallback);
+  error.status = response.status;
+  return error;
+};
+
+const webhookFailureState = (error, title, retry) => {
+  if (error.status === 403) {
+    return {
+      tone: "warning",
+      title: "Integration changes restricted",
+      message:
+        error.message ||
+        "Only workspace owners and managers can change integrations.",
+      onRetry: null,
+    };
+  }
+
+  return {
+    tone: "danger",
+    title,
+    message: error.message || "Check the connection and try again.",
+    onRetry: retry,
+  };
+};
+
 const normalizeWorkingDays = (days) =>
   Array.from(
     new Set(
@@ -340,7 +386,11 @@ function SettingsView({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [webhooks, setWebhooks] = useState([]);
-  const [webhooksError, setWebhooksError] = useState("");
+  const [webhooksLoading, setWebhooksLoading] = useState(true);
+  const [webhooksError, setWebhooksError] = useState(null);
+  const [webhookActionBusy, setWebhookActionBusy] = useState(null);
+  const [webhookFieldErrors, setWebhookFieldErrors] = useState({});
+  const [webhooksReloadKey, setWebhooksReloadKey] = useState(0);
   const [webhookForm, setWebhookForm] = useState({
     kind: "teams",
     url: "",
@@ -348,7 +398,10 @@ function SettingsView({
   });
   const [webhookSaving, setWebhookSaving] = useState(false);
   const [calendarToken, setCalendarToken] = useState("");
+  const [calendarTokenLoading, setCalendarTokenLoading] = useState(true);
+  const [calendarTokenError, setCalendarTokenError] = useState(null);
   const [calendarTokenSaving, setCalendarTokenSaving] = useState(false);
+  const [calendarTokenReloadKey, setCalendarTokenReloadKey] = useState(0);
   const [lifecycleBusy, setLifecycleBusy] = useState(null);
   const [lifecycleError, setLifecycleError] = useState(null);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
@@ -1039,43 +1092,90 @@ function SettingsView({
   useEffect(() => {
     if (!workspaceId || section !== "integrations") return undefined;
     let isCurrent = true;
-    setWebhooksError("");
+    setWebhooksLoading(true);
+    setWebhooksError(null);
     fetch(`/api/workspaces/${workspaceId}/webhooks/?page_size=500`, {
       credentials: "include",
       headers: { "X-Workspace-Id": String(workspaceId) },
     })
       .then((response) =>
-        response.json().then((data) => ({ ok: response.ok, data })),
+        response.json().then((data) => ({
+          ok: response.ok,
+          status: response.status,
+          data,
+        })),
       )
-      .then(({ ok, data }) => {
+      .then(({ ok, status, data }) => {
         if (!isCurrent) return;
-        if (!ok) throw new Error(data.error || "Webhooks could not be loaded.");
-        setWebhooks(data.webhooks);
+        if (!ok) {
+          const error = new Error(data.error || "Webhooks could not be loaded.");
+          error.status = status;
+          throw error;
+        }
+        setWebhooks(Array.isArray(data.webhooks) ? data.webhooks : []);
       })
       .catch((error) => {
-        if (isCurrent) setWebhooksError(error.message || "Webhooks could not be loaded.");
+        if (!isCurrent) return;
+        setWebhooksError(
+          webhookFailureState(
+            error,
+            "Webhooks could not be loaded",
+            () => setWebhooksReloadKey((current) => current + 1),
+          ),
+        );
+      })
+      .finally(() => {
+        if (isCurrent) setWebhooksLoading(false);
       });
+    setCalendarTokenLoading(true);
+    setCalendarTokenError(null);
     fetch(`/api/workspaces/${workspaceId}/calendar-feed-token/`, {
       credentials: "include",
       headers: { "X-Workspace-Id": String(workspaceId) },
     })
       .then((response) =>
-        response.json().then((data) => ({ ok: response.ok, data })),
+        response.json().then((data) => ({
+          ok: response.ok,
+          status: response.status,
+          data,
+        })),
       )
-      .then(({ ok, data }) => {
-        if (isCurrent && ok) setCalendarToken(data.token);
+      .then(({ ok, status, data }) => {
+        if (!isCurrent) return;
+        if (!ok) {
+          const error = new Error(
+            data.error || "Subscribe link could not be loaded.",
+          );
+          error.status = status;
+          throw error;
+        }
+        setCalendarToken(data.token || "");
       })
-      .catch((error) =>
-        console.error("Calendar feed token could not be loaded", error),
-      );
+      .catch((error) => {
+        if (!isCurrent) return;
+        setCalendarTokenError(
+          webhookFailureState(
+            error,
+            "Subscribe link could not be loaded",
+            () => setCalendarTokenReloadKey((current) => current + 1),
+          ),
+        );
+      })
+      .finally(() => {
+        if (isCurrent) setCalendarTokenLoading(false);
+      });
     return () => {
       isCurrent = false;
     };
-  }, [workspaceId, section]);
+  }, [workspaceId, section, webhooksReloadKey, calendarTokenReloadKey]);
   const addWebhook = async (event) => {
-    event.preventDefault();
+    event?.preventDefault();
+    const validationErrors = validateWebhookForm(webhookForm);
+    setWebhookFieldErrors(validationErrors);
+    if (Object.keys(validationErrors).length) return;
+
     setWebhookSaving(true);
-    setWebhooksError("");
+    setWebhooksError(null);
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/webhooks/`, {
         method: "POST",
@@ -1087,17 +1187,31 @@ function SettingsView({
         body: JSON.stringify(webhookForm),
       });
       const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Webhook could not be connected.");
+      if (!response.ok) {
+        throw integrationRequestError(
+          response,
+          data,
+          "Webhook could not be connected.",
+        );
+      }
       setWebhooks((current) => [data.webhook, ...current]);
       setWebhookForm({ kind: "teams", url: "", label: "" });
+      setWebhookFieldErrors({});
     } catch (error) {
-      setWebhooksError(error.message || "Webhook could not be connected.");
+      setWebhooksError(
+        webhookFailureState(
+          error,
+          "Webhook could not be connected",
+          () => addWebhook(),
+        ),
+      );
     } finally {
       setWebhookSaving(false);
     }
   };
   const toggleWebhook = async (webhook) => {
+    setWebhookActionBusy({ id: webhook.id, action: "toggle" });
+    setWebhooksError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/webhooks/${webhook.id}/`,
@@ -1112,16 +1226,33 @@ function SettingsView({
         },
       );
       const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Webhook could not be updated.");
+      if (!response.ok) {
+        throw integrationRequestError(
+          response,
+          data,
+          "Webhook could not be updated.",
+        );
+      }
       setWebhooks((current) =>
         current.map((item) => (item.id === webhook.id ? data.webhook : item)),
       );
     } catch (error) {
-      setWebhooksError(error.message || "Webhook could not be updated.");
+      setWebhooksError(
+        webhookFailureState(
+          error,
+          "Webhook could not be updated",
+          () => toggleWebhook(webhook),
+        ),
+      );
+    } finally {
+      setWebhookActionBusy((current) =>
+        current?.id === webhook.id ? null : current,
+      );
     }
   };
   const deleteWebhook = async (webhook) => {
+    setWebhookActionBusy({ id: webhook.id, action: "delete" });
+    setWebhooksError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/webhooks/${webhook.id}/`,
@@ -1133,17 +1264,32 @@ function SettingsView({
       );
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Webhook could not be removed.");
+        throw integrationRequestError(
+          response,
+          data,
+          "Webhook could not be removed.",
+        );
       }
       setWebhooks((current) =>
         current.filter((item) => item.id !== webhook.id),
       );
     } catch (error) {
-      setWebhooksError(error.message || "Webhook could not be removed.");
+      setWebhooksError(
+        webhookFailureState(
+          error,
+          "Webhook could not be removed",
+          () => deleteWebhook(webhook),
+        ),
+      );
+    } finally {
+      setWebhookActionBusy((current) =>
+        current?.id === webhook.id ? null : current,
+      );
     }
   };
   const resetCalendarToken = async () => {
     setCalendarTokenSaving(true);
+    setCalendarTokenError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/calendar-feed-token/`,
@@ -1154,11 +1300,22 @@ function SettingsView({
         },
       );
       const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Subscribe link could not be reset.");
-      setCalendarToken(data.token);
+      if (!response.ok) {
+        throw integrationRequestError(
+          response,
+          data,
+          "Subscribe link could not be reset.",
+        );
+      }
+      setCalendarToken(data.token || "");
     } catch (error) {
-      setWebhooksError(error.message || "Subscribe link could not be reset.");
+      setCalendarTokenError(
+        webhookFailureState(
+          error,
+          "Subscribe link could not be reset",
+          () => resetCalendarToken(),
+        ),
+      );
     } finally {
       setCalendarTokenSaving(false);
     }
@@ -3618,7 +3775,21 @@ function SettingsView({
                     </small>
                   </div>
                 </div>
-                {calendarSubscribeUrl ? (
+                {calendarTokenError && (
+                  <SettingsAlert
+                    tone={calendarTokenError.tone}
+                    title={calendarTokenError.title}
+                    onRetry={calendarTokenError.onRetry}
+                    className="settings-integration-inline-alert"
+                  >
+                    {calendarTokenError.message}
+                  </SettingsAlert>
+                )}
+                {calendarTokenLoading ? (
+                  <SkeletonGroup className="settings-inline-skeleton" label="Loading your subscribe link">
+                    <Skeleton variant="row" />
+                  </SkeletonGroup>
+                ) : calendarSubscribeUrl ? (
                   <div className="settings-webhook-url-row">
                     <Link2 size={14} />
                     <code>{calendarSubscribeUrl}</code>
@@ -3632,16 +3803,12 @@ function SettingsView({
                       <Copy size={14} />
                     </Button>
                   </div>
-                ) : (
-                  <SkeletonGroup className="settings-inline-skeleton" label="Loading your subscribe link">
-                    <Skeleton variant="row" />
-                  </SkeletonGroup>
-                )}
+                ) : null}
                 {canManageMembers && (
                   <button
                     type="button"
                     className="secondary-button settings-reset-link"
-                    disabled={calendarTokenSaving}
+                    disabled={calendarTokenSaving || calendarTokenLoading}
                     onClick={resetCalendarToken}
                   >
                     {calendarTokenSaving ? "Resetting..." : "Reset link"}
@@ -3655,54 +3822,92 @@ function SettingsView({
                 </div>
               </div>
               {webhooksError && (
-                <p className="auth-error" role="alert">
-                  {webhooksError}
-                </p>
+                <SettingsAlert
+                  tone={webhooksError.tone}
+                  title={webhooksError.title}
+                  onRetry={webhooksError.onRetry}
+                >
+                  {webhooksError.message}
+                </SettingsAlert>
               )}
               <div className="settings-webhook-list">
-                {webhooks.length ? (
-                  webhooks.map((hook) => (
-                    <div className="settings-webhook-row" key={hook.id}>
-                      <Webhook size={14} />
-                      <div>
-                        <strong>
-                          {hook.label ||
-                            (hook.kind === "teams"
-                              ? "Microsoft Teams"
-                              : hook.kind === "slack"
-                                ? "Slack"
-                                : "Generic webhook")}
-                        </strong>
-                        <span>{hook.url}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className={`settings-switch ${hook.is_active ? "is-on" : ""}`}
-                        aria-pressed={hook.is_active}
-                        onClick={() => toggleWebhook(hook)}
-                      >
-                        <span className="settings-switch-track" aria-hidden="true" />
-                        <span className="settings-switch-label">{hook.is_active ? "On" : "Off"}</span>
-                      </button>
-                      {canManageMembers && (
-                        <Button
+                {webhooksLoading ? (
+                  <SkeletonGroup className="settings-webhook-skeleton" label="Loading webhooks">
+                    <Skeleton variant="row" />
+                    <Skeleton variant="row" />
+                  </SkeletonGroup>
+                ) : webhooks.length ? (
+                  webhooks.map((hook) => {
+                    const actionBusy =
+                      webhookActionBusy?.id === hook.id
+                        ? webhookActionBusy.action
+                        : "";
+                    return (
+                      <div className="settings-webhook-row" key={hook.id}>
+                        <Webhook size={14} />
+                        <div>
+                          <strong>
+                            {hook.label ||
+                              (hook.kind === "teams"
+                                ? "Microsoft Teams"
+                                : hook.kind === "slack"
+                                  ? "Slack"
+                                  : "Generic webhook")}
+                          </strong>
+                          <span>{hook.url}</span>
+                        </div>
+                        <button
                           type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => deleteWebhook(hook)}
-                          aria-label={`Remove ${hook.label || hook.url}`}
+                          className={`settings-switch ${hook.is_active ? "is-on" : ""}`}
+                          aria-pressed={hook.is_active}
+                          aria-busy={actionBusy === "toggle"}
+                          disabled={Boolean(actionBusy)}
+                          onClick={() => toggleWebhook(hook)}
                         >
-                          <X size={14} />
-                        </Button>
-                      )}
+                          <span className="settings-switch-track" aria-hidden="true" />
+                          <span className="settings-switch-label">
+                            {actionBusy === "toggle"
+                              ? "Saving"
+                              : hook.is_active
+                                ? "On"
+                                : "Off"}
+                          </span>
+                        </button>
+                        {canManageMembers && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            disabled={Boolean(actionBusy)}
+                            aria-busy={actionBusy === "delete"}
+                            onClick={() => deleteWebhook(hook)}
+                            aria-label={`Remove ${hook.label || hook.url}`}
+                          >
+                            {actionBusy === "delete" ? (
+                              <LoaderCircle
+                                size={14}
+                                className="settings-template-spinner"
+                              />
+                            ) : (
+                              <X size={14} />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : webhooksError ? null : (
+                  <div className="settings-integration-empty">
+                    <span aria-hidden="true"><Webhook size={18} /></span>
+                    <div>
+                      <strong>No webhooks connected</strong>
+                      <p>Connect a channel to start sending workspace notifications.</p>
                     </div>
-                  ))
-                ) : (
-                  <p className="settings-note">No webhooks connected yet.</p>
+                  </div>
                 )}
               </div>
               {canManageMembers && (
-                <form className="settings-webhook-form" onSubmit={addWebhook}>
+                <form className="settings-webhook-form" noValidate onSubmit={addWebhook}>
                   <strong className="settings-webhook-form-title">Connect a channel</strong>
                   <AppSelect
                     value={webhookForm.kind}
@@ -3718,32 +3923,64 @@ function SettingsView({
                     <option value="slack">Slack</option>
                     <option value="generic">Generic JSON</option>
                   </AppSelect>
-                  <input
-                    type="url"
-                    required
-                    placeholder="https://... incoming webhook URL"
-                    value={webhookForm.url}
-                    onChange={(event) =>
-                      setWebhookForm((current) => ({
-                        ...current,
-                        url: event.target.value,
-                      }))
-                    }
-                    aria-label="Webhook URL"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Label (optional)"
-                    value={webhookForm.label}
-                    onChange={(event) =>
-                      setWebhookForm((current) => ({
-                        ...current,
-                        label: event.target.value,
-                      }))
-                    }
-                    aria-label="Webhook label"
-                    maxLength={120}
-                  />
+                  <label className="settings-webhook-field">
+                    <input
+                      type="url"
+                      placeholder="https://... incoming webhook URL"
+                      value={webhookForm.url}
+                      onChange={(event) => {
+                        setWebhookForm((current) => ({
+                          ...current,
+                          url: event.target.value,
+                        }));
+                        setWebhookFieldErrors((current) => ({
+                          ...current,
+                          url: "",
+                        }));
+                      }}
+                      aria-label="Webhook URL"
+                      aria-invalid={Boolean(webhookFieldErrors.url)}
+                      aria-describedby={
+                        webhookFieldErrors.url ? "webhook-url-error" : undefined
+                      }
+                      maxLength={500}
+                    />
+                    {webhookFieldErrors.url && (
+                      <small id="webhook-url-error" className="settings-field-error">
+                        {webhookFieldErrors.url}
+                      </small>
+                    )}
+                  </label>
+                  <label className="settings-webhook-field">
+                    <input
+                      type="text"
+                      placeholder="Label (optional)"
+                      value={webhookForm.label}
+                      onChange={(event) => {
+                        setWebhookForm((current) => ({
+                          ...current,
+                          label: event.target.value,
+                        }));
+                        setWebhookFieldErrors((current) => ({
+                          ...current,
+                          label: "",
+                        }));
+                      }}
+                      aria-label="Webhook label"
+                      aria-invalid={Boolean(webhookFieldErrors.label)}
+                      aria-describedby={
+                        webhookFieldErrors.label
+                          ? "webhook-label-error"
+                          : undefined
+                      }
+                      maxLength={120}
+                    />
+                    {webhookFieldErrors.label && (
+                      <small id="webhook-label-error" className="settings-field-error">
+                        {webhookFieldErrors.label}
+                      </small>
+                    )}
+                  </label>
                   <Button type="submit" disabled={webhookSaving}>
                     {webhookSaving ? "Connecting..." : "Connect"}
                   </Button>

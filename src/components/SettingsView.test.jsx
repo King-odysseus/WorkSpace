@@ -810,6 +810,300 @@ it('renders integrations as a calendar card and a webhook connection form', asyn
   expect(document.querySelector('.settings-webhook-form')).toBeInTheDocument()
 })
 
+it('shows an integrations loading state before the disconnected webhook state', async () => {
+  let resolveWebhooks
+  const webhooksResponse = new Promise((resolve) => {
+    resolveWebhooks = resolve
+  })
+  mockApi({
+    '/api/workspaces/1/webhooks/?page_size=500': webhooksResponse,
+    '/api/workspaces/1/calendar-feed-token/': { token: 'calendar-token' },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+  expect(await screen.findByRole('status', { name: 'Loading webhooks' })).toBeInTheDocument()
+  expect(screen.queryByText('No webhooks connected')).not.toBeInTheDocument()
+
+  resolveWebhooks({ webhooks: [] })
+
+  expect(await screen.findByText('No webhooks connected')).toBeInTheDocument()
+  expect(screen.queryByRole('status', { name: 'Loading webhooks' })).not.toBeInTheDocument()
+})
+
+it('validates webhook fields before sending a create request', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/webhooks/?page_size=500': { webhooks: [] },
+    '/api/workspaces/1/calendar-feed-token/': { token: 'calendar-token' },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+  await screen.findByText('No webhooks connected')
+  fireEvent.change(screen.getByLabelText('Webhook URL'), {
+    target: { value: 'http://example.test/hook' },
+  })
+  fireEvent.change(screen.getByLabelText('Webhook label'), {
+    target: { value: 'x'.repeat(121) },
+  })
+  fireEvent.submit(document.querySelector('.settings-webhook-form'))
+
+  expect(screen.getByText('Webhook URLs must start with https://.')).toBeInTheDocument()
+  expect(screen.getByText('Labels must be 120 characters or fewer.')).toBeInTheDocument()
+  expect(screen.getByLabelText('Webhook URL')).toHaveAttribute('aria-invalid', 'true')
+  expect(screen.getByLabelText('Webhook label')).toHaveAttribute('aria-invalid', 'true')
+  expect(
+    api.mock.calls.some(([url, init = {}]) =>
+      String(url).includes('/api/workspaces/1/webhooks/') && init.method === 'POST'),
+  ).toBe(false)
+})
+
+it('preserves webhook values and retries a failed create request', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/webhooks/?page_size=500': { webhooks: [] },
+    '/api/workspaces/1/calendar-feed-token/': { token: 'calendar-token' },
+  })
+  const originalFetch = api.getMockImplementation()
+  let createAttempts = 0
+  api.mockImplementation(async (input, init = {}) => {
+    const url = String(input)
+    if (url.includes('/api/workspaces/1/webhooks/') && init.method === 'POST') {
+      createAttempts += 1
+      if (createAttempts === 1) {
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Webhook service unavailable.' }),
+          text: async () => '{"error":"Webhook service unavailable."}',
+        }
+      }
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          webhook: {
+            id: 7,
+            kind: 'slack',
+            url: 'https://hooks.slack.com/services/example',
+            label: 'Delivery alerts',
+            is_active: true,
+          },
+        }),
+        text: async () => '{"webhook":{"id":7}}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+  await screen.findByText('No webhooks connected')
+  fireEvent.change(screen.getByLabelText('Webhook type'), { target: { value: 'slack' } })
+  fireEvent.change(screen.getByLabelText('Webhook URL'), {
+    target: { value: 'https://hooks.slack.com/services/example' },
+  })
+  fireEvent.change(screen.getByLabelText('Webhook label'), {
+    target: { value: 'Delivery alerts' },
+  })
+  fireEvent.submit(document.querySelector('.settings-webhook-form'))
+
+  expect(await screen.findByText('Webhook service unavailable.')).toBeInTheDocument()
+  expect(screen.getByLabelText('Webhook URL')).toHaveValue('https://hooks.slack.com/services/example')
+  expect(screen.getByLabelText('Webhook label')).toHaveValue('Delivery alerts')
+  const alert = screen.getByText('Webhook service unavailable.').closest('[data-slot="alert"]')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  expect(await screen.findByText('Delivery alerts')).toBeInTheDocument()
+  expect(createAttempts).toBe(2)
+})
+
+it('renders revoked integration access as a non-retryable permission state', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/webhooks/?page_size=500': { webhooks: [] },
+    '/api/workspaces/1/calendar-feed-token/': { token: 'calendar-token' },
+  })
+  const originalFetch = api.getMockImplementation()
+  api.mockImplementation(async (input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/webhooks/') && init.method === 'POST') {
+      return {
+        ok: false,
+        status: 403,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ error: 'Owner or manager access is required.' }),
+        text: async () => '{"error":"Owner or manager access is required."}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+  await screen.findByText('No webhooks connected')
+  fireEvent.change(screen.getByLabelText('Webhook URL'), {
+    target: { value: 'https://example.test/incoming' },
+  })
+  fireEvent.submit(document.querySelector('.settings-webhook-form'))
+
+  expect(await screen.findByText('Integration changes restricted')).toBeInTheDocument()
+  expect(screen.getByText('Owner or manager access is required.')).toBeInTheDocument()
+  const alert = screen.getByText('Owner or manager access is required.').closest('[data-slot="alert"]')
+  expect(within(alert).queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+})
+
+it('retries a failed calendar subscribe-link load', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/webhooks/?page_size=500': { webhooks: [] },
+  })
+  const originalFetch = api.getMockImplementation()
+  let calendarAttempts = 0
+  api.mockImplementation(async (input, init = {}) => {
+    const url = String(input)
+    if (url.includes('/api/workspaces/1/calendar-feed-token/')) {
+      calendarAttempts += 1
+      if (calendarAttempts === 1) {
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Calendar feed is unavailable.' }),
+          text: async () => '{"error":"Calendar feed is unavailable."}',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ token: 'recovered-calendar-token' }),
+        text: async () => '{"token":"recovered-calendar-token"}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+  expect(await screen.findByText('Subscribe link could not be loaded')).toBeInTheDocument()
+  const alert = screen.getByText('Calendar feed is unavailable.').closest('[data-slot="alert"]')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  expect(await screen.findByRole('button', { name: 'Copy subscribe link' })).toBeInTheDocument()
+  expect(calendarAttempts).toBe(2)
+})
+
+it('keeps a webhook row after delete failure and retries the removal', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/webhooks/?page_size=500': {
+      webhooks: [{
+        id: 9,
+        kind: 'generic',
+        url: 'https://example.test/hooks/9',
+        label: 'Release bot',
+        is_active: true,
+      }],
+    },
+    '/api/workspaces/1/calendar-feed-token/': { token: 'calendar-token' },
+  })
+  const originalFetch = api.getMockImplementation()
+  let deleteAttempts = 0
+  api.mockImplementation(async (input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/webhooks/9/') && init.method === 'DELETE') {
+      deleteAttempts += 1
+      if (deleteAttempts === 1) {
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Webhook could not be reached.' }),
+          text: async () => '{"error":"Webhook could not be reached."}',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ deleted: 9 }),
+        text: async () => '{"deleted":9}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+  expect(await screen.findByText('Release bot')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Remove Release bot' }))
+
+  expect(await screen.findByText('Webhook could not be reached.')).toBeInTheDocument()
+  expect(screen.getByText('Release bot')).toBeInTheDocument()
+  const alert = screen.getByText('Webhook could not be reached.').closest('[data-slot="alert"]')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(screen.queryByText('Release bot')).not.toBeInTheDocument())
+  expect(deleteAttempts).toBe(2)
+})
+
 it('lets an owner save daily hours and working days for a member', async () => {
   const api = mockApi({
     '/api/workspaces/1/notification-preferences/': {

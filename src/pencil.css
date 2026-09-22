@@ -2121,7 +2121,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 @media (min-width: 1024px) {
   .my-task-row {
     display: grid !important;
-    grid-template-columns: 20px 12px minmax(0, 1fr) 8px 96px 12px 64px 52px 28px;
+    grid-template-columns: 20px 12px minmax(0, 1fr) 8px 96px 12px 64px 52px 28px 8px 36px;
     align-items: center;
     column-gap: 0 !important;
   }
@@ -2130,6 +2130,11 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .my-task-status-slot { grid-column: 5; }
   .my-task-due { grid-column: 7; }
   .my-task-row .row-avatar { grid-column: 9; margin-left: 0; }
+  /* The actions button is absolutely positioned at the row's right edge, which
+     is where the grid puts the assignee's picture, so on hover the three dots
+     landed on top of the avatar. On a grid it gets a column of its own and the
+     two cannot collide. */
+  .my-task-row > button:last-child { position: static; transform: none; grid-column: 11; }
 }
 
 @media (max-width: 1023px) {
@@ -4752,6 +4757,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .screen-share-policy-hint, .screen-share-policy-copy, .screen-share-policy-meta { margin: 0; color: var(--pencil-text-muted); font-size: 11px; line-height: 17px; }
 .screen-sharing-policy-form .primary-button, .screen-sharing-request-card .primary-button { width: fit-content; min-height: 40px; padding: 0 16px; font-size: 12px; }
 .screen-sharing-session-list { display: grid; border: 1px solid var(--pencil-border); border-radius: 10px; }
+.screen-sharing-session-list .empty-copy { margin: 0; padding: 16px; }
+.screen-sharing-captures .empty-copy { margin: 0; padding: 16px; }
 .screen-sharing-session-row { display: grid; min-height: 62px; grid-template-columns: minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--pencil-border-light); }
 .screen-sharing-session-row:last-child { border-bottom: 0; }
 .screen-sharing-session-row > div { display: grid; gap: 3px; min-width: 0; }
