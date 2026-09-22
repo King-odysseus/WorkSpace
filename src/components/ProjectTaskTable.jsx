@@ -3,6 +3,7 @@ import { Check, Search } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { normalizeProjectTaskStatus } from './ProjectKanbanBoard.jsx'
 import { AppSelect } from './ui/select.jsx'
+import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import { formatDayMonthName, formatEstimateMinutes, toDateKey } from '../lib/workspace-format.js'
 
 const STATUS_OPTIONS = [
@@ -194,6 +195,88 @@ export default function ProjectTaskTable({
   const canCompleteTask = task => canEditTask(task) && Boolean(onComplete)
   const canChangeStatus = task => canEditTask(task) && Boolean(onStatusChange)
 
+  // Completed rows leave the working table and collect in their own folded
+  // section, so the table reads as what is left to do. Filtering by Done is a
+  // request to look at finished work, so that one filter answers in the table
+  // directly rather than folding away the rows it was asked for.
+  const splitDone = statusFilter !== 'done'
+  const activeRows = splitDone ? filteredTasks.filter(task => projectStatusKey(task.status) !== 'done') : filteredTasks
+  const completedRows = splitDone ? filteredTasks.filter(task => projectStatusKey(task.status) === 'done') : []
+
+  const tableHead = (
+    <thead>
+      <tr>
+        <th className="project-task-done-column"><span className="sr-only">Done</span></th>
+        <th>Task</th>
+        <th>Status</th>
+        <th>Priority</th>
+        <th>Assignee</th>
+        <th>Bucket</th>
+        <th>Due</th>
+        <th>Estimate</th>
+      </tr>
+    </thead>
+  )
+
+  const renderTaskRow = task => {
+    const done = projectStatusKey(task.status) === 'done'
+    const overdue = Boolean(task.due_date && task.due_date < today && !done)
+    const priority = priorityDefinition(task.priority)
+    const status = statusDefinition(task.status)
+    const pending = String(pendingTaskId) === String(task.id)
+    return (
+      <tr className={done ? 'is-done' : ''} key={task.id}>
+        <td className="project-task-done-column">
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={done}
+            disabled={!canCompleteTask(task) || pending}
+            onClick={() => runTaskAction(task, () => onComplete?.(task.id))}
+            aria-label={`${done ? 'Reopen' : 'Complete'} ${task.title}`}
+            title={done ? 'Reopen task' : 'Mark task complete'}
+            className={`project-task-check${done ? ' is-checked' : ''}`}
+          >
+            <Check size={13} strokeWidth={3} aria-hidden="true" />
+          </button>
+        </td>
+        <td className="project-task-title-cell">
+          <button type="button" onClick={() => onOpenTask?.(task)} title={task.title}>{task.title}</button>
+        </td>
+        <td>
+          {canChangeStatus(task) ? (
+            <AppSelect
+              className={`project-task-status-select is-${statusSlug(status.value)}`}
+              value={status.value}
+              disabled={pending}
+              onChange={event => runTaskAction(task, () => onStatusChange?.(task.id, event.target.value))}
+              aria-label={`Change status for ${task.title}`}
+            >
+              {STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </AppSelect>
+          ) : <span className={`project-task-status is-${statusSlug(status.value)}`}>{status.label}</span>}
+        </td>
+        <td><span className={`project-task-priority is-${priority.value}`} title={priority.label}>{priority.badge}</span></td>
+        <td><span className="project-task-assignee"><Avatar name={memberNameForTask(task)} avatarUrl={memberForTask(task)?.avatar_url} small /><span>{memberNameForTask(task)}</span></span></td>
+        <td><span className="project-task-bucket">{task.bucket || 'Backlog'}</span></td>
+        <td><span className={`project-task-due${overdue ? ' is-overdue' : ''}`}>{overdue ? 'Overdue' : formatDayMonthName(task.due_date) || '--'}</span></td>
+        <td><span className="project-task-estimate">{formatEstimateMinutes(task.estimate_minutes) || '--'}</span></td>
+      </tr>
+    )
+  }
+
+  const emptyRow = (list, message, hint) => !list.length && (
+    <tr>
+      <td colSpan={8}>
+        <div className="project-task-empty" role="status">
+          <strong>{message}</strong>
+          <span>{hint}</span>
+          {filtersActive && <button type="button" className="secondary-button" onClick={clearFilters}>Clear filters</button>}
+        </div>
+      </td>
+    </tr>
+  )
+
   return (
     <section className="project-task-table-surface" aria-label="Project tasks">
       <div className="project-task-filterbar">
@@ -243,80 +326,40 @@ export default function ProjectTaskTable({
       <div className="project-task-table-scroll">
         <table className="project-task-table">
           <caption className="sr-only">Project tasks</caption>
-          <thead>
-            <tr>
-              <th className="project-task-done-column"><span className="sr-only">Done</span></th>
-              <th>Task</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Assignee</th>
-              <th>Bucket</th>
-              <th>Due</th>
-              <th>Estimate</th>
-            </tr>
-          </thead>
+          {tableHead}
           <tbody>
-            {filteredTasks.map(task => {
-              const done = projectStatusKey(task.status) === 'done'
-              const overdue = Boolean(task.due_date && task.due_date < today && !done)
-              const priority = priorityDefinition(task.priority)
-              const status = statusDefinition(task.status)
-              const editable = canEditTask(task)
-              const pending = String(pendingTaskId) === String(task.id)
-              return (
-                <tr className={done ? 'is-done' : ''} key={task.id}>
-                  <td className="project-task-done-column">
-                    <button
-                      type="button"
-                      role="checkbox"
-                      aria-checked={done}
-                      disabled={!canCompleteTask(task) || pending}
-                      onClick={() => runTaskAction(task, () => onComplete?.(task.id))}
-                      aria-label={`${done ? 'Reopen' : 'Complete'} ${task.title}`}
-                      title={done ? 'Reopen task' : 'Mark task complete'}
-                      className={`project-task-check${done ? ' is-checked' : ''}`}
-                    >
-                      <Check size={13} strokeWidth={3} aria-hidden="true" />
-                    </button>
-                  </td>
-                  <td className="project-task-title-cell">
-                    <button type="button" onClick={() => onOpenTask?.(task)} title={task.title}>{task.title}</button>
-                  </td>
-                  <td>
-                    {canChangeStatus(task) ? (
-                      <AppSelect
-                        className={`project-task-status-select is-${statusSlug(status.value)}`}
-                        value={status.value}
-                        disabled={pending}
-                        onChange={event => runTaskAction(task, () => onStatusChange?.(task.id, event.target.value))}
-                        aria-label={`Change status for ${task.title}`}
-                      >
-                        {STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </AppSelect>
-                    ) : <span className={`project-task-status is-${statusSlug(status.value)}`}>{status.label}</span>}
-                  </td>
-                  <td><span className={`project-task-priority is-${priority.value}`} title={priority.label}>{priority.badge}</span></td>
-                  <td><span className="project-task-assignee"><Avatar name={memberNameForTask(task)} avatarUrl={memberForTask(task)?.avatar_url} small /><span>{memberNameForTask(task)}</span></span></td>
-                  <td><span className="project-task-bucket">{task.bucket || 'Backlog'}</span></td>
-                  <td><span className={`project-task-due${overdue ? ' is-overdue' : ''}`}>{overdue ? 'Overdue' : formatDayMonthName(task.due_date) || '--'}</span></td>
-                  <td><span className="project-task-estimate">{formatEstimateMinutes(task.estimate_minutes) || '--'}</span></td>
-                </tr>
-              )
-            })}
-            {!filteredTasks.length && (
-              <tr>
-                <td colSpan={8}>
-                  <div className="project-task-empty" role="status">
-                    <strong>{tasks.length ? 'No tasks match these filters' : 'No tasks are linked to this project'}</strong>
-                    <span>{tasks.length ? 'Adjust the filters or search to see more project tasks.' : 'Create a task and assign it to this project to begin tracking delivery.'}</span>
-                    {filtersActive && <button type="button" className="secondary-button" onClick={clearFilters}>Clear filters</button>}
-                  </div>
-                </td>
-              </tr>
+            {activeRows.map(renderTaskRow)}
+            {emptyRow(
+              activeRows,
+              !tasks.length
+                ? 'No tasks are linked to this project'
+                : completedRows.length && !filtersActive
+                  ? 'Everything in this project is done'
+                  : 'No tasks match these filters',
+              !tasks.length
+                ? 'Create a task and assign it to this project to begin tracking delivery.'
+                : completedRows.length && !filtersActive
+                  ? 'Open Done below to review or reopen the finished work.'
+                  : 'Adjust the filters or search to see more project tasks.',
             )}
           </tbody>
         </table>
       </div>
+
+      {completedRows.length > 0 && (
+        <CollapsibleSection
+          className="project-task-done-section"
+          title="Done"
+          count={completedRows.length}
+          contentClassName="project-task-table-scroll"
+        >
+          <table className="project-task-table">
+            <caption className="sr-only">Completed project tasks</caption>
+            {tableHead}
+            <tbody>{completedRows.map(renderTaskRow)}</tbody>
+          </table>
+        </CollapsibleSection>
+      )}
     </section>
   )
 }

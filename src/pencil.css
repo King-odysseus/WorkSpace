@@ -4620,6 +4620,10 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .project-task-section-heading { display: flex; min-height: 34px; align-items: center; padding: 0 2px; }
 .project-task-section-heading h2 { margin: 0; color: var(--pencil-text); font-size: 16px; font-weight: 600; line-height: 24px; }
 .project-task-table-scroll { width: 100%; min-width: 0; overflow-x: auto; background: var(--pencil-surface); }
+.project-task-done-section { margin-top: 18px; }
+/* The completed table sits inside the folded band, so its top rule would double
+   up with the band's own edge. */
+.project-task-done-section .project-task-table th { border-top: 0; }
 .project-task-table { width: 100%; min-width: 1010px; border-collapse: collapse; table-layout: fixed; }
 .project-task-table th { height: 36px; padding: 0 10px; border-top: 1px solid var(--pencil-border); border-bottom: 1px solid var(--pencil-border); background: var(--pencil-surface); color: var(--pencil-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .65px; text-align: left; text-transform: uppercase; }
 .project-task-table th:nth-child(2) { width: 27%; }

@@ -34,7 +34,14 @@ const renderTable = (props = {}) => render(
   />,
 )
 
-const visibleTaskCount = () => screen.getAllByRole('checkbox').length
+// Rows are read from the first table, which is the working table. The folded
+// Done band renders its own table below it and only once it is opened.
+const tableTitles = table => within(table).getAllByRole('row')
+  .map(row => row.querySelector('.project-task-title-cell button')?.textContent)
+  .filter(Boolean)
+const activeTitles = () => tableTitles(screen.getAllByRole('table')[0])
+const visibleTaskCount = () => activeTitles().length
+const doneTitles = () => tableTitles(screen.getAllByRole('table')[1])
 
 async function chooseFilter(user, name, option) {
   await user.click(screen.getByRole('combobox', { name }))
@@ -44,7 +51,8 @@ async function chooseFilter(user, name, option) {
 it('renders every project task with the approved table columns', () => {
   renderTable()
 
-  expect(visibleTaskCount()).toBe(10)
+  expect(visibleTaskCount()).toBe(9)
+  expect(activeTitles()).not.toContain('Ship design tokens')
   expect(screen.getByRole('columnheader', { name: 'Task' })).toBeInTheDocument()
   expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument()
   expect(screen.getByRole('columnheader', { name: 'Priority' })).toBeInTheDocument()
@@ -55,6 +63,41 @@ it('renders every project task with the approved table columns', () => {
   expect(screen.getByText(/10 tasks/)).toHaveTextContent('1 completed')
   expect(screen.getByText(/10 tasks/)).toHaveTextContent('1 blocked')
   expect(screen.getByText(/10 tasks/)).toHaveTextContent('1 overdue')
+})
+
+it('moves completed tasks into the folded Done band', async () => {
+  const user = userEvent.setup()
+  renderTable()
+
+  expect(screen.queryByText('Ship design tokens')).not.toBeInTheDocument()
+  const doneBand = screen.getByRole('button', { name: 'Show Done (1 item)' })
+  expect(doneBand).toHaveAttribute('aria-expanded', 'false')
+
+  await user.click(doneBand)
+  expect(doneTitles()).toEqual(['Ship design tokens'])
+  expect(visibleTaskCount()).toBe(9)
+})
+
+it('reopens a completed task from the Done band', async () => {
+  const user = userEvent.setup()
+  const onComplete = vi.fn()
+  renderTable({ onComplete })
+
+  await user.click(screen.getByRole('button', { name: 'Show Done (1 item)' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Reopen Ship design tokens' }))
+
+  expect(onComplete).toHaveBeenCalledWith(8)
+})
+
+it('answers a Done status filter in the working table instead of folding it away', async () => {
+  const user = userEvent.setup()
+  renderTable()
+
+  await chooseFilter(user, 'Filter by status', 'Done')
+
+  expect(screen.queryByRole('button', { name: /Show Done/ })).not.toBeInTheDocument()
+  expect(visibleTaskCount()).toBe(1)
+  expect(activeTitles()).toEqual(['Ship design tokens'])
 })
 
 it('searches task copy and filters by status', async () => {
@@ -70,7 +113,7 @@ it('searches task copy and filters by status', async () => {
   expect(visibleTaskCount()).toBe(1)
   expect(screen.getByText('Fix billing webhooks')).toBeInTheDocument()
   await chooseFilter(user, 'Filter by status', 'All statuses')
-  expect(visibleTaskCount()).toBe(10)
+  expect(visibleTaskCount()).toBe(9)
 })
 
 it('filters by assignee and priority', async () => {
@@ -80,13 +123,13 @@ it('filters by assignee and priority', async () => {
   await chooseFilter(user, 'Filter by assignee', 'Dana Reed')
   expect(visibleTaskCount()).toBe(4)
   await chooseFilter(user, 'Filter by assignee', 'All assignees')
-  expect(visibleTaskCount()).toBe(10)
+  expect(visibleTaskCount()).toBe(9)
 
   await chooseFilter(user, 'Filter by priority', 'Urgent (P1)')
   expect(visibleTaskCount()).toBe(1)
   expect(screen.getByText('Rebuild settings nav')).toBeInTheDocument()
   await chooseFilter(user, 'Filter by priority', 'All priorities')
-  expect(visibleTaskCount()).toBe(10)
+  expect(visibleTaskCount()).toBe(9)
 })
 
 it('filters by bucket and due-date state', async () => {
@@ -96,7 +139,7 @@ it('filters by bucket and due-date state', async () => {
   await chooseFilter(user, 'Filter by bucket', 'Build')
   expect(visibleTaskCount()).toBe(3)
   await chooseFilter(user, 'Filter by bucket', 'All buckets')
-  expect(visibleTaskCount()).toBe(10)
+  expect(visibleTaskCount()).toBe(9)
 
   await chooseFilter(user, 'Filter by date', 'Overdue')
   expect(visibleTaskCount()).toBe(1)
@@ -110,7 +153,7 @@ it('sorts through the summary control', async () => {
   const { container } = renderTable()
   const firstTitle = () => container.querySelector('tbody tr .project-task-title-cell button')?.textContent
 
-  expect(firstTitle()).toBe('Ship design tokens')
+  expect(firstTitle()).toBe('Rebuild settings nav')
   await chooseFilter(user, 'Sort tasks', 'Sort: title')
   expect(firstTitle()).toBe('Archive old briefs')
   expect(screen.getByRole('combobox', { name: 'Sort tasks' })).toHaveTextContent('10 \u00B7 Sort: title')
@@ -153,5 +196,5 @@ it('shows a helpful empty state when filters hide every task', async () => {
 
   expect(screen.getByText('No tasks match these filters')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Clear filters' }))
-  expect(visibleTaskCount()).toBe(10)
+  expect(visibleTaskCount()).toBe(9)
 })
