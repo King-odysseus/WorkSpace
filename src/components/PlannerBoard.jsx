@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, Check, ChevronRight, FolderInput, GripVertical, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
@@ -649,7 +649,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       <button type="button" className={`planner-mobile-filter-button${mobileFiltersOpen ? ' is-active' : ''}`} onClick={() => setMobileFiltersOpen(current => !current)} aria-expanded={mobileFiltersOpen} aria-controls="planner-mobile-filters">
         <SlidersHorizontal size={18} aria-hidden="true" /> Filter
       </button>
-      {canManageTasks && <button type="button" className={`planner-desktop-control planner-select-toggle${selectMode ? ' is-active' : ''}`} onClick={toggleSelectMode} aria-pressed={selectMode}>{selectMode ? 'Done selecting' : 'Select'}</button>}
+      {canManageTasks && <button type="button" className={`planner-desktop-control planner-select-toggle${selectMode ? ' is-active' : ''}`} onClick={toggleSelectMode} aria-label={selectMode ? 'Done selecting' : 'Select'} title={selectMode ? 'Done selecting' : 'Select'} aria-pressed={selectMode}><ListChecks size={18} aria-hidden="true" /></button>}
       <AppSelect className="planner-desktop-control planner-work-scope chip-select w-full sm:w-[170px]" value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Work scope" disabled={scopeMode === 'projects'}>
         <option value="all">All work</option>
         <option value="operations">Daily operations</option>

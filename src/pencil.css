@@ -2234,18 +2234,20 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .my-tasks-view { padding-bottom: 96px !important; }
 }
 
-/* P3 Planner. The desktop board uses 304px lanes with 16px gaps, a
-   744px board, and compact 76px task cards. Wider boards scroll horizontally. */
+/* P3 Planner. The desktop board uses 264px lanes with 16px gaps so four
+   lanes fit the 1440px frame. Wider boards scroll horizontally. */
 .planner-header { min-height: 101px; margin-bottom: 8px; }
 .planner-header > button { width: 124px; min-width: 124px; padding-inline: 12px !important; font-size: 14px; }
-.planner-commandbar { min-height: 42px; gap: 2px !important; }
+.planner-commandbar { min-height: 42px; gap: 8px !important; }
 .planner-commandbar > * { min-height: 42px; }
 .planner-commandbar [data-slot='select-trigger'] { height: 42px !important; min-height: 42px !important; }
-.planner-commandbar .planner-search { width: 280px; max-width: 280px; flex: 0 0 280px; margin-right: 10px; }
+.planner-commandbar .planner-search { width: 236px; max-width: 236px; flex: 0 0 236px; margin-right: 0; }
+.planner-select-toggle { display: grid; width: 36px; min-width: 36px; height: 42px; flex: 0 0 36px; place-items: center; padding: 0 !important; border: 1px solid var(--pencil-border-strong); border-radius: 12px; background: var(--pencil-surface); color: var(--pencil-text-secondary); }
+.planner-select-toggle:hover { border-color: var(--pencil-navy); color: var(--pencil-navy); }
 .planner-commandbar .planner-work-scope,
 .planner-commandbar .planner-project-filter,
-.planner-commandbar .planner-workstream-filter { width: 180px !important; flex: 0 0 180px; }
-.planner-archive-button { width: 130px; flex: 0 0 130px; margin-right: 10px; padding-inline: 12px !important; }
+.planner-commandbar .planner-workstream-filter { width: 164px !important; flex: 0 0 164px; }
+.planner-archive-button { width: 136px; flex: 0 0 136px; margin-right: 0; padding-inline: 12px !important; }
 .planner-new-bucket-button {
   width: 132px;
   flex: 0 0 132px;
@@ -2254,8 +2256,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   line-height: 21px;
 }
 .planner-scope-summary { min-height: 15px; margin-top: 16px !important; line-height: 15px; }
-.planner-board { display: grid !important; grid-auto-flow: column; grid-auto-columns: 304px; gap: 16px !important; margin-top: 17px !important; padding-bottom: 0 !important; }
-.planner-column { width: 100% !important; min-width: 304px; height: 744px !important; overflow: hidden; border: 0 !important; border-radius: 12px !important; background: var(--pencil-surface-muted) !important; }
+.planner-board { display: grid !important; grid-auto-flow: column; grid-auto-columns: 264px; gap: 16px !important; margin-top: 17px !important; padding-bottom: 0 !important; }
+.planner-column { width: 100% !important; min-width: 264px; height: 744px !important; overflow: hidden; border: 0 !important; border-radius: 12px !important; background: var(--pencil-surface-muted) !important; }
 .planner-column-heading { height: 60px; padding: 14px 12px 0 34px !important; border: 0 !important; }
 .planner-column-heading[data-reorderable='true'] { cursor: grab; }
 .planner-column-heading[data-reorderable='true']:active { cursor: grabbing; }
