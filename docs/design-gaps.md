@@ -83,6 +83,7 @@ The following are no longer unresolved design gaps:
 - Message reactions: P66 defines the reaction picker and overflow behavior.
 - Project index and project controls: P28 defines the Projects index without the duplicated controls panel. Risk register and issue log live in the project detail Risks and Issues tabs, covered by P32 and P33.
 - Project Kanban: P30 defines the filterable status board, lane counts and estimates, task metadata, add-task affordances, and responsive horizontal board behavior.
+- Kanban lane reordering: P67 defines the shared 304px Planner and Project lane geometry, drag surface, insertion state, persisted per-board order, and keyboard move controls.
 - Screen sharing: P19 defines the session-first console hierarchy, policy, consent status, participants, session states, history, and capture surfaces now implemented against the existing consent/capture contract.
 - Global header, search, notification indicators, account chooser, and avatar fallback: F1.
 - Notification panel states: F2.

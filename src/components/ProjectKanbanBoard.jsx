@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Plus, Search } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, GripVertical, MoveHorizontal, Plus, Search } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
@@ -181,6 +181,7 @@ export default function ProjectKanbanBoard({
   const draggedTask = draggedTaskId ? taskById(draggedTaskId) : null
   const orderedColumns = normalizeProjectKanbanColumnOrder(columnOrder).map(id => PROJECT_KANBAN_COLUMN_BY_ID.get(id))
   const allowColumnReorder = Boolean(canReorderColumns && onColumnReorder)
+  const draggedColumnLabel = orderedColumns.find(column => column.id === draggedColumnId)?.label
 
   useEffect(() => {
     if (revealColumnId === null || !boardRef.current) return undefined
@@ -505,6 +506,11 @@ export default function ProjectKanbanBoard({
             </span>
           </>}
         </div>
+        {isColumnDropTarget && <div className="project-kanban-column-drop-state" aria-hidden="true">
+          <MoveHorizontal size={24} strokeWidth={2} />
+          <strong>Drop here</strong>
+          <span>{draggedColumnLabel} lands at position {dropColumnIndex}</span>
+        </div>}
         {!collapsed && <div className="project-kanban-column-body">
           {columnTasks.map(task => {
             const editable = canMoveTask(task)

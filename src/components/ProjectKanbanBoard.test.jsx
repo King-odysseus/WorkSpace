@@ -197,6 +197,23 @@ it('reorders project kanban columns by drag and drop', () => {
   ])
 })
 
+it('shows the shared lane insertion state while reordering project kanban columns', async () => {
+  const onColumnReorder = vi.fn()
+  renderBoard({ onColumnReorder, canReorderColumns: true })
+  const backlogColumn = screen.getByRole('region', { name: 'Backlog column' })
+  const reviewColumn = screen.getByRole('region', { name: 'Review column' })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'column:backlog') }
+  vi.spyOn(reviewColumn, 'getBoundingClientRect').mockReturnValue({ left: 600, right: 904, width: 304, top: 0, bottom: 600, height: 600, x: 600, y: 0, toJSON: () => ({}) })
+
+  fireEvent.dragStart(backlogColumn.querySelector('.project-kanban-column-heading'), { dataTransfer })
+  fireEvent.dragEnter(reviewColumn, { dataTransfer, clientX: 850 })
+
+  await waitFor(() => {
+    expect(reviewColumn.querySelector('.project-kanban-column-drop-state')).toHaveTextContent('Drop here')
+  })
+  expect(reviewColumn.querySelector('.project-kanban-column-drop-state')).toHaveTextContent('Backlog lands at position 4')
+})
+
 it('moves a project kanban lane forward across multiple lanes to the pointer side', () => {
   const onColumnReorder = vi.fn()
   renderBoard({ onColumnReorder, canReorderColumns: true })
