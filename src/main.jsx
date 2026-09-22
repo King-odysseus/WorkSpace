@@ -3054,7 +3054,19 @@ function App() {
               </>
             )}
             {sidebarProfileOpen && (
-              <div className="absolute bottom-full right-0 z-[60] mb-2 max-h-[calc(100dvh-5rem)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
+              <div
+                className={cn(
+                  "absolute z-[60] max-h-[calc(100dvh-5rem)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated",
+                  // Expanded, the menu rises from the account row it belongs to.
+                  // Collapsed, that row is a 40px column against the left edge
+                  // of the screen, so a 224px menu anchored to its right runs
+                  // off the viewport; it opens alongside the rail instead, the
+                  // way the expand flyout already does.
+                  railCollapsed
+                    ? "bottom-0 left-full ml-5"
+                    : "bottom-full right-0 mb-2",
+                )}
+              >
                 {profileMenuBody}
               </div>
             )}

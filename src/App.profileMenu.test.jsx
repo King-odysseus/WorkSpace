@@ -5,8 +5,15 @@
 // avatar, which means it must stay absolutely positioned relative to the trigger
 // rather than pinned to the viewport.
 import { fireEvent, screen } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { mockApi } from './test/setup-tests.js'
+
+// main.jsx mounts itself at module scope, so each test needs a fresh module
+// registry or the second import does nothing against a torn-down DOM.
+beforeEach(() => {
+  vi.resetModules()
+  window.localStorage.removeItem('workspace-sidebar-collapsed')
+})
 
 const session = {
   user: {
@@ -45,4 +52,29 @@ it('anchors the account menu to the avatar instead of the viewport', async () =>
   expect(menu.className).not.toContain('fixed')
   // The shell root clips overflow, so the menu must never outgrow the viewport.
   expect(menu.className).toContain('max-h-')
+}, 60000)
+
+// Regression: the sidebar's own account menu is 224px wide and was anchored to
+// the right edge of the row it sits in. Collapsed, that row is a 40px column
+// against the left edge of the screen, so 172px of the menu was off the
+// viewport - it opened where it could not be read or clicked.
+it('opens the sidebar account menu beside the rail when the sidebar is collapsed', async () => {
+  window.localStorage.setItem('workspace-sidebar-collapsed', 'true')
+  mockApi({ '/api/auth/me/': session, '/api/tasks/': { tasks: [], pagination: { has_next: false } } })
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main.jsx')
+
+  const trigger = await screen.findByRole(
+    'button',
+    { name: /More account options for Nate Foster/ },
+    { timeout: 20000 },
+  )
+  fireEvent.click(trigger)
+
+  const menu = trigger.nextElementSibling
+  expect(menu).not.toBeNull()
+  // Alongside the rail, not rising from a row that has no width to spare.
+  expect(menu.className).toContain('left-full')
+  expect(menu.className).not.toContain('right-0')
+  expect(menu.className).toContain('max-w-')
 }, 60000)
