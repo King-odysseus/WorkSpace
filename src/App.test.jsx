@@ -83,6 +83,7 @@ it('renders the workspace shell and opens a task from the today bar', async () =
 
   // The shell is up once it has rendered its own navigation.
   await waitFor(() => expect(document.querySelectorAll('button').length).toBeGreaterThan(5), { timeout: 20000 })
+  expect(screen.getAllByRole('button', { name: 'Hard refresh WorkSpace' })).toHaveLength(2)
 
   // The mobile bar is the design's TabBar: five equal fifths along the bottom
   // edge. Four are pages and the fifth opens the drawer. Zuri has moved up into

@@ -26,6 +26,7 @@ async function loadModule({ registration, controller = {} }) {
   const container = new EventTarget()
   container.controller = controller
   container.register = vi.fn(async () => registration)
+  container.getRegistration = vi.fn(async () => registration)
   Object.defineProperty(navigator, 'serviceWorker', { value: container, configurable: true })
 
   reload = vi.fn()
@@ -114,5 +115,49 @@ describe('app update detection', () => {
     container.dispatchEvent(new Event('controllerchange'))
 
     expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('hard refresh hands an already waiting worker to the update flow', async () => {
+    const waiting = fakeWorker()
+    const registration = fakeRegistration({ waiting })
+    const { module, container } = await loadModule({ registration })
+
+    await module.hardRefreshApp()
+
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    expect(reload).not.toHaveBeenCalled()
+
+    container.dispatchEvent(new Event('controllerchange'))
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('hard refresh checks once and reloads when no update is waiting', async () => {
+    const registration = fakeRegistration()
+    const { module } = await loadModule({ registration })
+
+    await module.hardRefreshApp()
+
+    expect(registration.update).toHaveBeenCalledTimes(1)
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('hard refresh waits for a newly installing worker before swapping', async () => {
+    const installing = fakeWorker()
+    const registration = fakeRegistration()
+    registration.installing = installing
+    const { module, container } = await loadModule({ registration })
+
+    const refresh = module.hardRefreshApp()
+    await vi.waitFor(() => expect(registration.update).toHaveBeenCalledTimes(1))
+    expect(reload).not.toHaveBeenCalled()
+
+    registration.waiting = installing
+    installing.state = 'installed'
+    installing.dispatchEvent(new Event('statechange'))
+    await refresh
+
+    expect(installing.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+    container.dispatchEvent(new Event('controllerchange'))
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 })

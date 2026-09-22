@@ -181,7 +181,7 @@ import PersonalPlanner from "./components/PersonalPlanner.jsx";
 import { releaseNotesUnread } from "./lib/release-notes.js";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import BrandedStatusScreen from "./components/BrandedStatusScreen.jsx";
-import { startAppUpdateWatch } from "./lib/app-updates.js";
+import { hardRefreshApp, startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts, updateAppBadge } from "./lib/notification-alerts.js";
 import { announceNotificationChange } from "./lib/notification-events.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
@@ -491,6 +491,12 @@ function App() {
       window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false,
   );
   const resolvedTheme = resolveWorkspaceTheme(theme, systemPrefersDark);
+  const [hardRefreshPending, setHardRefreshPending] = useState(false);
+  const handleHardRefresh = () => {
+    if (hardRefreshPending) return;
+    setHardRefreshPending(true);
+    void hardRefreshApp();
+  };
   const [session, setSession] = useState({
     loading: true,
     user: null,
@@ -3216,6 +3222,21 @@ function App() {
               <Search size={20} />
             </button>
 
+            <button
+              type="button"
+              onClick={handleHardRefresh}
+              disabled={hardRefreshPending}
+              aria-label="Hard refresh WorkSpace"
+              aria-busy={hardRefreshPending}
+              title="Hard refresh WorkSpace"
+              className="flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+            >
+              <RefreshCw
+                size={20}
+                className={hardRefreshPending ? "animate-spin" : undefined}
+              />
+            </button>
+
             {/* The AppBar's assistant is not the header's Assistant button. The
                 design strokes this one with its navy on the navy tint, where the
                 header button uses the info pair. bg-selected is the app's name
@@ -3425,6 +3446,21 @@ function App() {
             >
               <Sparkles size={18} />
               <span>Assistant</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleHardRefresh}
+              disabled={hardRefreshPending}
+              aria-label="Hard refresh WorkSpace"
+              aria-busy={hardRefreshPending}
+              title="Hard refresh WorkSpace"
+              className="shell-header-icon flex size-9 items-center justify-center rounded-[10px] text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+            >
+              <RefreshCw
+                size={20}
+                className={hardRefreshPending ? "animate-spin" : undefined}
+              />
             </button>
 
             <button
