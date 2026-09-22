@@ -510,7 +510,7 @@ it('keeps the composer controls inside one compact message row', async () => {
   expect(composeRow).not.toBeNull()
   expect(within(composeRow).getByRole('button', { name: 'Mention a teammate' })).toBeInTheDocument()
   expect(within(composeRow).getByRole('button', { name: 'Add emoji' })).toBeInTheDocument()
-  expect(within(composeRow).getByTitle('Attach file')).toBeInTheDocument()
+  expect(within(composeRow).getByLabelText('Upload and attach a file')).toHaveAttribute('type', 'file')
   expect(within(composeRow).getByRole('button', { name: 'Send' })).toBeInTheDocument()
   expect(composeRow.querySelector('.chat-compose-toolbar')).toBeNull()
 })

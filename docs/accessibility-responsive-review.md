@@ -21,6 +21,7 @@ screen-reader pass to confirm, and are not asserted as defects.
 | Decorative images | empty `alt=""` on avatars/icons; logos carry `alt="TijhaBooks"` (main.jsx:35, 691, 931) |
 | Keyboard drag fallback | planner cards expose Move up/down/left/right buttons (PlannerBoard.jsx:47-51) |
 | Semantic structure | `<table>` for planner table view, `<nav aria-label>` for settings/legal sections |
+| File uploads | Chat attachment, profile photo, and workspace logo inputs carry names on the file control itself; a live audit across 23 routes reports no unnamed interactive controls. |
 
 ## Responsive coverage (verified)
 

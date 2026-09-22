@@ -463,7 +463,7 @@ it('keeps the previous profile photo, then retries the failed upload with the sa
   )
 
   const file = new File(['avatar'], 'avatar.png', { type: 'image/png' })
-  fireEvent.change(container.querySelector('input[type="file"]'), {
+  fireEvent.change(screen.getByLabelText('Change profile photo'), {
     target: { files: [file] },
   })
 
@@ -2339,10 +2339,8 @@ it('uploads a workspace logo and cache-busts the unchanged url', async () => {
   render(<SettingsView {...workspaceProps()} onWorkspaceLogoUpdated={onWorkspaceLogoUpdated} />)
 
   fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
-  // The aria-label sits on the label that wraps the input, so the change has to
-  // be fired on the input itself.
   const trigger = screen.getByLabelText('Change workspace logo')
-  fireEvent.change(trigger.querySelector('input[type="file"]') || trigger, {
+  fireEvent.change(trigger, {
     target: { files: [new File(['x'], 'logo.png', { type: 'image/png' })] },
   })
 

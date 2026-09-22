@@ -2647,12 +2647,12 @@ function SettingsView({
                   />
                   <label
                     className="avatar-upload-trigger"
-                    aria-label="Change profile photo"
                   >
                     <Camera size={14} />
                     <input
                       ref={avatarInputRef}
                       type="file"
+                      aria-label="Change profile photo"
                       accept="image/png,image/jpeg,image/gif,image/webp"
                       onChange={handleAvatarChange}
                       disabled={avatarUploading}
@@ -3350,10 +3350,11 @@ function SettingsView({
                       {(currentWorkspace?.name || "W").trim().charAt(0).toUpperCase()}
                     </span>
                   )}
-                  <label className="avatar-upload-trigger" aria-label="Change workspace logo">
+                  <label className="avatar-upload-trigger">
                     <Camera size={14} />
                     <input
                       type="file"
+                      aria-label="Change workspace logo"
                       accept="image/png,image/jpeg,image/gif,image/webp"
                       onChange={handleLogoChange}
                       disabled={logoUploading}
