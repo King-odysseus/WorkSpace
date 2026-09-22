@@ -9,9 +9,10 @@
 // drawer was handed an identifier the shell never defined - and no
 // component-level test renders the shell.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { expectRequest, mockApi } from './test/setup-tests.js'
 import { toDateKey } from './lib/workspace-format.js'
+import { syncVisualViewportVariables } from './lib/visual-viewport.js'
 
 const session = {
   user: {
@@ -125,3 +126,20 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   )
   expect(document.body.innerText).not.toContain('could not render this view')
 }, 60000)
+
+it('tracks visual viewport geometry for mobile editors', () => {
+  const setProperty = vi.fn()
+  syncVisualViewportVariables(
+    {
+      visualViewport: { width: 320, height: 480, offsetTop: 8, offsetLeft: 4 },
+      innerWidth: 1024,
+      innerHeight: 768,
+    },
+    { documentElement: { style: { setProperty } } },
+  )
+
+  expect(setProperty).toHaveBeenCalledWith('--workspace-visual-viewport-top', '8px')
+  expect(setProperty).toHaveBeenCalledWith('--workspace-visual-viewport-left', '4px')
+  expect(setProperty).toHaveBeenCalledWith('--workspace-visual-viewport-width', '320px')
+  expect(setProperty).toHaveBeenCalledWith('--workspace-visual-viewport-height', '480px')
+})

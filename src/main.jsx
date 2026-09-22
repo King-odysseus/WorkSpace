@@ -129,6 +129,7 @@ import {
   SelectItem,
 } from "./components/ui/select.jsx";
 import { cn } from "./lib/utils.js";
+import { syncVisualViewportVariables } from "./lib/visual-viewport.js";
 import toast, { Toaster } from "react-hot-toast";
 
 import {
@@ -309,7 +310,25 @@ const KNOWN_PAGES = new Set([
   "Install app", "Help", "Legal", "Files",
 ]);
 
+function useVisualViewportVariables() {
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const update = () => syncVisualViewportVariables(window, document);
+
+    update();
+    window.addEventListener("resize", update);
+    viewport?.addEventListener("resize", update);
+    viewport?.addEventListener("scroll", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      viewport?.removeEventListener("resize", update);
+      viewport?.removeEventListener("scroll", update);
+    };
+  }, []);
+}
+
 function App() {
+  useVisualViewportVariables();
   const today = toDateKey(new Date());
   const todayLabel = formatLongDate(today);
   // Supports PWA shortcuts (manifest.webmanifest) and any other deep link that
