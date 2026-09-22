@@ -421,6 +421,8 @@ function App() {
   const searchRef = useRef(null);
   const searchInputRef = useRef(null);
   const profileMenuRef = useRef(null);
+  const appbarProfileRef = useRef(null);
+  const appbarProfileMenuRef = useRef(null);
   const sidebarProfileRef = useRef(null);
   const workspaceMenuRef = useRef(null);
   const workspaceMenuRefMobile = useRef(null);
@@ -800,9 +802,14 @@ function App() {
         !messagesNavPanelRef.current?.contains(event.target)
       )
         setMessagesOpen(false);
+      const profileSurfaces = [
+        profileMenuRef.current,
+        appbarProfileRef.current,
+        appbarProfileMenuRef.current,
+      ].filter(Boolean);
       if (
-        profileMenuRef.current &&
-        !profileMenuRef.current.contains(event.target)
+        profileSurfaces.length &&
+        profileSurfaces.every((surface) => !surface.contains(event.target))
       )
         setProfileMenuOpen(false);
       if (
@@ -3179,6 +3186,7 @@ function App() {
             </button>
 
             <button
+              ref={appbarProfileRef}
               type="button"
               onClick={() => {
                 setNotificationOrigin("appbar");
@@ -3262,7 +3270,10 @@ function App() {
           )}
 
         {profileMenuOpen && profileMenuOrigin === "appbar" && (
-          <div className="fixed left-4 right-4 top-[60px] z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-auto max-w-[calc(100vw-2rem)] animate-fade-in overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-elevated lg:hidden">
+          <div
+            ref={appbarProfileMenuRef}
+            className="fixed left-4 right-4 top-[60px] z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-auto max-w-[calc(100vw-2rem)] animate-fade-in overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-elevated lg:hidden"
+          >
             {profileMenuBody}
           </div>
         )}

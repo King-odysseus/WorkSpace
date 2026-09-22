@@ -78,3 +78,25 @@ it('opens the sidebar account menu beside the rail when the sidebar is collapsed
   expect(menu.className).not.toContain('right-0')
   expect(menu.className).toContain('max-w-')
 }, 60000)
+
+it('navigates to Settings from the header account menu', async () => {
+  mockApi({ '/api/auth/me/': session, '/api/tasks/': { tasks: [], pagination: { has_next: false } } })
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main.jsx')
+
+  const trigger = await screen.findByRole(
+    'button',
+    { name: /Open account menu for Nate Foster/ },
+    { timeout: 20000 },
+  )
+  fireEvent.click(trigger)
+  const settings = await screen.findByRole('button', { name: 'Settings' })
+  // The mobile menu is mounted outside the desktop profile ref. Its mousedown
+  // must count as inside the account surface or the click target disappears
+  // before the click event can navigate.
+  fireEvent.mouseDown(settings)
+  fireEvent.click(settings)
+
+  expect(await screen.findByRole('heading', { name: 'Profile', level: 1 }, { timeout: 20000 })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
+}, 60000)
