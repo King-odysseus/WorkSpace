@@ -8170,3 +8170,33 @@ html[data-theme='dark'] .pencil-activity-view .activity-history {
     padding-inline: 12px;
   }
 }
+
+/* Small secondary labels need a slightly stronger foreground when they sit on
+   the muted canvas. Keep the approved #6A7282 token for regular muted copy and
+   scope these corrections to the affected light-mode surfaces. */
+html:not([data-theme='dark']) .planner-column-summary,
+html:not([data-theme='dark']) .planner-dropzone > span,
+html:not([data-theme='dark']) .import-step:not(.is-current):not(.is-complete) > span,
+html:not([data-theme='dark']) .import-source-copy em.is-muted,
+html:not([data-theme='dark']) .help-guide-card small,
+html:not([data-theme='dark']) .help-guide-card em,
+html:not([data-theme='dark']) .legal-cookie-list em,
+html:not([data-theme='dark']) .screen-share-status,
+html:not([data-theme='dark']) .screen-sharing-state-list small,
+html:not([data-theme='dark']) .screen-share-policy-hint,
+html:not([data-theme='dark']) .screen-share-policy-copy,
+html:not([data-theme='dark']) .screen-share-policy-meta {
+  color: var(--pencil-text-secondary);
+}
+
+html:not([data-theme='dark']) .screen-share-status.status-idle {
+  color: var(--pencil-text-secondary) !important;
+}
+
+.project-owner-avatar {
+  color: var(--pencil-navy);
+}
+
+html:not([data-theme='dark']) .settings-view .avatar-initials {
+  color: var(--pencil-text-secondary);
+}

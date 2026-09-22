@@ -19,7 +19,7 @@
 .chat-workspace-view .channel-row-meta {
   display: none;
   overflow: hidden;
-  color: var(--pencil-text-muted);
+  color: var(--pencil-text-secondary);
   font-size: 10px;
   font-weight: 400;
   line-height: 12px;
