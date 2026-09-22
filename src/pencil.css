@@ -2246,7 +2246,13 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-commandbar .planner-project-filter,
 .planner-commandbar .planner-workstream-filter { width: 180px !important; flex: 0 0 180px; }
 .planner-archive-button { width: 130px; flex: 0 0 130px; margin-right: 10px; padding-inline: 12px !important; }
-.planner-new-bucket-button { width: 132px; flex: 0 0 132px; padding-inline: 12px !important; }
+.planner-new-bucket-button {
+  width: 132px;
+  flex: 0 0 132px;
+  padding-inline: 12px !important;
+  font-size: 14px;
+  line-height: 21px;
+}
 .planner-scope-summary { min-height: 15px; margin-top: 16px !important; line-height: 15px; }
 .planner-board { display: grid !important; grid-auto-flow: column; grid-auto-columns: 304px; gap: 16px !important; margin-top: 17px !important; padding-bottom: 0 !important; }
 .planner-column { width: 100% !important; min-width: 304px; height: 744px !important; overflow: hidden; border: 0 !important; border-radius: 12px !important; background: var(--pencil-surface-muted) !important; }
@@ -7828,6 +7834,13 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
   min-height: 28px;
   padding: 0 10px;
   line-height: 14px;
+}
+
+.project-status-badge,
+.pencil-reports-view .report-project-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .project-task-priority {
