@@ -35,7 +35,7 @@ it('lists the member own planners and tasks, with no team data in the request', 
   expect(String(url)).toContain('/api/workspaces/4/')
 })
 
-it('ticks an item off and shows the day it was finished', async () => {
+it('ticks an item off into the Done band and shows the day it was finished', async () => {
   const fetchMock = loadPlanner({
     '/personal/tasks/7/': { task: { ...tasks[0], is_done: true, completed_at: '2024-03-09T09:30:00Z' } },
   })
@@ -43,12 +43,43 @@ it('ticks an item off and shows the day it was finished', async () => {
   render(<PersonalPlanner workspaceId={4} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Finish Draft handover' }))
 
-  expect(await screen.findByText('Done 09-03-24')).toBeInTheDocument()
+  // The tick moves the item out of the day's list and into the folded Done band.
+  expect(await screen.findByRole('button', { name: 'Show Done (1 item)' })).toBeInTheDocument()
   expect(screen.getByText('1 of 2 done')).toBeInTheDocument()
+  expect(screen.queryByText('Done 09-03-24')).not.toBeInTheDocument()
   expect(screen.queryByText('Due 05-01-20')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show Done (1 item)' }))
+  expect(screen.getByText('Done 09-03-24')).toBeInTheDocument()
 
   const [, init] = expectRequest(fetchMock, '/personal/tasks/7/', 'PATCH')
   expect(JSON.parse(init.body)).toEqual({ is_done: true })
+})
+
+it('reopens a finished item from the Done band back into the day list', async () => {
+  mockApi({
+    '/personal/planners/': {
+      planners: [planner],
+      tasks: [
+        tasks[0],
+        { id: 8, planner_id: 3, title: 'Book the van', notes: '', due_date: '', is_done: true, completed_at: '2024-03-09T09:30:00Z', position: 1 },
+      ],
+    },
+    '/personal/tasks/8/': {
+      task: { id: 8, planner_id: 3, title: 'Book the van', notes: '', due_date: '', is_done: false, completed_at: '', position: 1 },
+    },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+
+  expect(await screen.findByText('1 of 2 done - 1 overdue')).toBeInTheDocument()
+  expect(screen.queryByDisplayValue('Book the van')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show Done (1 item)' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Reopen Book the van' }))
+
+  expect(await screen.findByDisplayValue('Book the van')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Show Done/ })).not.toBeInTheDocument()
 })
 
 it('puts the tick back when the save fails, and says why', async () => {

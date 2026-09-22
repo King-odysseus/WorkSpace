@@ -5857,6 +5857,10 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .personal-planner-composer input::placeholder { color: var(--pencil-text-secondary); opacity: 1; }
 .personal-planner-composer button { min-width: 72px; min-height: 32px; height: 32px; margin-right: 0; padding: 0 14px; border-radius: 8px; font-size: 12px; }
 .personal-task-list { display: grid; gap: 8px; margin: 0; padding: 0 20px 20px; list-style: none; }
+/* The Done band carries the planner card's own side padding so it lines up with
+   the list above it, and its inner list drops the padding the band already has. */
+.personal-planner-done { margin: 0 20px 20px; }
+.personal-planner-done .personal-task-list { padding: 0; }
 .personal-task-shell { min-width: 0; min-height: 88px; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); box-shadow: 0 1px 2px rgb(16 24 40 / 4%); }
 .personal-task-shell.is-done { background: var(--pencil-canvas); }
 .personal-task-shell.is-editing { border-color: #2563EB; box-shadow: 0 0 0 1px rgb(37 99 235 / 12%); }

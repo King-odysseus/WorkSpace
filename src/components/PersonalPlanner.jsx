@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Check, MoreHorizontal, NotebookPen, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { Card } from './ui/card.jsx'
+import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { formatDay, getCsrfToken, readJsonResponse, toDateKey } from '../lib/workspace-format.js'
 
@@ -190,6 +191,82 @@ function PersonalPlanner({ workspaceId }) {
   const isManaging = Boolean(addingPlanner || managingPlannerId || renamingId || confirmingPlannerId)
   const compactLayout = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches
 
+  // Ticking an item moves it out of the day's list and into the folded Done band
+  // below it, so a finished item stops taking up the room a next one needs. One
+  // row shape serves both lists: an item moving between them should not change
+  // how it looks on the way.
+  const openTasks = activeTasks.filter(task => !task.is_done)
+  const doneTasks = activeTasks.filter(task => task.is_done)
+
+  const renderPersonalTask = (task) => <li className={`personal-task-shell ${task.is_done ? 'is-done' : ''} ${openNotesId === task.id ? 'is-editing' : ''}`} key={task.id}>
+    <div className="personal-task-row">
+      <button
+        type="button"
+        className="personal-task-tick"
+        onClick={() => toggleTask(task)}
+        aria-pressed={task.is_done}
+        aria-label={task.is_done ? `Reopen ${task.title}` : `Finish ${task.title}`}
+      >{task.is_done && <Check size={13} />}</button>
+      <div className="personal-task-body">
+        <input
+          className="personal-task-title"
+          aria-label={`Title for ${task.title}`}
+          defaultValue={task.title}
+          onBlur={event => commitTitle(task, event.target)}
+          onKeyDown={event => { if (event.key === 'Enter') event.target.blur() }}
+        />
+        <div className="personal-task-meta">
+          {task.is_done && task.completed_at
+            ? <span className="personal-task-flag is-quiet">Done {formatDay(task.completed_at)}</span>
+            : <span className={`personal-task-flag${task.due_date && task.due_date < today ? ' is-overdue' : ''}`}>{task.due_date ? `Due ${formatDay(task.due_date)}` : 'No due date'}</span>}
+          <span aria-hidden="true">-</span>
+          <button type="button" className={`personal-task-link${openNotesId === task.id ? ' is-active' : ''}`} onClick={() => setOpenNotesId(current => (current === task.id ? null : task.id))}>
+            {task.notes ? 'Notes' : 'Add notes'}
+          </button>
+        </div>
+        {openNotesId === task.id && <div className="personal-task-notes-panel">
+          <div className="personal-task-edit-controls">
+            <label className="personal-task-date-control">
+              <CalendarDays size={15} aria-hidden="true" />
+              <input
+                type="date"
+                aria-label={`Due date for ${task.title}`}
+                value={task.due_date}
+                onChange={event => patchTask(task, { due_date: event.target.value }, true)}
+              />
+            </label>
+            <button type="button" className="personal-task-notes-toggle is-active"><NotebookPen size={15} /> Notes</button>
+          </div>
+          <textarea
+            className="personal-task-notes"
+            aria-label={`Notes for ${task.title}`}
+            placeholder="Anything you want to remember about this"
+            defaultValue={task.notes}
+            onBlur={event => commitNotes(task, event.target)}
+          />
+          <p>Notes save when the field loses focus.</p>
+        </div>}
+      </div>
+      <div className="personal-task-side">
+        {planners.length > 1 && <select
+          className="personal-task-move"
+          aria-label={`Planner for ${task.title}`}
+          value={task.planner_id}
+          onChange={event => patchTask(task, { planner_id: Number(event.target.value) }, true)}
+        >{planners.map(planner => <option value={planner.id} key={planner.id}>{planner.name}</option>)}</select>}
+        <button type="button" className="personal-task-delete" aria-label={`Delete ${task.title}`} title={`Delete ${task.title}`} onClick={() => setConfirmingTaskId(task.id)}><Trash2 size={15} /></button>
+      </div>
+    </div>
+    {confirmingTaskId === task.id && <div className="personal-task-delete-confirm" role="group" aria-label={`Delete ${task.title}`}>
+      <Trash2 size={17} aria-hidden="true" />
+      <div><strong>Delete {task.title}?</strong><span>This removes the item from your private planner.</span></div>
+      <div className="personal-planner-confirm-actions">
+        <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingTaskId(null)}>Cancel</Button>
+        <Button type="button" variant="destructive" size="sm" disabled={saving} onClick={() => deleteTask(task)}>Delete</Button>
+      </div>
+    </div>}
+  </li>
+
   return <section className="workspace-view personal-planner-view" aria-busy={loading}>
     <WorkspaceViewHeading title="My planner" subtitle="Your own list for planning the day. Private to you - nobody else in the workspace can see it." />
     <div className={`personal-planner-layout${isManaging ? ' is-managing' : ''}${!planners.length && !loading ? ' is-empty' : ''}`}>
@@ -294,76 +371,17 @@ function PersonalPlanner({ workspaceId }) {
                   <Button type="submit" disabled={saving || !draft.trim()}>Add</Button>
                 </form>
                 {activeTasks.length
-                  ? <ul className="personal-task-list">
-                    {activeTasks.map(task => <li className={`personal-task-shell ${task.is_done ? 'is-done' : ''} ${openNotesId === task.id ? 'is-editing' : ''}`} key={task.id}>
-                      <div className="personal-task-row">
-                        <button
-                          type="button"
-                          className="personal-task-tick"
-                          onClick={() => toggleTask(task)}
-                          aria-pressed={task.is_done}
-                          aria-label={task.is_done ? `Reopen ${task.title}` : `Finish ${task.title}`}
-                        >{task.is_done && <Check size={13} />}</button>
-                        <div className="personal-task-body">
-                          <input
-                            className="personal-task-title"
-                            aria-label={`Title for ${task.title}`}
-                            defaultValue={task.title}
-                            onBlur={event => commitTitle(task, event.target)}
-                            onKeyDown={event => { if (event.key === 'Enter') event.target.blur() }}
-                          />
-                          <div className="personal-task-meta">
-                            {task.is_done && task.completed_at
-                              ? <span className="personal-task-flag is-quiet">Done {formatDay(task.completed_at)}</span>
-                              : <span className={`personal-task-flag${task.due_date && task.due_date < today ? ' is-overdue' : ''}`}>{task.due_date ? `Due ${formatDay(task.due_date)}` : 'No due date'}</span>}
-                            <span aria-hidden="true">-</span>
-                            <button type="button" className={`personal-task-link${openNotesId === task.id ? ' is-active' : ''}`} onClick={() => setOpenNotesId(current => (current === task.id ? null : task.id))}>
-                              {task.notes ? 'Notes' : 'Add notes'}
-                            </button>
-                          </div>
-                          {openNotesId === task.id && <div className="personal-task-notes-panel">
-                            <div className="personal-task-edit-controls">
-                              <label className="personal-task-date-control">
-                                <CalendarDays size={15} aria-hidden="true" />
-                                <input
-                                  type="date"
-                                  aria-label={`Due date for ${task.title}`}
-                                  value={task.due_date}
-                                  onChange={event => patchTask(task, { due_date: event.target.value }, true)}
-                                />
-                              </label>
-                              <button type="button" className="personal-task-notes-toggle is-active"><NotebookPen size={15} /> Notes</button>
-                            </div>
-                            <textarea
-                              className="personal-task-notes"
-                              aria-label={`Notes for ${task.title}`}
-                              placeholder="Anything you want to remember about this"
-                              defaultValue={task.notes}
-                              onBlur={event => commitNotes(task, event.target)}
-                            />
-                            <p>Notes save when the field loses focus.</p>
-                          </div>}
-                        </div>
-                        <div className="personal-task-side">
-                          {planners.length > 1 && <select
-                            className="personal-task-move"
-                            aria-label={`Planner for ${task.title}`}
-                            value={task.planner_id}
-                            onChange={event => patchTask(task, { planner_id: Number(event.target.value) }, true)}
-                          >{planners.map(planner => <option value={planner.id} key={planner.id}>{planner.name}</option>)}</select>}
-                          <button type="button" className="personal-task-delete" aria-label={`Delete ${task.title}`} title={`Delete ${task.title}`} onClick={() => setConfirmingTaskId(task.id)}><Trash2 size={15} /></button>
-                        </div>
-                      </div>
-                      {confirmingTaskId === task.id && <div className="personal-task-delete-confirm" role="group" aria-label={`Delete ${task.title}`}>
-                        <Trash2 size={17} aria-hidden="true" />
-                        <div><strong>Delete {task.title}?</strong><span>This removes the item from your private planner.</span></div>
-                        <div className="personal-planner-confirm-actions">
-                          <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingTaskId(null)}>Cancel</Button>
-                          <Button type="button" variant="destructive" size="sm" disabled={saving} onClick={() => deleteTask(task)}>Delete</Button>
-                        </div>
-                      </div>}
-                    </li>)}
-                  </ul>
+                  ? <>
+                    {openTasks.length > 0 && <ul className="personal-task-list">{openTasks.map(renderPersonalTask)}</ul>}
+                    {doneTasks.length > 0 && <CollapsibleSection
+                      className="personal-planner-done"
+                      title="Done"
+                      count={doneTasks.length}
+                      contentClassName="personal-planner-done-list"
+                    >
+                      <ul className="personal-task-list">{doneTasks.map(renderPersonalTask)}</ul>
+                    </CollapsibleSection>}
+                  </>
                   : <div className="personal-task-empty"><NotebookPen size={22} aria-hidden="true" /><strong>Nothing here yet</strong><p>Add your first item above.</p></div>}
               </>}
         </Card>
