@@ -1711,6 +1711,7 @@ html[data-theme='dark'] .settings-view :is(
   .settings-integration-card,
   .settings-integration-empty,
   .settings-workspace-card,
+  .settings-workspace-create-tile,
   .settings-template-section,
   .settings-template-row,
   .settings-template-preview,
@@ -1720,6 +1721,7 @@ html[data-theme='dark'] .settings-view :is(
   .settings-webhook-form,
   .settings-webhook-url-row,
   .settings-manager-panel,
+  .settings-manager-card,
   .settings-danger-panel
 ) {
   border-color: var(--pencil-glass-edge) !important;
@@ -1733,6 +1735,10 @@ html[data-theme='dark'] .settings-view :is(
 html[data-theme='dark'] .settings-view .settings-workspace-card.is-current {
   border-color: rgb(196 154 108 / 44%) !important;
   background: linear-gradient(145deg, rgb(196 154 108 / 13%) 0%, rgb(0 13 61 / 92%) 100%) !important;
+}
+
+html[data-theme='dark'] .settings-view .settings-workspace-create-tile > span {
+  color: var(--pencil-bronze-muted);
 }
 
 html[data-theme='dark'] .settings-view .settings-panel :is(
