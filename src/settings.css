@@ -2574,3 +2574,9 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
     transition: none;
   }
 }
+
+/* Keep compact settings status labels clear of their chip edge. */
+.settings-view .settings-workspace-status {
+  min-height: 28px;
+  padding: 0 10px;
+}

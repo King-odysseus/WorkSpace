@@ -7801,3 +7801,67 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
     padding: 14px 14px 18px !important;
   }
 }
+
+/* Compact labels keep a consistent inset from their visible container edge. */
+.task-status-pill,
+[data-slot='select-trigger'].app-select-trigger:is(.task-status, .task-status-pill),
+.planner-task-card-details [data-slot='select-trigger'].planner-status-pill,
+.planner-task-card-details span.planner-status-pill,
+.projects-view [data-slot='select-trigger'].project-status,
+.project-kanban-status.app-select-trigger,
+.project-task-status,
+.project-task-status-select.app-select-trigger {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  line-height: 14px;
+}
+
+.project-health,
+.project-status-badge,
+.pencil-reports-view .report-project-status {
+  min-height: 28px;
+  padding: 0 10px;
+  line-height: 14px;
+}
+
+.project-task-priority {
+  min-height: 26px;
+  padding: 0 9px;
+  line-height: 14px;
+}
+
+.project-register-table .record-severity,
+.project-issues-table .record-severity,
+.project-issue-drawer-badges .record-severity,
+.project-issue-mobile-list .record-severity {
+  min-height: 26px;
+  align-items: center;
+  padding: 0 10px;
+  line-height: 14px;
+}
+
+.pencil-team-status {
+  display: inline-flex;
+  height: 22px;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  line-height: 14px;
+}
+
+.pencil-followup-due {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 10px;
+  line-height: 14px;
+}
+
+.calendar-date-number {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  line-height: 16px;
+}
