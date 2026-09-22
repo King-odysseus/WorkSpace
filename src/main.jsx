@@ -475,6 +475,11 @@ function App() {
   const [pendingFollowUpId, setPendingFollowUpId] = useState(null);
   const [pendingProjectNotification, setPendingProjectNotification] = useState(null);
   const [pendingWorkstreamNotification, setPendingWorkstreamNotification] = useState(null);
+  // A workspace refresh reads notification rows separately from the summary
+  // poll. If a read or arrival lands while that refresh is in flight, its
+  // notification payload is older than the authoritative event and must not be
+  // allowed to put the badge or dismissed rows back.
+  const notificationStateRevisionRef = useRef(0);
   useEffect(() => {
     setPendingCheckInId(null);
     setPendingDocumentId(null);
@@ -493,12 +498,17 @@ function App() {
   // from filling the other's 20-row page with unrelated alerts.
   useEffect(() => {
     if (!activeWorkspaceId || session.loading || !session.user?.id) return undefined;
+    let reloadSequence = 0;
+    let activeReload = true;
     const reloadNotifications = (event) => {
+      notificationStateRevisionRef.current += 1;
+      const requestSequence = ++reloadSequence;
       const loadFeed = (query) =>
         fetch(`/api/workspaces/${activeWorkspaceId}/notifications/?${query}`, { credentials: "include" })
           .then((response) => (response.ok ? response.json() : null));
       Promise.all([loadFeed("exclude_chat=1&sort=newest"), loadFeed("only_conversation=1")])
         .then(([activityPayload, conversationPayload]) => {
+          if (!activeReload || requestSequence !== reloadSequence) return;
           if (!activityPayload && !conversationPayload) return;
           const authoritativeActivityCount = event?.detail?.unreadCount;
           setWorkspaceData((current) => {
@@ -521,7 +531,10 @@ function App() {
         .catch((error) => console.warn("Notifications could not be refreshed.", error));
     };
     window.addEventListener("workspace:notifications-changed", reloadNotifications);
-    return () => window.removeEventListener("workspace:notifications-changed", reloadNotifications);
+    return () => {
+      activeReload = false;
+      window.removeEventListener("workspace:notifications-changed", reloadNotifications);
+    };
   }, [activeWorkspaceId, session.loading, session.user?.id]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
@@ -1071,6 +1084,7 @@ function App() {
     const refreshCollaboration = () => {
       if (refreshInFlight) return;
       refreshInFlight = true;
+      const notificationStateRevision = notificationStateRevisionRef.current;
       const auditRequest = ["owner", "manager"].includes(workspaceRole)
         ? read(`/api/workspaces/${workspaceId}/audit-logs/`, { audit_logs: [] })
         : Promise.resolve({ audit_logs: [] });
@@ -1179,13 +1193,17 @@ function App() {
               events: eventData.events,
               checkIns: checkInData.check_ins,
               workShifts: workShiftData.work_shifts,
-              notifications: [
-                ...(conversationNotificationData.notifications || []),
-                ...(activityNotificationData.notifications || []),
-              ],
-              activityNotifications: activityNotificationData.notifications || [],
-              conversationNotifications: conversationNotificationData.notifications || [],
-              notificationCounts: activityNotificationData.unread_counts ?? conversationNotificationData.unread_counts ?? null,
+              ...(notificationStateRevision === notificationStateRevisionRef.current
+                ? {
+                    notifications: [
+                      ...(conversationNotificationData.notifications || []),
+                      ...(activityNotificationData.notifications || []),
+                    ],
+                    activityNotifications: activityNotificationData.notifications || [],
+                    conversationNotifications: conversationNotificationData.notifications || [],
+                    notificationCounts: activityNotificationData.unread_counts ?? conversationNotificationData.unread_counts ?? null,
+                  }
+                : {}),
               activity: activityData.activity,
               auditLogs: auditData.audit_logs,
               buckets: bucketData.buckets,

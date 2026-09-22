@@ -1,6 +1,12 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { mockApi } from './test/setup-tests.js'
+
+beforeEach(() => {
+  vi.resetModules()
+  window.localStorage.removeItem('workspace-last-page')
+  window.history.replaceState(null, '', window.location.pathname)
+})
 
 const session = {
   user: {
@@ -204,4 +210,68 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(mobileViewAll).toBeInTheDocument()
   fireEvent.click(mobileViewAll)
   await screen.findByText('Everything that needs your attention, newest first.')
+}, 60000)
+
+it('does not let an older workspace refresh restore notifications after mark all read', async () => {
+  const baseFetch = mockApi({
+    '/api/auth/me/': session,
+    '/api/tasks/': { tasks: [], pagination: { has_next: false } },
+    '/api/notifications/summary/': { unread_count: 1, latest_unread_id: activityNotification.id },
+    '/api/push/public-key/': { configured: false, public_key: '' },
+  })
+  const jsonResponse = body => ({
+    ok: true,
+    status: 200,
+    headers: { get: name => (name.toLowerCase() === 'content-type' ? 'application/json' : null) },
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  })
+  let readStarted = false
+  const staleNotificationRequests = []
+  vi.stubGlobal('fetch', vi.fn((input, init = {}) => {
+    const url = String(input)
+    const method = String(init.method || 'GET').toUpperCase()
+    if (url.includes('/api/workspaces/1/notifications/?') && method === 'GET') {
+      if (!readStarted) {
+        return new Promise(resolve => {
+          staleNotificationRequests.push(() => resolve(baseFetch(input, init)))
+        })
+      }
+      const readCounts = { channel: 1, direct: 1, conversation: 2, activity: 0 }
+      return Promise.resolve(jsonResponse(
+        url.includes('exclude_chat=1')
+          ? { notifications: [{ ...activityNotification, read: true }], unread_counts: readCounts }
+          : { notifications: [channelNotification, chatNotification], unread_counts: readCounts },
+      ))
+    }
+    if (url.endsWith('/api/workspaces/1/notifications/') && method === 'PATCH') {
+      readStarted = true
+      return Promise.resolve(jsonResponse({ updated: 'all' }))
+    }
+    return baseFetch(input, init)
+  }))
+
+  document.title = 'WorkSpace'
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main.jsx')
+
+  const bellButton = await screen.findByRole(
+    'button',
+    { name: 'Open workspace activity notifications' },
+    { timeout: 20000 },
+  )
+  fireEvent.click(bellButton)
+  await waitFor(() => expect(staleNotificationRequests.length).toBeGreaterThanOrEqual(2), { timeout: 20000 })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }))
+  const readRow = await screen.findByRole('button', { name: 'Open Deployment finished' }, { timeout: 20000 })
+  expect(readRow).toHaveClass('is-read')
+  expect(within(bellButton).queryByLabelText('1 unread workspace notifications')).not.toBeInTheDocument()
+
+  await act(async () => {
+    staleNotificationRequests.splice(0).forEach(resolve => resolve())
+  })
+
+  expect(readRow).toHaveClass('is-read')
+  expect(within(bellButton).queryByLabelText('1 unread workspace notifications')).not.toBeInTheDocument()
 }, 60000)
