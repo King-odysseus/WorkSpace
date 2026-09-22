@@ -49,6 +49,7 @@
   --pencil-success-soft: #ECFDF5;
   --pencil-warning: #7E2A0C;
   --pencil-warning-fill: #FF6900;
+  --pencil-warning-badge: #B54708;
   --pencil-warning-soft: #FFF7ED;
   --pencil-danger: #C70036;
   --pencil-danger-soft: #FFF1F2;
@@ -764,6 +765,9 @@ aside[class*='bg-navy'] > .sidebar-account > .relative > button.text-text-muted:
 .sidebar-expand-flyout:focus-visible {
   outline: 2px solid rgb(255 255 255 / 62%);
   outline-offset: -2px;
+}
+.nav-badge-warning {
+  background: var(--pencil-warning-badge) !important;
 }
 @media (max-width: 1023px) {
   .sidebar-expand-flyout { display: none; }

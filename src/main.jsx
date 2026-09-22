@@ -3039,7 +3039,7 @@ function App() {
                             badgeTone === "info"
                               ? "bg-primary"
                               : badgeTone === "warning"
-                                ? "bg-warning-fill"
+                                ? "nav-badge-warning"
                                 : "bg-danger",
                           )}
                         >

@@ -1620,7 +1620,7 @@
 }
 
 .settings-view .settings-working-hours-summary span {
-  color: var(--pencil-text-muted);
+  color: var(--pencil-text-secondary);
   font-size: 10px;
   line-height: 13px;
 }
