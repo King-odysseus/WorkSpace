@@ -2388,7 +2388,6 @@ function App() {
         { label: "Planner", icon: LayoutGrid },
         { label: "Projects", icon: Folder },
         { label: "Calendar", icon: CalendarDays },
-        { label: "Files", icon: File },
         { label: "Import data", icon: Upload },
       ],
     },
@@ -8604,6 +8603,10 @@ function WorkspaceView({
     );
   }
 
+  // Files is no longer offered in the navigation, on either the sidebar or the
+  // mobile drawer. The page itself stays reachable because a document
+  // notification opens it directly, and there is nowhere else a document can be
+  // shown; removing the route would break that link rather than hide a page.
   if (active === "Files") {
     return (
       <Suspense fallback={null}>
