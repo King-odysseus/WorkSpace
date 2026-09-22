@@ -2873,6 +2873,8 @@ function ProjectRiskIssuePanel({
             >
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeTab === "risk"}
                 className={activeTab === "risk" ? "active" : ""}
                 onClick={() => setActiveTab("risk")}
               >
@@ -2880,6 +2882,8 @@ function ProjectRiskIssuePanel({
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeTab === "issue"}
                 className={activeTab === "issue" ? "active" : ""}
                 onClick={() => setActiveTab("issue")}
               >
@@ -2896,7 +2900,12 @@ function ProjectRiskIssuePanel({
               </button>
             )}
           </div>
-          <div className="project-register-table-wrap">
+          <div
+            className="project-register-table-wrap"
+            role="region"
+            aria-label="Project risk and issue records"
+            tabIndex={0}
+          >
             <table className="project-register-table">
               <thead>
                 <tr>
@@ -3539,7 +3548,12 @@ function ProjectRiskIssuePanel({
             )}
           </div>
         </div>
-        <div className="project-register-table-wrap">
+        <div
+          className="project-register-table-wrap"
+          role="region"
+          aria-label="Project risk and issue records"
+          tabIndex={0}
+        >
           <table className="project-register-table">
             <thead>
               <tr>

@@ -5165,12 +5165,13 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .project-budget-summary-card { min-height: 232px; padding-bottom: 18px; }
 .project-budget-summary-card .project-resources-design-heading { padding-bottom: 12px; }
 .project-currency-badge { display: inline-grid; min-width: 54px; height: 26px; place-items: center; padding: 0 9px; border-radius: 6px; background: var(--pencil-selected); color: var(--pencil-text-secondary); font-size: 10px; font-weight: 600; }
+.project-resources-design-heading > .project-currency-badge { color: var(--pencil-text-secondary); }
 .project-budget-summary-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 0 20px; }
 .project-budget-summary-values > div { display: grid; gap: 4px; min-width: 0; }
 .project-budget-summary-values span { color: var(--pencil-text-muted); font-size: 10px; line-height: 14px; }
 .project-budget-summary-values strong { overflow: hidden; color: var(--pencil-text); font-size: 19px; font-weight: 700; line-height: 24px; text-overflow: ellipsis; white-space: nowrap; }
 .project-budget-summary-values .is-success strong { color: var(--pencil-success); }
-.project-budget-summary-values .is-warning strong { color: var(--pencil-warning-fill); }
+.project-budget-summary-values .is-warning strong { color: var(--pencil-alert-warning-text); }
 .project-budget-summary-values .is-danger strong { color: var(--pencil-danger); }
 .project-budget-usage-track { display: flex; overflow: hidden; height: 10px; margin: 18px 20px 10px; border-radius: 999px; background: var(--pencil-border); }
 .project-budget-usage-track > span { display: block; height: 100%; }
@@ -5223,6 +5224,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .project-currency-options > span.active { background: var(--pencil-selected); color: var(--pencil-navy); }
 .project-currency-options strong { color: inherit; font-size: 10px; font-weight: 600; }
 .project-currency-options small { color: var(--pencil-text-muted); font-size: 9px; }
+.project-currency-options > span.active small { color: var(--pencil-text-secondary); }
 .project-budget-mini-form label + .project-budget-mini-form label { margin-top: 0; }
 
 @media (max-width: 760px) {
@@ -7311,6 +7313,9 @@ html[data-theme='dark'] :is(
   .projects-view .project-task-stats .risk strong,
   .projects-view .project-task-stats .danger strong,
   .project-register-tabs button.active span,
+  .project-overview-delivery-rows strong.is-danger,
+  .project-kanban-task-due.is-overdue,
+  .project-task-due.is-overdue,
   .project-health.off-track,
   .project-resource-status.is-over,
   .settings-mobile-signout,
@@ -7328,6 +7333,7 @@ html[data-theme='dark'] :is(
   .pencil-reports-view .report-stat > em,
   .pencil-reports-view .report-project-status,
   .projects-view .project-summary small,
+  .project-overview-delivery-rows strong.is-success,
   .project-health.on-track,
   .project-health.completed,
   .project-resource-status,
@@ -7343,9 +7349,20 @@ html[data-theme='dark'] .chat-workspace-view .chat-receipt-read {
 
 html[data-theme='dark'] :is(
   .calendar-mobile-event.event-type-focus em,
+  .project-overview-delivery-rows strong.is-warning,
   .project-expense-state.is-committed
 ) {
   color: var(--pencil-alert-warning-text) !important;
+}
+
+html[data-theme='dark'] .project-resource-type-picker button.active {
+  border-color: var(--pencil-bronze);
+  color: var(--pencil-bronze-muted);
+  box-shadow: inset 0 0 0 1px var(--pencil-bronze);
+}
+
+html[data-theme='dark'] .project-currency-options > span.active {
+  color: var(--pencil-text);
 }
 
 /* Mobile channel rows use a light surface fallback in component CSS. Remap

@@ -111,6 +111,35 @@ it('keeps the legacy risk register heading out of the page and in the toolbar co
   await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/risks-issues/'))
 })
 
+it('exposes the designed project register tabs and record scroller accessibly', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/1/risks-issues/': { records: [] },
+  })
+  const user = userEvent.setup()
+  render(
+    <ProjectRiskIssuePanel
+      projects={[{ id: 42, name: 'Safron Website' }]}
+      workspaceId={1}
+      canManage
+      design="p32"
+    />,
+  )
+
+  const riskTab = screen.getByRole('tab', { name: /^Risk register/ })
+  const issueTab = screen.getByRole('tab', { name: /^Issue log/ })
+  expect(riskTab).toHaveAttribute('aria-selected', 'true')
+  expect(issueTab).toHaveAttribute('aria-selected', 'false')
+
+  await user.click(issueTab)
+
+  expect(riskTab).toHaveAttribute('aria-selected', 'false')
+  expect(issueTab).toHaveAttribute('aria-selected', 'true')
+  expect(
+    screen.getByRole('region', { name: 'Project risk and issue records' }),
+  ).toHaveAttribute('tabindex', '0')
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/risks-issues/'))
+})
+
 it('presents the project record form as one clear dialog hierarchy', async () => {
   const fetchMock = mockApi({
     '/api/workspaces/1/risks-issues/': { records: [] },
