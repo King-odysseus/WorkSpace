@@ -732,6 +732,11 @@ aside[class*='bg-navy'] > .sidebar-account > .relative > button.text-text-muted:
   aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] { justify-content: center !important; padding: 0 !important; border-left: 0 !important; border-radius: 0 !important; }
   aside[class*='bg-navy'].is-sidebar-collapsed nav button svg { margin-right: auto; margin-left: auto; }
   aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > span[aria-hidden='true'] { left: 0 !important; }
+  /* Expanded, the rows are read as a list and 2px between them is enough.
+     Collapsed, they are a column of bare icons with nothing but that gap to
+     separate them, so they need room to read as separate targets. The !important
+     is what beats the utility that sets the 2px. */
+  aside[class*='bg-navy'].is-sidebar-collapsed nav ul > li + li { margin-top: 8px !important; }
 }
 .sidebar-expand-flyout {
   position: absolute;
