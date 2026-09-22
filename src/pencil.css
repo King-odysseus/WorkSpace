@@ -94,23 +94,23 @@
    sync means the app tokens and Flowbite's dark variants resolve together. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --pencil-sidebar: #00124D;
-  --pencil-navy-tint: #08245F;
-  --pencil-canvas: #00124D;
-  --pencil-surface: #000D3D;
-  --pencil-surface-muted: #001654;
-  --pencil-surface-hover: #001C61;
-  --pencil-surface-elevated: #001045;
-  --pencil-border: #173C8F;
-  --pencil-border-strong: #2850A3;
-  --pencil-border-light: #0C2E73;
+  --pencil-sidebar: #000A2A;
+  --pencil-navy-tint: #041234;
+  --pencil-canvas: #000A2A;
+  --pencil-surface: #000721;
+  --pencil-surface-muted: #000C2E;
+  --pencil-surface-hover: #001036;
+  --pencil-surface-elevated: #000926;
+  --pencil-border: #112D6B;
+  --pencil-border-strong: #1E3C7A;
+  --pencil-border-light: #092356;
   --pencil-text: #F8FAFC;
   --pencil-text-secondary: #CBD5E1;
   --pencil-text-muted: #94A3B8;
   --pencil-scrollbar-thumb: rgb(216 185 150 / 34%);
   --pencil-scrollbar-thumb-hover: rgb(216 185 150 / 58%);
-  --pencil-selected: #082D7A;
-  --pencil-blue-soft: #092A72;
+  --pencil-selected: #041742;
+  --pencil-blue-soft: #051539;
   --pencil-success-soft: #0B2E29;
   --pencil-warning-soft: #3A2415;
   --pencil-danger-soft: #3A1722;
