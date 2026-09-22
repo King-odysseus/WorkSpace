@@ -2119,6 +2119,21 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .my-task-layout { display: block !important; margin-top: 24px !important; }
   .my-task-filters { display: none !important; }
   .my-task-sidebar { display: none !important; }
+
+  /* Mobile cards must size from the parent content box. Without an explicit
+     min-width reset, an intrinsic-width child can make the whole card exceed
+     the padded task container at narrow and scaled viewports. */
+  :is(.task-card, .my-task-row, .personal-task-shell, .personal-task-row, .planner-task-card, .project-kanban-task) {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  :is(.task-card, .my-task-row, .personal-task-row, .planner-task-card, .project-kanban-task) > * {
+    min-width: 0;
+  }
+
   .my-task-mobile-controls { display: grid; gap: 12px; }
   .my-task-mobile-search { height: 40px !important; border-radius: 10px !important; }
   .my-task-mobile-chips { display: flex; min-width: 0; align-items: center; gap: 8px; overflow: hidden; }
