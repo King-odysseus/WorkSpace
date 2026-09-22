@@ -7662,11 +7662,13 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
   }
 
   .project-kanban-columns {
-    grid-auto-columns: min(264px, calc(100vw - 56px));
+    grid-auto-columns: min(264px, 100%);
   }
 
   .project-kanban-column {
-    min-width: min(264px, calc(100vw - 56px));
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
