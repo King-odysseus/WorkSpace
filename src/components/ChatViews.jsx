@@ -633,6 +633,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     setHighlightMessageId(thread.messageId || null)
   }, [threadRequest, workspaceId])
 
+  // Clicking the quoted message in a reply takes the reader to it. This is the
+  // same pair a notification sets: reveal holds the feed on that message instead
+  // of pinning to the newest, highlight is the ring that fades on a timer.
+  const jumpToMessage = messageId => {
+    setRevealMessageId(messageId)
+    setHighlightMessageId(messageId)
+  }
+
   const deleteChannel = async channel => {
     if (!(await onConfirm(`Delete #${channel.name} and all of its messages?`, { title: 'Delete channel', confirmLabel: 'Delete channel' }))) return
     try {
@@ -1017,6 +1025,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   }, [mode, selectedChannel, workspaceId])
   const renderMessage = message => {
     const parent = message.parent_id ? (mode === 'channels' ? activeChannelMessages : directMessages).find(item => item.id === message.parent_id) : null
+    // Only offer the jump when the message being quoted is actually in the feed
+    // and still readable. A parent that is deleted, or older than the history
+    // loaded so far, has nothing to scroll to, and a control that does nothing
+    // is worse than plain text.
     const reactions = reactionUpdates[message.id] || message.reactions || []
     const author = memberForMessage(message)
     const isMine = String(author.id) === String(currentUserId)
@@ -1042,7 +1054,9 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {isMine && !deletedAt && <span className={`chat-receipt${message.read ? ' chat-receipt-read' : ''}`} aria-label={receiptLabel} title={receiptLabel}>{message.read || message.delivered ? <CheckCheck size={14} /> : <Check size={14} />}</span>}
           {editedAt && !deletedAt && <span className="chat-edited-marker" title={`Edited ${formatRelativeActivityTime(editedAt)}`}>edited</span>}
         </div>
-        {message.parent_id && <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.deleted_at ? 'Original message was deleted.' : (parent?.message || 'Original message is unavailable.')}</span></div>}
+        {message.parent_id && (parent && !parent.deleted_at
+          ? <button type="button" className="chat-reply-context is-linked" onClick={() => jumpToMessage(parent.id)} aria-label={`Go to the message from ${parent.author_name} that this replies to`}><strong>{parent.author_name}</strong><span>{parent.message}</span></button>
+          : <div className="chat-reply-context"><strong>{parent?.author_name || 'Original message'}</strong><span>{parent?.deleted_at ? 'Original message was deleted.' : 'Original message is unavailable.'}</span></div>)}
         <div className="chat-message-bubble">
           {deletedAt ? <p className="chat-deleted-text" title={`Deleted ${formatRelativeActivityTime(deletedAt)}`}>This message was deleted</p> : <p>{renderMessageText(bodyText)}</p>}
         </div>

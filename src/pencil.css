@@ -2845,6 +2845,12 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .chat-message-bubble a { color: var(--pencil-navy); text-decoration: underline; text-decoration-color: var(--pencil-border-strong); }
 .chat-workspace-view .chat-deleted-text { color: var(--pencil-text-muted) !important; font-style: italic; }
 .chat-workspace-view .chat-reply-context { display: grid; width: min(520px, 100%); gap: 2px; margin: 2px 0 6px; padding: 8px 10px 8px 12px; border-left: 3px solid var(--pencil-navy); border-radius: 0 8px 8px 0; background: var(--pencil-surface); }
+/* As a button it needs the element defaults stripped, since it has to look
+   exactly like the div it replaces - only now it is reachable by keyboard and
+   says under the cursor that it leads somewhere. */
+.chat-workspace-view button.chat-reply-context { border: 0; border-left: 3px solid var(--pencil-navy); font: inherit; text-align: left; }
+.chat-workspace-view .chat-reply-context.is-linked:hover,
+.chat-workspace-view .chat-reply-context.is-linked:focus-visible { background: var(--pencil-surface-hover); }
 .chat-workspace-view .chat-reply-context strong { color: var(--pencil-navy); font-size: 11px; line-height: 13px; }
 .chat-workspace-view .chat-reply-context span { overflow: hidden; color: var(--pencil-text-muted); font-size: 11px; line-height: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .chat-workspace-view.chat-mode-direct .chat-message-bubble { display: inline-block; max-width: min(520px, 100%); padding: 13px 14px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); }

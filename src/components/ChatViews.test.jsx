@@ -1242,3 +1242,50 @@ it('keeps failed edits available for retry and cancels with Escape', async () =>
   expect(screen.queryByRole('textbox', { name: 'Edit message' })).not.toBeInTheDocument()
   expect(screen.queryByText('Save failed')).not.toBeInTheDocument()
 })
+
+it('takes the reader to the message a reply is quoting', async () => {
+  const messages = [
+    { id: 1, author_id: 9, author_name: 'Dana Reed', message: 'Can you review this?', created_at: '2026-09-12T10:00:00Z', reply_count: 1 },
+    { id: 2, author_id: currentUserId, author_name: 'Ada Lane', message: 'Yes, I will.', created_at: '2026-09-12T10:01:00Z', parent_id: 1 },
+  ]
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByText('Yes, I will.')
+
+  const quoted = screen.getByRole('button', { name: /Go to the message from Dana Reed/ })
+  fireEvent.click(quoted)
+
+  // The quoted message is the one that gets the highlight ring, the same one a
+  // notification uses when it points at a message.
+  await waitFor(() => {
+    const original = document.querySelector('[data-message-id="1"]')
+    expect(original).toHaveClass('chat-message-highlight')
+  })
+})
+
+it('leaves a reply inert when the message it quotes was deleted', async () => {
+  const messages = [
+    { id: 1, author_id: 9, author_name: 'Dana Reed', message: '', created_at: '2026-09-12T10:00:00Z', deleted_at: '2026-09-12T10:05:00Z' },
+    { id: 2, author_id: currentUserId, author_name: 'Ada Lane', message: 'Yes, I will.', created_at: '2026-09-12T10:01:00Z', parent_id: 1 },
+  ]
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+  await screen.findByText('Yes, I will.')
+
+  // There is nothing to scroll to, so it stays text rather than a control that
+  // would do nothing when pressed.
+  expect(screen.queryByRole('button', { name: /Go to the message from/ })).not.toBeInTheDocument()
+  expect(screen.getByText('Original message was deleted.')).toBeInTheDocument()
+})
