@@ -35,6 +35,21 @@ it('lists the member own planners and tasks, with no team data in the request', 
   expect(String(url)).toContain('/api/workspaces/4/')
 })
 
+it('waits for a workspace before loading the private planner', async () => {
+  const fetchMock = loadPlanner()
+
+  const { rerender } = render(<PersonalPlanner workspaceId={null} />)
+
+  expect(screen.getByRole('status', { name: 'Loading your planner' })).toBeInTheDocument()
+  expect(fetchMock).not.toHaveBeenCalled()
+
+  rerender(<PersonalPlanner workspaceId={4} />)
+
+  expect(await screen.findByRole('button', { name: /^My day/ })).toBeInTheDocument()
+  const urls = fetchMock.mock.calls.map(([url]) => String(url))
+  expect(urls.some(url => url.includes('/api/workspaces/null/'))).toBe(false)
+})
+
 it('ticks an item off into the Done band and shows the day it was finished', async () => {
   const fetchMock = loadPlanner({
     '/personal/tasks/7/': { task: { ...tasks[0], is_done: true, completed_at: '2024-03-09T09:30:00Z' } },

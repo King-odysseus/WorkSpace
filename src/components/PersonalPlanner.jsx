@@ -52,6 +52,7 @@ function PersonalPlanner({ workspaceId }) {
   }, [])
 
   useEffect(() => {
+    if (!workspaceId) return undefined
     let cancelled = false
     setLoading(true)
     request('/planners/', 'GET')
@@ -64,7 +65,7 @@ function PersonalPlanner({ workspaceId }) {
       .catch(failure => { if (!cancelled) setError(failure.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [request])
+  }, [request, workspaceId])
 
   // Derived rather than stored. A stored open planner needs an effect to keep it
   // pointing at a planner that still exists, and that leaves a render where the

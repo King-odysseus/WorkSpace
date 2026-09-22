@@ -4663,7 +4663,7 @@ function WorkspaceView({
   }, [active, localData.followUps, pendingFollowUpId]);
 
   useEffect(() => {
-    if (active !== "Check-ins") return undefined;
+    if (active !== "Check-ins" || !workspaceId) return undefined;
     let isCurrent = true;
     setCheckInLoading(true);
     setCheckInError("");
