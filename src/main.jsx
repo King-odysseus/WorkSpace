@@ -6817,6 +6817,11 @@ function WorkspaceView({
         onSwitchWorkspace={onSwitchWorkspace}
         taskTemplates={localData.taskTemplates || []}
         projectTemplates={localData.projectTemplates || []}
+        templatesLoading={
+          workspaceLoading &&
+          !(localData.taskTemplates || []).length &&
+          !(localData.projectTemplates || []).length
+        }
         projects={localData.projects}
         invitations={localData.invitations || []}
         onRefresh={onRefresh}

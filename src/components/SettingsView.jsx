@@ -19,6 +19,7 @@ import {
   Layers,
   Link2,
   LogOut,
+  LoaderCircle,
   Plus,
   Sparkles,
   Sun,
@@ -268,6 +269,7 @@ function SettingsView({
   onSwitchWorkspace,
   taskTemplates = [],
   projectTemplates = [],
+  templatesLoading = false,
   projects = [],
   onRefresh,
   onConfirm,
@@ -1272,11 +1274,131 @@ function SettingsView({
     due_days: 14,
   });
   const [templateSaving, setTemplateSaving] = useState(false);
-  const [templateError, setTemplateError] = useState("");
+  const [templateError, setTemplateError] = useState(null);
+  const [templateActionBusy, setTemplateActionBusy] = useState(null);
+  const [templateActionError, setTemplateActionError] = useState(null);
+
+  const templateActionFailure = (kind, action, status, message) => {
+    const subject = kind === "task" ? "Task template" : "Project template";
+    const fallback =
+      action === "delete"
+        ? `${subject} could not be deleted.`
+        : kind === "task"
+          ? "Task could not be created from template."
+          : "Project could not be created from template.";
+
+    return {
+      title:
+        action === "delete"
+          ? `${subject} could not be deleted`
+          : fallback.replace(/\.$/, ""),
+      message: message || fallback,
+      retryable: ![400, 403, 404, 409].includes(status),
+    };
+  };
+
+  const runTemplateAction = async (kind, action, template) => {
+    const detailPath = `/api/workspaces/${workspaceId}/${kind}-templates/${template.id}/`;
+    const subject = kind === "task" ? "task template" : "project template";
+
+    if (action === "delete") {
+      if (!onConfirm) return;
+      const confirmed = await onConfirm(
+        `Delete ${template.name}? This cannot be undone.`,
+        {
+          title: `Delete ${subject}`,
+          confirmLabel: "Delete template",
+        },
+      );
+      if (!confirmed) return;
+    }
+
+    setTemplateActionBusy({ kind, id: template.id, action });
+    setTemplateActionError(null);
+    setTemplateError(null);
+
+    try {
+      const response = await fetch(
+        action === "delete" ? detailPath : `${detailPath}apply/`,
+        {
+          method: action === "delete" ? "DELETE" : "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": await getCsrfToken(),
+          },
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const failure = templateActionFailure(
+          kind,
+          action,
+          response.status,
+          data.error,
+        );
+        setTemplateActionError({
+          kind,
+          id: template.id,
+          ...failure,
+          retry: failure.retryable
+            ? () => runTemplateAction(kind, action, template)
+            : null,
+        });
+        return;
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("workspace:notice", {
+          detail:
+            action === "delete"
+              ? `${kind === "task" ? "Task" : "Project"} template deleted.`
+              : `${kind === "task" ? "Task" : "Project"} created from ${template.name}.`,
+        }),
+      );
+      onRefresh?.();
+    } catch (error) {
+      setTemplateActionError({
+        kind,
+        id: template.id,
+        title:
+          action === "delete"
+            ? `${kind === "task" ? "Task" : "Project"} template could not be deleted`
+            : kind === "task"
+              ? "Task could not be created from template"
+              : "Project could not be created from template",
+        message: error.message || "Check the connection and try again.",
+        retry: () => runTemplateAction(kind, action, template),
+      });
+    } finally {
+      setTemplateActionBusy(null);
+    }
+  };
+
   const createTaskTemplate = async (event) => {
     event.preventDefault();
+    const name = taskTemplateForm.name.trim();
+    const title = taskTemplateForm.title.trim();
+    if (!name || name.length > 120) {
+      setTemplateError({
+        kind: "task",
+        field: "name",
+        message: "Template name must be between 1 and 120 characters.",
+      });
+      return;
+    }
+    if (!title || title.length > 200) {
+      setTemplateError({
+        kind: "task",
+        field: "title",
+        message: "Task title must be between 1 and 200 characters.",
+      });
+      return;
+    }
     setTemplateSaving(true);
-    setTemplateError("");
+    setTemplateError(null);
+    setTemplateActionError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/task-templates/`,
@@ -1306,15 +1428,43 @@ function SettingsView({
       });
       onRefresh?.();
     } catch (error) {
-      setTemplateError(error.message);
+      setTemplateError({ kind: "task", message: error.message });
     } finally {
       setTemplateSaving(false);
     }
   };
   const createProjectTemplate = async (event) => {
     event.preventDefault();
+    const name = projectTemplateForm.name.trim();
+    const projectName = projectTemplateForm.project_name.trim();
+    const dueDays = Number(projectTemplateForm.due_days);
+    if (!name || name.length > 120) {
+      setTemplateError({
+        kind: "project",
+        field: "name",
+        message: "Template name must be between 1 and 120 characters.",
+      });
+      return;
+    }
+    if (!projectName || projectName.length > 160) {
+      setTemplateError({
+        kind: "project",
+        field: "project_name",
+        message: "Project name must be between 1 and 160 characters.",
+      });
+      return;
+    }
+    if (!Number.isInteger(dueDays) || dueDays < 0 || dueDays > 365) {
+      setTemplateError({
+        kind: "project",
+        field: "due_days",
+        message: "Due in days must be a whole number between 0 and 365.",
+      });
+      return;
+    }
     setTemplateSaving(true);
-    setTemplateError("");
+    setTemplateError(null);
+    setTemplateActionError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/project-templates/`,
@@ -1339,75 +1489,19 @@ function SettingsView({
       });
       onRefresh?.();
     } catch (error) {
-      setTemplateError(error.message);
+      setTemplateError({ kind: "project", message: error.message });
     } finally {
       setTemplateSaving(false);
     }
   };
-  const deleteTaskTemplate = async (template) => {
-    const response = await fetch(
-      `/api/workspaces/${workspaceId}/task-templates/${template.id}/`,
-      {
-        method: "DELETE",
-        credentials: "include",
-        headers: { "X-CSRFToken": await getCsrfToken() },
-      },
-    );
-    if (response.ok) onRefresh?.();
-  };
-  const deleteProjectTemplate = async (template) => {
-    const response = await fetch(
-      `/api/workspaces/${workspaceId}/project-templates/${template.id}/`,
-      {
-        method: "DELETE",
-        credentials: "include",
-        headers: { "X-CSRFToken": await getCsrfToken() },
-      },
-    );
-    if (response.ok) onRefresh?.();
-  };
-  const applyTaskTemplate = async (template) => {
-    const response = await fetch(
-      `/api/workspaces/${workspaceId}/task-templates/${template.id}/apply/`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: { "X-CSRFToken": await getCsrfToken() },
-      },
-    );
-    const data = await response.json();
-    if (!response.ok)
-      return setTemplateError(
-        data.error || "Task could not be created from template.",
-      );
-    window.dispatchEvent(
-      new CustomEvent("workspace:notice", {
-        detail: `Task created from ${template.name}.`,
-      }),
-    );
-    onRefresh?.();
-  };
-  const applyProjectTemplate = async (template) => {
-    const response = await fetch(
-      `/api/workspaces/${workspaceId}/project-templates/${template.id}/apply/`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: { "X-CSRFToken": await getCsrfToken() },
-      },
-    );
-    const data = await response.json();
-    if (!response.ok)
-      return setTemplateError(
-        data.error || "Project could not be created from template.",
-      );
-    window.dispatchEvent(
-      new CustomEvent("workspace:notice", {
-        detail: `Project created from ${template.name}.`,
-      }),
-    );
-    onRefresh?.();
-  };
+  const deleteTaskTemplate = (template) =>
+    runTemplateAction("task", "delete", template);
+  const deleteProjectTemplate = (template) =>
+    runTemplateAction("project", "delete", template);
+  const applyTaskTemplate = (template) =>
+    runTemplateAction("task", "apply", template);
+  const applyProjectTemplate = (template) =>
+    runTemplateAction("project", "apply", template);
   const roleLabel =
     currentWorkspace?.role === "owner"
       ? "Owner"
@@ -2320,6 +2414,11 @@ function SettingsView({
                     Template name
                     <input
                       value={taskTemplateForm.name}
+                      maxLength={120}
+                      aria-invalid={
+                        templateError?.kind === "task" &&
+                        templateError.field === "name"
+                      }
                       onChange={(event) =>
                         setTaskTemplateForm((current) => ({
                           ...current,
@@ -2333,6 +2432,11 @@ function SettingsView({
                     Task title
                     <input
                       value={taskTemplateForm.title}
+                      maxLength={200}
+                      aria-invalid={
+                        templateError?.kind === "task" &&
+                        templateError.field === "title"
+                      }
                       onChange={(event) =>
                         setTaskTemplateForm((current) => ({
                           ...current,
@@ -2462,35 +2566,96 @@ function SettingsView({
                   </button>
                 </form>
                 <div className="settings-template-list">
-                  {taskTemplates.map((template) => (
-                    <div className="settings-template-row" key={template.id}>
-                      <div>
-                        <strong>{template.name}</strong>
-                        <span>
-                          {template.title} · {template.priority} ·{" "}
-                          {template.bucket}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => applyTaskTemplate(template)}
-                      >
-                        Use
-                      </button>
-                      {canManageMembers && (
-                        <button
-                          type="button"
-                          className="inline-delete"
-                          onClick={() => deleteTaskTemplate(template)}
-                          aria-label={`Delete ${template.name}`}
+                  {templatesLoading ? (
+                    <SkeletonGroup
+                      className="settings-template-list-loading"
+                      label="Loading task templates"
+                    >
+                      <Skeleton variant="row" />
+                      <Skeleton variant="row" />
+                    </SkeletonGroup>
+                  ) : taskTemplates.length ? (
+                    taskTemplates.map((template) => {
+                      const rowBusy =
+                        templateActionBusy?.kind === "task" &&
+                        templateActionBusy.id === template.id;
+                      const deleting =
+                        rowBusy && templateActionBusy.action === "delete";
+                      const applying =
+                        rowBusy && templateActionBusy.action === "apply";
+
+                      return (
+                        <div
+                          className={`settings-template-row${rowBusy ? " is-busy" : ""}`}
+                          key={template.id}
+                          aria-busy={rowBusy || undefined}
                         >
-                          <X size={14} />
-                        </button>
-                      )}
+                          <div>
+                            <strong>{template.name}</strong>
+                            <span>
+                              {template.title} · {template.priority} ·{" "}
+                              {template.bucket}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={Boolean(templateActionBusy) || templateSaving}
+                            onClick={() => applyTaskTemplate(template)}
+                            aria-label={`Use task template ${template.name}`}
+                          >
+                            {applying ? (
+                              <>
+                                <LoaderCircle size={14} className="settings-template-spinner" />
+                                Applying
+                              </>
+                            ) : (
+                              "Use"
+                            )}
+                          </button>
+                          {canManageMembers && (
+                            <button
+                              type="button"
+                              className="inline-delete"
+                              disabled={Boolean(templateActionBusy) || templateSaving}
+                              onClick={() => deleteTaskTemplate(template)}
+                              aria-label={deleting ? `Deleting ${template.name}` : `Delete ${template.name}`}
+                            >
+                              {deleting ? (
+                                <LoaderCircle size={14} className="settings-template-spinner" />
+                              ) : (
+                                <X size={14} />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="settings-template-empty" role="status">
+                      <ClipboardList size={22} aria-hidden="true" />
+                      <strong>No task templates yet</strong>
+                      <p>Create a reusable blueprint for repeatable work.</p>
                     </div>
-                  ))}
+                  )}
                 </div>
+                {templateError?.kind === "task" && (
+                  <SettingsAlert
+                    className="settings-template-action-alert"
+                    title="Task template could not be created"
+                  >
+                    {templateError.message}
+                  </SettingsAlert>
+                )}
+                {templateActionError?.kind === "task" && (
+                  <SettingsAlert
+                    className="settings-template-action-alert"
+                    title={templateActionError.title}
+                    onRetry={templateActionError.retry || undefined}
+                  >
+                    {templateActionError.message}
+                  </SettingsAlert>
+                )}
               </div>
               <div className="settings-template-section">
                 <h3>Project templates</h3>
@@ -2503,6 +2668,11 @@ function SettingsView({
                     Template name
                     <input
                       value={projectTemplateForm.name}
+                      maxLength={120}
+                      aria-invalid={
+                        templateError?.kind === "project" &&
+                        templateError.field === "name"
+                      }
                       onChange={(event) =>
                         setProjectTemplateForm((current) => ({
                           ...current,
@@ -2516,6 +2686,11 @@ function SettingsView({
                     Project name
                     <input
                       value={projectTemplateForm.project_name}
+                      maxLength={160}
+                      aria-invalid={
+                        templateError?.kind === "project" &&
+                        templateError.field === "project_name"
+                      }
                       onChange={(event) =>
                         setProjectTemplateForm((current) => ({
                           ...current,
@@ -2544,6 +2719,10 @@ function SettingsView({
                       min="0"
                       max="365"
                       value={projectTemplateForm.due_days}
+                      aria-invalid={
+                        templateError?.kind === "project" &&
+                        templateError.field === "due_days"
+                      }
                       onChange={(event) =>
                         setProjectTemplateForm((current) => ({
                           ...current,
@@ -2571,41 +2750,97 @@ function SettingsView({
                   </button>
                 </form>
                 <div className="settings-template-list">
-                  {projectTemplates.map((template) => (
-                    <div className="settings-template-row" key={template.id}>
-                      <div>
-                        <strong>{template.name}</strong>
-                        <span>
-                          {template.project_name} · {template.due_days} days
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => applyProjectTemplate(template)}
-                      >
-                        Use
-                      </button>
-                      {canManageMembers && (
-                        <button
-                          type="button"
-                          className="inline-delete"
-                          onClick={() => deleteProjectTemplate(template)}
-                          aria-label={`Delete ${template.name}`}
+                  {templatesLoading ? (
+                    <SkeletonGroup
+                      className="settings-template-list-loading"
+                      label="Loading project templates"
+                    >
+                      <Skeleton variant="row" />
+                      <Skeleton variant="row" />
+                    </SkeletonGroup>
+                  ) : projectTemplates.length ? (
+                    projectTemplates.map((template) => {
+                      const rowBusy =
+                        templateActionBusy?.kind === "project" &&
+                        templateActionBusy.id === template.id;
+                      const deleting =
+                        rowBusy && templateActionBusy.action === "delete";
+                      const applying =
+                        rowBusy && templateActionBusy.action === "apply";
+
+                      return (
+                        <div
+                          className={`settings-template-row${rowBusy ? " is-busy" : ""}`}
+                          key={template.id}
+                          aria-busy={rowBusy || undefined}
                         >
-                          <X size={14} />
-                        </button>
-                      )}
+                          <div>
+                            <strong>{template.name}</strong>
+                            <span>
+                              {template.project_name} · {template.due_days} days
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={Boolean(templateActionBusy) || templateSaving}
+                            onClick={() => applyProjectTemplate(template)}
+                            aria-label={`Use project template ${template.name}`}
+                          >
+                            {applying ? (
+                              <>
+                                <LoaderCircle size={14} className="settings-template-spinner" />
+                                Applying
+                              </>
+                            ) : (
+                              "Use"
+                            )}
+                          </button>
+                          {canManageMembers && (
+                            <button
+                              type="button"
+                              className="inline-delete"
+                              disabled={Boolean(templateActionBusy) || templateSaving}
+                              onClick={() => deleteProjectTemplate(template)}
+                              aria-label={deleting ? `Deleting ${template.name}` : `Delete ${template.name}`}
+                            >
+                              {deleting ? (
+                                <LoaderCircle size={14} className="settings-template-spinner" />
+                              ) : (
+                                <X size={14} />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="settings-template-empty" role="status">
+                      <ClipboardList size={22} aria-hidden="true" />
+                      <strong>No project templates yet</strong>
+                      <p>Save a project shell and due window for repeatable delivery.</p>
                     </div>
-                  ))}
+                  )}
                 </div>
+                {templateError?.kind === "project" && (
+                  <SettingsAlert
+                    className="settings-template-action-alert"
+                    title="Project template could not be created"
+                  >
+                    {templateError.message}
+                  </SettingsAlert>
+                )}
+                {templateActionError?.kind === "project" && (
+                  <SettingsAlert
+                    className="settings-template-action-alert"
+                    title={templateActionError.title}
+                    onRetry={templateActionError.retry || undefined}
+                  >
+                    {templateActionError.message}
+                  </SettingsAlert>
+                )}
               </div>
               </div>
-              {templateError && (
-                <p className="auth-error" role="alert">
-                  {templateError}
-                </p>
-              )}
             </Card>
           )}
           {section === "workspace" && (

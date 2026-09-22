@@ -129,6 +129,270 @@ it('renders the designed appearance, workspace, and template structures', () => 
   expect(document.querySelector('.settings-template-preview')).toBeInTheDocument()
 })
 
+it('confirms a template deletion before sending the destructive request', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/task-templates/11/': { deleted: 11 },
+  })
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  const onRefresh = vi.fn()
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      taskTemplates={[
+        { id: 11, name: 'Weekly planning', title: 'Plan the week', priority: 'normal', bucket: 'Backlog' },
+      ]}
+      onConfirm={onConfirm}
+      onRefresh={onRefresh}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Delete Weekly planning' }))
+
+  await waitFor(() => {
+    expect(onConfirm).toHaveBeenCalledWith(
+      'Delete Weekly planning? This cannot be undone.',
+      expect.objectContaining({ title: 'Delete task template', confirmLabel: 'Delete template' }),
+    )
+  })
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/task-templates/11/', 'DELETE'))
+  expect(onRefresh).toHaveBeenCalled()
+})
+
+it('keeps a cancelled template deletion from calling the API', async () => {
+  const api = mockApi({})
+  const onConfirm = vi.fn().mockResolvedValue(false)
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      taskTemplates={[
+        { id: 11, name: 'Weekly planning', title: 'Plan the week', priority: 'normal', bucket: 'Backlog' },
+      ]}
+      onConfirm={onConfirm}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Delete Weekly planning' }))
+
+  await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1))
+  expect(api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/api/workspaces/1/task-templates/11/') && init.method === 'DELETE')).toHaveLength(0)
+})
+
+it('shows a deleting row state, then retries a failed template deletion', async () => {
+  const api = mockApi({})
+  const originalFetch = api.getMockImplementation()
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  const onRefresh = vi.fn()
+  let resolveFirstDelete
+  let deleteRequests = 0
+  const failureResponse = () => ({
+    ok: false,
+    status: 503,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ error: 'Delete service is unavailable.' }),
+    text: async () => '{"error":"Delete service is unavailable."}',
+  })
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/task-templates/11/') && init.method === 'DELETE') {
+      deleteRequests += 1
+      if (deleteRequests === 1) {
+        return new Promise((resolve) => {
+          resolveFirstDelete = resolve
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ deleted: 11 }),
+        text: async () => '{"deleted":11}',
+      })
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      taskTemplates={[
+        { id: 11, name: 'Weekly planning', title: 'Plan the week', priority: 'normal', bucket: 'Backlog' },
+      ]}
+      onConfirm={onConfirm}
+      onRefresh={onRefresh}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Delete Weekly planning' }))
+
+  await waitFor(() => expect(resolveFirstDelete).toBeTypeOf('function'))
+  const row = screen.getByText('Weekly planning').closest('.settings-template-row')
+  expect(row).toHaveAttribute('aria-busy', 'true')
+  expect(within(row).getByRole('button', { name: 'Deleting Weekly planning' })).toBeDisabled()
+
+  resolveFirstDelete(failureResponse())
+  const error = await screen.findByText('Delete service is unavailable.')
+  const alert = error.closest('[data-slot="alert"]')
+  expect(within(alert).getByText('Task template could not be deleted')).toBeInTheDocument()
+
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(deleteRequests).toBe(2))
+  await waitFor(() => expect(onRefresh).toHaveBeenCalled())
+  expect(onConfirm).toHaveBeenCalledTimes(2)
+})
+
+it('renders dedicated empty states for both template lists', () => {
+  mockApi({})
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      taskTemplates={[]}
+      projectTemplates={[]}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+
+  expect(screen.getByText('No task templates yet')).toBeInTheDocument()
+  expect(screen.getByText('No project templates yet')).toBeInTheDocument()
+  expect(screen.getAllByRole('status')).toHaveLength(2)
+})
+
+it('renders template loading states instead of a false empty state', () => {
+  mockApi({})
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      taskTemplates={[]}
+      projectTemplates={[]}
+      templatesLoading
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+
+  expect(screen.getByRole('status', { name: 'Loading task templates' })).toBeInTheDocument()
+  expect(screen.getByRole('status', { name: 'Loading project templates' })).toBeInTheDocument()
+  expect(screen.queryByText('No task templates yet')).not.toBeInTheDocument()
+  expect(screen.queryByText('No project templates yet')).not.toBeInTheDocument()
+})
+
+it('validates project template fields before sending a request', () => {
+  const api = mockApi({})
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+  const section = screen.getByText('Project templates').closest('.settings-template-section')
+  fireEvent.change(within(section).getByLabelText('Template name'), { target: { value: 'Client delivery' } })
+  fireEvent.change(within(section).getByLabelText('Project name'), { target: { value: 'Client project' } })
+  fireEvent.change(within(section).getByLabelText('Due in days'), { target: { value: '400' } })
+  fireEvent.submit(within(section).getByRole('button', { name: 'Create project template' }).closest('form'))
+
+  expect(screen.getByText('Due in days must be a whole number between 0 and 365.')).toBeInTheDocument()
+  expect(within(section).getByLabelText('Due in days')).toHaveAttribute('aria-invalid', 'true')
+  expect(api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/project-templates/') && init.method === 'POST')).toHaveLength(0)
+})
+
+it('keeps an apply failure recoverable without discarding the template', async () => {
+  const api = mockApi({})
+  const originalFetch = api.getMockImplementation()
+  const onRefresh = vi.fn()
+  let applyRequests = 0
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/project-templates/22/apply/') && init.method === 'POST') {
+      applyRequests += 1
+      if (applyRequests === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Project service is unavailable.' }),
+          text: async () => '{"error":"Project service is unavailable."}',
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ project: { id: 4 } }),
+        text: async () => '{"project":{"id":4}}',
+      })
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      projectTemplates={[
+        { id: 22, name: 'Client delivery', project_name: 'Client project', due_days: 30 },
+      ]}
+      onRefresh={onRefresh}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Templates' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Use project template Client delivery' }))
+
+  const error = await screen.findByText('Project service is unavailable.')
+  const alert = error.closest('[data-slot="alert"]')
+  expect(within(alert).getByText('Project could not be created from template')).toBeInTheDocument()
+  expect(screen.getByText('Client delivery')).toBeInTheDocument()
+
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+  await waitFor(() => expect(applyRequests).toBe(2))
+  await waitFor(() => expect(onRefresh).toHaveBeenCalled())
+})
+
 it('keeps the previous appearance when local persistence fails, then retries', () => {
   const onSetTheme = vi.fn()
   const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

@@ -39,7 +39,6 @@ recovery path differs from F13; the following cases remain in that category.
 | Workspace access | Invite failure, member removal, and accepted or expired invitation states |
 | AI settings | Credential rotation, provider removal confirmation, concurrent-update conflict, and desktop/mobile error parity |
 | Integrations | Loading, disconnected, invalid credentials, URL validation, save failure, reconnect, and revoked-access states |
-| Templates | Loading, empty, create/edit validation, apply failure, duplicate name, and destructive-action states |
 
 The shared loading, empty, offline, expired-session, permission, and recoverable
 error compositions on F12 define the shell-level treatment. A Settings panel
@@ -73,6 +72,7 @@ The following are no longer unresolved design gaps:
 - Appearance operational states: P40 and F13 cover retained-theme persistence failure, retry, unsupported-theme fallback, and reduced-motion behavior.
 - Notification operational states: P41 and F13 cover denied browser permission, unsupported browsers, push configuration and subscription recovery, disabled sound, and notification-preference load/save recovery.
 - Profile media recovery: F13 covers upload and removal failures with retained-photo rollback, operation-specific retry, and the file picker fallback for uploads.
+- Templates: F13 covers panel loading, empty task and project template lists, client-side create validation, apply failure with retry, and destructive delete confirmation, busy, and recoverable error states. Template editing is not supported by the current detail API, and duplicate template names are allowed by the current backend contract, so neither is simulated in the UI.
 - Workspace lifecycle recovery: P42 and F13 cover busy actions, archived workspace display, owner-only restore and permanent deletion, permission and conflict separation, destructive confirmation, retryable failures, and the workspace empty/create state.
 - Workspace access recovery: P43 and F13 cover the loading skeleton, limited-access treatment, role-save rollback and retry, non-retryable permission denial, and the empty member state.
 - Global crash fallback: P65 defines the branded recoverable error screen.

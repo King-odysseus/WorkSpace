@@ -1664,10 +1664,21 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   gap: 14px;
 }
 
+.settings-view .settings-template-form :is(input, textarea, [data-slot='select-trigger']) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .settings-view .settings-template-form .modal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.settings-view .settings-template-form :is(input, textarea)[aria-invalid='true'] {
+  border-color: var(--pencil-danger) !important;
+  box-shadow: 0 0 0 3px rgb(199 0 54 / 12%);
 }
 
 .settings-view .settings-template-form > .secondary-button,
@@ -1681,6 +1692,50 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   gap: 8px;
 }
 
+.settings-view .settings-template-empty {
+  display: grid;
+  min-height: 132px;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  padding: 20px;
+  border: 1px dashed var(--pencil-border-strong);
+  border-radius: 10px;
+  background: var(--pencil-surface-muted);
+  color: var(--pencil-text-muted);
+  text-align: center;
+}
+
+.settings-view .settings-template-empty svg {
+  margin-bottom: 3px;
+  color: var(--pencil-text-secondary);
+}
+
+.settings-view .settings-template-empty strong {
+  color: var(--pencil-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.settings-view .settings-template-empty p {
+  max-width: 250px;
+  margin: 0;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.settings-view .settings-template-list-loading {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-view .settings-template-list-loading .workspace-skeleton-row {
+  width: 100%;
+  min-height: 64px;
+  border-radius: 10px;
+}
+
 .settings-view .settings-template-row {
   display: grid;
   min-height: 64px;
@@ -1691,6 +1746,42 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   border: 1px solid var(--pencil-border);
   border-radius: 10px;
   background: #f9fafb;
+}
+
+.settings-view .settings-template-row.is-busy {
+  border-color: rgb(0 22 102 / 22%);
+  background: rgb(0 22 102 / 4%);
+}
+
+.settings-view .settings-template-row button:disabled {
+  cursor: wait;
+}
+
+.settings-view .settings-template-row .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.settings-view .settings-template-spinner {
+  animation: settings-template-spin 800ms linear infinite;
+}
+
+.settings-view .settings-template-action-alert {
+  margin: 0;
+}
+
+@keyframes settings-template-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-view .settings-template-spinner {
+    animation: none;
+  }
 }
 
 .settings-view .settings-template-row > div {
