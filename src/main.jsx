@@ -421,6 +421,7 @@ function App() {
   const searchRef = useRef(null);
   const searchInputRef = useRef(null);
   const profileMenuRef = useRef(null);
+  const appbarNotificationRef = useRef(null);
   const appbarProfileRef = useRef(null);
   const appbarProfileMenuRef = useRef(null);
   const sidebarProfileRef = useRef(null);
@@ -801,6 +802,7 @@ function App() {
     const handler = (event) => {
       if (
         !notifRef.current?.contains(event.target) &&
+        !appbarNotificationRef.current?.contains(event.target) &&
         !notificationPanelRef.current?.contains(event.target)
       )
         setNotificationOpen(false);
@@ -2606,14 +2608,13 @@ function App() {
     </div>
   );
 
-  // Same again for the activity list: the desktop header anchors it under the
-  // bell, the mobile AppBar pins it under the bar, and only the position
-  // differs. Each caller supplies its own offset.
+  // Same again for the activity list: the desktop header and mobile AppBar both
+  // anchor it under their bell. Each caller supplies its own positioning class.
   const renderNotificationsPanel = (positionClass, panelRef) => (
     <div
       ref={panelRef}
       className={cn(
-        "workspace-popup-panel z-[60] mt-2 w-auto max-w-md animate-fade-in",
+        "workspace-popup-panel z-[60] mt-2 max-w-md origin-top-right animate-fade-in",
         positionClass,
       )}
     >
@@ -3204,31 +3205,41 @@ function App() {
               {resolvedTheme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
             </button>
 
-            <button
-              ref={appbarProfileRef}
-              type="button"
-              onClick={() => {
-                setNotificationOrigin("appbar");
-                setNotificationOpen((current) => !current);
-              }}
-              className="relative flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
-              aria-label="Open workspace activity"
-            >
-              <Bell size={20} />
-              {/* The design puts the count on the bell's own 28px box rather
-                  than on the bar, a 14px roundel against that box's top-right
-                  corner, and draws no ring around it. */}
-              <NotificationIndicator
-                count={unreadActivityNotificationCount}
-                countKnown={activityCountKnown}
-                max={9}
-                label="workspace notifications"
-                className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[9px] font-bold leading-none text-white"
-                dotClassName="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-danger ring-2 ring-surface"
-              />
-            </button>
+            <div className="relative shrink-0">
+              <button
+                ref={appbarNotificationRef}
+                type="button"
+                onClick={() => {
+                  setNotificationOrigin("appbar");
+                  setNotificationOpen((current) => !current);
+                }}
+                className="relative flex size-7 shrink-0 items-center justify-center rounded-badge text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                aria-label="Open workspace activity"
+                aria-expanded={notificationOpen && notificationOrigin === "appbar"}
+              >
+                <Bell size={20} />
+                {/* The design puts the count on the bell's own 28px box rather
+                    than on the bar, a 14px roundel against that box's top-right
+                    corner, and draws no ring around it. */}
+                <NotificationIndicator
+                  count={unreadActivityNotificationCount}
+                  countKnown={activityCountKnown}
+                  max={9}
+                  label="workspace notifications"
+                  className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[9px] font-bold leading-none text-white"
+                  dotClassName="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-danger ring-2 ring-surface"
+                />
+              </button>
+              {notificationOpen &&
+                notificationOrigin === "appbar" &&
+                renderNotificationsPanel(
+                  "absolute right-0 top-full w-[min(calc(100vw-4.5rem),380px)]",
+                  notificationPanelRef,
+                )}
+            </div>
 
             <button
+              ref={appbarProfileRef}
               type="button"
               onClick={() => {
                 setProfileMenuOrigin("appbar");
@@ -3280,13 +3291,6 @@ function App() {
             </div>
           </div>
         )}
-
-        {notificationOpen &&
-          notificationOrigin === "appbar" &&
-          renderNotificationsPanel(
-            "fixed left-4 right-4 top-[60px]",
-            notificationPanelRef,
-          )}
 
         {profileMenuOpen && profileMenuOrigin === "appbar" && (
           <div

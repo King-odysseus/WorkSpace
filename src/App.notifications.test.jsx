@@ -202,13 +202,25 @@ it('separates message alerts from workspace activity across the header and mobil
 
   fireEvent.click(within(mobileNav).getByRole('button', { name: /Today/ }))
   await screen.findByRole('heading', { name: 'Today' })
-  fireEvent.click(screen.getByRole('button', { name: 'Open workspace activity' }))
+  const mobileBell = screen.getByRole('button', { name: 'Open workspace activity' })
+  fireEvent.click(mobileBell)
   const mobileViewAll = await screen.findByRole('button', { name: 'View all workspace activity' })
+  const mobilePanel = mobileViewAll.closest('.workspace-popup-panel')
+  expect(mobilePanel).toHaveClass('absolute', 'right-0', 'top-full')
+  expect(mobilePanel.className).not.toContain('fixed')
+  expect(mobilePanel.className).not.toContain('left-4')
+  expect(mobilePanel.parentElement).toContainElement(mobileBell)
+
+  fireEvent.click(mobileBell)
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'View all workspace activity' })).not.toBeInTheDocument())
+  fireEvent.click(mobileBell)
+  const reopenedViewAll = await screen.findByRole('button', { name: 'View all workspace activity' })
+
   // The activity sheet is mounted outside the header on phones. Its own
   // mousedown must not dismiss it before the View all click can run.
-  fireEvent.mouseDown(mobileViewAll)
-  expect(mobileViewAll).toBeInTheDocument()
-  fireEvent.click(mobileViewAll)
+  fireEvent.mouseDown(reopenedViewAll)
+  expect(reopenedViewAll).toBeInTheDocument()
+  fireEvent.click(reopenedViewAll)
   await screen.findByText('Everything that needs your attention, newest first.')
 }, 60000)
 
