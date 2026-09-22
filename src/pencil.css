@@ -2232,7 +2232,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 /* P3 Planner. The desktop board uses 304px lanes with 16px gaps, a
    744px board, and compact 76px task cards. Wider boards scroll horizontally. */
 .planner-header { min-height: 101px; margin-bottom: 8px; }
-.planner-header > button { width: 124px; min-width: 124px; padding-inline: 10px !important; font-size: 14px; }
+.planner-header > button { width: 124px; min-width: 124px; padding-inline: 12px !important; font-size: 14px; }
 .planner-commandbar { min-height: 42px; gap: 2px !important; }
 .planner-commandbar > * { min-height: 42px; }
 .planner-commandbar [data-slot='select-trigger'] { height: 42px !important; min-height: 42px !important; }
@@ -2241,7 +2241,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-commandbar .planner-project-filter,
 .planner-commandbar .planner-workstream-filter { width: 180px !important; flex: 0 0 180px; }
 .planner-archive-button { width: 130px; flex: 0 0 130px; margin-right: 10px; padding-inline: 12px !important; }
-.planner-new-bucket-button { width: 132px; flex: 0 0 132px; padding-inline: 14px !important; }
+.planner-new-bucket-button { width: 132px; flex: 0 0 132px; padding-inline: 12px !important; }
 .planner-scope-summary { min-height: 15px; margin-top: 16px !important; line-height: 15px; }
 .planner-board { display: grid !important; grid-auto-flow: column; grid-auto-columns: 304px; gap: 16px !important; margin-top: 17px !important; padding-bottom: 0 !important; }
 .planner-column { width: 100% !important; min-width: 304px; height: 744px !important; overflow: hidden; border: 0 !important; border-radius: 12px !important; background: var(--pencil-surface-muted) !important; }
@@ -2607,7 +2607,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .event-pill { display: grid; min-width: 0; gap: 1px; overflow: hidden; padding: 4px 6px; border: 1px solid var(--pencil-border); border-left: 3px solid var(--pencil-navy); border-radius: 6px; background: var(--pencil-alert-info-fill); color: var(--pencil-navy); font-size: 10px; line-height: 13px; text-align: left; text-overflow: ellipsis; }
 .event-pill > span:first-child { color: var(--pencil-text-muted); font-size: 9px; line-height: 11px; }
 .event-pill-title { display: block; min-width: 0; max-width: 100%; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.calendar-view-month .event-pill { display: flex; min-width: 0; height: 18px; align-items: center; overflow: hidden; padding: 0 10px; border: 0; border-radius: 4px; box-shadow: inset 3px 0 var(--pencil-navy); font-size: 10px; font-weight: 500; line-height: 18px; text-overflow: ellipsis; }
+.calendar-view-month .event-pill { display: flex; min-width: 0; height: 18px; align-items: center; overflow: hidden; padding: 0 12px; border: 0; border-radius: 4px; box-shadow: inset 3px 0 var(--pencil-navy); font-size: 10px; font-weight: 500; line-height: 18px; text-overflow: ellipsis; }
 .calendar-view-month .event-pill > span:first-child { display: none; }
 .calendar-view-month .event-pill.event-type-meeting { background: var(--pencil-alert-info-fill); color: var(--pencil-alert-info-text); box-shadow: inset 3px 0 #1447E6; }
 .calendar-view-month .event-pill.event-type-focus { background: var(--pencil-alert-warning-fill); color: var(--pencil-alert-warning-text); box-shadow: inset 3px 0 var(--pencil-warning-fill); }
@@ -3877,18 +3877,18 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .help-article-list, .help-popular-card, .help-support-card, .help-shortcuts-card { margin: 0; padding: 20px; }
 .help-article-items { display: grid; margin-top: 10px; }
 .help-article-items > article { border-top: 1px solid var(--pencil-border-light); }
-.help-article-items > article > button { display: grid; width: 100%; min-height: 58px; grid-template-columns: 32px minmax(0, 1fr) 18px; align-items: center; gap: 10px; padding: 8px 0; border: 0; background: transparent; color: var(--pencil-text); text-align: left; }
+.help-article-items > article > button { display: grid; width: 100%; min-height: 58px; grid-template-columns: 32px minmax(0, 1fr) 18px; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--pencil-text); text-align: left; }
 .help-article-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); }
 .help-article-items > article > button > span:nth-child(2) { display: grid; gap: 2px; }
 .help-article-items strong { font-size: 12px; font-weight: 600; line-height: 16px; }
 .help-article-items small { color: var(--pencil-text-muted); font-size: 10px; line-height: 14px; }
 .help-article-items > article > ol { display: grid; gap: 7px; margin: 0; padding: 0 0 14px 42px; color: var(--pencil-text-secondary); font-size: 12px; line-height: 18px; }
 .help-popular-list { display: grid; margin-top: 10px; }
-.help-popular-list button { display: grid; min-height: 52px; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 0; border: 0; border-top: 1px solid var(--pencil-border-light); background: transparent; color: var(--pencil-text); text-align: left; }
+.help-popular-list button { display: grid; min-height: 52px; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 0 10px; border: 0; border-top: 1px solid var(--pencil-border-light); background: transparent; color: var(--pencil-text); text-align: left; }
 .help-popular-list button strong { font-size: 12px; font-weight: 500; }
 .help-popular-list button small { color: var(--pencil-text-muted); font-size: 10px; }
 .help-support-card h2, .help-shortcuts-card h2 { margin: 0 0 14px; color: var(--pencil-text); font-size: 18px; font-weight: 600; line-height: 24px; }
-.help-support-primary, .help-support-secondary { display: flex; width: 100%; min-height: 42px; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.help-support-primary, .help-support-secondary { display: flex; width: 100%; min-height: 42px; align-items: center; justify-content: center; gap: 8px; padding-inline: 16px; border-radius: 10px; font-size: 13px; font-weight: 600; }
 .help-support-primary { border: 0; background: var(--pencil-navy); color: #fff; }
 .help-support-secondary { margin-top: 10px; border: 1px solid var(--pencil-border); background: var(--pencil-surface); color: var(--pencil-text); }
 .help-support-card > p { display: flex; align-items: center; gap: 7px; margin: 18px 0 0; color: var(--pencil-text-muted); font-size: 11px; }
@@ -4358,7 +4358,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .projects-view .project-task-stats .risk strong, .projects-view .project-task-stats .danger strong { color: var(--pencil-danger); }
 .projects-view .project-footer { position: absolute; top: 260px; right: 24px; left: 24px; display: flex; min-width: 0; height: 32px; align-items: center; gap: 8px; margin-top: 0; }
 .projects-view .project-updated { margin-right: auto; color: var(--pencil-text-muted); font-size: 10px; }
-.projects-view .project-open-button { display: inline-flex; height: 32px; min-height: 32px; align-items: center; justify-content: center; gap: 4px; padding: 0 9px; border-radius: 8px !important; font-size: 11px; font-weight: 600; line-height: 14px; letter-spacing: .1px; white-space: nowrap; }
+.projects-view .project-open-button { display: inline-flex; height: 32px; min-height: 32px; align-items: center; justify-content: center; gap: 4px; padding: 0 12px; border-radius: 8px !important; font-size: 11px; font-weight: 600; line-height: 14px; letter-spacing: .1px; white-space: nowrap; }
 .projects-view .project-open-button svg { width: 13px; height: 13px; flex: 0 0 13px; }
 .projects-view .project-card-action { width: 36px !important; height: 32px !important; min-height: 32px !important; flex: 0 0 36px; padding: 0 !important; border: 1px solid var(--pencil-border) !important; border-radius: 8px !important; background: var(--pencil-surface) !important; color: var(--pencil-text-secondary) !important; box-shadow: none !important; }
 .projects-view .project-card-action:hover { background: var(--pencil-surface-muted) !important; color: var(--pencil-text) !important; }
