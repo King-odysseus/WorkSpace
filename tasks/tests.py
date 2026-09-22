@@ -3187,6 +3187,11 @@ class WorkspaceSearchApiTests(TestCase):
 
 class WorkspacePulseApiTests(TestCase):
     def setUp(self):
+        # LastSeenMiddleware throttles its profile write in the shared test
+        # cache. A stale entry from an earlier test can expire between two
+        # fingerprint requests and make last_seen_at look like a data change,
+        # so each pulse test starts with a deterministic cold throttle.
+        cache.clear()
         self.user = User.objects.create_user(username='pulse@example.com', email='pulse@example.com', password='secure-pass-123')
         self.other = User.objects.create_user(username='pulseother@example.com', email='pulseother@example.com', password='secure-pass-123')
         self.workspace = Workspace.objects.create(name='Pulse', slug='pulse')
