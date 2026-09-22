@@ -385,6 +385,7 @@ export default function ProjectKanbanBoard({
     <div
       ref={boardRef}
       className="project-kanban-columns"
+      role="region"
       aria-label="Project Kanban board"
       onDragOver={scrollColumnBoard}
       onPointerMove={moveColumnPointerDrag}

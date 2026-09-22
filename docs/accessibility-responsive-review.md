@@ -19,7 +19,7 @@ Lighthouse pass and are not asserted as defects.
 | Current page | `aria-current="page"` on active nav items (main.jsx:720, 758) |
 | Toggle state | `aria-pressed` on sidebar/notification/theme switches (main.jsx:784, 906, 1103-1104) |
 | Decorative images | empty `alt=""` on avatars/icons; logos carry `alt="TijhaBooks"` (main.jsx:35, 691, 931) |
-| Keyboard drag fallback | planner cards expose Move up/down/left/right buttons (PlannerBoard.jsx:47-51) |
+| Keyboard drag fallback | planner cards expose Move up/down/left/right controls, project lanes expose left/right controls, and board moves announce completion through polite live regions. |
 | Semantic structure | `<table>` for planner table view, `<nav aria-label>` for settings/legal sections |
 | File uploads | Chat attachment, profile photo, and workspace logo inputs carry names on the file control itself; a live audit across 23 routes reports no unnamed interactive controls. |
 | Route containment | Automated Playwright audit across 23 top-level routes, 8 Settings panels, and 8 project tabs at 320, 390, 768, 1024, and 1440 widths reports 190 checks and 0 width, crash, page-error, or uncontained-overflow failures. |
@@ -48,5 +48,5 @@ responsive and color changes share one token source.
 | Severity | Finding | Recommendation |
 | --- | --- | --- |
 | verify | Color contrast for `mobile-pill-nav` text `#B9CCDD` on `#0B223AEE`, and priority/scope badge colors, is not computed here. | Run axe-core / Lighthouse contrast checks; adjust tokens if below 4.5:1 (normal text). |
-| verify | Drag-and-drop only works by pointer; keyboard users rely on the Move buttons, which is acceptable but confirm each move is announced to screen readers. | Add `aria-live="polite"` to the bulk-action bar / column counts if not present. |
-| verify | Gantt and board views have no obvious table/region semantics for screen readers. | Confirm Gantt content exposes a labelled region (`aria-label`) and column headers. |
+| verify | Drag-and-drop only works by pointer; keyboard users rely on the Move controls. | Keep regression coverage for board move announcements and lane counts; run a screen-reader pass on the desktop and 390px layouts. |
+| verify | No implemented Gantt view was found in the current source; only a help-reference string remains. | If a Gantt view is added later, expose it as a labelled region with explicit column/date headers. |

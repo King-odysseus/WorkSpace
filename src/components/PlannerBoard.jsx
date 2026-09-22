@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Archive, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
@@ -16,7 +16,7 @@ const STALE_DAYS = 14
 // The design's compact lane card: a completion checkbox and title lead, then
 // owner, workstream/estimate, and status. Status moves between lanes by dragging
 // the card; the overflow menu carries the moves a drag cannot express.
-function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect }) {
+function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onMoveWithinBucket, canMoveUp = false, canMoveDown = false, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect }) {
   const isDone = task.status === 'done'
   const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
   const assignee = task.assignee || {}
@@ -62,6 +62,11 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="planner-bucket-menu">
           <DropdownMenuItem className="planner-bucket-menu-item" aria-label={`Open ${task.title}`} onSelect={() => onOpen(task)}><Pencil size={13} /><span>Open task</span></DropdownMenuItem>
+          {canReorder && (canMoveUp || canMoveDown) && <>
+            <DropdownMenuSeparator className="planner-bucket-menu-separator" />
+            <DropdownMenuItem className="planner-bucket-menu-item" disabled={!canMoveUp} aria-label={`Move ${task.title} up`} onSelect={() => onMoveWithinBucket?.(task, 'up')}><ArrowUp size={13} /><span>Move up</span></DropdownMenuItem>
+            <DropdownMenuItem className="planner-bucket-menu-item" disabled={!canMoveDown} aria-label={`Move ${task.title} down`} onSelect={() => onMoveWithinBucket?.(task, 'down')}><ArrowDown size={13} /><span>Move down</span></DropdownMenuItem>
+          </>}
           {canReorder && otherBuckets.length > 0 && <>
             <DropdownMenuSeparator className="planner-bucket-menu-separator" />
             {otherBuckets.map(bucket => <DropdownMenuItem key={bucket.id} className="planner-bucket-menu-item" aria-label={`Move ${task.title} to ${bucket.name}`} onSelect={() => onMove(task, bucket.name)}><ArrowRight size={13} /><span>Move to {bucket.name}</span></DropdownMenuItem>)}
@@ -124,6 +129,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const [dropTaskId, setDropTaskId] = useState(null)
   const [dropTaskBucket, setDropTaskBucket] = useState(null)
   const [dropTaskIndex, setDropTaskIndex] = useState(null)
+  const [moveAnnouncement, setMoveAnnouncement] = useState('')
   const [creating, setCreating] = useState(false)
   const [editingBucketId, setEditingBucketId] = useState(null)
   const [bucketNameDraft, setBucketNameDraft] = useState('')
@@ -292,6 +298,14 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     onTaskMove(canManageTasks ? columns : columns.map(column => ({ ...column, task_ids: column.task_ids.filter(id => { const item = tasks.find(task => task.id === id); return item && taskIsAssignedTo(item, currentUserId) }) })).filter(column => column.task_ids.length))
   }
   const moveTask = (task, targetBucket) => persistMove(task.id, targetBucket, allOrderedFor(targetBucket).filter(item => item.id !== task.id).length)
+  const moveTaskWithinBucket = (task, direction) => {
+    const ordered = allOrderedFor(task.bucket)
+    const currentIndex = ordered.findIndex(item => String(item.id) === String(task.id))
+    const targetIndex = currentIndex + (direction === 'up' ? -1 : 1)
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= ordered.length) return
+    persistMove(task.id, task.bucket, targetIndex)
+    setMoveAnnouncement(`Moved ${task.title} ${direction} in ${task.bucket}.`)
+  }
   const clearTaskDropState = () => {
     setDropTaskId(null)
     setDropTaskBucket(null)
@@ -592,27 +606,34 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   // One card shape for the lanes and the Done band. A lane name of null means
   // "not a drop target": the band collects finished work, it does not receive
   // cards by dropping on them.
-  const renderTaskCard = (task, laneName, index, laneLength) => <PlannerTaskCard
-    key={task.id}
-    task={task}
-    buckets={buckets}
-    today={today}
-    canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)}
-    canDeletePermanently={canDeletePermanently}
-    onOpen={onOpenTask}
-    onDelete={onDeleteTask}
-    onDeletePermanently={onDeletePermanently}
-    onMove={moveTask}
-    onStatusChange={onStatusChange}
-    draggedTaskId={draggedTaskId}
-    setDraggedTaskId={setDraggedTaskId}
-    dropTaskId={dropTaskId}
-    dropBefore={laneName !== null && dropTaskBucket === laneName && dropTaskIndex === index}
-    dropAfter={laneName !== null && dropTaskBucket === laneName && dropTaskIndex === laneLength && index === laneLength - 1}
-    selectMode={selectMode}
-    selected={selectedTaskIds.some(id => String(id) === String(task.id))}
-    onToggleSelect={toggleTaskSelected}
-  />
+  const renderTaskCard = (task, laneName, index, laneLength) => {
+    const ordered = allOrderedFor(task.bucket)
+    const orderedIndex = ordered.findIndex(item => String(item.id) === String(task.id))
+    return <PlannerTaskCard
+      key={task.id}
+      task={task}
+      buckets={buckets}
+      today={today}
+      canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)}
+      canDeletePermanently={canDeletePermanently}
+      onOpen={onOpenTask}
+      onDelete={onDeleteTask}
+      onDeletePermanently={onDeletePermanently}
+      onMove={moveTask}
+      onMoveWithinBucket={moveTaskWithinBucket}
+      canMoveUp={laneName !== null && orderedIndex > 0}
+      canMoveDown={laneName !== null && orderedIndex >= 0 && orderedIndex < ordered.length - 1}
+      onStatusChange={onStatusChange}
+      draggedTaskId={draggedTaskId}
+      setDraggedTaskId={setDraggedTaskId}
+      dropTaskId={dropTaskId}
+      dropBefore={laneName !== null && dropTaskBucket === laneName && dropTaskIndex === index}
+      dropAfter={laneName !== null && dropTaskBucket === laneName && dropTaskIndex === laneLength && index === laneLength - 1}
+      selectMode={selectMode}
+      selected={selectedTaskIds.some(id => String(id) === String(task.id))}
+      onToggleSelect={toggleTaskSelected}
+    />
+  }
   const draggedBucketName = buckets.find(bucket => bucket.id === draggedBucketId)?.name
   const dropBucketPosition = dropBucketIndex ?? buckets.findIndex(bucket => bucket.id === dropBucketId) + 1
 
@@ -721,7 +742,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     </div>
 
     <div className="planner-scope-summary mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">
-      <span>{scopeLine}</span>
+      <span aria-live="polite">{scopeLine}</span>
       {filtersHiding && <button type="button" className="text-caption font-medium text-navy underline underline-offset-2" onClick={clearHiddenFilters}>Clear filters</button>}
     </div>
 
@@ -731,6 +752,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     <div
       ref={boardRef}
       className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`}
+      role="region"
       aria-label="Planner board"
       onDragOver={scrollBucketBoard}
       onPointerMove={moveBucketPointerDrag}
@@ -829,7 +851,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
                   <button type="button" onClick={() => setEditingBucketId(null)} aria-label="Cancel rename" title="Cancel"><X size={14} /></button>
                 </form>
               : <><strong className="planner-column-name block truncate pr-[54px] text-body-small font-semibold text-text-primary">{bucket.name}</strong>
-                  <span className="planner-column-summary mt-0.5 block truncate pr-[54px] text-caption text-text-muted">{laneSummary(bucket.name)}</span></>}
+                  <span className="planner-column-summary mt-0.5 block truncate pr-[54px] text-caption text-text-muted" aria-live="polite">{laneSummary(bucket.name)}</span></>}
             {canManageBuckets && <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="planner-column-menu absolute right-2 top-4" aria-label={`Open actions for ${bucket.name}`} title={`Actions for ${bucket.name}`}><MoreHorizontal size={20} /></button>
@@ -895,6 +917,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       {doneTasks.map(task => renderTaskCard(task, null, -1, 0))}
     </CollapsibleSection>}
     </>}
+    <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</p>
     <BulkActionBar
       selectedCount={selectedTaskIds.length}
       destinations={buckets.filter(bucket => bucket.name).map(bucket => ({ value: bucket.name, label: bucket.name }))}

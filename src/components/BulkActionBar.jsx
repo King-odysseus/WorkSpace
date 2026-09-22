@@ -22,39 +22,43 @@ export default function BulkActionBar({
   onClear,
   busy = false,
 }) {
-  if (!selectedCount) return null
-  const countLabel = `${selectedCount} ${selectedCount === 1 ? 'card' : 'cards'} selected`
+  const countLabel = selectedCount ? `${selectedCount} ${selectedCount === 1 ? 'card' : 'cards'} selected` : ''
   return (
-    <div className="bulk-action-bar" role="region" aria-label="Bulk actions">
-      <strong className="bulk-action-count">{countLabel}</strong>
-      {destinations.length > 0 && (
-        <AppSelect
-          className="bulk-action-move"
-          value=""
-          disabled={busy}
-          aria-label={destinationLabel}
-          // A command, not a stored value: `value` stays empty so the control
-          // keeps showing its placeholder and the same destination can be
-          // chosen twice running.
-          onChange={event => { if (event.target.value) onMove?.(event.target.value) }}
-        >
-          <option value="">{destinationLabel}</option>
-          {destinations.map(destination => (
-            <option key={destination.value} value={destination.value}>{destination.label}</option>
-          ))}
-        </AppSelect>
+    <>
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{countLabel}</p>
+      {selectedCount > 0 && (
+        <div className="bulk-action-bar" role="region" aria-label="Bulk actions">
+          <strong className="bulk-action-count">{countLabel}</strong>
+          {destinations.length > 0 && (
+            <AppSelect
+              className="bulk-action-move"
+              value=""
+              disabled={busy}
+              aria-label={destinationLabel}
+              // A command, not a stored value: `value` stays empty so the control
+              // keeps showing its placeholder and the same destination can be
+              // chosen twice running.
+              onChange={event => { if (event.target.value) onMove?.(event.target.value) }}
+            >
+              <option value="">{destinationLabel}</option>
+              {destinations.map(destination => (
+                <option key={destination.value} value={destination.value}>{destination.label}</option>
+              ))}
+            </AppSelect>
+          )}
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => onArchive?.()}>
+            Archive
+          </Button>
+          {onDelete && (
+            <Button type="button" variant="outline" size="sm" className="bulk-action-delete" disabled={busy} onClick={() => onDelete()}>
+              <Trash2 size={14} aria-hidden="true" /> Delete
+            </Button>
+          )}
+          <button type="button" className="bulk-action-clear" onClick={() => onClear?.()} aria-label="Clear selection">
+            <X size={16} />
+          </button>
+        </div>
       )}
-      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => onArchive?.()}>
-        Archive
-      </Button>
-      {onDelete && (
-        <Button type="button" variant="outline" size="sm" className="bulk-action-delete" disabled={busy} onClick={() => onDelete()}>
-          <Trash2 size={14} aria-hidden="true" /> Delete
-        </Button>
-      )}
-      <button type="button" className="bulk-action-clear" onClick={() => onClear?.()} aria-label="Clear selection">
-        <X size={16} />
-      </button>
-    </div>
+    </>
   )
 }

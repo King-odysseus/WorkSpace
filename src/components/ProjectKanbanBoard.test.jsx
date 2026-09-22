@@ -348,7 +348,9 @@ it('can nudge a project lane across the full board and back again', async () => 
   }
 
   render(<ReorderableBoard />)
-  const laneNames = () => screen.getAllByRole('region').map(region => region.getAttribute('aria-label').replace(' column', ''))
+  const laneNames = () => screen.getAllByRole('region')
+    .filter(region => region.hasAttribute('data-column-id'))
+    .map(region => region.getAttribute('aria-label').replace(' column', ''))
 
   for (let step = 0; step < 6; step += 1) {
     await user.click(screen.getByRole('button', { name: 'Move Backlog right' }))
@@ -429,9 +431,10 @@ it('archives the selected kanban cards in one action', async () => {
   await user.click(screen.getByRole('button', { name: 'Select' }))
   await user.click(screen.getByText('Design UI').closest('.project-kanban-task'))
   await user.click(screen.getByText('Review copy').closest('.project-kanban-task'))
-  expect(screen.getByText('2 cards selected')).toBeInTheDocument()
+  const bar = screen.getByRole('region', { name: 'Bulk actions' })
+  expect(within(bar).getByText('2 cards selected')).toBeInTheDocument()
 
-  await user.click(screen.getByRole('button', { name: 'Archive' }))
+  await user.click(within(bar).getByRole('button', { name: 'Archive' }))
   expect(onBulkArchive).toHaveBeenCalledWith([91, 92])
 })
 
@@ -456,4 +459,3 @@ it('offers permanent delete on the kanban only to someone who may use it', async
   await user.click(screen.getByText('Design UI').closest('.project-kanban-task'))
   expect(screen.getByRole('button', { name: /Delete/ })).toBeInTheDocument()
 })
-

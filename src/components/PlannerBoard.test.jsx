@@ -876,6 +876,28 @@ it('moves a planner task between buckets from the card menu', async () => {
   ])
 })
 
+it('reorders a planner task within its lane from the card menu', async () => {
+  const onTaskMove = vi.fn()
+  const user = userEvent.setup()
+  cardPlanner({
+    tasks: [
+      cardTask,
+      { ...cardTask, id: 92, title: 'Review copy' },
+    ],
+    onTaskMove,
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Actions for Design UI' }))
+  const moveDown = screen.getByRole('menuitem', { name: 'Move Design UI down' })
+  expect(moveDown).not.toHaveAttribute('aria-disabled', 'true')
+  await user.click(moveDown)
+
+  expect(onTaskMove).toHaveBeenCalledWith([
+    { bucket: 'Backlog', task_ids: [92, 91] },
+  ])
+  expect(screen.getAllByRole('status').map(node => node.textContent)).toContain('Moved Design UI down in Backlog.')
+})
+
 it('marks an incomplete past-due task as overdue', () => {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
@@ -1044,9 +1066,10 @@ it('archives every selected card in one action', async () => {
   await user.click(screen.getByRole('button', { name: 'Select' }))
   await user.click(screen.getByText('Fix Paystack').closest('.planner-task-card'))
   await user.click(screen.getByText('Plan social').closest('.planner-task-card'))
-  expect(screen.getByText('2 cards selected')).toBeInTheDocument()
+  const bar = screen.getByRole('region', { name: 'Bulk actions' })
+  expect(within(bar).getByText('2 cards selected')).toBeInTheDocument()
 
-  await user.click(screen.getByRole('button', { name: 'Archive' }))
+  await user.click(within(bar).getByRole('button', { name: 'Archive' }))
   expect(onBulkArchive).toHaveBeenCalledWith([71, 72])
 })
 
@@ -1080,7 +1103,7 @@ it('drops the selection when selection mode is turned off', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Select' }))
   await user.click(screen.getByText('Fix Paystack').closest('.planner-task-card'))
-  expect(screen.getByText('1 card selected')).toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: 'Bulk actions' })).getByText('1 card selected')).toBeInTheDocument()
 
   // Otherwise the board would hold a selection nobody can see.
   await user.click(screen.getByRole('button', { name: 'Done selecting' }))
