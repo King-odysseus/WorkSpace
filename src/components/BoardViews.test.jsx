@@ -594,6 +594,48 @@ it('keeps the P2 row status, due date, owner, and action menu in their own slots
   expect(onDelete).toHaveBeenCalledWith(3)
 })
 
+it('offers owners a permanent delete action from the My Tasks row menu', async () => {
+  const onDeletePermanently = vi.fn()
+  const { container } = render(
+    <MyTasksView
+      tasks={[
+        {
+          id: 3,
+          title: 'Review copy',
+          status: 'todo',
+          assignee_id: 7,
+          member: 'Nate Foster',
+          priority: 'normal',
+          tag: 'Ops',
+          bucket: 'Backlog',
+        },
+      ]}
+      currentUserId={7}
+      currentUserName="Nate Foster"
+      projects={[]}
+      buckets={[{ id: 1, name: 'Backlog' }]}
+      onAddTask={noop}
+      onOpenTask={noop}
+      onComplete={noop}
+      onStatusChange={noop}
+      onDelete={noop}
+      onDeletePermanently={onDeletePermanently}
+      canDeletePermanently
+      canManageTasks
+    />,
+  )
+
+  const row = container.querySelector('.my-task-row')
+  const actions = within(row).getByRole('button', {
+    name: 'Open actions for Review copy',
+  })
+
+  fireEvent.click(actions)
+  const permanentDelete = await screen.findByRole('button', { name: 'Delete permanently' })
+  fireEvent.click(permanentDelete)
+  expect(onDeletePermanently).toHaveBeenCalledWith(expect.objectContaining({ id: 3 }))
+})
+
 it('filters the mobile task queue through the P2 All, Overdue, and Blocked chips', () => {
   render(
     <MyTasksView

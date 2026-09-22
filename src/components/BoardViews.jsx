@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Square,
   Target,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -42,6 +43,7 @@ import {
   Popover,
   PopoverContent,
   PopoverItem,
+  PopoverSeparator,
   PopoverTrigger,
 } from "./ui/popover.jsx";
 import Avatar from "./Avatar.jsx";
@@ -1605,6 +1607,8 @@ function MyTasksView({
   onComplete,
   onStatusChange,
   onDelete,
+  onDeletePermanently,
+  canDeletePermanently = false,
   canManageTasks,
 }) {
   const today = toDateKey(new Date());
@@ -1927,6 +1931,18 @@ function MyTasksView({
               >
                 Archive task
               </PopoverItem>
+              {canDeletePermanently && onDeletePermanently && (
+                <>
+                  <PopoverSeparator />
+                  <PopoverItem
+                    icon={Trash2}
+                    destructive
+                    onClick={() => onDeletePermanently(task)}
+                  >
+                    Delete permanently
+                  </PopoverItem>
+                </>
+              )}
             </PopoverContent>
           </Popover>
         )}

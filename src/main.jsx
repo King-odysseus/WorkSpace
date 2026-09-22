@@ -1663,7 +1663,7 @@ function App() {
   const deleteTask = async (id) => {
     if (
       !(await confirmAction(
-        "Archive this task? It will be hidden from active views, but its history and code are kept.",
+        "Archive this task? It will be hidden from active task views, but its history is kept.",
         { title: "Archive task", confirmLabel: "Archive task" },
       ))
     )
@@ -1722,7 +1722,7 @@ function App() {
     if (!ids.length) return 0;
     if (
       !(await confirmAction(
-        `Archive ${ids.length} ${ids.length === 1 ? "task" : "tasks"}? They will be hidden from active views, but their history and codes are kept.`,
+        `Archive ${ids.length} ${ids.length === 1 ? "task" : "tasks"}? They will be hidden from active task views, but their history is kept.`,
         { title: "Archive tasks", confirmLabel: `Archive ${ids.length}` },
       ))
     )
@@ -3952,6 +3952,8 @@ function App() {
           canManageTasks={["owner", "manager"].includes(currentWorkspace?.role)}
           onClose={() => setSelectedTask(null)}
           onDelete={deleteTask}
+          onDeletePermanently={deleteTaskPermanently}
+          canDeletePermanently={currentWorkspace?.role === "owner"}
           onTaskUpdated={(updatedTask) => {
             setTasks((current) =>
               current.map((item) =>
@@ -8935,6 +8937,8 @@ function WorkspaceView({
         onComplete={onComplete}
         onStatusChange={onStatusChange}
         onDelete={onDelete}
+        onDeletePermanently={onDeletePermanently}
+        canDeletePermanently={currentWorkspace?.role === "owner"}
         canManageTasks={canManageTasks}
       />
     );

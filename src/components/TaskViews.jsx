@@ -88,7 +88,7 @@ function AssigneePicker({ members = [], value = [], onChange, disabled = false }
 
 function TaskCard({ task, onComplete, onStatusChange, onDelete, onOpenTask, onBucketChange, bucketOptions = [], canDelete = true, canEdit = task.can_edit ?? true, draggable = false }) { const completed = task.status === 'done'; return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button type="button" role="checkbox" aria-checked={completed} className={`task-check ${completed ? 'checked' : ''}`} disabled={!canEdit} onClick={() => onComplete(task.id)} aria-label={`${completed ? 'Reopen' : 'Complete'} ${task.title}`} title={completed ? 'Reopen task' : 'Mark task complete'}><Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" /></button><div className="task-copy"><button type="button" className="task-title-button" onClick={() => onOpenTask(task)}>{task.title}</button><div><AppSelect disabled={!canEdit} className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></AppSelect>{bucketOptions.length > 1 && <AppSelect disabled={!canEdit} className="task-bucket-select" value={task.bucket || ''} onChange={event => onBucketChange?.(task.id, event.target.value)} aria-label={`Move ${task.title} to bucket`}>{bucketOptions.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</AppSelect>}<span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span>{canDelete && <button type="button" className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Archive ${task.title}`} title="Archive task"><Archive size={16} /></button>}</div> }
 
-function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buckets = [], tasks = [], currentUserId, canManageTasks = false, onClose, onDelete, onTaskUpdated }) {
+function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buckets = [], tasks = [], currentUserId, canManageTasks = false, canDeletePermanently = false, onClose, onDelete, onDeletePermanently, onTaskUpdated }) {
   const canEdit = task.can_edit ?? true
   const [comments, setComments] = useState([])
   const [subtasks, setSubtasks] = useState([])
@@ -489,15 +489,37 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
               </>
             )}
           </div>
-          <div className="task-dialog-footer">
-            <button type="button" className="secondary-button" onClick={onClose}>
-              {canEdit ? 'Cancel' : 'Close'}
-            </button>
-            {canEdit && (
-              <button type="submit" form="task-detail-form" className="primary-button modal-submit" disabled={loading || saving}>
-                {saving ? 'Saving...' : 'Save changes'} <Check size={16} />
+          <div className="task-dialog-footer flex-wrap">
+            <div className="flex w-full items-center gap-2 sm:mr-auto sm:w-auto">
+              {canManageTasks && onDelete && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => onDelete(task.id)}
+                >
+                  Archive
+                </button>
+              )}
+              {canDeletePermanently && onDeletePermanently && (
+                <button
+                  type="button"
+                  className="inline-flex h-[42px] items-center justify-center rounded-control border border-danger bg-danger/10 px-4 text-sm font-semibold text-danger transition-colors hover:bg-danger/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => onDeletePermanently(task)}
+                >
+                  Delete permanently
+                </button>
+              )}
+            </div>
+            <div className="ml-auto flex w-full items-center justify-end gap-2 sm:w-auto">
+              <button type="button" className="secondary-button" onClick={onClose}>
+                {canEdit ? 'Cancel' : 'Close'}
               </button>
-            )}
+              {canEdit && (
+                <button type="submit" form="task-detail-form" className="primary-button modal-submit" disabled={loading || saving}>
+                  {saving ? 'Saving...' : 'Save changes'} <Check size={16} />
+                </button>
+              )}
+            </div>
           </div>
         </section>
       </div>

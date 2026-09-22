@@ -80,6 +80,32 @@ it('closes the task dialog on Escape and locks page scrolling', async () => {
   expect(onClose).toHaveBeenCalledTimes(1)
 })
 
+it('offers owners a permanent delete action from the task dialog', async () => {
+  const onDeletePermanently = vi.fn()
+  mockApi({
+    '/api/tasks/91/comments/': { comments: [] },
+    '/api/tasks/91/subtasks/': { subtasks: [] },
+    '/api/tasks/91/attachments/': { attachments: [] },
+    '/api/workspaces/1/tasks/': { tasks: [] },
+  })
+
+  render(
+    <TaskDetailDrawer
+      task={task}
+      workspaceId={1}
+      canManageTasks
+      canDeletePermanently
+      onClose={vi.fn()}
+      onDelete={vi.fn()}
+      onDeletePermanently={onDeletePermanently}
+      onTaskUpdated={vi.fn()}
+    />,
+  )
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete permanently' }))
+  expect(onDeletePermanently).toHaveBeenCalledWith(task)
+})
+
 it('keeps dependency titles attached to their checkbox labels', async () => {
   mockApi({
     '/api/tasks/91/comments/': { comments: [] },
