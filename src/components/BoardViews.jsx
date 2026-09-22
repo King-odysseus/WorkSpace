@@ -2356,10 +2356,7 @@ function ProjectProgress({ project, tasks }) {
       : 0;
 
   return (
-    <div
-      className="project-progress"
-      aria-label={`${completedTasks} of ${totalTasks} project tasks completed`}
-    >
+    <div className="project-progress">
       <div className="project-progress-label">
         <span>Progress</span>
         <strong>
@@ -2371,6 +2368,7 @@ function ProjectProgress({ project, tasks }) {
       <div
         className="project-progress-track"
         role="progressbar"
+        aria-label={`Project progress: ${completedTasks} of ${totalTasks} tasks completed`}
         aria-valuemin="0"
         aria-valuemax="100"
         aria-valuenow={completionPercent}

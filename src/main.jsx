@@ -90,7 +90,6 @@ import { Button } from "./components/ui/button.jsx";
 import { Badge } from "./components/ui/badge.jsx";
 import { Alert } from "./components/ui/alert.jsx";
 import { Card, CardContent, CardHeader } from "./components/ui/card.jsx";
-import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs.jsx";
 import {
   Popover,
   PopoverTrigger,
@@ -2824,8 +2823,8 @@ function App() {
             fontSize: "0.875rem",
           },
           success: {
-            style: { background: "rgba(8, 127, 115, 0.94)", color: "#FFFFFF" },
-            iconTheme: { primary: "#86efac", secondary: "#087f73" },
+            style: { background: "rgba(6, 103, 94, 0.94)", color: "#FFFFFF" },
+            iconTheme: { primary: "#86efac", secondary: "#06675e" },
           },
           error: {
             style: { background: "rgba(180, 35, 24, 0.94)", color: "#FFFFFF" },
@@ -4498,33 +4497,9 @@ function WorkspaceView({
       );
       if (project) setSelectedProjectWorkspace(project);
     };
-    const openProjectCardWithKeyboard = (event) => {
-      if (!["Enter", " "].includes(event.key)) return;
-      const card = event.target.closest?.(".project-card");
-      if (!card) return;
-      event.preventDefault();
-      const projectName = card.querySelector("h3")?.textContent?.trim();
-      const project = localData.projects.find(
-        (item) => item.name === projectName,
-      );
-      if (project) setSelectedProjectWorkspace(project);
-    };
-    const cards = [
-      ...document.querySelectorAll(".projects-view .project-card"),
-    ];
-    cards.forEach((card) => {
-      card.tabIndex = 0;
-      card.setAttribute("role", "button");
-      card.setAttribute(
-        "aria-label",
-        `Open project ${card.querySelector("h3")?.textContent || ""}`,
-      );
-    });
     document.addEventListener("click", openProjectCard);
-    document.addEventListener("keydown", openProjectCardWithKeyboard);
     return () => {
       document.removeEventListener("click", openProjectCard);
-      document.removeEventListener("keydown", openProjectCardWithKeyboard);
     };
   }, [active, selectedProjectWorkspace, localData.projects]);
   useEffect(() => {
@@ -6315,7 +6290,7 @@ function WorkspaceView({
               <h3>Status mix</h3>
             </div>
             <div className="report-donut-wrap">
-              <div className="report-donut" style={{ background: reportDonutGradient }} aria-label="Task mix chart"><span>{report.completion_rate}%<small>complete</small></span></div>
+              <div className="report-donut" role="img" style={{ background: reportDonutGradient }} aria-label={`Task status mix: ${report.completion_rate}% complete`}><span>{report.completion_rate}%<small>complete</small></span></div>
               <div className="report-donut-legend">
                 {reportStatusEntries.slice(0, 5).map(([key, count]) => <div key={key}><i style={{ background: reportStatusColors[key] || "#94a3b8" }} /><span>{statusLabels[key] || key}</span><strong>{reportStatusTotal ? Math.round((count / reportStatusTotal) * 100) : 0}%</strong></div>)}
               </div>
@@ -7569,19 +7544,18 @@ function WorkspaceView({
         </div>
         <div className="calendar-toolbar">
           <div className="calendar-view-control">
-            <Tabs
-              value={calendarView}
-              onValueChange={setCalendarView}
-              className="calendar-view-switch"
-            >
-              <TabsList aria-label="Calendar view">
-                {["month", "week", "day"].map((view) => (
-                  <TabsTrigger key={view} value={view}>
-                    {view[0].toUpperCase() + view.slice(1)}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+            <div className="calendar-view-switch" role="group" aria-label="Calendar view">
+              {["month", "week", "day"].map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={calendarView === view}
+                  onClick={() => setCalendarView(view)}
+                >
+                  {view[0].toUpperCase() + view.slice(1)}
+                </button>
+              ))}
+            </div>
             <Popover
               open={calendarViewMenuOpen}
               onOpenChange={setCalendarViewMenuOpen}
@@ -8023,15 +7997,14 @@ function WorkspaceView({
         <div className="checkin-toolbar">
           <div
             className="checkin-range-filter"
-            role="tablist"
+            role="group"
             aria-label="Filter check-ins by date range"
           >
             {checkInRangeOptions.map((range) => (
               <button
                 type="button"
-                role="tab"
                 key={range.value}
-                aria-selected={checkInRange === range.value}
+                aria-pressed={checkInRange === range.value}
                 aria-label={`${range.label}: ${checkInRangeCounts[range.value]} check-ins`}
                 className={checkInRange === range.value ? "active" : ""}
                 onClick={() => setCheckInRange(range.value)}
@@ -8821,8 +8794,8 @@ function WorkspaceView({
           action="New follow-up"
           onAction={() => openComposer("followup")}
         />
-        <div className="pencil-followup-filters" role="tablist" aria-label="Filter follow-ups">
-          {[["all", "All"], ["today", "Due today"], ["overdue", "Overdue"], ["completed", "Done"]].map(([value, label]) => <button type="button" key={value} className={followUpFilter === value ? "active" : ""} onClick={() => setFollowUpFilter(value)}>{label} {value === "all" ? localData.followUps.length : value === "today" ? dueToday : value === "overdue" ? overdueFollowUps : localData.followUps.filter((item) => item.status === "completed").length}</button>)}
+        <div className="pencil-followup-filters" role="group" aria-label="Filter follow-ups">
+          {[["all", "All"], ["today", "Due today"], ["overdue", "Overdue"], ["completed", "Done"]].map(([value, label]) => <button type="button" key={value} aria-pressed={followUpFilter === value} className={followUpFilter === value ? "active" : ""} onClick={() => setFollowUpFilter(value)}>{label} {value === "all" ? localData.followUps.length : value === "today" ? dueToday : value === "overdue" ? overdueFollowUps : localData.followUps.filter((item) => item.status === "completed").length}</button>)}
           <AppSelect value={followUpFilter} onChange={(event) => setFollowUpFilter(event.target.value)} aria-label="Sort follow-ups"><option value="all">Due date</option><option value="open">Open</option><option value="completed">Completed</option><option value="overdue">Overdue</option></AppSelect>
         </div>
         <div className="pencil-followup-layout">

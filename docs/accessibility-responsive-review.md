@@ -24,6 +24,8 @@ Lighthouse pass and are not asserted as defects.
 | File uploads | Chat attachment, profile photo, and workspace logo inputs carry names on the file control itself; a live audit across 23 routes reports no unnamed interactive controls. |
 | Route containment | Automated Playwright audit across 23 top-level routes, 8 Settings panels, and 8 project tabs at 320, 390, 768, 1024, and 1440 widths reports 190 checks and 0 width, crash, page-error, or uncontained-overflow failures. |
 | Named visible controls | Automated visible-control audit across 23 routes reports 0 unnamed inputs, textareas, selects, or buttons. |
+| WCAG rules | axe-core 4.10.2 across 23 routes, 8 Settings panels, 2 themes, and 2 viewports reports 124 checks, 0 violations, 0 page errors, and 0 confirmed contrast failures. The remaining color-contrast entries are incomplete checks that axe cannot resolve for short text or image-backed content and require manual review. |
+| Dark surfaces | Computed-style scans across 23 routes and 8 Settings panels at 1440px and 390px report 0 effective white card surfaces and 0 bright surfaces in both the source build and production preview. Intentional switch knobs, theme previews, and logo wells are excluded. |
 | Native control theming | `color-scheme: light` and `color-scheme: dark` are declared with their matching theme tokens (pencil.css:89-96). |
 
 ## Responsive coverage (verified)
@@ -47,6 +49,6 @@ responsive and color changes share one token source.
 
 | Severity | Finding | Recommendation |
 | --- | --- | --- |
-| verify | Color contrast for `mobile-pill-nav` text `#B9CCDD` on `#0B223AEE`, and priority/scope badge colors, is not computed here. | Run axe-core / Lighthouse contrast checks; adjust tokens if below 4.5:1 (normal text). |
+| verify | axe marks some very short labels and image-backed status text as color-contrast incomplete rather than pass or fail. | Manually inspect those rendered labels in both themes and at 390px before treating the audit as complete. |
 | verify | Drag-and-drop only works by pointer; keyboard users rely on the Move controls. | Keep regression coverage for board move announcements and lane counts; run a screen-reader pass on the desktop and 390px layouts. |
 | verify | No implemented Gantt view was found in the current source; only a help-reference string remains. | If a Gantt view is added later, expose it as a labelled region with explicit column/date headers. |

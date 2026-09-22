@@ -225,7 +225,7 @@ export default function ImportView({ workspaceId, role }) {
         subtitle="Bring tasks, projects and people in from another tool."
       />
 
-      <div className="import-stepper" aria-label="Import progress">
+      <div className="import-stepper" role="group" aria-label="Import progress">
         {STEP_LABELS.map((label, index) => {
           const number = index + 1
           const complete = number < currentStep
