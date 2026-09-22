@@ -539,12 +539,42 @@ it('presents task completion as a labelled checkbox with the correct next action
     />,
   )
 
-  // Completed work moved behind the rail's "Recently completed" card, which
-  // swaps the list for the completed one rather than adding a tab beside it.
+  // The rail's "Recently completed" card is the way into the Done band, which
+  // opens below the working list rather than swapping the list out for it.
   fireEvent.click(screen.getByRole('button', { name: 'View all completed' }))
   const completed = screen.getByRole('checkbox', { name: 'Reopen Review copy' })
   expect(completed).toHaveAttribute('aria-checked', 'true')
   expect(completed).toHaveAttribute('title', 'Reopen task')
+})
+
+it('holds completed work in a folded Done band under the open list', () => {
+  render(
+    <MyTasksView
+      tasks={[
+        { id: 3, title: 'Review copy', status: 'todo', assignee_id: 7, member: 'Nate Foster', priority: 'normal', tag: 'Ops', bucket: 'Backlog' },
+        { id: 4, title: 'Ship release', status: 'done', assignee_id: 7, member: 'Nate Foster', priority: 'normal', tag: 'Ops', bucket: 'Backlog', completed_at: '2026-09-11T09:00:00Z' },
+      ]}
+      currentUserId={7}
+      currentUserName="Nate Foster"
+      projects={[]}
+      buckets={[{ id: 1, name: 'Backlog' }]}
+      onAddTask={noop}
+      onOpenTask={noop}
+      onComplete={noop}
+      onStatusChange={noop}
+      onDelete={noop}
+      canManageTasks
+    />,
+  )
+
+  // The open task is listed; the finished one is not, and the band counts it.
+  expect(screen.getByRole('button', { name: 'Review copy' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Ship release' })).not.toBeInTheDocument()
+  const band = screen.getByRole('button', { name: 'Show Done (1 item)' })
+
+  fireEvent.click(band)
+  expect(screen.getByRole('button', { name: 'Ship release' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Review copy' })).toBeInTheDocument()
 })
 
 it('keeps the P2 row status, due date, owner, and action menu in their own slots', async () => {

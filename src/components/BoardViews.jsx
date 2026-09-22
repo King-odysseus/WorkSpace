@@ -39,6 +39,7 @@ import { Button } from "./ui/button.jsx";
 import { AppSelect } from "./ui/select.jsx";
 import { SearchInput } from "./ui/search-input.jsx";
 import { Card } from "./ui/card.jsx";
+import { CollapsibleSection } from "./ui/collapsible-section.jsx";
 import {
   Popover,
   PopoverContent,
@@ -1950,12 +1951,21 @@ function MyTasksView({
     );
   };
 
-  const activeList = completedOpen ? completedVisible : openVisible;
-  const rowGroups = completedOpen
-    ? activeList.length
-      ? [{ key: "completed", label: "Completed", items: activeList }]
+  // Completed work leaves the working list and collects in the folded Done band
+  // at the end of it. Filtering by Done is a request to look at finished work,
+  // so that filter answers in the list itself rather than folding away the rows
+  // it was asked for.
+  const viewingDone = status === "done";
+  const listGroups = viewingDone
+    ? completedVisible.length
+      ? [{ key: "done", label: "Done", items: completedVisible }]
       : []
     : groups;
+  const showDoneBand = !viewingDone && completedVisible.length > 0;
+  // Nothing on the board but finished work is a different message from having
+  // nothing at all, and it is the one that points at the Done band.
+  const allWorkFinished =
+    !viewingDone && !listGroups.length && completedVisible.length > 0 && !query.trim() && !filterCount;
 
   return (
     <section className="workspace-view my-tasks-view pb-10">
@@ -2131,7 +2141,7 @@ function MyTasksView({
           )}
 
           <div className="my-task-groups mt-[30px] grid gap-8">
-            {rowGroups.map((group) => (
+            {listGroups.map((group) => (
               <section className="my-task-group" key={group.key}>
                 <div className="my-task-group-heading mb-2 flex items-center justify-between gap-3">
                   <h2 className="text-subheading text-text-primary">{group.label}</h2>
@@ -2147,22 +2157,42 @@ function MyTasksView({
               </section>
             ))}
 
-            {!rowGroups.length && (
+            {!listGroups.length && (
               <div className="my-task-empty grid justify-items-center gap-2 rounded-card border border-border bg-card px-5 py-12 text-center">
                 <CheckCircle2 size={22} className="text-text-muted" aria-hidden="true" />
                 <p className="text-body-small text-text-secondary">
-                  {completedOpen
+                  {viewingDone
                     ? "Nothing completed yet."
-                    : query.trim() || filterCount
-                      ? "No task matches these filters."
-                      : "Nothing is assigned to you. Enjoy the quiet."}
+                    : allWorkFinished
+                      ? "Everything assigned to you is done."
+                      : query.trim() || filterCount
+                        ? "No task matches these filters."
+                        : "Nothing is assigned to you. Enjoy the quiet."}
                 </p>
-                {!completedOpen && !query.trim() && !filterCount && (
+                {allWorkFinished && (
+                  <p className="text-caption text-text-muted">
+                    Open Done below to review or reopen the finished work.
+                  </p>
+                )}
+                {!viewingDone && !allWorkFinished && !query.trim() && !filterCount && (
                   <Button type="button" variant="ghost" size="sm" onClick={onAddTask}>
                     Add your first task <ArrowUpRight size={14} aria-hidden="true" />
                   </Button>
                 )}
               </div>
+            )}
+
+            {showDoneBand && (
+              <CollapsibleSection
+                title="Done"
+                count={completedVisible.length}
+                className="my-task-done-band"
+                contentClassName="grid gap-3"
+                open={completedOpen}
+                onOpenChange={setCompletedOpen}
+              >
+                {completedVisible.map(renderRow)}
+              </CollapsibleSection>
             )}
           </div>
         </div>
@@ -2279,10 +2309,24 @@ function MyTasksView({
             </div>
             <button
               type="button"
-              onClick={() => setCompletedOpen((open) => !open)}
+              onClick={() => {
+                // While the Done filter is on, this is the way back: the band is
+                // not rendered beside that filter, so closing it would be a
+                // control with nothing to close.
+                if (viewingDone) {
+                  setStatus("all");
+                  setCompletedOpen(false);
+                  return;
+                }
+                setCompletedOpen((open) => !open);
+              }}
               className="mt-[9px] text-caption font-medium text-navy transition-colors hover:text-text-primary"
             >
-              {completedOpen ? "Back to open work" : "View all completed"}
+              {viewingDone
+                ? "Back to open work"
+                : completedOpen
+                  ? "Hide completed"
+                  : "View all completed"}
             </button>
           </section>
         </aside>
