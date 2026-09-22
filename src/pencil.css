@@ -4536,13 +4536,27 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .project-kanban-add-task { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 11px; font-weight: 600; }
 .project-kanban-add-task:hover { border-color: var(--pencil-navy); color: var(--pencil-navy); }
 .project-kanban-summary { margin-left: auto; color: var(--pencil-text-muted); font-size: 10px; line-height: 15px; }
-.project-kanban-columns { display: grid; grid-auto-flow: column; grid-auto-columns: 264px; gap: 16px; overflow-x: auto; padding-bottom: 4px; overscroll-behavior-inline: contain; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+/* The board is a horizontal strip of lanes rather than a grid, because the
+   folded Done lane is a different width from the rest and one track size cannot
+   express both. Lanes never shrink: a lane narrower than its cards would clip
+   them, so the strip scrolls instead. */
+.project-kanban-columns { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 4px; overscroll-behavior-inline: contain; scrollbar-width: thin; scrollbar-color: transparent transparent; }
 .project-kanban-columns:hover, .project-kanban-columns:focus-within { scrollbar-color: var(--pencil-border) transparent; }
 .project-kanban-columns::-webkit-scrollbar { height: 6px; }
 .project-kanban-columns::-webkit-scrollbar-track { background: transparent; }
 .project-kanban-columns::-webkit-scrollbar-thumb { border-radius: 999px; background: transparent; }
 .project-kanban-columns:hover::-webkit-scrollbar-thumb, .project-kanban-columns:focus-within::-webkit-scrollbar-thumb { background: var(--pencil-border); }
-.project-kanban-column { display: flex; width: 100%; min-width: 264px; height: 676px; flex-direction: column; overflow: hidden; padding: 0; border: 0; border-radius: 12px; background: var(--pencil-surface-muted); transition: opacity 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
+.project-kanban-column { display: flex; width: 264px; min-width: 264px; max-width: 264px; flex: 0 0 264px; height: 676px; flex-direction: column; overflow: hidden; padding: 0; border: 0; border-radius: 12px; background: var(--pencil-surface-muted); transition: opacity 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
+.project-kanban-column.is-collapsed { width: 56px; min-width: 56px; max-width: 56px; flex-basis: 56px; }
+.project-kanban-column-heading.is-collapsed { min-height: 0; flex: 1 1 auto; flex-direction: column; justify-content: flex-start; gap: 10px; padding: 10px 0; }
+.project-kanban-column-collapsed-label { color: var(--pencil-text-secondary); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-orientation: mixed; writing-mode: vertical-rl; }
+.project-kanban-column-collapsed-count { color: var(--pencil-text-muted); font-size: 10px; font-weight: 600; }
+.project-kanban-column-collapse { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--pencil-text-muted); }
+.project-kanban-column-collapse:hover { background: var(--pencil-surface); color: var(--pencil-navy); }
+.project-kanban-column-collapse:focus-visible { outline: 2px solid var(--pencil-navy-focus); outline-offset: 1px; }
+/* The chevron points down when the lane is open and right when it is folded, so
+   the same glyph reads as "collapse" and "expand" without a second icon. */
+.project-kanban-column-heading.is-collapsed .project-kanban-column-collapse svg { transform: rotate(-90deg); }
 .project-kanban-column-heading { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px 0 12px; color: var(--pencil-text-secondary); font-size: 12px; font-weight: 600; }
 .project-kanban-column-heading[data-reorderable='true'] { cursor: grab; touch-action: none; user-select: none; }
 .project-kanban-column-heading[data-reorderable='true']:active { cursor: grabbing; }
@@ -7759,14 +7773,20 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
     width: 100%;
   }
 
-  .project-kanban-columns {
-    grid-auto-columns: min(264px, 100%);
-  }
-
   .project-kanban-column {
-    width: 100%;
+    width: min(264px, 100%);
     min-width: 0;
     max-width: 100%;
+    flex-basis: min(264px, 100%);
+  }
+
+  /* The folded lane keeps its slim width on a phone: it is already narrower than
+     any viewport, and stretching it to the track would unfold it. */
+  .project-kanban-column.is-collapsed {
+    width: 56px;
+    min-width: 56px;
+    max-width: 56px;
+    flex-basis: 56px;
   }
 }
 

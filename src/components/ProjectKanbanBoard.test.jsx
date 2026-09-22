@@ -69,6 +69,44 @@ it('filters the visible lanes and updates the P30 summary', async () => {
   expect(screen.getByText('1 task in 7 lanes')).toBeInTheDocument()
 })
 
+it('folds the Done lane so finished work stops competing with open work', () => {
+  renderBoard({ tasks: [...tasks, { id: 93, title: 'Ship release', status: 'done', priority: 'normal', can_edit: true }] })
+
+  const doneColumn = screen.getByRole('region', { name: 'Done column' })
+  expect(doneColumn).toHaveClass('is-collapsed')
+  expect(within(doneColumn).getByText('Done')).toBeInTheDocument()
+  expect(doneColumn.querySelector('.project-kanban-column-collapsed-count')).toHaveTextContent('1')
+  expect(screen.queryByText('Ship release')).not.toBeInTheDocument()
+})
+
+it('opens the folded Done lane and folds it again', async () => {
+  const user = userEvent.setup()
+  renderBoard({ tasks: [...tasks, { id: 93, title: 'Ship release', status: 'done', priority: 'normal', can_edit: true }] })
+
+  await user.click(screen.getByRole('button', { name: 'Show Done (1 item)' }))
+  expect(screen.getByRole('region', { name: 'Done column' })).not.toHaveClass('is-collapsed')
+  expect(screen.getByText('Ship release')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Hide Done (1 item)' }))
+  expect(screen.queryByText('Ship release')).not.toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Done column' })).toHaveClass('is-collapsed')
+})
+
+it('completes a task by dropping it on the folded Done lane', () => {
+  const onStatusChange = vi.fn()
+  renderBoard({ onStatusChange })
+  const taskCard = screen.getByText('Design UI').closest('.project-kanban-task')
+  const doneColumn = screen.getByRole('region', { name: 'Done column' })
+  const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), getData: vi.fn(() => 'task:91') }
+
+  fireEvent.dragStart(taskCard, { dataTransfer })
+  fireEvent.dragEnter(doneColumn, { dataTransfer })
+  expect(doneColumn).toHaveClass('is-drop-target')
+  fireEvent.drop(doneColumn, { dataTransfer })
+
+  expect(onStatusChange).toHaveBeenCalledWith(91, 'done')
+})
+
 it('moves a task to another status lane by drag and drop', () => {
   const onStatusChange = vi.fn()
   const { container } = renderBoard({ onStatusChange })

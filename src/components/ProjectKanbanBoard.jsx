@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, GripVertical, Plus, Search } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Plus, Search } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
@@ -30,6 +30,12 @@ const DATE_FILTER_OPTIONS = [
 ]
 
 const UNASSIGNED_FILTER = '__unassigned__'
+
+// Done is where finished work collects, so it is the one lane that starts
+// folded: a slim strip carrying the lane name and its count, expandable into a
+// full lane you can read, reorder and drop cards into. The other lanes hold work
+// still being done and are worth the width they take.
+const COLLAPSIBLE_COLUMN_IDS = new Set(['done'])
 
 export const PROJECT_KANBAN_COLUMNS = COLUMN_DEFINITIONS
 const PROJECT_KANBAN_COLUMN_BY_ID = new Map(COLUMN_DEFINITIONS.map(column => [column.id, column]))
@@ -114,6 +120,10 @@ export default function ProjectKanbanBoard({
     if (done) clearSelection()
   }
   const [draggedTaskId, setDraggedTaskId] = useState(null)
+  // Folded by default, not remembered across visits: the lane exists to keep
+  // finished work out of the way, and a board that opened with Done unfolded
+  // because of one earlier look would be the opposite of that.
+  const [collapsedColumnIds, setCollapsedColumnIds] = useState(() => new Set(COLLAPSIBLE_COLUMN_IDS))
   const [dropTaskId, setDropTaskId] = useState(null)
   const [draggedColumnId, setDraggedColumnId] = useState(null)
   const [dropColumnId, setDropColumnId] = useState(null)
@@ -188,6 +198,17 @@ export default function ProjectKanbanBoard({
     if (currentColumn.status === status) return
     onStatusChange?.(task.id, status)
   }
+
+  // Only the Done lane folds. Keeping the rule in one place means the heading,
+  // the body and the add-task footer cannot disagree about which lane it is.
+  const canCollapseColumn = column => COLLAPSIBLE_COLUMN_IDS.has(column.id)
+  const isColumnCollapsed = column => canCollapseColumn(column) && collapsedColumnIds.has(column.id)
+  const setColumnCollapsed = (columnId, collapsed) => setCollapsedColumnIds(current => {
+    const next = new Set(current)
+    if (collapsed) next.add(columnId)
+    else next.delete(columnId)
+    return next
+  })
 
   const finishDrag = () => {
     setDraggedTaskId(null)
@@ -378,8 +399,9 @@ export default function ProjectKanbanBoard({
       const estimatedMinutes = columnTasks.reduce((total, task) => total + (Number(task.estimate_minutes) || 0), 0)
       const canDrop = Boolean(draggedTask && column.status && canMoveTask(draggedTask) && projectKanbanColumnForTask(draggedTask).id !== column.id)
       const isColumnDropTarget = Boolean(draggedColumnId && draggedColumnId !== column.id && dropColumnId === column.id && allowColumnReorder)
+      const collapsed = isColumnCollapsed(column)
       return <section
-        className={`project-kanban-column${canDrop && dropTaskColumnId === column.id ? ' is-drop-target' : ''}${isColumnDropTarget ? ' is-column-drop-target' : ''}${draggedColumnId === column.id ? ' is-column-source' : ''}`}
+        className={`project-kanban-column${collapsed ? ' is-collapsed' : ''}${canDrop && dropTaskColumnId === column.id ? ' is-drop-target' : ''}${isColumnDropTarget ? ' is-column-drop-target' : ''}${draggedColumnId === column.id ? ' is-column-source' : ''}`}
         key={column.id}
         data-column-id={column.id}
         data-drop-position={isColumnDropTarget && dropColumnIndex ? String(dropColumnIndex) : undefined}
@@ -435,7 +457,7 @@ export default function ProjectKanbanBoard({
         }}
       >
         <div
-          className="project-kanban-column-heading"
+          className={`project-kanban-column-heading${collapsed ? ' is-collapsed' : ''}`}
           data-reorderable={allowColumnReorder ? 'true' : undefined}
           draggable={allowColumnReorder}
           onDragStart={event => {
@@ -456,17 +478,33 @@ export default function ProjectKanbanBoard({
           onDragEnd={finishDrag}
           onPointerDown={event => startColumnPointerDrag(event, column)}
         >
-          <span className="project-kanban-column-heading-label">
-            {allowColumnReorder && <GripVertical className="project-kanban-column-grip" size={15} strokeWidth={1.7} title={`Drag ${column.label} to reorder`} aria-hidden="true" />}
-            <span>{column.label}</span>
-          </span>
-          <span className="project-kanban-column-heading-actions">
-            {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === 0} onClick={() => nudgeColumn(column.id, -1)} aria-label={`Move ${column.label} left`} title={`Move ${column.label} left`}><ChevronLeft size={13} /></button>}
-            <span className="project-kanban-column-count"><strong>{columnTasks.length}</strong><small>tasks</small><i>{formatEstimateMinutes(estimatedMinutes) || '0h'}</i></span>
-            {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === orderedColumns.length - 1} onClick={() => nudgeColumn(column.id, 1)} aria-label={`Move ${column.label} right`} title={`Move ${column.label} right`}><ChevronRight size={13} /></button>}
-          </span>
+          {collapsed ? <>
+            <button
+              type="button"
+              className="project-kanban-column-collapse"
+              onClick={() => setColumnCollapsed(column.id, false)}
+              aria-expanded="false"
+              aria-label={`Show ${column.label} (${columnTasks.length} ${columnTasks.length === 1 ? 'item' : 'items'})`}
+              title={`Show ${column.label}`}
+            >
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+            <span className="project-kanban-column-collapsed-label">{column.label}</span>
+            <span className="project-kanban-column-collapsed-count" aria-hidden="true">{columnTasks.length}</span>
+          </> : <>
+            <span className="project-kanban-column-heading-label">
+              {allowColumnReorder && <GripVertical className="project-kanban-column-grip" size={15} strokeWidth={1.7} title={`Drag ${column.label} to reorder`} aria-hidden="true" />}
+              <span>{column.label}</span>
+            </span>
+            <span className="project-kanban-column-heading-actions">
+              {canCollapseColumn(column) && <button type="button" className="project-kanban-column-collapse" onClick={() => setColumnCollapsed(column.id, true)} aria-expanded="true" aria-label={`Hide ${column.label} (${columnTasks.length} ${columnTasks.length === 1 ? 'item' : 'items'})`} title={`Hide ${column.label}`}><ChevronDown size={13} aria-hidden="true" /></button>}
+              {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === 0} onClick={() => nudgeColumn(column.id, -1)} aria-label={`Move ${column.label} left`} title={`Move ${column.label} left`}><ChevronLeft size={13} /></button>}
+              <span className="project-kanban-column-count"><strong>{columnTasks.length}</strong><small>tasks</small><i>{formatEstimateMinutes(estimatedMinutes) || '0h'}</i></span>
+              {allowColumnReorder && <button type="button" className="project-kanban-column-order-button" disabled={columnIndex === orderedColumns.length - 1} onClick={() => nudgeColumn(column.id, 1)} aria-label={`Move ${column.label} right`} title={`Move ${column.label} right`}><ChevronRight size={13} /></button>}
+            </span>
+          </>}
         </div>
-        <div className="project-kanban-column-body">
+        {!collapsed && <div className="project-kanban-column-body">
           {columnTasks.map(task => {
             const editable = canMoveTask(task)
             const currentColumn = projectKanbanColumnForTask(task)
@@ -539,8 +577,8 @@ export default function ProjectKanbanBoard({
               </div>
             </article>
           })}
-        </div>
-        {canManageTasks && onAddTask && <button type="button" className="project-kanban-add-column-task" onClick={() => onAddTask(column)} aria-label={`Add task to ${column.label}`}><Plus size={14} />Add task</button>}
+        </div>}
+        {!collapsed && canManageTasks && onAddTask && <button type="button" className="project-kanban-add-column-task" onClick={() => onAddTask(column)} aria-label={`Add task to ${column.label}`}><Plus size={14} />Add task</button>}
       </section>
     })}
     </div>
