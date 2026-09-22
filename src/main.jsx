@@ -6825,6 +6825,7 @@ function WorkspaceView({
         invitations={localData.invitations || []}
         onRefresh={onRefresh}
         onConfirm={onConfirm}
+        onInvite={() => openComposer("invite")}
         onNavigate={onNavigate}
         onSignOut={onSignOut}
       />

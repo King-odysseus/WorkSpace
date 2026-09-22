@@ -1048,6 +1048,138 @@ it('does not retry a role change rejected by workspace permissions', async () =>
   expect(within(alert).queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
 })
 
+it('removes a member only after confirmation and recovers a failed removal', async () => {
+  const user = userEvent.setup()
+  const api = mockApi({})
+  const originalFetch = api.getMockImplementation()
+  let removalRequests = 0
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/members/2/') && init.method === 'DELETE') {
+      removalRequests += 1
+      if (removalRequests === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Member service is unavailable.' }),
+          text: async () => '{"error":"Member service is unavailable."}',
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ removed: 2 }),
+        text: async () => '{"removed":2}',
+      })
+    }
+    return originalFetch(input, init)
+  })
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  const onRefresh = vi.fn()
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner', status: 'active' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserId={1}
+      members={[
+        { id: 1, first_name: 'Test', last_name: 'Owner', email: 'test@example.test', role: 'owner' },
+        { id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member' },
+      ]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+      onConfirm={onConfirm}
+      onRefresh={onRefresh}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  await user.click(screen.getByRole('button', { name: 'Remove amara@example.test' }))
+
+  const alert = (await screen.findByText('Member could not be removed')).closest('[data-slot="alert"]')
+  expect(within(alert).getByText('Member service is unavailable.')).toBeInTheDocument()
+  expect(screen.getAllByText('amara@example.test')).toHaveLength(2)
+  expect(onConfirm).toHaveBeenCalledWith(
+    'Remove amara@example.test from Northstar?',
+    { title: 'Remove member', confirmLabel: 'Remove member' },
+  )
+
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+  await waitFor(() => expect(removalRequests).toBe(2))
+  await waitFor(() => expect(screen.queryByText('amara@example.test')).not.toBeInTheDocument())
+  expect(onConfirm).toHaveBeenCalledTimes(1)
+  expect(onRefresh).toHaveBeenCalled()
+})
+
+it('presents invitation outcomes and supports resend and revoke recovery', async () => {
+  const user = userEvent.setup()
+  const api = mockApi({
+    '/api/workspaces/1/invitations/3/resend/': {
+      invitation: {
+        id: 3,
+        email: 'expired@example.test',
+        role: 'member',
+        status: 'pending',
+        created_at: '2026-09-01T09:00:00Z',
+        expires_at: '2026-09-29T09:00:00Z',
+      },
+    },
+    '/api/workspaces/1/invitations/2/': {
+      invitation: { id: 2, email: 'pending@example.test', status: 'cancelled' },
+    },
+  })
+  const onConfirm = vi.fn().mockResolvedValue(true)
+  const onInvite = vi.fn()
+  const onRefresh = vi.fn()
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner', status: 'active' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserId={1}
+      members={[
+        { id: 1, first_name: 'Test', last_name: 'Owner', email: 'test@example.test', role: 'owner' },
+      ]}
+      invitations={[
+        { id: 1, email: 'accepted@example.test', role: 'manager', status: 'accepted', created_at: '2026-08-01T09:00:00Z', expires_at: '2026-08-08T09:00:00Z' },
+        { id: 2, email: 'pending@example.test', role: 'member', status: 'pending', created_at: '2026-09-10T09:00:00Z', expires_at: '2026-09-17T09:00:00Z' },
+        { id: 3, email: 'expired@example.test', role: 'member', status: 'expired', created_at: '2026-09-01T09:00:00Z', expires_at: '2026-09-08T09:00:00Z' },
+        { id: 4, email: 'declined@example.test', role: 'member', status: 'declined', created_at: '2026-08-20T09:00:00Z', expires_at: '2026-08-27T09:00:00Z' },
+      ]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+      onConfirm={onConfirm}
+      onInvite={onInvite}
+      onRefresh={onRefresh}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  expect(screen.getByText('Accepted')).toBeInTheDocument()
+  expect(screen.getByText('Access granted')).toBeInTheDocument()
+  expect(screen.getByText('Expired')).toBeInTheDocument()
+  expect(screen.getByText('Declined')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Invite member' }))
+  expect(onInvite).toHaveBeenCalledTimes(1)
+
+  const pendingRow = screen.getByText('pending@example.test').closest('.settings-invitation-row')
+  await user.click(within(pendingRow).getByRole('button', { name: 'Revoke invitation for pending@example.test' }))
+  await waitFor(() => expect(within(pendingRow).getByText('Revoked')).toBeInTheDocument())
+  expectRequest(api, '/api/workspaces/1/invitations/2/', 'DELETE')
+
+  const expiredRow = screen.getByText('expired@example.test').closest('.settings-invitation-row')
+  await user.click(within(expiredRow).getByRole('button', { name: 'Resend invitation for expired@example.test' }))
+  await waitFor(() => expect(within(expiredRow).getByText('Pending')).toBeInTheDocument())
+  expectRequest(api, '/api/workspaces/1/invitations/3/resend/', 'POST')
+  expect(onRefresh).toHaveBeenCalledTimes(2)
+})
+
 it('shows limited access if Workspace administration permission is removed', () => {
   const props = {
     currentWorkspace: { id: 1, name: 'Northstar', role: 'owner', status: 'active' },

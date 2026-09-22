@@ -23,6 +23,7 @@ import {
   Plus,
   Sparkles,
   Sun,
+  UserMinus,
   UserRound,
   Volume2,
   Webhook,
@@ -42,7 +43,7 @@ const AISettingsPanel = lazy(() =>
   })),
 );
 import { WorkspaceViewHeading } from "./workspace-ui.jsx";
-import { effectivePresence, getCsrfToken } from "../lib/workspace-format.js";
+import { effectivePresence, formatDate, getCsrfToken } from "../lib/workspace-format.js";
 import { NOTIFICATION_SOUND_OPTIONS, playNotificationSound } from "../lib/notification-sounds.js";
 import { persistWorkspaceTheme } from "../lib/theme.js";
 import "../settings.css";
@@ -81,6 +82,22 @@ const WORKING_DAY_OPTIONS = [
   { value: 5, short: "S", label: "Saturday" },
   { value: 6, short: "S", label: "Sunday" },
 ];
+
+const INVITATION_STATUS_LABELS = {
+  pending: "Pending",
+  accepted: "Accepted",
+  expired: "Expired",
+  declined: "Declined",
+  cancelled: "Revoked",
+};
+
+const INVITATION_STATUS_RANK = {
+  pending: 0,
+  expired: 1,
+  accepted: 2,
+  declined: 3,
+  cancelled: 4,
+};
 
 const LIFECYCLE_ACTION_COPY = {
   archive: {
@@ -260,6 +277,7 @@ function SettingsView({
   canManageMembers,
   members,
   membersLoading = false,
+  invitations = [],
   notifications,
   workspaceId,
   workspaces = [],
@@ -273,6 +291,7 @@ function SettingsView({
   projects = [],
   onRefresh,
   onConfirm,
+  onInvite,
   onNavigate,
   onSignOut,
   whatsNewUnread = false,
@@ -336,6 +355,11 @@ function SettingsView({
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [permissionsSavingId, setPermissionsSavingId] = useState(null);
   const [memberActionError, setMemberActionError] = useState(null);
+  const [memberRemovalBusyId, setMemberRemovalBusyId] = useState(null);
+  const [removedMemberIds, setRemovedMemberIds] = useState([]);
+  const [invitationActionError, setInvitationActionError] = useState(null);
+  const [invitationActionBusy, setInvitationActionBusy] = useState(null);
+  const [invitationOverrides, setInvitationOverrides] = useState({});
   const [workingHoursSavingId, setWorkingHoursSavingId] = useState(null);
   const [workingHoursError, setWorkingHoursError] = useState("");
   const [notificationPrefsReloadKey, setNotificationPrefsReloadKey] = useState(0);
@@ -344,24 +368,45 @@ function SettingsView({
   const isOwner = currentWorkspace?.role === "owner";
   const isArchived = currentWorkspace?.status === "archived";
   const showMemberSkeleton = membersLoading && members.length === 0;
+  const visibleMembers = members.filter(
+    (member) => !removedMemberIds.includes(member.id),
+  );
+  const visibleInvitations = invitations
+    .map((invitation) => ({
+      ...invitation,
+      ...(invitationOverrides[invitation.id] || {}),
+    }))
+    .sort(
+      (left, right) =>
+        (INVITATION_STATUS_RANK[left.status] ?? 99) -
+          (INVITATION_STATUS_RANK[right.status] ?? 99) ||
+        String(right.created_at || "").localeCompare(String(left.created_at || "")),
+    );
   const lifecycleBusyFor = (action, targetWorkspaceId) =>
     lifecycleBusy?.action === action && lifecycleBusy?.workspaceId === targetWorkspaceId;
   const memberActionFailure = (action, status, message) => {
     const roleAction = action === "role";
+    const removeAction = action === "remove";
     const title = roleAction
       ? "Role could not be saved"
-      : "Permissions could not be saved";
+      : removeAction
+        ? "Member could not be removed"
+        : "Permissions could not be saved";
     if (status === 403) {
       return {
         tone: "warning",
         title: roleAction
           ? "Role change not permitted"
-          : "Permission change not permitted",
+          : removeAction
+            ? "Member removal not permitted"
+            : "Permission change not permitted",
         message:
           message ||
           (roleAction
             ? "Your role does not allow changing this member."
-            : "Your role does not allow changing these permissions."),
+            : removeAction
+              ? "Your role does not allow removing this member."
+              : "Your role does not allow changing these permissions."),
         retryable: false,
       };
     }
@@ -371,7 +416,9 @@ function SettingsView({
         title,
         message:
           message ||
-          "The workspace changed before the update completed. The previous values are still active.",
+          (removeAction
+            ? "The workspace changed before the member could be removed. The member list is unchanged."
+            : "The workspace changed before the update completed. The previous values are still active."),
         retryable: false,
       };
     }
@@ -382,7 +429,9 @@ function SettingsView({
         message ||
         (roleAction
           ? "The previous role is still active. Check the connection and try again."
-          : "The previous permissions are still active. Check the connection and try again."),
+          : removeAction
+            ? "The member still has access. Check the connection and try again."
+            : "The previous permissions are still active. Check the connection and try again."),
       retryable: status === 0 || status === 429 || status >= 500,
     };
   };
@@ -472,6 +521,172 @@ function SettingsView({
       });
     } finally {
       setPermissionsSavingId(null);
+    }
+  };
+  const removeMember = async (member, skipConfirmation = false) => {
+    if (!canManageMembers || member.role === "owner") return;
+    if (!skipConfirmation) {
+      const confirmed = onConfirm
+        ? await onConfirm(
+            `Remove ${member.email} from ${currentWorkspace?.name || "this workspace"}?`,
+            {
+              title: "Remove member",
+              confirmLabel: "Remove member",
+            },
+          )
+        : false;
+      if (!confirmed) return;
+    }
+
+    setMemberRemovalBusyId(member.id);
+    setMemberActionError(null);
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/members/${member.id}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: {
+            "X-CSRFToken": await getCsrfToken(),
+            "X-Workspace-Id": String(workspaceId),
+          },
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const failure = memberActionFailure(
+          "remove",
+          response.status,
+          data.error,
+        );
+        setMemberActionError({
+          ...failure,
+          retry: failure.retryable
+            ? () => removeMember(member, true)
+            : undefined,
+        });
+        return;
+      }
+      setRemovedMemberIds((current) =>
+        current.includes(member.id) ? current : [...current, member.id],
+      );
+      onRefresh?.();
+    } catch (error) {
+      const failure = memberActionFailure("remove", 0, error.message);
+      setMemberActionError({
+        ...failure,
+        retry: () => removeMember(member, true),
+      });
+    } finally {
+      setMemberRemovalBusyId(null);
+    }
+  };
+  const invitationFailure = (action, status, message) => {
+    const resend = action === "resend";
+    if (status === 403) {
+      return {
+        tone: "warning",
+        title: "Invitation action not permitted",
+        message: message || "Your role does not allow managing this invitation.",
+        retryable: false,
+      };
+    }
+    if (status === 404 || status === 409) {
+      return {
+        tone: "warning",
+        title: "Invitation is no longer actionable",
+        message:
+          message ||
+          "The invitation changed elsewhere. Refresh to see its current state.",
+        retryable: false,
+      };
+    }
+    if (status === 429 && resend) {
+      return {
+        tone: "warning",
+        title: "Invitation resend is on cooldown",
+        message:
+          message ||
+          "Wait a few minutes before sending this invitation again.",
+        retryable: false,
+      };
+    }
+    return {
+      tone: "danger",
+      title: resend
+        ? "Invitation could not be resent"
+        : "Invitation could not be revoked",
+      message:
+        message ||
+        (resend
+          ? "The invitation was not sent again. Check the connection and try again."
+          : "The invitation is still active. Check the connection and try again."),
+      retryable: status === 0 || status === 429 || status >= 500,
+    };
+  };
+  const runInvitationAction = async (
+    action,
+    invitation,
+    skipConfirmation = false,
+  ) => {
+    if (action === "revoke" && !skipConfirmation) {
+      const confirmed = onConfirm
+        ? await onConfirm(`Revoke the invitation for ${invitation.email}?`, {
+            title: "Revoke invitation",
+            confirmLabel: "Revoke invitation",
+          })
+        : false;
+      if (!confirmed) return;
+    }
+
+    setInvitationActionBusy({ action, id: invitation.id });
+    setInvitationActionError(null);
+    try {
+      const response = await fetch(
+        action === "resend"
+          ? `/api/workspaces/${workspaceId}/invitations/${invitation.id}/resend/`
+          : `/api/workspaces/${workspaceId}/invitations/${invitation.id}/`,
+        {
+          method: action === "resend" ? "POST" : "DELETE",
+          credentials: "include",
+          headers: {
+            "X-CSRFToken": await getCsrfToken(),
+            "X-Workspace-Id": String(workspaceId),
+          },
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const failure = invitationFailure(
+          action,
+          response.status,
+          data.error,
+        );
+        setInvitationActionError({
+          ...failure,
+          retry: failure.retryable
+            ? () => runInvitationAction(action, invitation, true)
+            : undefined,
+        });
+        return;
+      }
+      const updatedInvitation = data.invitation || {
+        id: invitation.id,
+        status: "cancelled",
+      };
+      setInvitationOverrides((current) => ({
+        ...current,
+        [invitation.id]: updatedInvitation,
+      }));
+      onRefresh?.();
+    } catch (error) {
+      const failure = invitationFailure(action, 0, error.message);
+      setInvitationActionError({
+        ...failure,
+        retry: () => runInvitationAction(action, invitation, true),
+      });
+    } finally {
+      setInvitationActionBusy(null);
     }
   };
   const saveMemberWorkingHours = async (member, dailyHours, workingDays) => {
@@ -2853,6 +3068,12 @@ function SettingsView({
                     {currentWorkspace?.name || "this workspace"}.
                   </p>
                 </div>
+                {onInvite && (
+                  <Button type="button" onClick={onInvite}>
+                    <Plus size={15} />
+                    Invite member
+                  </Button>
+                )}
               </div>
               {!canManageMembers ? (
                 <div className="settings-access-limited">
@@ -2925,7 +3146,7 @@ function SettingsView({
                     {showMemberSkeleton ? (
                       <Skeleton variant="heading" />
                     ) : (
-                      members.length
+                      visibleMembers.length
                     )}
                   </strong>
                   <span>Members</span>
@@ -2935,7 +3156,7 @@ function SettingsView({
                     {showMemberSkeleton ? (
                       <Skeleton variant="heading" />
                     ) : (
-                      members.filter(
+                      visibleMembers.filter(
                         (member) =>
                           member.role === "owner" || member.role === "manager",
                       ).length
@@ -2959,7 +3180,7 @@ function SettingsView({
                 <span>
                   {showMemberSkeleton
                     ? "Loading members"
-                    : `${members.length} member${members.length === 1 ? "" : "s"}`}
+                    : `${visibleMembers.length} member${visibleMembers.length === 1 ? "" : "s"}`}
                 </span>
               </div>
               <div className="settings-member-list" aria-busy={showMemberSkeleton}>
@@ -2992,8 +3213,8 @@ function SettingsView({
                       </div>
                     ))}
                   </SkeletonGroup>
-                ) : members.length ? (
-                  members.map((member) => {
+                ) : visibleMembers.length ? (
+                  visibleMembers.map((member) => {
                     // Mirrors the backend's member_detail rule: an owner can change anyone
                     // but the owner row; a manager can only change plain members.
                     const canEditThisRow =
@@ -3020,17 +3241,34 @@ function SettingsView({
                           <span>{member.email}</span>
                         </div>
                         {canEditThisRow ? (
-                          <AppSelect
-                            value={member.role}
-                            disabled={permissionsSavingId === member.id}
-                            onChange={(event) =>
-                              changeMemberRole(member, event.target.value)
-                            }
-                            aria-label={`Change role for ${member.email}`}
-                          >
-                            <option value="member">Member</option>
-                            <option value="manager">Manager</option>
-                          </AppSelect>
+                          <div className="settings-member-actions">
+                            <AppSelect
+                              value={member.role}
+                              disabled={
+                                permissionsSavingId === member.id ||
+                                memberRemovalBusyId === member.id
+                              }
+                              onChange={(event) =>
+                                changeMemberRole(member, event.target.value)
+                              }
+                              aria-label={`Change role for ${member.email}`}
+                            >
+                              <option value="member">Member</option>
+                              <option value="manager">Manager</option>
+                            </AppSelect>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              loading={memberRemovalBusyId === member.id}
+                              disabled={memberRemovalBusyId === member.id}
+                              onClick={() => removeMember(member)}
+                              aria-label={`Remove ${member.email}`}
+                              title={`Remove ${member.email}`}
+                            >
+                              <UserMinus size={14} />
+                            </Button>
+                          </div>
                         ) : (
                           <em>{member.role}</em>
                         )}
@@ -3052,6 +3290,118 @@ function SettingsView({
                   </div>
                 )}
               </div>
+              <div className="settings-section-heading settings-invitations-heading">
+                <div>
+                  <strong>Invitations</strong>
+                  <span>
+                    Sent invitations retain their outcome and expiry history.
+                  </span>
+                </div>
+                <span>
+                  {visibleInvitations.length} invitation
+                  {visibleInvitations.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div
+                className="settings-invitation-list"
+                aria-busy={Boolean(invitationActionBusy)}
+              >
+                {invitationActionError && (
+                  <SettingsAlert
+                    tone={invitationActionError.tone}
+                    title={invitationActionError.title}
+                    onRetry={invitationActionError.retry}
+                    className="settings-invitation-alert"
+                  >
+                    {invitationActionError.message}
+                  </SettingsAlert>
+                )}
+                {visibleInvitations.length ? (
+                  visibleInvitations.map((invitation) => {
+                    const status = invitation.status || "pending";
+                    const canAct =
+                      status === "pending" || status === "expired";
+                    const resending =
+                      invitationActionBusy?.action === "resend" &&
+                      invitationActionBusy?.id === invitation.id;
+                    const revoking =
+                      invitationActionBusy?.action === "revoke" &&
+                      invitationActionBusy?.id === invitation.id;
+                    return (
+                      <div
+                        className="settings-invitation-row"
+                        key={invitation.id}
+                      >
+                        <span
+                          className={`settings-invitation-status is-${status}`}
+                        >
+                          {INVITATION_STATUS_LABELS[status] || status}
+                        </span>
+                        <div className="settings-invitation-copy">
+                          <strong>{invitation.email}</strong>
+                          <span>
+                            Invited as {invitation.role} on{" "}
+                            {formatDate(invitation.created_at)}
+                            {canAct && invitation.expires_at
+                              ? ` · Expires ${formatDate(invitation.expires_at)}`
+                              : ""}
+                          </span>
+                        </div>
+                        <div className="settings-invitation-actions">
+                          {canAct ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                loading={resending}
+                                disabled={Boolean(invitationActionBusy)}
+                                onClick={() =>
+                                  runInvitationAction("resend", invitation)
+                                }
+                                aria-label={`Resend invitation for ${invitation.email}`}
+                              >
+                                Resend
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                loading={revoking}
+                                disabled={Boolean(invitationActionBusy)}
+                                onClick={() =>
+                                  runInvitationAction("revoke", invitation)
+                                }
+                                aria-label={`Revoke invitation for ${invitation.email}`}
+                                title={`Revoke invitation for ${invitation.email}`}
+                              >
+                                <X size={14} />
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="settings-invitation-outcome">
+                              {status === "accepted"
+                                ? "Access granted"
+                                : "No further action"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="settings-invitation-empty" role="status">
+                    <UserRound size={18} aria-hidden="true" />
+                    <div>
+                      <strong>No invitation history yet</strong>
+                      <p>
+                        Invite a teammate to start building the workspace access
+                        record.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="settings-section-heading settings-working-hours-heading">
                 <div>
                   <strong>Working hours</strong>
@@ -3063,7 +3413,7 @@ function SettingsView({
                   {workingHoursError}
                 </p>
               )}
-              {members.length > 0 && (
+              {visibleMembers.length > 0 && (
                 <div className="settings-working-hours-table-head" aria-hidden="true">
                   <span>Member</span>
                   <span>Daily hours</span>
@@ -3081,8 +3431,8 @@ function SettingsView({
                     <Skeleton variant="row" />
                     <Skeleton variant="row" />
                   </SkeletonGroup>
-                ) : members.length ? (
-                  members.map((member) => {
+                ) : visibleMembers.length ? (
+                  visibleMembers.map((member) => {
                     const canEditHours = member.role === "owner"
                       ? isOwner && String(member.id) === String(currentUserId)
                       : isOwner || (canManageMembers && member.role === "member");
@@ -3113,7 +3463,7 @@ function SettingsView({
                 </p>
               )}
               {isOwner &&
-                members.filter((member) => member.role === "manager").length >
+                visibleMembers.filter((member) => member.role === "manager").length >
                   0 && (
                   <div className="settings-manager-panel">
                     <div>
@@ -3124,7 +3474,7 @@ function SettingsView({
                         own tasks, use Zuri, view reports).
                       </span>
                     </div>
-                    {members
+                    {visibleMembers
                       .filter((member) => member.role === "manager")
                       .map((manager) => (
                         <div

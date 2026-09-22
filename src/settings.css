@@ -1152,7 +1152,7 @@
 .settings-view .settings-member-row {
   display: grid;
   min-height: 68px;
-  grid-template-columns: 36px minmax(0, 1fr) 150px;
+  grid-template-columns: 36px minmax(0, 1fr) 194px;
   align-items: center;
   gap: 16px;
   border-bottom: 1px solid #f3f4f6;
@@ -1188,6 +1188,175 @@
   color: var(--pencil-text-muted);
   font-size: 12px;
   font-style: normal;
+}
+
+.settings-view .settings-member-row > .settings-member-actions {
+  display: flex;
+  width: 194px;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.settings-view .settings-member-actions [data-slot='select-trigger'] {
+  width: 150px;
+}
+
+.settings-view .settings-member-actions [data-slot='button'] {
+  flex: 0 0 auto;
+  color: var(--pencil-text-muted);
+}
+
+.settings-view .settings-member-actions [data-slot='button']:hover {
+  color: var(--pencil-danger);
+}
+
+.settings-view .settings-invitations-heading {
+  padding-top: 20px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.settings-view .settings-invitation-list {
+  display: grid;
+  gap: 0;
+  padding: 0 32px 24px;
+}
+
+.settings-view .settings-invitation-alert {
+  margin: 0 0 18px;
+}
+
+.settings-view .settings-invitation-row {
+  display: grid;
+  min-height: 72px;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.settings-view .settings-invitation-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-view .settings-invitation-status {
+  display: inline-flex;
+  width: max-content;
+  min-width: 72px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--pencil-surface-muted);
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.settings-view .settings-invitation-status.is-pending {
+  background: var(--pencil-alert-info-fill);
+  color: var(--pencil-alert-info-text);
+}
+
+.settings-view .settings-invitation-status.is-expired {
+  background: var(--pencil-alert-warning-fill);
+  color: var(--pencil-alert-warning-text);
+}
+
+.settings-view .settings-invitation-status.is-accepted {
+  background: var(--pencil-alert-success-fill);
+  color: var(--pencil-alert-success-text);
+}
+
+.settings-view .settings-invitation-status.is-declined,
+.settings-view .settings-invitation-status.is-cancelled {
+  background: var(--pencil-alert-danger-fill);
+  color: var(--pencil-alert-danger-text);
+}
+
+.settings-view .settings-invitation-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.settings-view .settings-invitation-copy strong,
+.settings-view .settings-invitation-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-view .settings-invitation-copy strong {
+  color: var(--pencil-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.settings-view .settings-invitation-copy span {
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.settings-view .settings-invitation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-view .settings-invitation-outcome {
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.settings-view .settings-invitation-empty {
+  display: grid;
+  min-height: 86px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--pencil-border);
+  border-radius: 10px;
+  background: var(--pencil-surface-muted);
+}
+
+.settings-view .settings-invitation-empty > svg {
+  width: 36px;
+  height: 36px;
+  padding: 9px;
+  border-radius: 9px;
+  background: var(--pencil-surface);
+  color: var(--pencil-text-muted);
+}
+
+.settings-view .settings-invitation-empty > div {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-view .settings-invitation-empty strong {
+  color: var(--pencil-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 17px;
+}
+
+.settings-view .settings-invitation-empty p {
+  margin: 0;
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .settings-view .settings-access-limited {
@@ -1516,6 +1685,7 @@ html[data-theme='dark'] .settings-view :is(
   .settings-note,
   .settings-sidebar-layout,
   .settings-member-row,
+  .settings-invitation-row,
   .settings-working-hours-row,
   .settings-working-hours-empty
 ) {
@@ -1894,6 +2064,62 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
   }
 }
 
+@media (max-width: 1180px) and (min-width: 701px) {
+  .settings-view .settings-working-hours-table-head {
+    display: none;
+  }
+
+  .settings-view .settings-working-hours-list {
+    padding: 0 24px 24px;
+  }
+
+  .settings-view .settings-working-hours-row,
+  .settings-view .settings-working-hours-row.is-readonly {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+    padding: 16px 0;
+  }
+
+  .settings-view .settings-working-hours-field-label {
+    display: block;
+  }
+
+  .settings-view .settings-working-hours-person,
+  .settings-view .settings-working-hours-readonly,
+  .settings-view .settings-working-hours-days,
+  .settings-view .settings-working-hours-summary,
+  .settings-view .settings-working-hours-row > [data-slot='button'] {
+    grid-column: 1;
+  }
+
+  .settings-view .settings-working-hours-days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .settings-view .settings-working-hours-day {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .settings-view .settings-working-hours-summary {
+    width: 100%;
+  }
+
+  .settings-view .settings-working-hours-readonly {
+    justify-self: start;
+  }
+
+  .settings-view .settings-working-hours-row > [data-slot='button'] {
+    width: 100%;
+    justify-content: center;
+    margin-top: 2px;
+  }
+}
+
 @media (max-width: 700px) {
   .settings-view .settings-panel-heading {
     min-height: 0;
@@ -2086,6 +2312,17 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
     padding: 14px 0;
   }
 
+  .settings-view .settings-member-actions {
+    width: 100%;
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .settings-view .settings-member-actions [data-slot='select-trigger'] {
+    width: min(150px, 100%);
+    flex: 1 1 auto;
+  }
+
   .settings-view .settings-member-row > [data-slot='select-trigger'],
   .settings-view .settings-member-row > em {
     width: min(150px, 100%);
@@ -2097,6 +2334,43 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
     width: min(150px, 100%);
     grid-column: 2;
     justify-self: stretch;
+  }
+
+  .settings-view .settings-invitations-heading,
+  .settings-view .settings-invitation-list {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .settings-view .settings-invitation-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+    padding: 16px 0;
+  }
+
+  .settings-view .settings-invitation-status {
+    grid-column: 1;
+  }
+
+  .settings-view .settings-invitation-copy {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .settings-view .settings-invitation-copy span {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .settings-view .settings-invitation-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .settings-view .settings-invitation-outcome {
+    max-width: none;
+    text-align: right;
   }
 
   .settings-view .settings-working-hours-row,

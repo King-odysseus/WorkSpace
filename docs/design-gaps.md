@@ -36,7 +36,6 @@ recovery path differs from F13; the following cases remain in that category.
 | Settings surface | Missing design scope |
 | --- | --- |
 | Profile | Long identity content, field-level validation, and panel-level loading state |
-| Workspace access | Invite failure, member removal, and accepted or expired invitation states |
 | AI settings | Credential rotation, provider removal confirmation, concurrent-update conflict, and desktop/mobile error parity |
 | Integrations | Loading, disconnected, invalid credentials, URL validation, save failure, reconnect, and revoked-access states |
 
@@ -75,6 +74,7 @@ The following are no longer unresolved design gaps:
 - Templates: F13 covers panel loading, empty task and project template lists, client-side create validation, apply failure with retry, and destructive delete confirmation, busy, and recoverable error states. Template editing is not supported by the current detail API, and duplicate template names are allowed by the current backend contract, so neither is simulated in the UI.
 - Workspace lifecycle recovery: P42 and F13 cover busy actions, archived workspace display, owner-only restore and permanent deletion, permission and conflict separation, destructive confirmation, retryable failures, and the workspace empty/create state.
 - Workspace access recovery: P43 and F13 cover the loading skeleton, limited-access treatment, role-save rollback and retry, non-retryable permission denial, and the empty member state.
+- Workspace access operations: P43 and F13 cover invite-form failure styling, member removal with confirmation and retry, invitation resend and revoke recovery, and pending, accepted, expired, declined, and revoked invitation outcomes.
 - Global crash fallback: P65 defines the branded recoverable error screen.
 - Message reactions: P66 defines the reaction picker and overflow behavior.
 - Project index and project controls: P28 defines the Projects index without the duplicated controls panel. Risk register and issue log live in the project detail Risks and Issues tabs, covered by P32 and P33.

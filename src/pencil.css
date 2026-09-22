@@ -1651,6 +1651,16 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   justify-self: end;
 }
 .composer-modal .modal-submit.justify-center { justify-self: stretch; }
+.composer-modal .auth-error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--pencil-alert-danger-stroke);
+  border-radius: 10px;
+  background: var(--pencil-alert-danger-fill);
+  color: var(--pencil-alert-danger-text);
+  font-size: 13px;
+  line-height: 18px;
+}
 
 @media (max-width: 560px) {
   .composer-modal .modal-grid { grid-template-columns: minmax(0, 1fr); }
@@ -2510,7 +2520,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-team-task-count { color: var(--pencil-text-secondary); font-size: 12px; }
 .pencil-team-message { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text-secondary); }
 .pencil-team-side { display: grid; align-content: start; gap: 32px; }
-.pencil-team-card { min-width: 0; padding: 20px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); }
+.pencil-team-card { min-width: 0; padding: 24px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); }
 .pencil-team-card h2 { margin: 0; color: var(--pencil-text); font-size: 16px; font-weight: 600; line-height: 22px; }
 .pencil-team-card > p { margin: 4px 0 8px; color: var(--pencil-text-muted); font-size: 12px; }
 .pencil-team-card > strong { display: block; margin: 0 0 14px; color: var(--pencil-text); font-size: 28px; line-height: 34px; }
@@ -2523,7 +2533,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .pencil-team-breakdown i.at-capacity { background: #F97316; }.pencil-team-breakdown i.overloaded { background: #C70036; }.pencil-team-breakdown i.away { background: #98A2B3; }
 .pencil-team-breakdown b { display: block; width: 100% !important; max-width: 108px; height: 5px; border-radius: 99px; background: #00875A; }.pencil-team-breakdown:nth-of-type(3) b { background: #F97316; }.pencil-team-breakdown:nth-of-type(4) b { background: #C70036; }.pencil-team-breakdown:nth-of-type(5) b { background: #98A2B3; }
 .pencil-team-breakdown em { font-style: normal; text-align: right; }.pencil-team-card > small { display: block; margin-top: 24px; color: var(--pencil-text-muted); font-size: 11px; }
-.pencil-team-invites { display: grid; gap: 16px; }.pencil-team-invites > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }.pencil-team-invites > div span { display: grid; gap: 3px; }.pencil-team-invites > div small { color: var(--pencil-text-muted); font-size: 11px; }.pencil-team-invites > div button { border: 0; background: transparent; color: var(--pencil-navy); font-size: 12px; }.pencil-team-invite-button { display: flex; height: 42px; align-items: center; gap: 10px; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-canvas); color: var(--pencil-text); font-size: 13px; }
+.pencil-team-invites { display: grid; gap: 16px; }.pencil-team-invites > div { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; font-size: 13px; }.pencil-team-invites > div span { display: grid; gap: 3px; }.pencil-team-invites > div small { color: var(--pencil-text-muted); font-size: 11px; }.pencil-team-invites > div button { border: 0; background: transparent; color: var(--pencil-navy); font-size: 12px; }.pencil-team-invite-button { display: flex; width: 100%; height: 44px; align-items: center; justify-content: flex-start; gap: 10px; padding: 0 16px; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-canvas); color: var(--pencil-text); font-size: 13px; }
 
 /* P11 Follow-up. */
 .pencil-followup-view > header { min-height: 101px; }
