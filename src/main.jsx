@@ -2284,10 +2284,11 @@ function App() {
     setSidebarProfileOpen(false);
   };
 
-  // One account menu, two triggers that the design draws - the header avatar
-  // and the sidebar's overflow button. Both call sites wrap this body in their
-  // own positioned container, so every action closes whichever one opened it.
-  const profileMenuBody = (
+  // One account menu, three triggers that the design draws - the desktop header
+  // avatar, the mobile header avatar, and the sidebar overflow button. Every
+  // call site wraps the shared body in its own positioned container, so actions
+  // close whichever surface opened them.
+  const renderProfileMenuBody = ({ showWorkspaceSwitcher = false } = {}) => (
     <>
       <div className="border-b border-border-light px-3 py-2.5">
         <p className="truncate text-sm font-semibold text-text-primary">
@@ -2308,14 +2309,14 @@ function App() {
           </p>
         </div>
       )}
-      {session.user.workspaces.length > 1 && (
+      {showWorkspaceSwitcher && session.user.workspaces.length > 1 && (
         <button
           type="button"
           onClick={() => {
             setMobileOpen(true);
             closeProfileMenu();
           }}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary sm:hidden"
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary"
         >
           <Building2 size={16} /> Switch workspace
         </button>
@@ -3118,7 +3119,7 @@ function App() {
                     : "bottom-full right-0 mb-2",
                 )}
               >
-                {profileMenuBody}
+                {renderProfileMenuBody()}
               </div>
             )}
           </div>
@@ -3292,7 +3293,7 @@ function App() {
             ref={appbarProfileMenuRef}
             className="fixed left-4 right-4 top-[60px] z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-auto max-w-[calc(100vw-2rem)] animate-fade-in overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-elevated lg:hidden"
           >
-            {profileMenuBody}
+            {renderProfileMenuBody({ showWorkspaceSwitcher: true })}
           </div>
         )}
 
@@ -3490,7 +3491,7 @@ function App() {
 
               {profileMenuOpen && profileMenuOrigin === "header" && (
                 <div className="absolute right-0 top-full z-[60] mt-2 max-h-[calc(100dvh-5rem)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto animate-fade-in rounded-xl border border-border bg-surface p-1.5 shadow-elevated">
-                  {profileMenuBody}
+                  {renderProfileMenuBody()}
                 </div>
               )}
             </div>
