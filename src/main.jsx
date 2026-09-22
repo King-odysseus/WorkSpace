@@ -2146,6 +2146,24 @@ function App() {
     .trim()
     .slice(0, 1)
     .toUpperCase();
+  // The workspace's own mark: its logo when it has one, its initial when it
+  // does not. The header breadcrumb and the sidebar switcher both draw it, at
+  // different sizes, and they should not drift apart.
+  const workspaceMark = (sizeClass, textClass) =>
+    currentWorkspace?.logo_url ? (
+      <img
+        src={currentWorkspace.logo_url}
+        alt=""
+        className={`${sizeClass} shrink-0 rounded-badge object-contain`}
+      />
+    ) : (
+      <span
+        aria-hidden="true"
+        className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-badge bg-primary ${textClass} font-bold text-primary-foreground`}
+      >
+        {workspaceInitial}
+      </span>
+    );
 
   const closeProfileMenu = () => {
     setProfileMenuOpen(false);
@@ -2809,20 +2827,7 @@ function App() {
                   aria-haspopup="true"
                   aria-expanded={workspaceMenuOpen}
                 >
-                  {currentWorkspace?.logo_url ? (
-                    <img
-                      src={currentWorkspace.logo_url}
-                      alt=""
-                      className="size-6 shrink-0 rounded-badge object-contain"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="flex size-6 shrink-0 items-center justify-center rounded-badge bg-primary text-[12px] font-bold text-primary-foreground"
-                    >
-                      {workspaceInitial}
-                    </span>
-                  )}
+                  {workspaceMark("size-6", "text-[12px]")}
                   <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text-primary">
                     {currentWorkspace?.name || "Workspace"}
                   </span>
@@ -3181,12 +3186,7 @@ function App() {
                 <ChevronLeft size={18} />
               </button>
             )}
-            <span
-              aria-hidden="true"
-              className="flex size-7 shrink-0 items-center justify-center rounded-badge bg-primary text-body-compact font-bold text-primary-foreground"
-            >
-              {workspaceInitial}
-            </span>
+            {workspaceMark("size-7", "text-body-compact")}
             <span className="min-w-0 truncate text-label text-text-primary">
               {currentWorkspace?.name || "Workspace"}
             </span>
