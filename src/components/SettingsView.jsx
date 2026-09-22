@@ -385,6 +385,7 @@ function SettingsView({
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [profileFieldErrors, setProfileFieldErrors] = useState({});
   const [webhooks, setWebhooks] = useState([]);
   const [webhooksLoading, setWebhooksLoading] = useState(true);
   const [webhooksError, setWebhooksError] = useState(null);
@@ -1595,16 +1596,55 @@ function SettingsView({
       company: currentUserCompany,
       job_role: currentUserJobRole,
     });
+    setProfileFieldErrors({});
   }, [
     currentUserName,
     currentUserEmail,
     currentUserCompany,
     currentUserJobRole,
   ]);
+  const updateProfileField = (field, value) => {
+    setProfileForm((current) => ({ ...current, [field]: value }));
+    setProfileFieldErrors((current) => {
+      if (!current[field]) return current;
+      return { ...current, [field]: "" };
+    });
+  };
   const saveProfile = async (event) => {
     event.preventDefault();
-    setProfileSaving(true);
+    const normalizedProfile = Object.fromEntries(
+      Object.entries(profileForm).map(([key, value]) => [key, String(value || "").trim()]),
+    );
+    const validationErrors = {};
+    if (!normalizedProfile.first_name) {
+      validationErrors.first_name = "Enter your first name.";
+    } else if (normalizedProfile.first_name.length > 150) {
+      validationErrors.first_name = "First name must be 150 characters or fewer.";
+    }
+    if (normalizedProfile.last_name.length > 150) {
+      validationErrors.last_name = "Last name must be 150 characters or fewer.";
+    }
+    if (!normalizedProfile.email) {
+      validationErrors.email = "Enter your email address.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedProfile.email)) {
+      validationErrors.email = "Enter a valid email address.";
+    }
+    if (normalizedProfile.company.length > 150) {
+      validationErrors.company = "Company must be 150 characters or fewer.";
+    }
+    if (normalizedProfile.job_role.length > 150) {
+      validationErrors.job_role = "Job role must be 150 characters or fewer.";
+    }
+    setProfileFieldErrors(validationErrors);
     setProfileError("");
+    if (Object.keys(validationErrors).length) {
+      const firstInvalidField = Object.keys(validationErrors)[0];
+      profileFormRef.current
+        ?.querySelector(`[name="${firstInvalidField}"]`)
+        ?.focus();
+      return;
+    }
+    setProfileSaving(true);
     try {
       const response = await fetch("/api/auth/me/profile/", {
         method: "PATCH",
@@ -1613,11 +1653,19 @@ function SettingsView({
           "Content-Type": "application/json",
           "X-CSRFToken": await getCsrfToken(),
         },
-        body: JSON.stringify(profileForm),
+        body: JSON.stringify(normalizedProfile),
       });
       const data = await response.json();
+      if (response.status === 409 || /already in use/i.test(data.error || "")) {
+        setProfileFieldErrors({
+          email: "That email address is already in use.",
+        });
+        profileFormRef.current?.querySelector('[name="email"]')?.focus();
+        return;
+      }
       if (!response.ok)
         throw new Error(data.error || "Profile could not be updated.");
+      setProfileForm(normalizedProfile);
       onProfileUpdated(data.user);
       window.dispatchEvent(
         new CustomEvent("workspace:notice", { detail: "Profile updated." }),
@@ -2652,53 +2700,91 @@ function SettingsView({
                   <label>
                     First name
                     <input
+                      name="first_name"
                       value={profileForm.first_name}
-                      onChange={(event) =>
-                        setProfileForm((current) => ({
-                          ...current,
-                          first_name: event.target.value,
-                        }))
-                      }
+                      onChange={(event) => updateProfileField("first_name", event.target.value)}
                       maxLength="150"
+                      autoComplete="given-name"
+                      aria-invalid={Boolean(profileFieldErrors.first_name)}
+                      aria-describedby={profileFieldErrors.first_name ? "profile-first-name-error" : undefined}
                       required
                     />
+                    {profileFieldErrors.first_name && (
+                      <small id="profile-first-name-error" className="settings-field-error">
+                        {profileFieldErrors.first_name}
+                      </small>
+                    )}
                   </label>
                   <label>
                     Last name
                     <input
+                      name="last_name"
                       value={profileForm.last_name}
-                      onChange={(event) =>
-                        setProfileForm((current) => ({
-                          ...current,
-                          last_name: event.target.value,
-                        }))
-                      }
+                      onChange={(event) => updateProfileField("last_name", event.target.value)}
                       maxLength="150"
+                      autoComplete="family-name"
+                      aria-invalid={Boolean(profileFieldErrors.last_name)}
+                      aria-describedby={profileFieldErrors.last_name ? "profile-last-name-error" : undefined}
                     />
+                    {profileFieldErrors.last_name && (
+                      <small id="profile-last-name-error" className="settings-field-error">
+                        {profileFieldErrors.last_name}
+                      </small>
+                    )}
                   </label>
                 </div>
                 <label>
                   Email address
                   <input
+                    name="email"
                     type="email"
                     value={profileForm.email}
-                    onChange={(event) =>
-                      setProfileForm((current) => ({
-                        ...current,
-                        email: event.target.value,
-                      }))
-                    }
+                    onChange={(event) => updateProfileField("email", event.target.value)}
+                    autoComplete="email"
+                    aria-invalid={Boolean(profileFieldErrors.email)}
+                    aria-describedby={profileFieldErrors.email ? "profile-email-error" : undefined}
                     required
                   />
+                  {profileFieldErrors.email && (
+                    <small id="profile-email-error" className="settings-field-error">
+                      {profileFieldErrors.email}
+                    </small>
+                  )}
                 </label>
                 <div className="modal-grid">
                   <label>
                     Company
-                    <input value={profileForm.company} onChange={(event) => setProfileForm((current) => ({ ...current, company: event.target.value }))} maxLength="150" />
+                    <input
+                      name="company"
+                      value={profileForm.company}
+                      onChange={(event) => updateProfileField("company", event.target.value)}
+                      maxLength="150"
+                      autoComplete="organization"
+                      aria-invalid={Boolean(profileFieldErrors.company)}
+                      aria-describedby={profileFieldErrors.company ? "profile-company-error" : undefined}
+                    />
+                    {profileFieldErrors.company && (
+                      <small id="profile-company-error" className="settings-field-error">
+                        {profileFieldErrors.company}
+                      </small>
+                    )}
                   </label>
                   <label>
                     Job role
-                    <input value={profileForm.job_role} onChange={(event) => setProfileForm((current) => ({ ...current, job_role: event.target.value }))} maxLength="150" />
+                    <input
+                      name="job_role"
+                      value={profileForm.job_role}
+                      onChange={(event) => updateProfileField("job_role", event.target.value)}
+                      maxLength="150"
+                      autoComplete="organization-title"
+                      aria-invalid={Boolean(profileFieldErrors.job_role)}
+                      aria-describedby={profileFieldErrors.job_role ? "profile-job-role-error" : undefined}
+                    />
+                    {profileFieldErrors.job_role && (
+                      <small id="profile-job-role-error" className="settings-field-error">
+                        {profileFieldErrors.job_role}
+                      </small>
+                    )}
                   </label>
                 </div>
                 {profileError && (

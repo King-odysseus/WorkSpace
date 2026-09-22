@@ -536,6 +536,60 @@ it('retries a failed profile photo removal instead of asking for another file', 
   expect(removals).toHaveLength(2)
 })
 
+it('validates profile fields locally and focuses the first invalid field', () => {
+  const api = mockApi({})
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  const firstName = screen.getByLabelText('First name')
+  fireEvent.change(firstName, { target: { value: '   ' } })
+  fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'not-an-email' } })
+  fireEvent.submit(screen.getByRole('button', { name: 'Save profile' }).closest('form'))
+
+  expect(screen.getByText('Enter your first name.')).toBeInTheDocument()
+  expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument()
+  expect(firstName).toHaveFocus()
+  expect(api.mock.calls.filter(([url, init = {}]) =>
+    String(url).includes('/api/auth/me/profile/') && init.method === 'PATCH')).toHaveLength(0)
+})
+
+it('keeps a duplicate profile email on the field and focuses it', async () => {
+  mockApi({
+    '/api/auth/me/profile/': {
+      status: 409,
+      body: { error: 'That email address is already in use.' },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  const email = screen.getByLabelText('Email address')
+  fireEvent.change(email, { target: { value: 'owner@example.test' } })
+  fireEvent.submit(screen.getByRole('button', { name: 'Save profile' }).closest('form'))
+
+  expect(await screen.findByText('That email address is already in use.')).toBeInTheDocument()
+  expect(email).toHaveFocus()
+  expect(email).toHaveAttribute('aria-invalid', 'true')
+})
+
 it('groups notification categories and exposes switches with pressed state', async () => {
   mockApi({
     '/notification-preferences/': {
@@ -1512,7 +1566,7 @@ it('renders the P4 AI panel and saves provider and member access changes togethe
       providers: { openai: true, claude: false, kimi: false, deepseek: false },
       provider_config: {
         openai: { base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini', has_api_key: true, key_hint: '••••1234' },
-        claude: { base_url: 'https://api.anthropic.com/v1', model: 'claude-3-5-haiku-latest', has_api_key: false, key_hint: '' },
+        claude: { base_url: '', model: '', has_api_key: false, key_hint: '' },
         kimi: { base_url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', has_api_key: false, key_hint: '' },
         deepseek: { base_url: 'https://api.deepseek.com', model: 'deepseek-v4-flash', has_api_key: false, key_hint: '' },
       },
@@ -1593,10 +1647,10 @@ it('cancels unsaved AI provider and member access changes', async () => {
   expect(screen.queryByLabelText('Model')).not.toBeInTheDocument()
 })
 
-it('shows AI settings read-only when the API denies management', async () => {
-  mockApi({
+it('does not block unused provider configuration from member saves', async () => {
+  const api = mockApi({
     '/api/workspaces/1/ai/settings/': {
-      can_manage: false,
+      can_manage: true,
       settings: {
         ai_enabled: true,
         ai_user_ids: [],
@@ -1627,10 +1681,198 @@ it('shows AI settings read-only when the API denies management', async () => {
   // Settings now opens on Profile, so this AI panel is reached by name.
   fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
   expect(await screen.findByRole('heading', { name: 'AI assistance' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('switch', { name: 'Allow Amara Okafor to use AI' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH'))
+  const [, request] = expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH')
+  expect(JSON.parse(request.body).ai_user_ids).toEqual([2])
+  expect(screen.queryByText(/Choose a model for Anthropic/)).not.toBeInTheDocument()
+})
+
+it('shows AI settings read-only when the API denies management', async () => {
+  mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: false,
+      settings: {
+        ai_enabled: true,
+        ai_user_ids: [],
+        ai_enabled_providers: ['openai'],
+        ai_default_provider: 'openai',
+      },
+      providers: { openai: true, claude: false, kimi: false, deepseek: false },
+      provider_config: {},
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test' }]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
+  expect(await screen.findByRole('heading', { name: 'AI assistance' })).toBeInTheDocument()
   expect(screen.getByRole('switch', { name: 'Enable AI assistance' })).toBeDisabled()
   expect(screen.getByRole('switch', { name: 'Allow Amara Okafor to use AI' })).toBeDisabled()
   expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+})
+
+it('rotates a saved provider key without exposing the current key', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: true,
+      settings: {
+        ai_enabled: true,
+        ai_user_ids: [],
+        ai_enabled_providers: ['openai'],
+        ai_default_provider: 'openai',
+      },
+      providers: { openai: true, claude: false, kimi: false, deepseek: false },
+      provider_config: {
+        openai: { base_url: '', model: 'gpt-4o-mini', has_api_key: true, key_hint: 'stored-key' },
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Rotate key' }))
+  const apiKey = screen.getByLabelText('API key')
+  expect(apiKey).toHaveValue('')
+  fireEvent.change(apiKey, { target: { value: 'replacement-value' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH'))
+  const [, request] = expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH')
+  expect(JSON.parse(request.body).provider_config.openai.api_key).toBe('replacement-value')
+})
+
+it('keeps unsaved AI edits when another manager changed the same settings', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      status: 409,
+      body: { error: 'AI settings changed. Reload before saving.' },
+    },
+  })
+  const originalFetch = api.getMockImplementation()
+  let readCount = 0
+  api.mockImplementation(async (input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/ai/settings/') && (!init.method || init.method === 'GET')) {
+      readCount += 1
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          can_manage: true,
+          settings: {
+            ai_enabled: true,
+            ai_user_ids: [],
+            ai_enabled_providers: ['openai'],
+            ai_default_provider: 'openai',
+          },
+          providers: { openai: true, claude: false, kimi: false, deepseek: false },
+          provider_config: {
+            openai: { base_url: '', model: 'gpt-4o-mini', has_api_key: true, key_hint: 'stored-key' },
+          },
+        }),
+        text: async () => '{}',
+      }
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[{ id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test' }]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
+  const memberSwitch = await screen.findByRole('switch', { name: 'Allow Amara Okafor to use AI' })
+  fireEvent.click(memberSwitch)
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  const title = await screen.findByText('Settings changed by another manager')
+  const alert = title.closest('[data-slot="alert"]')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Review edits' }))
+
+  expect(screen.queryByText('Settings changed by another manager')).not.toBeInTheDocument()
+  expect(memberSwitch).toHaveAttribute('aria-checked', 'true')
+  expect(readCount).toBe(1)
+})
+
+it('retries a failed AI settings load without leaving the panel', async () => {
+  const api = mockApi({})
+  const originalFetch = api.getMockImplementation()
+  let requests = 0
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/ai/settings/')) {
+      requests += 1
+      if (requests === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'AI settings are unavailable.' }),
+          text: async () => '{"error":"AI settings are unavailable."}',
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          can_manage: true,
+          settings: { ai_enabled: true, ai_user_ids: [], ai_enabled_providers: ['openai'], ai_default_provider: 'openai' },
+          providers: { openai: true, claude: false, kimi: false, deepseek: false },
+          provider_config: { openai: { base_url: '', model: 'gpt-4o-mini', has_api_key: true, key_hint: 'stored-key' } },
+        }),
+        text: async () => '{}',
+      })
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
+  expect(await screen.findByText('AI settings are unavailable.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  expect(await screen.findByRole('heading', { name: 'AI assistance' })).toBeInTheDocument()
+  expect(requests).toBe(2)
 })
 
 it('opens the Help and Legal views from Settings, including for members', () => {

@@ -4,6 +4,7 @@ import DOMPurify from 'dompurify'
 import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Alert } from './ui/alert.jsx'
+import { Button } from './ui/button.jsx'
 import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog.jsx'
@@ -1186,25 +1187,50 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   const [data, setData] = useState(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [saveError, setSaveError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [expandedProvider, setExpandedProvider] = useState('')
+  const [confirmRemoveProvider, setConfirmRemoveProvider] = useState('')
+  const [providerFieldErrors, setProviderFieldErrors] = useState({})
+  const providerKeyRefs = useRef({})
 
   useEffect(() => {
     let active = true
+    setLoadError('')
+    setData(null)
     fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) })
-      .then(async response => ({ ok: response.ok, result: await response.json() }))
-      .then(({ ok, result }) => {
+      .then(async response => {
+        const result = await readJsonResponse(response, 'AI settings could not be loaded.')
         if (!active) return
-        setData(ok
-          ? { ...result, savedSettings: result.settings, savedProviderConfig: result.provider_config }
-          : { error: result.error || 'AI settings could not be loaded.' })
+        if (!response.ok) {
+          setLoadError(result.error || 'AI settings could not be loaded.')
+          return
+        }
+        setData({ ...result, savedSettings: result.settings, savedProviderConfig: result.provider_config })
       })
-      .catch(() => active && setData({ error: 'AI settings could not be loaded.' }))
+      .catch(error => active && setLoadError(error.message || 'AI settings could not be loaded.'))
     return () => { active = false }
-  }, [workspaceId])
+  }, [workspaceId, reloadKey])
 
+  if (loadError) return <Card className="settings-panel ai-settings-panel">
+    <header className="ai-settings-heading">
+      <div>
+        <h2>AI assistance</h2>
+        <p>Configure the providers available to this workspace and control who can use the assistant.</p>
+      </div>
+    </header>
+    <Alert
+      className="ai-settings-state-alert"
+      tone="danger"
+      title="AI settings could not be loaded"
+      action={<Button type="button" size="sm" variant="outline" onClick={() => setReloadKey(current => current + 1)}>Try again</Button>}
+    >
+      {loadError}
+    </Alert>
+  </Card>
   if (!data) return <Card className="settings-panel p-5"><SkeletonGroup className="drawer-skeleton" label="Loading AI settings"><Skeleton variant="heading" /><Skeleton variant="line" /><Skeleton variant="row" /><Skeleton variant="row" /></SkeletonGroup></Card>
-  if (data.error) return <Card className="settings-panel p-5"><Alert tone="danger" title="AI settings unavailable">{data.error}</Alert></Card>
 
   const settings = {
     ai_enabled: false,
@@ -1226,6 +1252,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
 
   const updateSettings = changes => {
     setNotice('')
+    setSaveError(null)
     setData(current => ({
       ...current,
       settings: { ...(current.settings || {}), ...changes },
@@ -1233,6 +1260,12 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
   }
   const updateProvider = (provider, changes) => {
     setNotice('')
+    setSaveError(null)
+    setProviderFieldErrors(current => {
+      const next = { ...current }
+      Object.keys(changes).forEach(field => { delete next[`${provider}.${field}`] })
+      return next
+    })
     setData(current => ({
       ...current,
       provider_config: {
@@ -1261,6 +1294,77 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
     }
   }
 
+  const validateProviderSettings = () => {
+    const errors = {}
+    AI_PROVIDERS.forEach(([provider, fallbackLabel]) => {
+      const config = providerConfig[provider] || {}
+      const label = providerMeta[provider]?.label || fallbackLabel
+      const enabled = settings.ai_enabled_providers.includes(provider)
+      const hasCredential = Boolean(config.has_api_key || String(config.api_key || '').trim())
+      if (enabled && (!hasCredential || config.clear_api_key)) {
+        errors[`${provider}.api_key`] = `Add and save an API key before enabling ${label}.`
+      }
+      const baseUrl = String(config.base_url || '').trim()
+      if (baseUrl) {
+        try {
+          const parsed = new URL(baseUrl)
+          if (parsed.protocol !== 'https:' || !parsed.hostname) {
+            errors[`${provider}.base_url`] = `${label} base URL must be a valid HTTPS address.`
+          }
+        } catch {
+          errors[`${provider}.base_url`] = `${label} base URL must be a valid HTTPS address.`
+        }
+      }
+      const shouldResolveConnection = enabled || hasCredential || settings.ai_default_provider === provider
+      if (shouldResolveConnection && !String(config.model || '').trim()) {
+        errors[`${provider}.model`] = `Choose a model for ${label}.`
+      }
+      if (config.clear_api_key && settings.ai_default_provider === provider) {
+        errors[`${provider}.api_key`] = `Choose another default provider before removing the ${label} key.`
+      }
+    })
+    return errors
+  }
+
+  const aiSaveFailure = (status, message, provider = '') => {
+    if (status === 409) {
+      return {
+        tone: 'warning',
+        title: 'Settings changed by another manager',
+        message: 'Your unsaved edits are kept here. Reload the latest values before saving.',
+        conflict: true,
+      }
+    }
+    if (status === 403) {
+      return {
+        tone: 'warning',
+        title: 'AI settings are read-only',
+        message: message || 'Your role does not allow changing these Zuri settings.',
+        retryable: false,
+      }
+    }
+    if (status === 400) {
+      return {
+        tone: 'danger',
+        title: 'AI settings need attention',
+        message: message || 'Review the highlighted provider fields and try again.',
+        provider,
+        retryable: false,
+      }
+    }
+    return {
+      tone: 'danger',
+      title: 'Could not save AI settings',
+      message: message || 'Previous values are still active. Retry after checking the connection.',
+      retryable: status === 0 || status === 429 || status >= 500,
+    }
+  }
+
+  const providerFromMessage = message => {
+    const lower = String(message || '').toLowerCase()
+    return AI_PROVIDERS.find(([provider, label]) => lower.includes(provider) || lower.includes(label.toLowerCase()))?.[0] || ''
+  }
+
   const cancel = () => {
     setData(current => ({
       ...current,
@@ -1268,10 +1372,26 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       provider_config: current.savedProviderConfig || current.provider_config,
     }))
     setExpandedProvider('')
+    setConfirmRemoveProvider('')
+    setProviderFieldErrors({})
+    setSaveError(null)
     setNotice('')
   }
 
   const save = async () => {
+    const validationErrors = validateProviderSettings()
+    setProviderFieldErrors(validationErrors)
+    setSaveError(null)
+    if (Object.keys(validationErrors).length) {
+      const [firstField] = Object.keys(validationErrors)
+      const provider = firstField.split('.')[0]
+      const field = firstField.split('.').slice(1).join('.')
+      setExpandedProvider(provider)
+      window.setTimeout(() => {
+        document.getElementById(`ai-provider-${provider}-${field}`)?.focus()
+      }, 0)
+      return
+    }
     setSaving(true)
     setNotice('')
     try {
@@ -1286,8 +1406,26 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
           ),
         }),
       })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Could not save AI settings.')
+      const result = await readJsonResponse(response, 'Could not save AI settings.')
+      if (!response.ok) {
+        const provider = providerFromMessage(result.error)
+        if (response.status === 400 && provider) {
+          const message = result.error || ''
+          const field = /base url/i.test(message) ? 'base_url' : /model/i.test(message) ? 'model' : 'api_key'
+          setProviderFieldErrors({ [`${provider}.${field}`]: message })
+          setExpandedProvider(provider)
+        }
+        const failure = aiSaveFailure(response.status, result.error, provider)
+        if (failure.retryable) {
+          setData(current => ({
+            ...current,
+            settings: current.savedSettings || current.settings,
+            provider_config: current.savedProviderConfig || current.provider_config,
+          }))
+        }
+        setSaveError(failure)
+        return
+      }
       setData(current => ({
         ...current,
         ...result,
@@ -1296,16 +1434,45 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       }))
       toast.success('Zuri access settings saved.')
     } catch (error) {
+      const failure = aiSaveFailure(0, error.message || 'Could not save AI settings.')
       setData(current => ({
         ...current,
         settings: current.savedSettings || current.settings,
         provider_config: current.savedProviderConfig || current.provider_config,
       }))
-      setNotice(error.message || 'Could not save AI settings.')
-      toast.error(error.message || 'Could not save AI settings.')
+      setSaveError(failure)
+      setNotice(failure.message)
+      toast.error(failure.message)
     } finally {
       setSaving(false)
     }
+  }
+
+  const beginKeyRotation = provider => {
+    setExpandedProvider(provider)
+    setConfirmRemoveProvider('')
+    window.setTimeout(() => providerKeyRefs.current[provider]?.focus(), 0)
+  }
+
+  const removeProviderKey = provider => {
+    const nextEnabledProviders = settings.ai_enabled_providers.filter(value => value !== provider)
+    const fallbackDefault = nextEnabledProviders.find(value => providerConfig[value]?.has_api_key)
+      || AI_PROVIDERS.map(([value]) => value).find(value => value !== provider && providerConfig[value]?.has_api_key)
+      || settings.ai_default_provider
+    updateProvider(provider, { api_key: '', clear_api_key: true })
+    updateSettings({
+      ai_enabled_providers: nextEnabledProviders,
+      ...(settings.ai_default_provider === provider && fallbackDefault !== provider
+        ? { ai_default_provider: fallbackDefault }
+        : {}),
+    })
+    setConfirmRemoveProvider('')
+  }
+
+  const reloadLatest = () => {
+    setSaveError(null)
+    setProviderFieldErrors({})
+    setReloadKey(current => current + 1)
   }
 
   return <Card className="settings-panel ai-settings-panel">
@@ -1359,13 +1526,17 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
           const enabled = settings.ai_enabled_providers.includes(provider)
           const isDefault = settings.ai_default_provider === provider
           const isExpanded = expandedProvider === provider
-          const status = isDefault
-            ? { label: 'Default', className: 'is-default' }
-            : config.has_api_key && enabled
-              ? { label: 'Ready', className: 'is-ready' }
-              : config.has_api_key
-                ? { label: 'Disabled', className: 'is-disabled' }
-                : { label: 'Not connected', className: 'is-offline' }
+          const status = config.clear_api_key
+            ? { label: 'Removal pending', className: 'is-disabled' }
+            : !config.has_api_key && !config.api_key
+              ? { label: 'Not connected', className: 'is-offline' }
+              : isDefault
+                ? { label: 'Default', className: 'is-default' }
+              : (config.has_api_key || config.api_key) && enabled
+                ? { label: 'Ready', className: 'is-ready' }
+                : config.has_api_key || config.api_key
+                  ? { label: 'Disabled', className: 'is-disabled' }
+                  : { label: 'Not connected', className: 'is-offline' }
 
           return <div className="ai-provider-block" key={provider}>
             <div className={`ai-provider-row ${isDefault ? 'is-selected' : ''}`}>
@@ -1374,7 +1545,7 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
                 className="ai-provider-radio"
                 aria-label={`Use ${meta.label} as the default provider`}
                 aria-pressed={isDefault}
-                disabled={!mayManage || !config.has_api_key}
+                disabled={!mayManage || (!config.has_api_key && !config.api_key) || config.clear_api_key}
                 onClick={() => updateSettings({ ai_default_provider: provider })}
               >
                 <span aria-hidden="true" />
@@ -1399,33 +1570,73 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
               >
                 {status.label}
               </button>
+              {mayManage && config.has_api_key && !config.clear_api_key && (
+                <button
+                  type="button"
+                  className="ai-provider-rotate"
+                  onClick={() => beginKeyRotation(provider)}
+                >
+                  Rotate key
+                </button>
+              )}
             </div>
             {isExpanded && <div className="ai-provider-config" id={`ai-provider-config-${provider}`}>
               <div className="ai-provider-config-grid">
                 <label className="ai-provider-config-key">API key
                   <input
+                    id={`ai-provider-${provider}-api_key`}
+                    ref={node => { providerKeyRefs.current[provider] = node }}
                     type="password"
                     value={config.api_key || ''}
-                    onChange={event => updateProvider(provider, { api_key: event.target.value, clear_api_key: false })}
-                    placeholder={config.has_api_key ? `Leave blank to keep ${config.key_hint}` : `Paste your ${meta.label} API key`}
+                    onChange={event => {
+                      setConfirmRemoveProvider('')
+                      updateProvider(provider, { api_key: event.target.value, clear_api_key: false })
+                    }}
+                    placeholder={config.has_api_key ? `Enter a new key to replace ${config.key_hint}` : `Paste your ${meta.label} API key`}
                     autoComplete="new-password"
                     disabled={!mayManage}
+                    aria-invalid={Boolean(providerFieldErrors[`${provider}.api_key`])}
+                    aria-describedby={providerFieldErrors[`${provider}.api_key`] ? `ai-provider-${provider}-api-key-error` : undefined}
                   />
+                  {config.api_key && config.has_api_key && (
+                    <small className="ai-provider-credential-state">New key ready to replace {config.key_hint}.</small>
+                  )}
+                  {providerFieldErrors[`${provider}.api_key`] && (
+                    <small id={`ai-provider-${provider}-api-key-error`} className="settings-field-error">
+                      {providerFieldErrors[`${provider}.api_key`]}
+                    </small>
+                  )}
                 </label>
                 <label>Base URL
                   <input
+                    id={`ai-provider-${provider}-base_url`}
                     type="url"
                     value={config.base_url || ''}
                     onChange={event => updateProvider(provider, { base_url: event.target.value })}
                     disabled={!mayManage}
+                    aria-invalid={Boolean(providerFieldErrors[`${provider}.base_url`])}
+                    aria-describedby={providerFieldErrors[`${provider}.base_url`] ? `ai-provider-${provider}-base-url-error` : undefined}
                   />
+                  {providerFieldErrors[`${provider}.base_url`] && (
+                    <small id={`ai-provider-${provider}-base-url-error`} className="settings-field-error">
+                      {providerFieldErrors[`${provider}.base_url`]}
+                    </small>
+                  )}
                 </label>
                 <label>Model
                   <input
+                    id={`ai-provider-${provider}-model`}
                     value={config.model || ''}
                     onChange={event => updateProvider(provider, { model: event.target.value })}
                     disabled={!mayManage}
+                    aria-invalid={Boolean(providerFieldErrors[`${provider}.model`])}
+                    aria-describedby={providerFieldErrors[`${provider}.model`] ? `ai-provider-${provider}-model-error` : undefined}
                   />
+                  {providerFieldErrors[`${provider}.model`] && (
+                    <small id={`ai-provider-${provider}-model-error`} className="settings-field-error">
+                      {providerFieldErrors[`${provider}.model`]}
+                    </small>
+                  )}
                 </label>
               </div>
               <div className="ai-provider-config-actions">
@@ -1434,20 +1645,38 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
                     type="checkbox"
                     checked={enabled}
                     onChange={() => toggleProvider(provider)}
-                    disabled={!mayManage || !config.has_api_key}
+                    disabled={!mayManage || (!config.has_api_key && !config.api_key) || config.clear_api_key}
                   />
                   <span>Provider enabled</span>
                 </label>
-                {mayManage && config.has_api_key && <button
-                  type="button"
-                  className="ai-provider-remove-key"
-                  onClick={() => {
-                    const clearing = !config.clear_api_key
-                    updateProvider(provider, { api_key: '', clear_api_key: clearing })
-                    if (clearing && enabled) toggleProvider(provider)
-                  }}
-                >{config.clear_api_key ? 'Keep saved key' : 'Remove saved key'}</button>}
+                {mayManage && (config.has_api_key || config.clear_api_key) && (
+                  <button
+                    type="button"
+                    className="ai-provider-remove-key"
+                    onClick={() => {
+                      if (config.clear_api_key) {
+                        updateProvider(provider, { clear_api_key: false })
+                        return
+                      }
+                      setConfirmRemoveProvider(current => current === provider ? '' : provider)
+                    }}
+                  >
+                    {config.clear_api_key ? 'Keep saved key' : 'Remove saved key'}
+                  </button>
+                )}
               </div>
+              {confirmRemoveProvider === provider && !config.clear_api_key && (
+                <div className="ai-provider-remove-confirm" role="alert">
+                  <div>
+                    <strong>Remove saved provider key?</strong>
+                    <p>Zuri falls back to no provider until another key is saved.</p>
+                  </div>
+                  <div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setConfirmRemoveProvider('')}>Cancel</Button>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => removeProviderKey(provider)}>Remove</Button>
+                  </div>
+                </div>
+              )}
               {config.clear_api_key && <p className="ai-provider-pending">The saved key will be removed when you save.</p>}
             </div>}
           </div>
@@ -1486,12 +1715,28 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       </div>
     </section>
 
+    {saveError && <Alert
+      className="ai-settings-state-alert"
+      tone={saveError.tone}
+      title={saveError.title}
+      action={saveError.conflict ? (
+        <div className="ai-settings-alert-actions">
+          <Button type="button" size="sm" variant="outline" onClick={reloadLatest}>Reload latest</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setSaveError(null)}>Review edits</Button>
+        </div>
+      ) : saveError.retryable ? (
+        <Button type="button" size="sm" variant="outline" onClick={save}>Try again</Button>
+      ) : null}
+    >
+      {saveError.message}
+    </Alert>}
+
     {mayManage && <footer className="ai-settings-footer">
       <button type="button" className="ai-settings-cancel" onClick={cancel} disabled={saving}>Cancel</button>
       <button type="button" className="ai-settings-save" onClick={save} disabled={saving}>
         {saving ? <><Save size={15} /> Saving…</> : 'Save'}
       </button>
     </footer>}
-    {notice && <p className="workspace-inline-status ai-settings-notice" role="status">{notice}</p>}
+    {notice && !saveError && <p className="workspace-inline-status ai-settings-notice" role="status">{notice}</p>}
   </Card>
 }
