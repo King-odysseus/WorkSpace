@@ -657,6 +657,18 @@ button { cursor: pointer; }
 
 /* Application shell: P1's 264px navy rail, 64px header and 32px canvas gap. */
 .main-content { min-width: 0; overflow-x: hidden; background: var(--pencil-canvas) !important; color: var(--pencil-text); }
+/* iOS Safari zooms the visual viewport when a focused text control is under
+   16px. Keep mobile edit fields at the browser-safe minimum so opening and
+   editing a record does not resize or jump the page. */
+@media (max-width: 767px) {
+  :is(
+    input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='hidden']),
+    textarea,
+    select
+  ) {
+    font-size: 16px !important;
+  }
+}
 /* Keep the desktop shell columns tied to the viewport rather than to the
    intrinsic width of whichever route happens to be mounted. */
 .shell-main { width: 100%; min-width: 0; max-width: none; flex: 1 1 0%; }
