@@ -163,7 +163,6 @@ import {
 } from "./components/RecordDialogs.jsx";
 import {
   AssigneePicker,
-  TaskCard,
   TaskDetailDrawer,
 } from "./components/TaskViews.jsx";
 import SettingsView from "./components/SettingsView.jsx";
@@ -292,6 +291,21 @@ function NotificationIndicator({
   );
 }
 
+// Every page name WorkspaceView knows how to render. A ?view= link, a PWA
+// shortcut, or a stale workspace-last-page can carry any string in, and one
+// that names no real page used to fall through to a generic, unfiltered task
+// list nothing else in the app could navigate to. Validating here means an
+// unrecognized name lands on Today instead of that dead end, and it self-heals
+// a corrupted workspace-last-page on the very next load.
+const KNOWN_PAGES = new Set([
+  "Today", "My tasks", "My planner", "Daily operations", "Team",
+  "Channels", "Chats", "Follow-up", "Check-ins",
+  "Planner", "Projects", "Calendar", "Import data",
+  "Reports", "Activity",
+  "Settings", "Notifications", "Screen sharing", "What's new",
+  "Install app", "Help", "Legal", "Files",
+]);
+
 function App() {
   const today = toDateKey(new Date());
   const todayLabel = formatLongDate(today);
@@ -302,7 +316,7 @@ function App() {
     const saved = localStorage.getItem("workspace-last-page");
     const requestedPage = requested || saved || "Today";
     const page = requestedPage === "Team board" ? "Team" : requestedPage;
-    return page;
+    return KNOWN_PAGES.has(page) ? page : "Today";
   });
   useEffect(() => {
     localStorage.setItem("workspace-last-page", active);
@@ -2529,28 +2543,33 @@ function App() {
   );
   const mobileTabItems = [
     ["Today", "Today"],
-    // The design labels this tab "Tasks"; the page it opens is "My tasks".
-    ["Tasks", "My tasks"],
+    ["My tasks", "My tasks"],
     ["Planner", "Planner"],
     ["Chats", "Chats"],
   ]
     .map(([label, page]) => {
       const item = navItemsByLabel.get(page);
       if (!item) return null;
+      // The page travels with the tab rather than being read back off the
+      // label. Tasks is the case that proves it: the label is the design's
+      // wording and the page is "My tasks", and navigating to the label instead
+      // lands on a view name no branch handles, which falls through to a
+      // generic list of the whole workspace.
       // Chats opens the chat panel rather than the Chats page, which is what the
       // bottom bar did before the design; the page is reachable from "More".
       return label === "Chats"
-        ? { ...item, label, onSelect: () => toggleMessages("nav") }
-        : { ...item, label };
+        ? { ...item, label, page, onSelect: () => toggleMessages("nav") }
+        : { ...item, label, page };
     })
     .filter(Boolean);
-  const renderMobileTab = ({ label, icon: Icon, active: itemActive, onSelect }) => {
-    const isItemActive = itemActive ?? active === label;
+  const renderMobileTab = ({ label, page, icon: Icon, active: itemActive, onSelect }) => {
+    const target = page || label;
+    const isItemActive = itemActive ?? active === target;
     return (
       <button
         type="button"
         key={label}
-        onClick={onSelect || (() => setActive(label))}
+        onClick={onSelect || (() => setActive(target))}
         aria-current={isItemActive ? "page" : undefined}
         className={cn(
           "flex h-full min-w-0 max-w-[66px] flex-1 flex-col items-center gap-1 pt-3.5 font-medium transition-colors",
@@ -8951,49 +8970,10 @@ function WorkspaceView({
     );
   }
 
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const filteredTasks = tasks
-    .filter(
-      (task) => active !== "My tasks" || taskIsAssignedTo(task, currentUserId),
-    )
-    .filter(
-      (task) =>
-        !normalizedSearch || taskSearchText(task).includes(normalizedSearch),
-    );
-  return (
-    <section className="workspace-view">
-      <WorkspaceViewHeading
-        title={title}
-        subtitle={subtitle}
-        action="Add task"
-        onAction={onAddTask}
-      />
-      <Card className="task-list-view px-5">
-        {active === "Team" && (
-          <div className="member-summary">
-            <Users size={18} />
-            <strong>{localData.members.length || 0} members</strong>
-            <span>across this workspace</span>
-          </div>
-        )}
-        {filteredTasks.length ? (
-          filteredTasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onComplete={onComplete}
-              onStatusChange={onStatusChange}
-              onDelete={onDelete}
-              onOpenTask={onOpenTask}
-              canDelete={canManageTasks}
-            />
-          ))
-        ) : (
-          <EmptyState text="No tasks match this view yet." />
-        )}
-      </Card>
-    </section>
-  );
+  // active is validated against KNOWN_PAGES where it is set (see App above), and
+  // every name in that set is handled by a branch before this point, so this is
+  // unreachable in practice. It exists only so the component always returns.
+  return null;
 }
 
 class AppErrorBoundary extends React.Component {

@@ -1308,22 +1308,9 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .workspace-skeleton::after { animation: none; }
 }
 
-/* C3 task card, completion control, and status controls. Status is a complete
-   token pair so a select, a read-only pill, and a priority chip stay in sync. */
-.task-card {
-  display: flex;
-  min-height: 54px;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border: 1px solid var(--pencil-border);
-  border-radius: 8px;
-  background: var(--pencil-surface);
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
-}
-.task-card:hover { border-color: var(--pencil-border-strong); box-shadow: 0 3px 8px rgb(21 51 81 / 5%); }
-.task-card.blocked { border-color: var(--pencil-alert-warning-stroke); background: var(--pencil-alert-warning-fill); }
-.task-card.done { opacity: .65; }
+/* Completion control and status controls, shared by team-task-row (BoardViews)
+   and the task detail drawer (TaskViews). Status is a complete token pair so a
+   select, a read-only pill, and a priority chip stay in sync. */
 .task-check, .check {
   display: grid;
   width: 20px;
@@ -1345,16 +1332,6 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .task-check:hover:not(:disabled) .task-check-mark, .check:hover:not(:disabled) .task-check-mark { opacity: 1; transform: scale(1); }
 .task-check.checked, .check.checked { border-color: var(--pencil-success); background: var(--pencil-success); box-shadow: 0 2px 6px rgb(0 122 85 / 22%); }
 .task-check.checked .task-check-mark, .check.checked .task-check-mark { opacity: 1; color: #fff; transform: scale(1); }
-.task-copy { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 6px; }
-.task-copy > div { display: flex; min-width: 0; align-items: center; gap: 7px; }
-.task-title-button { min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--pencil-text); font-size: 11px; font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-.task-title-button:hover { color: var(--pencil-navy); text-decoration: underline; text-underline-offset: 2px; }
-.due, .estimate { flex: 0 0 auto; color: var(--pencil-text-muted); font-size: 10px; white-space: nowrap; }
-.due.overdue { color: var(--pencil-danger); font-weight: 700; }
-.estimate { color: var(--pencil-text-muted); }
-.task-tag { color: var(--pencil-text-muted); font-size: 9px; }
-.task-more-button { display: grid; flex: 0 0 28px; width: 28px; height: 28px; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--pencil-text-muted); }
-.task-more-button:hover { background: var(--pencil-surface-hover); color: var(--pencil-text); }
 
 .task-status, .task-status-pill { --status-color: var(--pencil-status-todo); --status-bg: var(--pencil-status-todo-bg); }
 .task-status.in.progress, .task-status-pill.in.progress { --status-color: var(--pencil-status-progress); --status-bg: var(--pencil-status-progress-bg); }
@@ -2156,14 +2133,14 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   /* Mobile cards must size from the parent content box. Without an explicit
      min-width reset, an intrinsic-width child can make the whole card exceed
      the padded task container at narrow and scaled viewports. */
-  :is(.task-card, .my-task-row, .personal-task-shell, .personal-task-row, .planner-task-card, .project-kanban-task) {
+  :is(.my-task-row, .personal-task-shell, .personal-task-row, .planner-task-card, .project-kanban-task) {
     width: 100%;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
   }
 
-  :is(.task-card, .my-task-row, .personal-task-row, .planner-task-card, .project-kanban-task) > * {
+  :is(.my-task-row, .personal-task-row, .planner-task-card, .project-kanban-task) > * {
     min-width: 0;
   }
 
@@ -6944,7 +6921,6 @@ html[data-theme='dark'] :is(
   .project-resource-actions-card,
   .project-resources-design-card,
   .project-risk-design-card,
-  .task-card,
   .team-overview-panel,
   .pencil-team-card,
   .pencil-checkin-card,
@@ -6992,7 +6968,6 @@ html[data-theme='dark'] :is(
   .project-resource-actions-card,
   .project-resources-design-card,
   .project-risk-design-card,
-  .task-card,
   .team-overview-panel,
   .pencil-team-card,
   .pencil-checkin-card,
@@ -7858,7 +7833,6 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
   }
 
   .task-list-view {
-    display: grid;
     gap: 12px !important;
     padding-top: 12px !important;
     padding-bottom: 12px !important;

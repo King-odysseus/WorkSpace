@@ -95,7 +95,7 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   expect(tabs).toHaveLength(5)
   expect(tabs.every(tab => tab.className.includes('flex-1'))).toBe(true)
   expect(tabs[0]).toHaveTextContent('Today')
-  expect(tabs[1]).toHaveTextContent('Tasks')
+  expect(tabs[1]).toHaveTextContent('My tasks')
   expect(tabs[2]).toHaveTextContent('Planner')
   expect(tabs[3]).toHaveTextContent('Chats')
   expect(tabs[4]).toHaveTextContent('More')

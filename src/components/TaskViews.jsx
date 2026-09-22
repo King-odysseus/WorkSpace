@@ -5,7 +5,7 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 // the detail drawer with comments, subtasks, attachments and dependencies.
 
 import { useEffect, useRef, useState } from 'react'
-import { Archive, Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { DateField } from './workspace-ui.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
@@ -85,8 +85,6 @@ function AssigneePicker({ members = [], value = [], onChange, disabled = false }
     </Popover>
   )
 }
-
-function TaskCard({ task, onComplete, onStatusChange, onDelete, onOpenTask, onBucketChange, bucketOptions = [], canDelete = true, canEdit = task.can_edit ?? true, draggable = false }) { const completed = task.status === 'done'; return <div className={`task-card ${task.status}`} draggable={draggable} onDragStart={event => event.dataTransfer.setData('text/plain', String(task.id))}><button type="button" role="checkbox" aria-checked={completed} className={`task-check ${completed ? 'checked' : ''}`} disabled={!canEdit} onClick={() => onComplete(task.id)} aria-label={`${completed ? 'Reopen' : 'Complete'} ${task.title}`} title={completed ? 'Reopen task' : 'Mark task complete'}><Check className="task-check-mark" size={13} strokeWidth={3} aria-hidden="true" /></button><div className="task-copy"><button type="button" className="task-title-button" onClick={() => onOpenTask(task)}>{task.title}</button><div><AppSelect disabled={!canEdit} className={`task-status task-status-select ${task.status}`} value={task.status} onChange={event => onStatusChange(task.id, event.target.value)} aria-label={`Change status for ${task.title}`}><option value="todo">To do</option><option value="in progress">In progress</option><option value="review">Review</option><option value="blocked">Blocked</option><option value="on_hold">On hold</option><option value="cancelled">Cancelled</option><option value="done">Done</option></AppSelect>{bucketOptions.length > 1 && <AppSelect disabled={!canEdit} className="task-bucket-select" value={task.bucket || ''} onChange={event => onBucketChange?.(task.id, event.target.value)} aria-label={`Move ${task.title} to bucket`}>{bucketOptions.map(bucket => <option key={bucket.id} value={bucket.name}>{bucket.name}</option>)}</AppSelect>}<span className="task-tag">{task.tag}</span></div></div><span className={`due ${task.due === 'Overdue' ? 'overdue' : ''}`}>{task.due}</span><span className="estimate">{task.estimate}</span>{canDelete && <button type="button" className="task-more-button" onClick={() => onDelete(task.id)} aria-label={`Archive ${task.title}`} title="Archive task"><Archive size={16} /></button>}</div> }
 
 function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buckets = [], tasks = [], currentUserId, canManageTasks = false, canDeletePermanently = false, onClose, onDelete, onDeletePermanently, onTaskUpdated }) {
   const canEdit = task.can_edit ?? true
@@ -526,4 +524,4 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
     )
 }
 
-export { AssigneePicker, TaskCard, TaskDetailDrawer }
+export { AssigneePicker, TaskDetailDrawer }
