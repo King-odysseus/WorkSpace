@@ -258,6 +258,7 @@ function SettingsView({
   onProfileUpdated,
   canManageMembers,
   members,
+  membersLoading = false,
   notifications,
   workspaceId,
   workspaces = [],
@@ -332,7 +333,7 @@ function SettingsView({
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [permissionsSavingId, setPermissionsSavingId] = useState(null);
-  const [permissionsError, setPermissionsError] = useState("");
+  const [memberActionError, setMemberActionError] = useState(null);
   const [workingHoursSavingId, setWorkingHoursSavingId] = useState(null);
   const [workingHoursError, setWorkingHoursError] = useState("");
   const [notificationPrefsReloadKey, setNotificationPrefsReloadKey] = useState(0);
@@ -340,15 +341,56 @@ function SettingsView({
   const [pushConfigReloadKey, setPushConfigReloadKey] = useState(0);
   const isOwner = currentWorkspace?.role === "owner";
   const isArchived = currentWorkspace?.status === "archived";
+  const showMemberSkeleton = membersLoading && members.length === 0;
   const lifecycleBusyFor = (action, targetWorkspaceId) =>
     lifecycleBusy?.action === action && lifecycleBusy?.workspaceId === targetWorkspaceId;
+  const memberActionFailure = (action, status, message) => {
+    const roleAction = action === "role";
+    const title = roleAction
+      ? "Role could not be saved"
+      : "Permissions could not be saved";
+    if (status === 403) {
+      return {
+        tone: "warning",
+        title: roleAction
+          ? "Role change not permitted"
+          : "Permission change not permitted",
+        message:
+          message ||
+          (roleAction
+            ? "Your role does not allow changing this member."
+            : "Your role does not allow changing these permissions."),
+        retryable: false,
+      };
+    }
+    if (status === 409) {
+      return {
+        tone: "warning",
+        title,
+        message:
+          message ||
+          "The workspace changed before the update completed. The previous values are still active.",
+        retryable: false,
+      };
+    }
+    return {
+      tone: "danger",
+      title,
+      message:
+        message ||
+        (roleAction
+          ? "The previous role is still active. Check the connection and try again."
+          : "The previous permissions are still active. Check the connection and try again."),
+      retryable: status === 0 || status === 429 || status >= 500,
+    };
+  };
   const toggleManagerPermission = async (member, key) => {
     const current = member.permissions || [];
     const next = current.includes(key)
       ? current.filter((value) => value !== key)
       : [...current, key];
     setPermissionsSavingId(member.id);
-    setPermissionsError("");
+    setMemberActionError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/members/${member.id}/`,
@@ -363,21 +405,37 @@ function SettingsView({
           body: JSON.stringify({ permissions: next }),
         },
       );
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Permission could not be updated.");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const failure = memberActionFailure(
+          "permission",
+          response.status,
+          data.error,
+        );
+        setMemberActionError({
+          ...failure,
+          retry: failure.retryable
+            ? () => toggleManagerPermission(member, key)
+            : undefined,
+        });
+        return;
+      }
       // The member list lives in the parent (localData.members) - refresh it
       // so this panel and every other view reading `members` sees the change.
       onRefresh?.();
     } catch (error) {
-      setPermissionsError(error.message || "Permission could not be updated.");
+      const failure = memberActionFailure("permission", 0, error.message);
+      setMemberActionError({
+        ...failure,
+        retry: () => toggleManagerPermission(member, key),
+      });
     } finally {
       setPermissionsSavingId(null);
     }
   };
   const changeMemberRole = async (member, role) => {
     setPermissionsSavingId(member.id);
-    setPermissionsError("");
+    setMemberActionError(null);
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/members/${member.id}/`,
@@ -392,12 +450,24 @@ function SettingsView({
           body: JSON.stringify({ role }),
         },
       );
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Role could not be updated.");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const failure = memberActionFailure("role", response.status, data.error);
+        setMemberActionError({
+          ...failure,
+          retry: failure.retryable
+            ? () => changeMemberRole(member, role)
+            : undefined,
+        });
+        return;
+      }
       onRefresh?.();
     } catch (error) {
-      setPermissionsError(error.message || "Role could not be updated.");
+      const failure = memberActionFailure("role", 0, error.message);
+      setMemberActionError({
+        ...failure,
+        retry: () => changeMemberRole(member, role),
+      });
     } finally {
       setPermissionsSavingId(null);
     }
@@ -2549,6 +2619,29 @@ function SettingsView({
                   </p>
                 </div>
               </div>
+              {!canManageMembers ? (
+                <div className="settings-access-limited">
+                  <SettingsAlert
+                    tone="warning"
+                    title="Limited access"
+                    className="settings-access-limited-alert"
+                    secondaryAction={
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openSection("profile")}
+                      >
+                        View my role
+                      </Button>
+                    }
+                  >
+                    Your role cannot manage memberships. Ask an owner or manager
+                    if you need access changed.
+                  </SettingsAlert>
+                </div>
+              ) : (
+                <>
               <div className="settings-workspace-logo">
                 <span className="settings-workspace-logo-frame">
                   {workspaceLogoUrl ? (
@@ -2593,17 +2686,25 @@ function SettingsView({
               )}
               <div className="settings-stat-grid">
                 <div>
-                  <strong>{members.length}</strong>
+                  <strong>
+                    {showMemberSkeleton ? (
+                      <Skeleton variant="heading" />
+                    ) : (
+                      members.length
+                    )}
+                  </strong>
                   <span>Members</span>
                 </div>
                 <div>
                   <strong>
-                    {
+                    {showMemberSkeleton ? (
+                      <Skeleton variant="heading" />
+                    ) : (
                       members.filter(
                         (member) =>
                           member.role === "owner" || member.role === "manager",
                       ).length
-                    }
+                    )}
                   </strong>
                   <span>Managers</span>
                 </div>
@@ -2620,58 +2721,101 @@ function SettingsView({
               </div>
               <div className="settings-section-heading">
                 <div><strong>Members and roles</strong></div>
-                <span>{members.length} member{members.length === 1 ? "" : "s"}</span>
+                <span>
+                  {showMemberSkeleton
+                    ? "Loading members"
+                    : `${members.length} member${members.length === 1 ? "" : "s"}`}
+                </span>
               </div>
-              <div className="settings-member-list">
-                {permissionsError && (
-                  <p className="auth-error" role="alert">
-                    {permissionsError}
-                  </p>
+              <div className="settings-member-list" aria-busy={showMemberSkeleton}>
+                {memberActionError && (
+                  <SettingsAlert
+                    tone={memberActionError.tone}
+                    title={memberActionError.title}
+                    onRetry={memberActionError.retry}
+                    className="settings-member-alert"
+                  >
+                    {memberActionError.message}
+                  </SettingsAlert>
                 )}
-                {members.map((member) => {
-                  // Mirrors the backend's member_detail rule: an owner can change anyone
-                  // but the owner row; a manager can only change plain members.
-                  const canEditThisRow =
-                    member.role !== "owner" &&
-                    (isOwner || (canManageMembers && member.role === "member"));
-                  return (
-                    <div className="settings-member-row" key={member.id}>
-                      <Avatar
-                        name={
-                          [member.first_name, member.last_name]
-                            .filter(Boolean)
-                            .join(" ") || member.email
-                        }
-                        avatarUrl={member.avatar_url}
-                        presence={effectivePresence(member)}
-                        small
-                      />
-                      <div>
-                        <strong>
-                          {[member.first_name, member.last_name]
-                            .filter(Boolean)
-                            .join(" ") || member.email}
-                        </strong>
-                        <span>{member.email}</span>
+                {showMemberSkeleton ? (
+                  <SkeletonGroup
+                    className="settings-member-skeleton"
+                    label="Loading workspace members"
+                  >
+                    {[0, 1, 2].map((row) => (
+                      <div className="settings-member-row is-skeleton" key={row}>
+                        <Skeleton variant="avatar" />
+                        <div className="settings-member-skeleton-copy">
+                          <Skeleton variant="text" />
+                          <Skeleton variant="line" />
+                        </div>
+                        <Skeleton
+                          variant="line"
+                          className="settings-member-skeleton-control"
+                        />
                       </div>
-                      {canEditThisRow ? (
-                        <AppSelect
-                          value={member.role}
-                          disabled={permissionsSavingId === member.id}
-                          onChange={(event) =>
-                            changeMemberRole(member, event.target.value)
+                    ))}
+                  </SkeletonGroup>
+                ) : members.length ? (
+                  members.map((member) => {
+                    // Mirrors the backend's member_detail rule: an owner can change anyone
+                    // but the owner row; a manager can only change plain members.
+                    const canEditThisRow =
+                      member.role !== "owner" &&
+                      (isOwner || (canManageMembers && member.role === "member"));
+                    return (
+                      <div className="settings-member-row" key={member.id}>
+                        <Avatar
+                          name={
+                            [member.first_name, member.last_name]
+                              .filter(Boolean)
+                              .join(" ") || member.email
                           }
-                          aria-label={`Change role for ${member.email}`}
-                        >
-                          <option value="member">Member</option>
-                          <option value="manager">Manager</option>
-                        </AppSelect>
-                      ) : (
-                        <em>{member.role}</em>
-                      )}
+                          avatarUrl={member.avatar_url}
+                          presence={effectivePresence(member)}
+                          small
+                        />
+                        <div>
+                          <strong>
+                            {[member.first_name, member.last_name]
+                              .filter(Boolean)
+                              .join(" ") || member.email}
+                          </strong>
+                          <span>{member.email}</span>
+                        </div>
+                        {canEditThisRow ? (
+                          <AppSelect
+                            value={member.role}
+                            disabled={permissionsSavingId === member.id}
+                            onChange={(event) =>
+                              changeMemberRole(member, event.target.value)
+                            }
+                            aria-label={`Change role for ${member.email}`}
+                          >
+                            <option value="member">Member</option>
+                            <option value="manager">Manager</option>
+                          </AppSelect>
+                        ) : (
+                          <em>{member.role}</em>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="settings-member-empty" role="status">
+                    <span aria-hidden="true">
+                      <UserRound size={18} />
+                    </span>
+                    <div>
+                      <strong>No members to show</strong>
+                      <p>
+                        This workspace has not returned any members. This is an
+                        empty result, not a permission error.
+                      </p>
                     </div>
-                  );
-                })}
+                  </div>
+                )}
               </div>
               <div className="settings-section-heading settings-working-hours-heading">
                 <div>
@@ -2694,7 +2838,15 @@ function SettingsView({
                 </div>
               )}
               <div className="settings-working-hours-list">
-                {members.length ? (
+                {showMemberSkeleton ? (
+                  <SkeletonGroup
+                    className="settings-working-hours-skeleton"
+                    label="Loading working hours"
+                  >
+                    <Skeleton variant="row" />
+                    <Skeleton variant="row" />
+                  </SkeletonGroup>
+                ) : members.length ? (
                   members.map((member) => {
                     const canEditHours = member.role === "owner"
                       ? isOwner && String(member.id) === String(currentUserId)
@@ -2854,6 +3006,8 @@ function SettingsView({
                     </div>
                   )}
                 </div>
+              )}
+                </>
               )}
             </Card>
           )}

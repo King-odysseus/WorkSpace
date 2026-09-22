@@ -651,6 +651,164 @@ it('lets a manager save working hours for a regular member only', async () => {
   expect(JSON.parse(request.body)).toEqual({ daily_capacity_minutes: 420, working_days: [0, 1, 2, 3, 4] })
 })
 
+it('keeps Workspace access mounted with member rows loading', () => {
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      membersLoading
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+
+  expect(screen.getByRole('heading', { level: 2, name: 'Workspace access' })).toBeInTheDocument()
+  expect(screen.getByRole('status', { name: 'Loading workspace members' })).toBeInTheDocument()
+  expect(screen.getByText('Loading members')).toBeInTheDocument()
+  expect(screen.queryByText('No members to show')).not.toBeInTheDocument()
+})
+
+it('separates an empty member result from permission denial', () => {
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+
+  expect(screen.getByText('No members to show')).toBeInTheDocument()
+  expect(screen.getByText(/not a permission error/i)).toBeInTheDocument()
+  expect(screen.queryByText('Limited access')).not.toBeInTheDocument()
+})
+
+it('keeps the previous role after a save failure and retries the safe update', async () => {
+  const user = userEvent.setup()
+  const api = mockApi({})
+  const originalFetch = api.getMockImplementation()
+  let roleRequests = 0
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/workspaces/1/members/2/') && init.method === 'PATCH') {
+      roleRequests += 1
+      if (roleRequests === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: 'Role service is unavailable.' }),
+          text: async () => '{"error":"Role service is unavailable."}',
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ member: { id: 2, role: 'manager' } }),
+        text: async () => '{"member":{"id":2,"role":"manager"}}',
+      })
+    }
+    return originalFetch(input, init)
+  })
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner', status: 'active' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserId={1}
+      members={[
+        { id: 1, first_name: 'Test', last_name: 'Owner', email: 'test@example.test', role: 'owner' },
+        { id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member' },
+      ]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  await user.click(screen.getByRole('combobox', { name: 'Change role for amara@example.test' }))
+  await user.click(await screen.findByRole('option', { name: 'Manager' }))
+
+  const alert = (await screen.findByText('Role could not be saved')).closest('[data-slot="alert"]')
+  expect(within(alert).getByText('Role service is unavailable.')).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Change role for amara@example.test' })).toHaveTextContent('Member')
+
+  fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+  await waitFor(() => expect(roleRequests).toBe(2))
+  expect(screen.queryByText('Role could not be saved')).not.toBeInTheDocument()
+})
+
+it('does not retry a role change rejected by workspace permissions', async () => {
+  const user = userEvent.setup()
+  mockApi({
+    '/api/workspaces/1/members/2/': {
+      status: 403,
+      body: { error: 'Only owners can change a manager role.' },
+    },
+  })
+
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner', status: 'active' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserId={1}
+      members={[
+        { id: 1, first_name: 'Test', last_name: 'Owner', email: 'test@example.test', role: 'owner' },
+        { id: 2, first_name: 'Amara', last_name: 'Okafor', email: 'amara@example.test', role: 'member' },
+      ]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  await user.click(screen.getByRole('combobox', { name: 'Change role for amara@example.test' }))
+  await user.click(await screen.findByRole('option', { name: 'Manager' }))
+
+  const alert = (await screen.findByText('Role change not permitted')).closest('[data-slot="alert"]')
+  expect(within(alert).getByText('Only owners can change a manager role.')).toBeInTheDocument()
+  expect(within(alert).queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+})
+
+it('shows limited access if Workspace administration permission is removed', () => {
+  const props = {
+    currentWorkspace: { id: 1, name: 'Northstar', role: 'owner', status: 'active' },
+    currentUserName: 'Test',
+    currentUserEmail: 'test@example.test',
+    currentUserId: 1,
+    members: [
+      { id: 1, first_name: 'Test', last_name: 'Owner', email: 'test@example.test', role: 'owner' },
+    ],
+    notifications: [],
+    workspaceId: 1,
+  }
+  const { rerender } = render(<SettingsView {...props} canManageMembers />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+  rerender(<SettingsView {...props} canManageMembers={false} />)
+
+  expect(screen.getByText('Limited access')).toBeInTheDocument()
+  expect(screen.getByText(/cannot manage memberships/i)).toBeInTheDocument()
+  expect(screen.queryByText('Members and roles')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'View my role' }))
+  expect(screen.getByRole('heading', { level: 1, name: 'Profile' })).toBeInTheDocument()
+})
+
 it('renders the P4 AI panel and saves provider and member access changes together', async () => {
   const api = mockApi({
     '/api/workspaces/1/ai/settings/': {

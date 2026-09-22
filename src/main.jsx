@@ -3427,6 +3427,7 @@ function App() {
                 onSetTheme={setTheme}
                 sidebarCollapsed={sidebarCollapsed}
                 workspaceId={workspaceId}
+                workspaceLoading={workspaceLoading}
                 currentWorkspace={currentWorkspace}
                 currentUserName={
                   [session.user.first_name, session.user.last_name]
@@ -3903,6 +3904,7 @@ function WorkspaceView({
   onSignOut,
   canManageMembers,
   canManageTasks,
+  workspaceLoading,
   reportRange,
   setReportRange,
   shiftLogUserId,
@@ -6805,6 +6807,7 @@ function WorkspaceView({
         onWorkspaceLogoUpdated={onWorkspaceLogoUpdated}
         canManageMembers={canManageMembers}
         members={localData.members}
+        membersLoading={workspaceLoading && localData.members.length === 0}
         notifications={localData.notifications}
         workspaceId={workspaceId}
         workspaces={currentUserWorkspaces}

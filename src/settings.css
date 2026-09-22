@@ -1081,6 +1081,74 @@
   padding: 0 32px 24px;
 }
 
+.settings-view .settings-member-alert {
+  margin: 0 0 18px;
+}
+
+.settings-view .settings-member-skeleton {
+  gap: 0;
+}
+
+.settings-view .settings-member-skeleton .settings-member-row {
+  pointer-events: none;
+}
+
+.settings-view .settings-member-skeleton-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-view .settings-member-skeleton-copy .workspace-skeleton-line {
+  width: 58%;
+}
+
+.settings-view .settings-member-skeleton-control {
+  width: 120px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.settings-view .settings-member-empty {
+  display: grid;
+  min-height: 86px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--pencil-border);
+  border-radius: 10px;
+  background: var(--pencil-surface-muted);
+}
+
+.settings-view .settings-member-empty > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--pencil-surface);
+  color: var(--pencil-text-muted);
+}
+
+.settings-view .settings-member-empty > div {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-view .settings-member-empty strong {
+  color: var(--pencil-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 17px;
+}
+
+.settings-view .settings-member-empty p {
+  margin: 0;
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
 .settings-view .settings-member-row {
   display: grid;
   min-height: 68px;
@@ -1120,6 +1188,14 @@
   color: var(--pencil-text-muted);
   font-size: 12px;
   font-style: normal;
+}
+
+.settings-view .settings-access-limited {
+  padding: 24px 32px 28px;
+}
+
+.settings-view .settings-access-limited-alert {
+  margin: 0;
 }
 
 .settings-view .settings-working-hours-heading {
@@ -1891,6 +1967,10 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
     padding: 0 18px 18px;
   }
 
+  .settings-view .settings-access-limited {
+    padding: 18px;
+  }
+
   .settings-view .settings-integration-card {
     margin: 18px;
     padding: 14px;
@@ -1917,6 +1997,12 @@ html[data-theme='dark'] .settings-view .settings-profile-card .avatar-upload-tri
 
   .settings-view .settings-member-row > [data-slot='select-trigger'],
   .settings-view .settings-member-row > em {
+    width: min(150px, 100%);
+    grid-column: 2;
+    justify-self: stretch;
+  }
+
+  .settings-view .settings-member-skeleton-control {
     width: min(150px, 100%);
     grid-column: 2;
     justify-self: stretch;
