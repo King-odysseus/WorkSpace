@@ -814,6 +814,37 @@ it('completes a planner task from the card checkbox', async () => {
   expect(onStatusChange).toHaveBeenCalledWith(91, 'done')
 })
 
+it('moves a completed card out of its lane and into the folded Done band', () => {
+  const { container } = cardPlanner({
+    tasks: [
+      cardTask,
+      { id: 92, title: 'Ship release', bucket: 'Backlog', project_id: '', status: 'done', priority: 'normal' },
+    ],
+  })
+
+  // The lane holds only the open card; the finished one is counted, not shown.
+  const lane = container.querySelector('.planner-column-body')
+  expect(within(lane).getByText('Design UI')).toBeInTheDocument()
+  expect(within(lane).queryByText('Ship release')).not.toBeInTheDocument()
+  const band = screen.getByRole('button', { name: 'Show Done (1 item)' })
+  expect(within(band.closest('section')).queryByText('Ship release')).not.toBeInTheDocument()
+
+  fireEvent.click(band)
+  expect(screen.getByText('Ship release')).toBeInTheDocument()
+})
+
+it('leaves finished cards in their lanes while the Done filter is on', () => {
+  // externalFilter is how a Done drill-through arrives, and it is a request to
+  // look at finished work: folding it into a band would hide what was asked for.
+  cardPlanner({
+    externalFilter: 'done',
+    tasks: [{ id: 92, title: 'Ship release', bucket: 'Backlog', project_id: '', status: 'done', priority: 'normal' }],
+  })
+
+  expect(screen.getByText('Ship release')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Show Done/ })).not.toBeInTheDocument()
+})
+
 it('changes a planner task status from the card selector', async () => {
   const onStatusChange = vi.fn()
   const user = userEvent.setup()
@@ -854,11 +885,15 @@ it('marks an incomplete past-due task as overdue', () => {
   expect(screen.getByText('Overdue')).toBeInTheDocument()
 })
 
-it('does not mark a completed past-due task as overdue', () => {
+it('does not mark a completed past-due task as overdue, and files it under Done', () => {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
   const dueDate = toDateKey(yesterday)
   cardPlanner({ tasks: [{ ...cardTask, status: 'done', due_date: dueDate }], canManageTasks: false, currentUserId: 7 })
+
+  // The finished card leaves its lane, so the lane holds no card at all.
+  expect(screen.queryByText(dueDate)).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Show Done (1 item)' }))
 
   expect(screen.queryByText('Overdue')).not.toBeInTheDocument()
   expect(screen.getByText(dueDate)).toBeInTheDocument()

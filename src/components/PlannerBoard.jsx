@@ -5,6 +5,7 @@ import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
 import { Button } from './ui/button.jsx'
 import { SearchInput } from './ui/search-input.jsx'
+import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import Avatar from './Avatar.jsx'
 import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
@@ -263,7 +264,15 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       && (!staleOnly || (task.status !== 'done' && task.status !== 'cancelled' && task.updated_at && Date.now() - new Date(task.updated_at).getTime() > STALE_DAYS * 86400000))
   }), [tasks, searchQuery, status, priority, assignee, supporter, workstream, phase, bucketFilter, dueFilter, dateFrom, dateTo, projectFilter, today, projectByBucketName, staleOnly])
 
-  const orderedFor = bucket => visibleTasks.filter(task => task.bucket === bucket).sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
+  // Finished cards leave their lane and collect in the folded Done band under the
+  // board, so a lane shows only the work still waiting on it. Filtering by Done
+  // is a request to look at finished work, so that filter leaves the cards in
+  // their lanes rather than folding away what was asked for.
+  const viewingDone = status === 'done'
+  const orderedFor = bucket => visibleTasks.filter(task => task.bucket === bucket && (viewingDone || task.status !== 'done')).sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
+  const doneTasks = viewingDone
+    ? []
+    : visibleTasks.filter(task => task.status === 'done').sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
   const allOrderedFor = bucket => tasks.filter(task => task.bucket === bucket).sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id)
   const persistMove = (taskId, targetBucket, targetIndex, anchor = {}) => {
     const next = Object.fromEntries(buckets.map(bucket => [bucket.name, allOrderedFor(bucket.name).filter(task => task.id !== taskId)]))
@@ -580,6 +589,30 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
     `${buckets.length} ${buckets.length === 1 ? 'bucket' : 'buckets'}`,
     isOperations ? 'non-project work across all squads' : 'drag a card, or use its bucket selector to move it',
   ].filter(Boolean).join(' · ')
+  // One card shape for the lanes and the Done band. A lane name of null means
+  // "not a drop target": the band collects finished work, it does not receive
+  // cards by dropping on them.
+  const renderTaskCard = (task, laneName, index, laneLength) => <PlannerTaskCard
+    key={task.id}
+    task={task}
+    buckets={buckets}
+    today={today}
+    canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)}
+    canDeletePermanently={canDeletePermanently}
+    onOpen={onOpenTask}
+    onDelete={onDeleteTask}
+    onDeletePermanently={onDeletePermanently}
+    onMove={moveTask}
+    onStatusChange={onStatusChange}
+    draggedTaskId={draggedTaskId}
+    setDraggedTaskId={setDraggedTaskId}
+    dropTaskId={dropTaskId}
+    dropBefore={laneName !== null && dropTaskBucket === laneName && dropTaskIndex === index}
+    dropAfter={laneName !== null && dropTaskBucket === laneName && dropTaskIndex === laneLength && index === laneLength - 1}
+    selectMode={selectMode}
+    selected={selectedTaskIds.some(id => String(id) === String(task.id))}
+    onToggleSelect={toggleTaskSelected}
+  />
   const draggedBucketName = buckets.find(bucket => bucket.id === draggedBucketId)?.name
   const dropBucketPosition = dropBucketIndex ?? buckets.findIndex(bucket => bucket.id === dropBucketId) + 1
 
@@ -821,7 +854,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
             <span>{draggedBucketName} lands at position {dropBucketPosition}</span>
           </div>}
           <div className="planner-column-body flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
-            {laneTasks.map((task, index) => <PlannerTaskCard key={task.id} task={task} buckets={buckets} today={today} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} dropBefore={dropTaskBucket === bucket.name && dropTaskIndex === index} dropAfter={dropTaskBucket === bucket.name && dropTaskIndex === laneTasks.length && index === laneTasks.length - 1} selectMode={selectMode} selected={selectedTaskIds.some(id => String(id) === String(task.id))} onToggleSelect={toggleTaskSelected} />)}
+            {laneTasks.map((task, index) => renderTaskCard(task, bucket.name, index, laneTasks.length))}
             {(isDefaultBacklog(bucket) || (isMobilePlanner && activeMobileBucketId === bucket.id)) && <div className="planner-dropzone mt-3 flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-icon bg-border">
               <ArrowDownToLine size={18} className="text-text-muted" aria-hidden="true" />
               <span className="text-caption font-medium text-text-muted">Drop task here</span>
@@ -853,6 +886,14 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
         </section>})}
       {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}
     </div>
+    {doneTasks.length > 0 && <CollapsibleSection
+      className="planner-done-band"
+      title="Done"
+      count={doneTasks.length}
+      contentClassName="planner-done-band-list"
+    >
+      {doneTasks.map(task => renderTaskCard(task, null, -1, 0))}
+    </CollapsibleSection>}
     </>}
     <BulkActionBar
       selectedCount={selectedTaskIds.length}

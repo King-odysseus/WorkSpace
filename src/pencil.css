@@ -5860,6 +5860,11 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 /* The Done band carries the planner card's own side padding so it lines up with
    the list above it, and its inner list drops the padding the band already has. */
 .personal-planner-done { margin: 0 20px 20px; }
+/* The board scrolls sideways inside its own strip; the Done band sits under it on
+   the page, so it gets the board's own top gap and lays its cards out in a row
+   that wraps rather than one tall column. */
+.planner-done-band { margin-top: 17px; }
+.planner-done-band-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(264px, 1fr)); }
 .personal-planner-done .personal-task-list { padding: 0; }
 .personal-task-shell { min-width: 0; min-height: 88px; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); box-shadow: 0 1px 2px rgb(16 24 40 / 4%); }
 .personal-task-shell.is-done { background: var(--pencil-canvas); }
