@@ -2649,7 +2649,10 @@ function SettingsView({
                   <p>Your identity as it appears across the workspace.</p>
                 </div>
               </div>
-              <div className="settings-profile-card">
+              <div
+                className="settings-profile-card"
+                aria-busy={avatarUploading && avatarRetry?.type === "upload"}
+              >
                 <span className="avatar-upload">
                   <Avatar
                     name={currentUserName}
@@ -2688,6 +2691,17 @@ function SettingsView({
                     disabled={avatarUploading}
                   />
                 </label>
+                {avatarUploading && avatarRetry?.type === "upload" && (
+                  <div
+                    className="settings-profile-upload-state"
+                    role="status"
+                    aria-live="polite"
+                    aria-label="Uploading profile photo"
+                  >
+                    <LoaderCircle size={18} aria-hidden="true" />
+                    <strong>Uploading new photo</strong>
+                  </div>
+                )}
               </div>
               {avatarError && (
                 <SettingsAlert

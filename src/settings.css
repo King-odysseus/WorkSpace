@@ -377,6 +377,33 @@
   opacity: .58;
 }
 
+.settings-view .settings-profile-upload-state {
+  display: flex;
+  min-width: 0;
+  min-height: 40px;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--pencil-alert-info-fill);
+  color: var(--pencil-alert-info-text);
+}
+
+.settings-view .settings-profile-upload-state svg {
+  flex: 0 0 auto;
+  animation: settings-template-spin 800ms linear infinite;
+}
+
+.settings-view .settings-profile-upload-state strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
 /* The workspace logo control. It reuses .avatar-upload-trigger for the camera
    badge, so only the frame and the fallback initial are defined here. */
 .settings-view .settings-workspace-logo {
@@ -2106,7 +2133,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings-view .settings-template-spinner {
+  .settings-view .settings-template-spinner,
+  .settings-view .settings-profile-upload-state svg {
     animation: none;
   }
 }

@@ -510,6 +510,52 @@ it('keeps the previous profile photo, then retries the failed upload with the sa
   expect(uploads[1][1].body.get('avatar')).toBe(file)
 })
 
+it('shows the approved upload state while a profile photo is being saved', async () => {
+  const api = mockApi({})
+  const onProfileUpdated = vi.fn()
+  const originalFetch = api.getMockImplementation()
+  let resolveUpload
+  api.mockImplementation((input, init = {}) => {
+    if (String(input).includes('/api/auth/me/avatar/') && init.method === 'POST') {
+      return new Promise((resolve) => {
+        resolveUpload = () => resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ avatar_url: '/media/avatar.png' }),
+          text: async () => '{"avatar_url":"/media/avatar.png"}',
+        })
+      })
+    }
+    return originalFetch(input, init)
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      onProfileUpdated={onProfileUpdated}
+    />,
+  )
+
+  fireEvent.change(screen.getByLabelText('Change profile photo'), {
+    target: { files: [new File(['avatar'], 'avatar.png', { type: 'image/png' })] },
+  })
+
+  const status = await screen.findByRole('status', { name: 'Uploading profile photo' })
+  expect(status).toHaveTextContent('Uploading new photo')
+  expect(document.querySelector('.settings-profile-card')).toHaveAttribute('aria-busy', 'true')
+  expect(screen.getByLabelText('Change profile photo')).toBeDisabled()
+
+  resolveUpload()
+
+  await waitFor(() => expect(screen.queryByRole('status', { name: 'Uploading profile photo' })).not.toBeInTheDocument())
+  expect(onProfileUpdated).toHaveBeenCalled()
+})
+
 it('retries a failed profile photo removal instead of asking for another file', async () => {
   const api = mockApi({})
   const onProfileUpdated = vi.fn()
