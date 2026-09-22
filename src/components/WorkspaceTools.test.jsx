@@ -47,6 +47,18 @@ it('opens the exact document named by a notification', async () => {
   await waitFor(() => expect(onHandled).toHaveBeenCalledTimes(1))
 })
 
+it('exposes an accessible name for the file search field', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/members/': { members: [] },
+  })
+
+  render(<FilesWorkspaceView workspaceId={4} currentUserId={1} />)
+
+  expect(await screen.findByRole('textbox', { name: 'Search files' })).toBeInTheDocument()
+})
+
 it('tries a failed autosave once instead of retrying on a loop', async () => {
   // A failed save leaves the document dirty, which re-ran the autosave effect,
   // and every run scheduled the next one, so the endpoint was hammered about
