@@ -143,9 +143,12 @@ it('opens a notification stream and reconnects from the newest notification ID',
   }
   vi.stubGlobal('EventSource', FakeEventSource)
   const onSummary = vi.fn()
-  stop = startNotificationAlerts(onSummary, playSound)
+  stop = startNotificationAlerts(onSummary, playSound, undefined, 20)
   await vi.advanceTimersByTimeAsync(0)
+  expect(fetch.mock.calls[0][0]).toContain('/api/notifications/summary/?scope=activity&workspace_id=20')
   expect(FakeEventSource.instances[0].url).toContain('since=0')
+  expect(FakeEventSource.instances[0].url).toContain('scope=activity')
+  expect(FakeEventSource.instances[0].url).toContain('workspace_id=20')
   FakeEventSource.instances[0].onmessage({ data: JSON.stringify({ unread_count: 26, latest_unread_id: 26, latest_notification_id: 26 }) })
   expect(onSummary).toHaveBeenLastCalledWith({ unread_count: 26, latest_unread_id: 26, latest_notification_id: 26 })
   expect(FakeEventSource.instances.at(-1).url).toContain('since=26')

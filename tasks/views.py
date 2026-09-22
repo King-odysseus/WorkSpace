@@ -264,6 +264,7 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
             sound=preference.notification_sound if preference else True,
             sound_name=preference.notification_sound_name if preference else 'chime',
             volume=preference.notification_volume if preference else 70,
+            workspace_id=workspace_id,
         )
     return notification
 

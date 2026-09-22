@@ -18,8 +18,12 @@ it.each([
   const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ unread_count: 31 }) })
   vm.runInNewContext(readFileSync('public/sw.js', 'utf8'), { self, fetch, console, URL })
   let work
-  handlers.push({ data: { json: () => ({ title: 'New message', body: 'Hello' }) }, waitUntil: promise => { work = promise } })
+  handlers.push({ data: { json: () => ({ title: 'New message', body: 'Hello', workspace_id: 20 }) }, waitUntil: promise => { work = promise } })
   await work
+  expect(fetch).toHaveBeenCalledWith(
+    '/api/notifications/summary/?scope=activity&workspace_id=20',
+    { credentials: 'include', cache: 'no-store' },
+  )
   expect(self.navigator.setAppBadge).toHaveBeenCalledWith(31)
   expect(self.registration.showNotification).toHaveBeenCalledWith('New message', expect.objectContaining({ silent, requireInteraction: false }))
   expect(client.postMessage).toHaveBeenCalledWith({ type: 'NOTIFICATIONS_CHANGED' })

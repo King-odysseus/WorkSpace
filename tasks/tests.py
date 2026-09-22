@@ -5389,6 +5389,7 @@ class PushDeepLinkTests(TestCase):
         push.assert_called_once()
         self.assertEqual(push.call_args.args[0], self.member)
         self.assertEqual(push.call_args.kwargs['url'], f'/?notification={notification_id}&target_type=task&target_id={task.id}')
+        self.assertEqual(push.call_args.kwargs['workspace_id'], self.workspace.id)
 
     def test_a_notification_without_a_target_still_deep_links_to_itself(self):
         notification = create_notification(self.workspace.id, self.member, 'manager_activity', 'Something happened')

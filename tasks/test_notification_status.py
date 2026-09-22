@@ -26,6 +26,45 @@ class NotificationSummaryTests(TestCase):
     def test_requires_login(self):
         self.assertEqual(self.client.get(reverse('notification-summary')).status_code, 401)
 
+    def test_activity_scope_is_workspace_specific_and_excludes_chat(self):
+        user = User.objects.create_user(username='activity-scope-user')
+        workspace = Workspace.objects.create(name='Scoped', slug='scoped')
+        second = Workspace.objects.create(name='Other', slug='other')
+        for space in (workspace, second):
+            Membership.objects.create(workspace=space, user=user)
+        activity = WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='task_assigned', title='Task', target_type='task', target_id='7',
+        )
+        WorkspaceNotification.objects.create(
+            workspace=workspace, recipient=user, kind='direct_message', title='Chat', target_type='direct_conversation', target_id='9',
+        )
+        WorkspaceNotification.objects.create(
+            workspace=second, recipient=user, kind='mention', title='Other workspace activity',
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(
+            f"{reverse('notification-summary')}?scope=activity&workspace_id={workspace.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['unread_count'], 1)
+        self.assertEqual(response.json()['latest_unread_id'], activity.id)
+        self.assertEqual(response.json()['latest_notification_id'], activity.id)
+
+    def test_notification_scope_parameters_are_validated(self):
+        user = User.objects.create_user(username='scope-validation-user')
+        self.client.force_login(user)
+
+        self.assertEqual(
+            self.client.get(f"{reverse('notification-summary')}?workspace_id=no").status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.get(f"{reverse('notification-summary')}?scope=everything").status_code,
+            400,
+        )
+
     def test_counts_all_unread_only_for_current_member_across_workspaces(self):
         user = User.objects.create_user(username='badge-user')
         other = User.objects.create_user(username='badge-other')

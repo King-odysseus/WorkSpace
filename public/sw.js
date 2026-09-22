@@ -108,7 +108,8 @@ self.addEventListener('push', event => {
     })
     const badge = (async () => {
       try {
-        const response = await fetch('/api/notifications/summary/', { credentials: 'include', cache: 'no-store' })
+        const workspaceQuery = data.workspace_id ? `&workspace_id=${encodeURIComponent(String(data.workspace_id))}` : ''
+        const response = await fetch(`/api/notifications/summary/?scope=activity${workspaceQuery}`, { credentials: 'include', cache: 'no-store' })
         if (!response.ok) return
         const { unread_count } = await response.json()
         if (unread_count > 0) await self.navigator.setAppBadge?.(unread_count)

@@ -482,8 +482,10 @@ function App() {
     setPendingWorkstreamNotification(null);
   }, [activeWorkspaceId]);
   useEffect(() => {
-    if (session.user?.id) return startNotificationAlerts();
-  }, [session.user?.id]);
+    if (session.user?.id && activeWorkspaceId) {
+      return startNotificationAlerts(() => {}, undefined, undefined, activeWorkspaceId);
+    }
+  }, [session.user?.id, activeWorkspaceId]);
   // The two popups read independent workspace feeds: activity for the bell and
   // conversations for Messages. Loading them separately keeps either category
   // from filling the other's 20-row page with unrelated alerts.

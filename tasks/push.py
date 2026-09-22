@@ -33,12 +33,20 @@ def normalize_vapid_private_key(value):
     )
 
 
-def send_push_to_user(user, title, body='', url='/', sound=True, sound_name='chime', volume=70):
+def send_push_to_user(user, title, body='', url='/', sound=True, sound_name='chime', volume=70, workspace_id=None):
     if user is None or not settings.WEB_PUSH_CONFIGURED:
         return 0
     from .models import PushSubscription
 
-    payload = json.dumps({'title': title, 'body': body, 'url': url, 'sound': sound, 'sound_name': sound_name, 'volume': volume})
+    payload = json.dumps({
+        'title': title,
+        'body': body,
+        'url': url,
+        'sound': sound,
+        'sound_name': sound_name,
+        'volume': volume,
+        'workspace_id': workspace_id,
+    })
     sent = 0
     for subscription in PushSubscription.objects.filter(user=user):
         try:

@@ -13,7 +13,7 @@ export async function updateAppBadge(count) {
   }
 }
 
-export function startNotificationAlerts(onSummary = () => {}, playSound = playNotificationSound, primeAudio = primeNotificationAudio) {
+export function startNotificationAlerts(onSummary = () => {}, playSound = playNotificationSound, primeAudio = primeNotificationAudio, workspaceId = null) {
   let stopped = false
   let pending = false
   let refreshQueued = false
@@ -37,9 +37,9 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
       playSound(data.sound_name || 'chime', data.volume ?? 70)
     }
     lastPlayedId = Math.max(lastPlayedId, nextNotificationId)
-    // This poll reads an account-wide count, but the bell reads one workspace's
-    // history and is fetched separately, so a new arrival has to say so or the
-    // open popout keeps showing the list it loaded with.
+    // The summary and the bell both read the active workspace's activity, but
+    // the bell list is fetched separately, so a new arrival still has to say so
+    // or an open popout keeps showing the list it loaded with.
     if (arrived) announceNotificationChange('alert-arrival')
     latestNotificationId = nextNotificationId
     latestUnreadCount = Number(data.unread_count) || 0
@@ -57,7 +57,9 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     }
     pending = true
     try {
-      const response = await fetch('/api/notifications/summary/', { credentials: 'include', cache: 'no-store' })
+      const params = new URLSearchParams({ scope: 'activity' })
+      if (workspaceId) params.set('workspace_id', String(workspaceId))
+      const response = await fetch(`/api/notifications/summary/?${params.toString()}`, { credentials: 'include', cache: 'no-store' })
       if (response.status === 401) {
         signalAuthenticationRequired()
         return
@@ -79,7 +81,8 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
   const openStream = () => {
     if (stopped || !window.EventSource) return
     stream?.close()
-    const params = new URLSearchParams({ since: String(latestNotificationId) })
+    const params = new URLSearchParams({ since: String(latestNotificationId), scope: 'activity' })
+    if (workspaceId) params.set('workspace_id', String(workspaceId))
     if (latestUnreadCount !== null) params.set('unread', String(latestUnreadCount))
     stream = new EventSource(`/api/notifications/stream/?${params.toString()}`, { withCredentials: true })
     stream.onmessage = event => {
