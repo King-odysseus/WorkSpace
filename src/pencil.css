@@ -3920,7 +3920,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .legal-advice-note { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--pencil-border); color: var(--pencil-text-muted); font-size: 11px; }
 .legal-contents-card .eyebrow { margin: 0 0 8px; }
 .legal-contents-card > div { display: grid; }
-.legal-contents-card button { display: grid; min-height: 48px; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0; border: 0; border-top: 1px solid var(--pencil-border-light); background: transparent; color: var(--pencil-text); text-align: left; }
+.legal-contents-card button { display: grid; min-height: 48px; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-top: 1px solid var(--pencil-border-light); background: transparent; color: var(--pencil-text); text-align: left; }
 .legal-contents-card button > span { color: var(--pencil-text-muted); font-size: 11px; }
 .legal-contents-card button > strong { font-size: 12px; font-weight: 600; }
 .legal-contents-card button > small { color: var(--pencil-text-muted); font-size: 10px; }
@@ -5349,7 +5349,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .install-platform-list > div { grid-template-columns: 36px minmax(0, 1fr); padding: 9px 0; }
   .install-platform-list em { grid-column: 2; width: fit-content; }
   .legal-document-panel > header, .legal-cookie-heading { align-items: flex-start; flex-direction: column; }
-  .legal-contents-card button { grid-template-columns: 26px minmax(0, 1fr); padding: 8px 0; }
+  .legal-contents-card button { grid-template-columns: 26px minmax(0, 1fr); padding: 8px 12px; }
   .legal-contents-card button > small { grid-column: 2; }
   .legal-acceptance { align-items: stretch; flex-direction: column; }
   .legal-acceptance-actions { flex-direction: column-reverse; }
@@ -7720,8 +7720,8 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
   }
 
   .pencil-checkins-view .checkin-range-filter button {
-    min-height: 40px;
-    padding-inline: 12px !important;
+    min-height: 52px;
+    padding: 8px 10px !important;
   }
 
   .pencil-team-status {
