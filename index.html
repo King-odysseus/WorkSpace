@@ -14,6 +14,22 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="WorkSpace" />
     <title>WorkSpace - Team operations</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("workspace-theme") || "light";
+          var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved = stored === "dark" || (stored === "system" && prefersDark) ? "dark" : "light";
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.classList.toggle("dark", resolved === "dark");
+          document.documentElement.style.colorScheme = resolved;
+        } catch (error) {
+          document.documentElement.dataset.theme = "light";
+          document.documentElement.classList.remove("dark");
+          document.documentElement.style.colorScheme = "light";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

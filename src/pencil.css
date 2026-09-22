@@ -92,7 +92,8 @@
 /* The theme control stores the user's preference, while the root data
    attribute and .dark class describe the active palette. Keeping both in
    sync means the app tokens and Flowbite's dark variants resolve together. */
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+:root.dark {
   color-scheme: dark;
   --pencil-sidebar: #000A2A;
   --pencil-navy-tint: #041234;
