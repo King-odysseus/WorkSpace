@@ -2856,6 +2856,25 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .chat-message-bubble a { color: var(--pencil-navy); text-decoration: underline; text-decoration-color: var(--pencil-border-strong); }
 .chat-workspace-view .chat-deleted-text { color: var(--pencil-text-muted) !important; font-style: italic; }
 .chat-workspace-view .chat-reply-context { display: grid; width: min(520px, 100%); gap: 2px; margin: 2px 0 6px; padding: 8px 10px 8px 12px; border-left: 3px solid var(--pencil-navy); border-radius: 0 8px 8px 0; background: var(--pencil-surface); }
+/* The bar that appears while cards are selected, and the card states that go
+   with it. It sits above the board rather than in it, so a long board does not
+   scroll the actions out of reach. */
+.bulk-action-bar { position: sticky; z-index: 40; bottom: 16px; display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 10px; margin: 16px auto 0; padding: 10px 12px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); box-shadow: 0 10px 30px rgb(0 0 0 / 18%); }
+.bulk-action-count { font-size: 13px; font-weight: 600; line-height: 16px; white-space: nowrap; }
+.bulk-action-move { min-width: 160px; }
+.bulk-action-delete { color: var(--pencil-danger-text, #B42318); }
+.bulk-action-clear { display: grid; width: 28px; height: 28px; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--pencil-text-muted); }
+.bulk-action-clear:hover { background: var(--pencil-surface-hover); color: var(--pencil-text); }
+
+/* In select mode the whole card is the target, so it has to look like one and
+   stop pretending its inner controls are what you press. */
+.planner-task-card.is-selectable, .project-kanban-task.is-selectable { cursor: pointer; }
+.planner-task-card.is-selectable .planner-card-menu,
+.planner-task-card.is-selectable .planner-card-check,
+.project-kanban-task.is-selectable .project-kanban-task-open { pointer-events: none; }
+.planner-task-card.is-selected, .project-kanban-task.is-selected { border-color: var(--pencil-navy) !important; box-shadow: inset 0 0 0 1px var(--pencil-navy); }
+.planner-select-toggle.is-active, .project-kanban-select-toggle.is-active { border-color: var(--pencil-navy) !important; background: var(--pencil-navy) !important; color: #fff !important; }
+
 /* As a button it needs the element defaults stripped, since it has to look
    exactly like the div it replaces - only now it is reachable by keyboard and
    says under the cursor that it leads somewhere. */

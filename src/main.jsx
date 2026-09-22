@@ -1529,6 +1529,7 @@ function App() {
         `${previousTask?.title || "Task"} moved to ${status === "in progress" ? "In progress" : status === "todo" ? "To do" : status.charAt(0).toUpperCase() + status.slice(1)}.`,
       );
       setWorkspaceReload((current) => current + 1);
+      return true;
     } catch (error) {
       if (previousTask)
         setTasks((current) =>
@@ -1536,6 +1537,7 @@ function App() {
         );
       toast.error(error.message || "Task status could not be saved.");
       console.warn("Task status could not be saved.", error.message);
+      return false;
     }
   };
   const changeTaskBucket = async (id, bucket) => {
@@ -1558,6 +1560,7 @@ function App() {
       if (!response.ok)
         throw new Error(`Task bucket update returned ${response.status}`);
       setWorkspaceReload((current) => current + 1);
+      return true;
     } catch (error) {
       if (previousTask)
         setTasks((current) =>
@@ -1565,6 +1568,7 @@ function App() {
         );
       toast.error(error.message || "Task bucket could not be saved.");
       console.warn("Task bucket could not be saved.", error.message);
+      return false;
     }
   };
   const reorderPlannerTasks = async (columns) => {
@@ -1610,14 +1614,9 @@ function App() {
       throw error;
     }
   };
-  const deleteTask = async (id) => {
-    if (
-      !(await confirmAction(
-        "Archive this task? It will be hidden from active views, but its history and code are kept.",
-        { title: "Archive task", confirmLabel: "Archive task" },
-      ))
-    )
-      return false;
+  // The request without the confirmation. A bulk action asks once for the whole
+  // selection, so it cannot use the single-task handlers, which ask every time.
+  const archiveTaskRequest = async (id) => {
     try {
       const response = await fetch(`/api/tasks/${id}/`, {
         method: "DELETE",
@@ -1627,19 +1626,46 @@ function App() {
           "X-Workspace-Id": String(activeWorkspaceId || ""),
         },
       });
-      if (!response.ok) {
-        toast.error("Task could not be archived.");
-        return false;
-      }
+      if (!response.ok) return false;
       setTasks((current) => current.filter((task) => task.id !== id));
-      setSelectedTask(null);
-      setWorkspaceNotice("Task archived.");
-      setWorkspaceReload((current) => current + 1);
       return true;
-    } catch (error) {
-      toast.error(error.message || "Task could not be archived.");
+    } catch {
       return false;
     }
+  };
+  const deleteTaskPermanentlyRequest = async (id) => {
+    try {
+      const response = await fetch(`/api/tasks/${id}/?permanent=1`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "X-CSRFToken": await getCsrfToken(),
+          "X-Workspace-Id": String(activeWorkspaceId || ""),
+        },
+      });
+      if (!response.ok) return false;
+      setTasks((current) => current.filter((task) => task.id !== id));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const deleteTask = async (id) => {
+    if (
+      !(await confirmAction(
+        "Archive this task? It will be hidden from active views, but its history and code are kept.",
+        { title: "Archive task", confirmLabel: "Archive task" },
+      ))
+    )
+      return false;
+    if (!(await archiveTaskRequest(id))) {
+      toast.error("Task could not be archived.");
+      return false;
+    }
+    setSelectedTask(null);
+    setWorkspaceNotice("Task archived.");
+    setWorkspaceReload((current) => current + 1);
+    return true;
   };
   // Archiving keeps the task and its history; this is the only path that destroys
   // it, and the API reserves it for workspace owners (tasks/views.py task_detail).
@@ -1653,29 +1679,66 @@ function App() {
       ))
     )
       return false;
-    try {
-      const response = await fetch(`/api/tasks/${task.id}/?permanent=1`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: {
-          "X-CSRFToken": await getCsrfToken(),
-          "X-Workspace-Id": String(activeWorkspaceId || ""),
-        },
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        toast.error(body.error || "Task could not be deleted.");
-        return false;
-      }
-      setTasks((current) => current.filter((item) => item.id !== task.id));
-      setSelectedTask(null);
-      setWorkspaceNotice("Task deleted.");
-      setWorkspaceReload((current) => current + 1);
-      return true;
-    } catch (error) {
-      toast.error(error.message || "Task could not be deleted.");
+    if (!(await deleteTaskPermanentlyRequest(task.id))) {
+      toast.error("Task could not be deleted.");
       return false;
     }
+    setSelectedTask(null);
+    setWorkspaceNotice("Task deleted.");
+    setWorkspaceReload((current) => current + 1);
+    return true;
+  };
+  // Bulk actions drive the same per-task endpoints the single-card menus use,
+  // one request each, rather than a bulk endpoint that would have to restate
+  // the permission and audit rules those already carry. They run in sequence so
+  // a large selection does not arrive as a burst, they ask once for the whole
+  // selection, and they report what actually happened: some of a selection
+  // failing is the normal case when one task has already been removed by
+  // somebody else.
+  const runBulkTaskAction = async (ids, perform) => {
+    let done = 0;
+    for (const id of ids) {
+      if (await perform(id)) done += 1;
+    }
+    return { done, failed: ids.length - done };
+  };
+  const reportBulkOutcome = ({ done, failed }, verb) => {
+    if (done) setWorkspaceNotice(`${done} ${done === 1 ? "task" : "tasks"} ${verb}.`);
+    if (failed) toast.error(`${failed} ${failed === 1 ? "task" : "tasks"} could not be ${verb}.`);
+    if (done) setWorkspaceReload((current) => current + 1);
+    return done;
+  };
+  const bulkArchiveTasks = async (ids) => {
+    if (!ids.length) return 0;
+    if (
+      !(await confirmAction(
+        `Archive ${ids.length} ${ids.length === 1 ? "task" : "tasks"}? They will be hidden from active views, but their history and codes are kept.`,
+        { title: "Archive tasks", confirmLabel: `Archive ${ids.length}` },
+      ))
+    )
+      return 0;
+    return reportBulkOutcome(await runBulkTaskAction(ids, archiveTaskRequest), "archived");
+  };
+  const bulkDeleteTasksPermanently = async (ids) => {
+    if (!ids.length) return 0;
+    if (
+      !(await confirmAction(
+        `Delete ${ids.length} ${ids.length === 1 ? "task" : "tasks"} permanently? Their history and attachments are removed and this cannot be undone.`,
+        { title: "Delete tasks permanently", confirmLabel: `Delete ${ids.length}` },
+      ))
+    )
+      return 0;
+    return reportBulkOutcome(await runBulkTaskAction(ids, deleteTaskPermanentlyRequest), "deleted");
+  };
+  const bulkMoveTasksToBucket = async (ids, bucket) => {
+    if (!ids.length || !bucket) return 0;
+    const outcome = await runBulkTaskAction(ids, (id) => changeTaskBucket(id, bucket));
+    return reportBulkOutcome(outcome, `moved to ${bucket}`);
+  };
+  const bulkChangeTaskStatus = async (ids, status) => {
+    if (!ids.length || !status) return 0;
+    const outcome = await runBulkTaskAction(ids, (id) => changeTaskStatus(id, status));
+    return reportBulkOutcome(outcome, `moved to ${status}`);
   };
   const applyTaskTemplate = (event) => {
     const templateId = event.target.value;
@@ -3473,6 +3536,10 @@ function App() {
                 onBucketChange={changeTaskBucket}
                 onDelete={deleteTask}
                 onDeletePermanently={deleteTaskPermanently}
+                onBulkArchive={bulkArchiveTasks}
+                onBulkDelete={bulkDeleteTasksPermanently}
+                onBulkMoveToBucket={bulkMoveTasksToBucket}
+                onBulkChangeStatus={bulkChangeTaskStatus}
                 onAddTask={openTaskModal}
                 onOpenTask={setSelectedTask}
                 selectedEvent={selectedEvent}
@@ -3918,6 +3985,10 @@ function WorkspaceView({
   onBucketChange,
   onDelete,
   onDeletePermanently,
+  onBulkArchive,
+  onBulkDelete,
+  onBulkMoveToBucket,
+  onBulkChangeStatus,
   onAddTask,
   onOpenTask,
   selectedEvent,
@@ -5646,6 +5717,9 @@ function WorkspaceView({
           onDeleteTask={onDelete}
           onDeletePermanently={onDeletePermanently}
           canDeletePermanently={currentWorkspace?.role === "owner"}
+          onBulkArchive={onBulkArchive}
+          onBulkDelete={onBulkDelete}
+          onBulkMove={onBulkMoveToBucket}
           onAddTask={() => {
             sessionStorage.setItem("workspace-new-task-scope", "operations");
             onAddTask();
@@ -5715,6 +5789,9 @@ function WorkspaceView({
           onDeleteTask={onDelete}
           onDeletePermanently={onDeletePermanently}
           canDeletePermanently={currentWorkspace?.role === "owner"}
+          onBulkArchive={onBulkArchive}
+          onBulkDelete={onBulkDelete}
+          onBulkMove={onBulkMoveToBucket}
           onAddTask={() => {
             const projectId =
               plannerProjectFilter && plannerProjectFilter !== "all"
@@ -8284,6 +8361,10 @@ function WorkspaceView({
                 columnOrder={selectedProjectWorkspace.configuration?.kanban_column_order}
                 onColumnReorder={(columnOrder) => reorderProjectKanbanColumns(selectedProjectWorkspace, columnOrder)}
                 canReorderColumns={canManageTasks}
+                canDeletePermanently={currentWorkspace?.role === "owner"}
+                onBulkArchive={onBulkArchive}
+                onBulkDelete={onBulkDelete}
+                onBulkMove={onBulkChangeStatus}
               />
             </section>
           )}

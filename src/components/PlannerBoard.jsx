@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowLeft, ArrowRight, Archive, Check, ChevronRight, FolderInput, GripVertical, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
+import BulkActionBar from './BulkActionBar.jsx'
 import { Button } from './ui/button.jsx'
 import { SearchInput } from './ui/search-input.jsx'
 import Avatar from './Avatar.jsx'
@@ -14,7 +15,7 @@ const STALE_DAYS = 14
 // The design's compact lane card: a completion checkbox and title lead, then
 // owner, workstream/estimate, and status. Status moves between lanes by dragging
 // the card; the overflow menu carries the moves a drag cannot express.
-function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter }) {
+function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect }) {
   const isDone = task.status === 'done'
   const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
   const assignee = task.assignee || {}
@@ -22,8 +23,10 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
   const taskTag = task.tag && task.tag !== 'General' ? task.tag : task.labels?.[0]
   const meta = [taskTag, task.workstream, formatEstimateMinutes(task.estimate_minutes), !isOverdue && task.due_date].filter(Boolean)
   return <article
-    className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors${String(draggedTaskId) === String(task.id) ? ' is-dragging opacity-50' : ''}${String(dropTaskId) === String(task.id) && String(draggedTaskId) !== String(task.id) ? ' is-drop-target border-navy' : ''}${dropBefore ? ' is-drop-before' : ''}${dropAfter ? ' is-drop-after' : ''}`}
-    draggable={canReorder}
+    className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors${String(draggedTaskId) === String(task.id) ? ' is-dragging opacity-50' : ''}${String(dropTaskId) === String(task.id) && String(draggedTaskId) !== String(task.id) ? ' is-drop-target border-navy' : ''}${dropBefore ? ' is-drop-before' : ''}${dropAfter ? ' is-drop-after' : ''}${selectMode ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
+    draggable={canReorder && !selectMode}
+    onClick={selectMode ? () => onToggleSelect?.(task.id) : undefined}
+    aria-pressed={selectMode ? selected : undefined}
     data-planner-task-id={task.id}
     data-planner-task-bucket={task.bucket}
     onDragStart={event => {
@@ -100,7 +103,7 @@ function taskHasAssignee(task) {
   return Boolean((task.assignee_ids || []).length || task.assignee_id || task.assignee?.id || task.member)
 }
 
-export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all' }) {
+export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all', onBulkArchive, onBulkDelete, onBulkMove }) {
   const [status, setStatus] = useState('all')
   const [priority, setPriority] = useState('all')
   const [assignee, setAssignee] = useState('all')
@@ -322,6 +325,26 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   // server materialises it the first time an order names it, exactly as it
   // already does for the Backlog sentinel.
   const isLegacyBucketId = id => typeof id === 'string' && id.startsWith('legacy-')
+  // Selection is a mode rather than a permanent checkbox: the card already has
+  // one and it completes the task, so a second would be a reliable source of
+  // mistakes. Turning the mode off clears the selection, which keeps the board
+  // from holding a hidden selection nobody can see.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedTaskIds, setSelectedTaskIds] = useState([])
+  const clearSelection = () => setSelectedTaskIds([])
+  const toggleSelectMode = () => {
+    setSelectMode(current => !current)
+    clearSelection()
+  }
+  const toggleTaskSelected = taskId => setSelectedTaskIds(current => (
+    current.some(id => String(id) === String(taskId))
+      ? current.filter(id => String(id) !== String(taskId))
+      : [...current, taskId]
+  ))
+  const runBulk = async action => {
+    const moved = await action(selectedTaskIds)
+    if (moved) clearSelection()
+  }
   const reorderableBuckets = buckets.filter(bucket => typeof bucket.id === 'number' || bucket.id === 'backlog' || isLegacyBucketId(bucket.id))
   const reorderScopeFor = bucket => {
     if (bucket.id === 'backlog' && !bucket.project_id && !bucket.workstream_id) return { project_id: null, workstream_id: null }
@@ -626,6 +649,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       <button type="button" className={`planner-mobile-filter-button${mobileFiltersOpen ? ' is-active' : ''}`} onClick={() => setMobileFiltersOpen(current => !current)} aria-expanded={mobileFiltersOpen} aria-controls="planner-mobile-filters">
         <SlidersHorizontal size={18} aria-hidden="true" /> Filter
       </button>
+      {canManageTasks && <button type="button" className={`planner-desktop-control planner-select-toggle${selectMode ? ' is-active' : ''}`} onClick={toggleSelectMode} aria-pressed={selectMode}>{selectMode ? 'Done selecting' : 'Select'}</button>}
       <AppSelect className="planner-desktop-control planner-work-scope chip-select w-full sm:w-[170px]" value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Work scope" disabled={scopeMode === 'projects'}>
         <option value="all">All work</option>
         <option value="operations">Daily operations</option>
@@ -797,7 +821,7 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
             <span>{draggedBucketName} lands at position {dropBucketPosition}</span>
           </div>}
           <div className="planner-column-body flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
-            {laneTasks.map((task, index) => <PlannerTaskCard key={task.id} task={task} buckets={buckets} today={today} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} dropBefore={dropTaskBucket === bucket.name && dropTaskIndex === index} dropAfter={dropTaskBucket === bucket.name && dropTaskIndex === laneTasks.length && index === laneTasks.length - 1} />)}
+            {laneTasks.map((task, index) => <PlannerTaskCard key={task.id} task={task} buckets={buckets} today={today} canReorder={canManageTasks || taskIsAssignedTo(task, currentUserId)} canDeletePermanently={canDeletePermanently} onOpen={onOpenTask} onDelete={onDeleteTask} onDeletePermanently={onDeletePermanently} onMove={moveTask} onStatusChange={onStatusChange} draggedTaskId={draggedTaskId} setDraggedTaskId={setDraggedTaskId} dropTaskId={dropTaskId} dropBefore={dropTaskBucket === bucket.name && dropTaskIndex === index} dropAfter={dropTaskBucket === bucket.name && dropTaskIndex === laneTasks.length && index === laneTasks.length - 1} selectMode={selectMode} selected={selectedTaskIds.some(id => String(id) === String(task.id))} onToggleSelect={toggleTaskSelected} />)}
             {(isDefaultBacklog(bucket) || (isMobilePlanner && activeMobileBucketId === bucket.id)) && <div className="planner-dropzone mt-3 flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-icon bg-border">
               <ArrowDownToLine size={18} className="text-text-muted" aria-hidden="true" />
               <span className="text-caption font-medium text-text-muted">Drop task here</span>
@@ -830,5 +854,14 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
       {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}
     </div>
     </>}
+    <BulkActionBar
+      selectedCount={selectedTaskIds.length}
+      destinations={buckets.filter(bucket => bucket.name).map(bucket => ({ value: bucket.name, label: bucket.name }))}
+      destinationLabel="Move to bucket"
+      onMove={bucket => runBulk(ids => onBulkMove?.(ids, bucket))}
+      onArchive={() => runBulk(ids => onBulkArchive?.(ids))}
+      onDelete={canDeletePermanently ? () => runBulk(ids => onBulkDelete?.(ids)) : undefined}
+      onClear={clearSelection}
+    />
   </section>
 }

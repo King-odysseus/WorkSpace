@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
@@ -979,4 +979,75 @@ it('keeps the single-scope payload when every lane shares one scope', async () =
   await user.click(screen.getByRole('menuitem', { name: 'Move Done left' }))
 
   expect(onBucketReorder).toHaveBeenCalledWith([43, 42], { project_id: null, workstream_id: null })
+})
+
+const selectableBuckets = [
+  { id: 2, name: 'Backlog', project_id: null, workstream_id: null },
+  { id: 19, name: 'Doing', project_id: null, workstream_id: null },
+]
+const selectableTasks = [
+  { id: 71, title: 'Fix Paystack', bucket: 'Backlog', status: 'todo', labels: [] },
+  { id: 72, title: 'Plan social', bucket: 'Backlog', status: 'todo', labels: [] },
+]
+
+it('keeps the board unchanged until selection is turned on', async () => {
+  const user = userEvent.setup()
+  const onOpenTask = vi.fn()
+  renderPlanner({ buckets: selectableBuckets, tasks: selectableTasks, canManageTasks: true, onOpenTask })
+
+  // No bar, and a card still opens the task rather than selecting it.
+  expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Fix Paystack' }))
+  expect(onOpenTask).toHaveBeenCalled()
+})
+
+it('archives every selected card in one action', async () => {
+  const user = userEvent.setup()
+  const onBulkArchive = vi.fn().mockResolvedValue(2)
+  renderPlanner({ buckets: selectableBuckets, tasks: selectableTasks, canManageTasks: true, onBulkArchive })
+
+  await user.click(screen.getByRole('button', { name: 'Select' }))
+  await user.click(screen.getByText('Fix Paystack').closest('.planner-task-card'))
+  await user.click(screen.getByText('Plan social').closest('.planner-task-card'))
+  expect(screen.getByText('2 cards selected')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Archive' }))
+  expect(onBulkArchive).toHaveBeenCalledWith([71, 72])
+})
+
+it('moves the selection to another bucket in one action', async () => {
+  const user = userEvent.setup()
+  const onBulkMove = vi.fn().mockResolvedValue(1)
+  renderPlanner({ buckets: selectableBuckets, tasks: selectableTasks, canManageTasks: true, onBulkMove })
+
+  await user.click(screen.getByRole('button', { name: 'Select' }))
+  await user.click(screen.getByText('Fix Paystack').closest('.planner-task-card'))
+  // AppSelect is the app's own dropdown, not a native select: open it, then
+  // pick the option. Scoped to the bar, since the card menu also offers a move.
+  const bar = screen.getByRole('region', { name: 'Bulk actions' })
+  await user.click(within(bar).getByRole('combobox', { name: 'Move to bucket' }))
+  await user.click(screen.getByRole('option', { name: 'Doing' }))
+
+  expect(onBulkMove).toHaveBeenCalledWith([71], 'Doing')
+})
+
+it('offers permanent delete only to someone who may delete permanently', async () => {
+  const user = userEvent.setup()
+  renderPlanner({ buckets: selectableBuckets, tasks: selectableTasks, canManageTasks: true })
+  await user.click(screen.getByRole('button', { name: 'Select' }))
+  await user.click(screen.getByText('Fix Paystack').closest('.planner-task-card'))
+  expect(screen.queryByRole('button', { name: /Delete/ })).not.toBeInTheDocument()
+})
+
+it('drops the selection when selection mode is turned off', async () => {
+  const user = userEvent.setup()
+  renderPlanner({ buckets: selectableBuckets, tasks: selectableTasks, canManageTasks: true })
+
+  await user.click(screen.getByRole('button', { name: 'Select' }))
+  await user.click(screen.getByText('Fix Paystack').closest('.planner-task-card'))
+  expect(screen.getByText('1 card selected')).toBeInTheDocument()
+
+  // Otherwise the board would hold a selection nobody can see.
+  await user.click(screen.getByRole('button', { name: 'Done selecting' }))
+  expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument()
 })

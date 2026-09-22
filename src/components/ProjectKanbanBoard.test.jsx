@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
@@ -372,3 +372,50 @@ it('scrolls the project lane board toward the pointer while dragging and reveals
   await waitFor(() => expect(scrolledElements.some(element => element.dataset.columnId === 'backlog')).toBe(true))
   scrollIntoView.mockRestore()
 })
+
+it('leaves the kanban alone until selection is turned on', async () => {
+  const user = userEvent.setup()
+  const onOpenTask = vi.fn()
+  renderBoard({ onOpenTask })
+
+  expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Design UI' }))
+  expect(onOpenTask).toHaveBeenCalled()
+})
+
+it('archives the selected kanban cards in one action', async () => {
+  const user = userEvent.setup()
+  const onBulkArchive = vi.fn().mockResolvedValue(2)
+  renderBoard({ onBulkArchive })
+
+  await user.click(screen.getByRole('button', { name: 'Select' }))
+  await user.click(screen.getByText('Design UI').closest('.project-kanban-task'))
+  await user.click(screen.getByText('Review copy').closest('.project-kanban-task'))
+  expect(screen.getByText('2 cards selected')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Archive' }))
+  expect(onBulkArchive).toHaveBeenCalledWith([91, 92])
+})
+
+it('moves the selected kanban cards to another status in one action', async () => {
+  const user = userEvent.setup()
+  const onBulkMove = vi.fn().mockResolvedValue(1)
+  renderBoard({ onBulkMove })
+
+  await user.click(screen.getByRole('button', { name: 'Select' }))
+  await user.click(screen.getByText('Design UI').closest('.project-kanban-task'))
+  const bar = screen.getByRole('region', { name: 'Bulk actions' })
+  await user.click(within(bar).getByRole('combobox', { name: 'Move to status' }))
+  await user.click(screen.getByRole('option', { name: 'Done' }))
+
+  expect(onBulkMove).toHaveBeenCalledWith([91], 'done')
+})
+
+it('offers permanent delete on the kanban only to someone who may use it', async () => {
+  const user = userEvent.setup()
+  renderBoard({ canDeletePermanently: true, onBulkDelete: vi.fn() })
+  await user.click(screen.getByRole('button', { name: 'Select' }))
+  await user.click(screen.getByText('Design UI').closest('.project-kanban-task'))
+  expect(screen.getByRole('button', { name: /Delete/ })).toBeInTheDocument()
+})
+

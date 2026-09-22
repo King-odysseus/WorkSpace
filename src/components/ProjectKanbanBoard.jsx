@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, GripVertical, Plus, Search } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { AppSelect } from './ui/select.jsx'
+import BulkActionBar from './BulkActionBar.jsx'
 import { formatDayMonthName, formatEstimateMinutes, toDateKey } from '../lib/workspace-format.js'
 
 const COLUMN_DEFINITIONS = [
@@ -82,6 +83,10 @@ export default function ProjectKanbanBoard({
   columnOrder,
   onColumnReorder,
   canReorderColumns = false,
+  canDeletePermanently = false,
+  onBulkArchive,
+  onBulkDelete,
+  onBulkMove,
 }) {
   const [query, setQuery] = useState('')
   const [assigneeFilter, setAssigneeFilter] = useState('all')
@@ -89,6 +94,25 @@ export default function ProjectKanbanBoard({
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
   const [workstreamFilter, setWorkstreamFilter] = useState('all')
+  // Same selection model as the planner: a mode rather than a per-card
+  // checkbox, cleared whenever the mode is turned off so no hidden selection
+  // survives out of sight.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedTaskIds, setSelectedTaskIds] = useState([])
+  const clearSelection = () => setSelectedTaskIds([])
+  const toggleSelectMode = () => {
+    setSelectMode(current => !current)
+    clearSelection()
+  }
+  const toggleTaskSelected = taskId => setSelectedTaskIds(current => (
+    current.some(id => String(id) === String(taskId))
+      ? current.filter(id => String(id) !== String(taskId))
+      : [...current, taskId]
+  ))
+  const runBulk = async action => {
+    const done = await action(selectedTaskIds)
+    if (done) clearSelection()
+  }
   const [draggedTaskId, setDraggedTaskId] = useState(null)
   const [dropTaskId, setDropTaskId] = useState(null)
   const [draggedColumnId, setDraggedColumnId] = useState(null)
@@ -306,6 +330,7 @@ export default function ProjectKanbanBoard({
   return <div className="project-kanban-board">
     <div className="project-kanban-toolbar">
       <div className="project-kanban-filter-row">
+        {canManageTasks && <button type="button" className={`project-kanban-filter project-kanban-select-toggle${selectMode ? ' is-active' : ''}`} onClick={toggleSelectMode} aria-pressed={selectMode}>{selectMode ? 'Done selecting' : 'Select'}</button>}
         <label className="project-kanban-search">
           <Search size={15} aria-hidden="true" />
           <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search tasks" aria-label="Search project kanban tasks" />
@@ -451,10 +476,13 @@ export default function ProjectKanbanBoard({
             const priority = priorityDefinition(task.priority)
             const dueLabel = formatDayMonthName(task.due_date)
             const overdue = Boolean(task.due_date && task.due_date < today && currentColumn.id !== 'done')
+            const selected = selectedTaskIds.some(id => String(id) === String(task.id))
             return <article
-              className={`project-kanban-task${draggedTaskId === task.id ? ' is-dragging' : ''}${canDropOnTask && dropTaskId === task.id ? ' is-drop-target' : ''}`}
+              className={`project-kanban-task${draggedTaskId === task.id ? ' is-dragging' : ''}${canDropOnTask && dropTaskId === task.id ? ' is-drop-target' : ''}${selectMode ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
               key={task.id}
-              draggable={editable}
+              draggable={editable && !selectMode}
+              onClick={selectMode ? () => toggleTaskSelected(task.id) : undefined}
+              aria-pressed={selectMode ? selected : undefined}
               onDragStart={event => {
                 if (!editable) return
                 event.stopPropagation()
@@ -516,5 +544,14 @@ export default function ProjectKanbanBoard({
       </section>
     })}
     </div>
+    <BulkActionBar
+      selectedCount={selectedTaskIds.length}
+      destinations={PROJECT_KANBAN_COLUMNS.filter(column => column.status).map(column => ({ value: column.status, label: column.label }))}
+      destinationLabel="Move to status"
+      onMove={status => runBulk(ids => onBulkMove?.(ids, status))}
+      onArchive={() => runBulk(ids => onBulkArchive?.(ids))}
+      onDelete={canDeletePermanently ? () => runBulk(ids => onBulkDelete?.(ids)) : undefined}
+      onClear={clearSelection}
+    />
   </div>
 }
