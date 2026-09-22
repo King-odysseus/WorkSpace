@@ -68,6 +68,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   Square,
   Upload,
@@ -132,6 +133,7 @@ import toast, { Toaster } from "react-hot-toast";
 
 import {
   Activity,
+  ActivityHistoryItem,
   AuthScreen,
   InvitationReview,
   NoWorkspaceScreen,
@@ -4160,6 +4162,7 @@ function WorkspaceView({
   const [activityDateFrom, setActivityDateFrom] = useState("");
   const [activityDateTo, setActivityDateTo] = useState("");
   const [activityPage, setActivityPage] = useState(1);
+  const [activityFiltersOpen, setActivityFiltersOpen] = useState(false);
   const [activityReload, setActivityReload] = useState(0);
   const [activityServer, setActivityServer] = useState({
     activity: [],
@@ -4281,7 +4284,7 @@ function WorkspaceView({
       setActivityError("");
       const params = new URLSearchParams({
         page: String(activityPage),
-        page_size: "40",
+        page_size: "15",
       });
       if (activitySearch.trim()) params.set("search", activitySearch.trim());
       if (activityActor !== "all") params.set("actor_id", activityActor);
@@ -6771,6 +6774,16 @@ function WorkspaceView({
     const activityStart = activityPagination
       ? (activityPageSafe - 1) * activityPagination.page_size
       : 0;
+    const activityFiltersActive = Boolean(
+      activitySearch ||
+      activityActor !== "all" ||
+      activityKind !== "all" ||
+      activityDateFrom ||
+      activityDateTo,
+    );
+    const membersById = new Map(
+      (localData.members || []).map((member) => [String(member.id), member]),
+    );
     const groupedActivity = activityServer.activity.reduce((groups, event) => {
       const key = toDateKey(event.created_at);
       (groups[key] ||= []).push(event);
@@ -6792,11 +6805,37 @@ function WorkspaceView({
         <WorkspaceViewHeading
           eyebrow="Insights"
           title="Activity"
-          subtitle="Everything that changed in this workspace, and who changed it."
-          action={activityLoading ? "Refreshing..." : "Refresh"}
-          onAction={() => setActivityReload((current) => current + 1)}
+          subtitle="Every workspace change, newest first."
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                className="activity-filter-toggle"
+                aria-controls="activity-filters"
+                aria-expanded={activityFiltersOpen}
+                aria-label={activityFiltersActive ? "Filter, filters active" : "Filter"}
+                onClick={() => setActivityFiltersOpen((current) => !current)}
+              >
+                <SlidersHorizontal size={16} aria-hidden="true" /> Filter
+                {activityFiltersActive && <span className="activity-filter-count" aria-hidden="true" />}
+              </Button>
+              <Button
+                type="button"
+                className="activity-refresh-button"
+                disabled={activityLoading}
+                onClick={() => setActivityReload((current) => current + 1)}
+              >
+                <RefreshCw size={16} aria-hidden="true" />
+                {activityLoading ? "Refreshing..." : "Refresh"}
+              </Button>
+            </>
+          }
         />
-        <div className="activity-toolbar">
+        <div
+          id="activity-filters"
+          className={cn("activity-toolbar", activityFiltersOpen && "is-open")}
+        >
           <label className="activity-search">
             <Search size={15} />
             <input
@@ -6848,7 +6887,7 @@ function WorkspaceView({
             onChange={(event) => setActivityDateTo(event.target.value)}
             placeholder="Any date"
           />
-          {(activitySearch || activityActor !== "all" || activityKind !== "all" || activityDateFrom || activityDateTo) && (
+          {activityFiltersActive && (
             <button
               type="button"
               className="text-button activity-clear"
@@ -6876,15 +6915,10 @@ function WorkspaceView({
                 <h3>{activityDateLabel(date)}</h3>
                 <div className="activity-list">
                   {events.map((event) => (
-                    <Activity
+                    <ActivityHistoryItem
                       key={`activity-history-${event.id}`}
-                      avatar={event.actor_name.slice(0, 2).toUpperCase()}
-                      color="blue"
-                      kind={event.kind}
-                      text={event.actor_name}
-                      strong={event.message}
-                      suffix=""
-                      time={formatRelativeActivityTime(event.created_at)}
+                      event={event}
+                      member={membersById.get(String(event.actor_id))}
                     />
                   ))}
                 </div>
@@ -6903,7 +6937,7 @@ function WorkspaceView({
           )}
         </Card>
         {activityPagination && activityPagination.total_pages > 1 && (
-          <div className="activity-pagination">
+          <nav className="activity-pagination" aria-label="Activity pages">
             <span>{`${activityStart + 1}-${activityStart + activityServer.activity.length} of ${activityPagination.total_items}`}</span>
             <div>
               <button
@@ -6926,7 +6960,7 @@ function WorkspaceView({
                 <ChevronRight size={15} />
               </button>
             </div>
-          </div>
+          </nav>
         )}
       </section>
     );

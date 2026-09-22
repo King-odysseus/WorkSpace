@@ -10,7 +10,7 @@
 // component-level test renders the shell.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
-import { mockApi } from './test/setup-tests.js'
+import { expectRequest, mockApi } from './test/setup-tests.js'
 import { toDateKey } from './lib/workspace-format.js'
 
 const session = {
@@ -67,7 +67,7 @@ const mountApp = async () => {
         message: 'Nate Foster created task Check-In Reminder.',
         created_at: new Date().toISOString(),
       }],
-      pagination: { page: 1, page_size: 40, total_items: 1, total_pages: 1, has_next: false, has_previous: false },
+      pagination: { page: 1, page_size: 15, total_items: 1, total_pages: 1, has_next: false, has_previous: false },
       filters: { actors: [{ id: 7, name: 'Nate Foster' }], kinds: ['task_created'] },
       summary: { total_events: 1, today_events: 1, week_events: 1, active_actors: 1 },
     },
@@ -105,6 +105,7 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   // nav. What is still worth pinning here is that it titles itself once.
   fireEvent.click(screen.getByRole('button', { name: 'Activity' }))
   expect(await screen.findAllByRole('heading', { name: 'Activity' })).toHaveLength(1)
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/activity/?page=1&page_size=15'))
 
   fireEvent.click(screen.getByRole('button', { name: 'Channels' }))
   await waitFor(

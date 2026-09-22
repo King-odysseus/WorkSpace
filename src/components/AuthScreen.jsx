@@ -3,7 +3,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Activity as ActivityGlyph, Building2, CheckCircle2, Eye, EyeOff, FileText, Flag, FolderKanban, LoaderCircle, Mail, MessageSquare, Plus, TriangleAlert, Upload, UserPlus } from 'lucide-react'
-import { formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
+import Avatar from './Avatar.jsx'
+import { activityKindLabel, activityMessageParts } from '../lib/activity-format.js'
+import { formatDateTime, formatRelativeActivityTime, readJsonResponse } from '../lib/workspace-format.js'
 import { formatSentenceBreaks } from '../lib/sentence-format.js'
 
 function activityVisual(kind = '') {
@@ -29,6 +31,30 @@ function Activity({ kind, text, strong, suffix, time }) {
         <time title={time}>{time}</time>
       </div>
     </div>
+  )
+}
+
+function ActivityHistoryItem({ event, member }) {
+  const actorName = event.actor_name || 'System'
+  const { detail } = activityMessageParts(event.message, actorName)
+  const { Icon, tone } = activityVisual(event.kind)
+  const timestamp = formatRelativeActivityTime(event.created_at)
+  return (
+    <article className="activity-history-row">
+      <div className="activity-history-person">
+        {event.actor_id ? (
+          <Avatar name={actorName} avatarUrl={member?.avatar_url} small />
+        ) : (
+          <span className="activity-kind is-info" aria-hidden="true"><ActivityGlyph size={16} /></span>
+        )}
+        <p><strong>{actorName}</strong>{detail ? ` ${detail}` : ''}</p>
+      </div>
+      <div className={`activity-history-context is-${tone}`}>
+        <Icon size={14} aria-hidden="true" />
+        <span>{activityKindLabel(event.kind)}</span>
+      </div>
+      <time dateTime={event.created_at} title={formatDateTime(event.created_at)}>{timestamp}</time>
+    </article>
   )
 }
 
@@ -345,4 +371,4 @@ function NoWorkspaceScreen({ currentUserEmail, pendingInvitations = [], onCreate
   )
 }
 
-export { Activity, AuthScreen, InvitationReview, NoWorkspaceScreen }
+export { Activity, ActivityHistoryItem, AuthScreen, InvitationReview, NoWorkspaceScreen }
