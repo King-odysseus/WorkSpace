@@ -1901,7 +1901,12 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .shell-avatar-rail,
 .shell-avatar-expanded,
 .shell-avatar-header { width: 32px; height: 32px; flex-basis: 32px; }
-.shell-avatar-mobile { width: 28px; height: 28px; flex-basis: 28px; font-size: 10px; }
+.shell-avatar-mobile { width: 28px; height: 28px; min-width: 28px; min-height: 28px; max-width: 28px; max-height: 28px; flex: 0 0 28px; font-size: 10px; }
+.shell-appbar-controls,
+.shell-appbar-controls > button { flex-wrap: nowrap; }
+.shell-appbar-controls > button { min-width: 0; flex-shrink: 0; overflow: visible; }
+.shell-appbar-avatar-button { width: 32px !important; height: 32px !important; min-width: 32px; min-height: 32px; flex: 0 0 32px !important; overflow: visible; }
+.shell-avatar-mobile > .presence-dot { right: -2px; bottom: -2px; width: 9px; height: 9px; min-width: 9px; min-height: 9px; max-width: 9px; max-height: 9px; flex: 0 0 9px; aspect-ratio: 1; pointer-events: none; }
 [data-slot='avatar-group-item'] { overflow: hidden; border-radius: 50%; box-shadow: 0 0 0 2px var(--pencil-surface); }
 [data-slot='avatar-group-item'] + [data-slot='avatar-group-item'] { margin-left: -12px; }
 

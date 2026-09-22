@@ -3029,7 +3029,7 @@ function App() {
             {active}
           </span>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="shell-appbar-controls flex shrink-0 items-center gap-2">
             {/* The design draws the search as an icon rather than a field, so
                 tapping it reveals the field in a row under the bar. It is the
                 same query as the desktop header's - one state, two fields, and
@@ -3105,7 +3105,7 @@ function App() {
               aria-haspopup="true"
               aria-expanded={profileMenuOpen}
               aria-label={`Open account menu for ${currentUserName}`}
-              className="flex size-7 shrink-0 items-center justify-center rounded-full"
+              className="shell-appbar-avatar-button flex size-8 shrink-0 items-center justify-center rounded-full"
             >
               <Avatar
                 name={currentUserName}
