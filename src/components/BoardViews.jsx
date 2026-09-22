@@ -5762,13 +5762,23 @@ function TodayDashboard({
           : task.status === "in progress"
             ? 2
             : 3;
-  const todayTaskRows = [...myTasks]
+  const todayTaskRows = myTasks
+    .filter(isOpen)
     .sort(
       (a, b) =>
         rowRank(a) - rowRank(b) ||
         (a.due_date || "9999").localeCompare(b.due_date || "9999"),
     )
     .slice(0, 5);
+  // Finished work moves out of the day's list and into its own folded band, so a
+  // tick does not leave a struck-through row competing with the work still to do.
+  const myDoneTasks = myTasks
+    .filter((task) => !isOpen(task))
+    .sort(
+      (a, b) =>
+        String(b.completed_at || "").localeCompare(String(a.completed_at || "")) ||
+        b.id - a.id,
+    );
   const checkedInCount = checkedInMemberIds.size;
   const memberCount = members.length;
   const pendingCheckIns = missingCheckInMembers.length;
@@ -5828,6 +5838,67 @@ function TodayDashboard({
     if (task.due === "Overdue") return "Overdue";
     if (task.due_date === today) return "Today";
     return task.due_date ? formatDayMonthName(task.due_date) : "";
+  };
+  // One row shape for both the day's list and the Done band: a task that moves
+  // between them should not change how it looks on the way.
+  const renderTodayTaskRow = (task) => {
+    const assignee = assigneeFor(task);
+    const done = task.status === "done";
+    return (
+      <article
+        key={task.id}
+        className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 last:border-b-0"
+      >
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={done}
+          onClick={() => onComplete(task.id)}
+          aria-label={`${done ? "Reopen" : "Complete"} ${task.title}`}
+          title={done ? "Reopen task" : "Mark task complete"}
+          className={cn(
+            "flex size-5 shrink-0 items-center justify-center rounded-badge border transition-colors",
+            done
+              ? "border-success bg-success text-white"
+              : "border-border-strong text-transparent hover:border-navy",
+          )}
+        >
+          <Check size={14} strokeWidth={3} aria-hidden="true" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => onOpenTask(task)}
+            className={cn(
+              "block max-w-full truncate text-left text-[14px] font-medium leading-[17px] text-text-primary hover:underline",
+              done && "text-text-muted line-through",
+            )}
+          >
+            {task.title}
+          </button>
+          <span className="block truncate text-[12px] leading-[15px] text-text-muted">
+            {taskRowMeta(task)}
+          </span>
+        </div>
+        <span
+          className={cn(
+            "hidden h-6 w-24 shrink-0 items-center justify-center rounded-chip text-[12px] font-medium leading-[15px] sm:inline-flex",
+            STATUS_PILL[task.status] || STATUS_PILL.todo,
+          )}
+        >
+          {STATUS_LABEL[task.status] || task.status}
+        </span>
+        <span className="w-20 shrink-0 text-right text-[12px] leading-[15px] text-text-secondary">
+          {taskRowDate(task)}
+        </span>
+        <Avatar
+          name={assignee ? memberName(assignee) : "Unassigned"}
+          avatarUrl={assignee?.avatar_url}
+          presence={assignee ? effectivePresence(assignee) : null}
+          small
+        />
+      </article>
+    );
   };
   const eventTimeRange = (event) => {
     const times = [event.start_at, event.end_at || event.start_at]
@@ -5936,65 +6007,7 @@ function TodayDashboard({
             </div>
             <div className="mt-3.5 flex h-[304px] flex-col overflow-hidden rounded-card border border-border bg-card pb-2 pt-3.5">
               {todayTaskRows.length ? (
-                todayTaskRows.map((task) => {
-                  const assignee = assigneeFor(task);
-                  const done = task.status === "done";
-                  return (
-                    <article
-                      key={task.id}
-                      className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 last:border-b-0"
-                    >
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={done}
-                        onClick={() => onComplete(task.id)}
-                        aria-label={`${done ? "Reopen" : "Complete"} ${task.title}`}
-                        title={done ? "Reopen task" : "Mark task complete"}
-                        className={cn(
-                          "flex size-5 shrink-0 items-center justify-center rounded-badge border transition-colors",
-                          done
-                            ? "border-success bg-success text-white"
-                            : "border-border-strong text-transparent hover:border-navy",
-                        )}
-                      >
-                        <Check size={14} strokeWidth={3} aria-hidden="true" />
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => onOpenTask(task)}
-                          className={cn(
-                            "block max-w-full truncate text-left text-[14px] font-medium leading-[17px] text-text-primary hover:underline",
-                            done && "text-text-muted line-through",
-                          )}
-                        >
-                          {task.title}
-                        </button>
-                        <span className="block truncate text-[12px] leading-[15px] text-text-muted">
-                          {taskRowMeta(task)}
-                        </span>
-                      </div>
-                      <span
-                        className={cn(
-                          "hidden h-6 w-24 shrink-0 items-center justify-center rounded-chip text-[12px] font-medium leading-[15px] sm:inline-flex",
-                          STATUS_PILL[task.status] || STATUS_PILL.todo,
-                        )}
-                      >
-                        {STATUS_LABEL[task.status] || task.status}
-                      </span>
-                      <span className="w-20 shrink-0 text-right text-[12px] leading-[15px] text-text-secondary">
-                        {taskRowDate(task)}
-                      </span>
-                      <Avatar
-                        name={assignee ? memberName(assignee) : "Unassigned"}
-                        avatarUrl={assignee?.avatar_url}
-                        presence={assignee ? effectivePresence(assignee) : null}
-                        small
-                      />
-                    </article>
-                  );
-                })
+                todayTaskRows.map(renderTodayTaskRow)
               ) : (
                 <div className="grid h-full content-center justify-items-center gap-2 px-4 text-center">
                   <CheckCircle2 size={22} className="text-text-muted" aria-hidden="true" />
@@ -6007,6 +6020,17 @@ function TodayDashboard({
                 </div>
               )}
             </div>
+
+            {myDoneTasks.length > 0 && (
+              <CollapsibleSection
+                className="mt-3.5"
+                title="Done"
+                count={myDoneTasks.length}
+                contentClassName="mt-3.5 flex flex-col overflow-hidden rounded-card border border-border bg-card pb-2 pt-1"
+              >
+                {myDoneTasks.map(renderTodayTaskRow)}
+              </CollapsibleSection>
+            )}
           </section>
 
           <section data-panel="check-ins">

@@ -376,6 +376,21 @@ it('renders only the five dashboard task rows from the design', () => {
   expect(panel.queryByText('Dashboard task 6')).not.toBeInTheDocument()
 })
 
+it('moves a finished task out of the day list and into the Done band', () => {
+  renderDashboard([
+    { id: 1, title: 'Mine to do', status: 'todo', assignee_id: 7, member: 'Nate Foster', priority: 'high', tag: 'Ops' },
+    { id: 2, title: 'Already finished', status: 'done', assignee_id: 7, member: 'Nate Foster', priority: 'high', tag: 'Ops', completed_at: '2026-09-12T09:00:00Z' },
+  ])
+
+  const panel = within(todayPanel('tasks'))
+  expect(panel.getByText('Mine to do')).toBeInTheDocument()
+  expect(panel.queryByText('Already finished')).not.toBeInTheDocument()
+
+  fireEvent.click(within(todayPanel('tasks')).getByRole('button', { name: 'Show Done (1 item)' }))
+  expect(within(todayPanel('tasks')).getByText('Already finished')).toBeInTheDocument()
+  expect(within(todayPanel('tasks')).getByText('Mine to do')).toBeInTheDocument()
+})
+
 it('keeps the upcoming events card mounted without inventing an empty state', () => {
   renderDashboard([])
 
