@@ -6058,14 +6058,14 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
   .personal-planner-composer button { width: 62px; min-width: 62px; height: 36px; min-height: 36px; margin: 0; padding: 0; border-radius: 9px; font-size: 12px; font-weight: 600; }
   .personal-task-list { gap: 8px; margin-top: 12px; padding: 0 0 96px; }
   .personal-task-shell { height: 84px; min-height: 84px; border-radius: 12px; }
-  .personal-task-row { height: 84px; min-height: 84px; grid-template-columns: 20px minmax(0, 1fr) 76px; gap: 12px; padding: 0 16px; }
+  .personal-task-row { height: 84px; min-height: 84px; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; padding: 0 16px; }
   .personal-task-tick { width: 20px; height: 20px; flex-basis: 20px; border-radius: 6px; }
   .personal-task-body { align-content: center; gap: 2px; }
-  .personal-task-title { height: 18px; font-size: 14px; font-weight: 600; line-height: 18px; }
+  .personal-task-title { height: 18px; font-size: 14px; font-weight: 600; line-height: 18px; white-space: nowrap; }
   .personal-task-meta { min-width: 0; gap: 5px; overflow: hidden; font-size: 12px; line-height: 15px; white-space: nowrap; }
-  .personal-task-side { display: flex; width: 76px; grid-column: auto; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 0; }
+  .personal-task-side { display: flex; width: auto; min-width: 0; max-width: 104px; grid-column: auto; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 0; }
   .personal-task-row > .personal-task-side { grid-column: auto; }
-  .personal-task-move { width: 68px; height: 24px; min-height: 24px; padding: 3px 20px 3px 8px; border: 0; border-radius: 6px; background: var(--pencil-surface-muted); font-size: 11px; }
+  .personal-task-move { width: 64px; height: 24px; min-height: 24px; padding: 3px 18px 3px 7px; border: 0; border-radius: 6px; background: var(--pencil-surface-muted); font-size: 11px; }
   .personal-task-delete { width: 28px; height: 28px; flex-basis: 28px; }
   .personal-task-shell.is-editing { position: relative; height: 252px; min-height: 252px; }
   .personal-task-shell.is-editing .personal-task-row { position: relative; display: block; height: 252px; min-height: 252px; padding: 0; }
