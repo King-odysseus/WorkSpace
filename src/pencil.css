@@ -7707,10 +7707,11 @@ html[data-theme='dark'] .workspace-popup-footer-button.is-primary {
     padding: 12px 14px !important;
   }
 
+  /* Keep the compact status dot inside the avatar so it reads as one badge. */
   .shell-avatar-mobile > .presence-dot,
   .pencil-team-person .pencil-team-avatar > .presence-dot {
-    right: 1px;
-    bottom: 1px;
+    inset: auto 0 0 auto;
+    border-width: 1px;
   }
 
   /* Give compact text controls enough inset without changing their hierarchy. */
