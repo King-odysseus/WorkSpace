@@ -36,7 +36,6 @@ recovery path differs from F13; the following cases remain in that category.
 | Settings surface | Missing design scope |
 | --- | --- |
 | Profile | Long identity content, field-level validation, and panel-level loading state |
-| AI settings | Credential rotation, provider removal confirmation, concurrent-update conflict, and desktop/mobile error parity |
 
 The shared loading, empty, offline, expired-session, permission, and recoverable
 error compositions on F12 define the shell-level treatment. A Settings panel
@@ -75,6 +74,7 @@ The following are no longer unresolved design gaps:
 - Workspace access recovery: P43 and F13 cover the loading skeleton, limited-access treatment, role-save rollback and retry, non-retryable permission denial, and the empty member state.
 - Workspace access operations: P43 and F13 cover invite-form failure styling, member removal with confirmation and retry, invitation resend and revoke recovery, and pending, accepted, expired, declined, and revoked invitation outcomes.
 - Integrations operations: F13 covers webhook and calendar-feed loading, disconnected, validation, save failure, retry, and revoked-access states without adding unsupported credential checks or delivery-status APIs.
+- AI settings operations: F9 and F13 cover credential rotation, provider removal confirmation including the default-provider fallback to no provider, concurrent-update conflict, load recovery, and desktop/mobile error parity.
 - Global crash fallback: P65 defines the branded recoverable error screen.
 - Message reactions: P66 defines the reaction picker and overflow behavior.
 - Project index and project controls: P28 defines the Projects index without the duplicated controls panel. Risk register and issue log live in the project detail Risks and Issues tabs, covered by P32 and P33.

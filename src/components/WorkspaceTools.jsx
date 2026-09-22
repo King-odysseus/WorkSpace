@@ -1319,9 +1319,6 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
       if (shouldResolveConnection && !String(config.model || '').trim()) {
         errors[`${provider}.model`] = `Choose a model for ${label}.`
       }
-      if (config.clear_api_key && settings.ai_default_provider === provider) {
-        errors[`${provider}.api_key`] = `Choose another default provider before removing the ${label} key.`
-      }
     })
     return errors
   }

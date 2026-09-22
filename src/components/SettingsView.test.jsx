@@ -1764,6 +1764,59 @@ it('rotates a saved provider key without exposing the current key', async () => 
   expect(JSON.parse(request.body).provider_config.openai.api_key).toBe('replacement-value')
 })
 
+it('confirms removal of the default provider key and lets Zuri fall back to no provider', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: true,
+      settings: {
+        ai_enabled: true,
+        ai_user_ids: [],
+        ai_enabled_providers: ['openai'],
+        ai_default_provider: 'openai',
+      },
+      providers: { openai: true, claude: false, kimi: false, deepseek: false },
+      provider_config: {
+        openai: { base_url: '', model: 'gpt-4o-mini', has_api_key: true, key_hint: 'stored-key' },
+      },
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
+  fireEvent.click(await screen.findByRole('button', { name: /Configure OpenAI/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Remove saved key' }))
+
+  const confirmation = screen.getByText('Remove saved provider key?').closest('[role="alert"]')
+  expect(confirmation).toHaveTextContent('Zuri falls back to no provider until another key is saved.')
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByText('Remove saved provider key?')).not.toBeInTheDocument()
+  expect(screen.queryByText('The saved key will be removed when you save.')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove saved key' }))
+  fireEvent.click(within(screen.getByText('Remove saved provider key?').closest('[role="alert"]')).getByRole('button', { name: 'Remove' }))
+  expect(screen.getByText('The saved key will be removed when you save.')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH'))
+  const [, request] = expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH')
+  const body = JSON.parse(request.body)
+  expect(body.ai_enabled_providers).toEqual([])
+  expect(body.ai_default_provider).toBe('openai')
+  expect(body.provider_config.openai.api_key).toBe('')
+  expect(body.provider_config.openai.clear_api_key).toBe(true)
+})
+
 it('keeps unsaved AI edits when another manager changed the same settings', async () => {
   const api = mockApi({
     '/api/workspaces/1/ai/settings/': {
