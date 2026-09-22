@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { startNotificationAlerts } from './notification-alerts.js'
+import { startNotificationAlerts, updateAppBadge } from './notification-alerts.js'
 
 let stop, summary, worker, playSound
 beforeEach(() => {
@@ -67,6 +67,28 @@ it('asks listeners to re-read the notification list when a new one arrives', asy
   await vi.advanceTimersByTimeAsync(15000)
   expect(onChanged).toHaveBeenCalledOnce()
   window.removeEventListener('workspace:notifications-changed', onChanged)
+})
+
+it('applies an authoritative read count without waiting for a summary refresh', async () => {
+  stop = startNotificationAlerts(() => {}, playSound, undefined, 20)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(document.title).toBe('(25) WorkSpace')
+
+  window.dispatchEvent(new CustomEvent('workspace:notifications-changed', {
+    detail: { source: 'activity-read', unreadCount: 0 },
+  }))
+
+  expect(document.title).toBe('WorkSpace')
+  expect(navigator.clearAppBadge).toHaveBeenCalled()
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+it('falls back to setting a zero app badge when clearAppBadge is unavailable', async () => {
+  navigator.clearAppBadge = undefined
+
+  await updateAppBadge(0)
+
+  expect(navigator.setAppBadge).toHaveBeenCalledWith(0)
 })
 
 it('fetches a fresh summary after a change arrives during an in-flight refresh', async () => {

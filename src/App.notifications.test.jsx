@@ -84,6 +84,7 @@ const mountApp = async () => {
       },
       pagination: { page: 1, page_size: 7, total_items: 2, total_pages: 1, has_next: false, has_previous: false },
     },
+    '/api/workspaces/1/notifications/': { updated: 'all' },
     '/api/workspaces/1/notification-preferences/': {
       preferences: {
         mentions: true,
@@ -100,6 +101,7 @@ const mountApp = async () => {
     '/api/notifications/summary/': { unread_count: 3, latest_unread_id: channelNotification.id },
     '/api/push/public-key/': { configured: false, public_key: '' },
   })
+  document.title = 'WorkSpace'
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main.jsx')
   return fetchMock
@@ -185,6 +187,12 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(screen.getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
   expect(screen.queryByText('New direct message')).not.toBeInTheDocument()
   expect(screen.queryByText('New channel message')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }))
+  await waitFor(() =>
+    expect(within(bellButton).queryByLabelText('1 unread workspace notifications')).not.toBeInTheDocument(),
+  )
+  expect(document.title).toBe('WorkSpace')
 
   fireEvent.click(within(mobileNav).getByRole('button', { name: /Today/ }))
   await screen.findByRole('heading', { name: 'Today' })

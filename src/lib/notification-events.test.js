@@ -14,11 +14,11 @@ it('announces notification changes locally and for other same-origin windows', (
   window.addEventListener(NOTIFICATION_CHANGE_EVENT, listener)
   cleanups.push(() => window.removeEventListener(NOTIFICATION_CHANGE_EVENT, listener))
 
-  announceNotificationChange('activity-read')
+  announceNotificationChange('activity-read', { unreadCount: 0 })
 
   expect(listener).toHaveBeenCalledOnce()
-  expect(listener.mock.calls[0][0].detail).toEqual({ source: 'activity-read' })
-  expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ source: 'activity-read' }))
+  expect(listener.mock.calls[0][0].detail).toEqual({ source: 'activity-read', unreadCount: 0 })
+  expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ source: 'activity-read', unreadCount: 0 }))
 })
 
 it('bridges a notification change received from another window', () => {
@@ -33,4 +33,8 @@ it('bridges a notification change received from another window', () => {
   }))
 
   expect(listener).toHaveBeenCalledOnce()
+  expect(listener.mock.calls[0][0].detail).toEqual({
+    type: NOTIFICATION_CHANGE_EVENT,
+    source: 'other-window',
+  })
 })

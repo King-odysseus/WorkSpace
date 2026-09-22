@@ -181,7 +181,7 @@ import { releaseNotesUnread } from "./lib/release-notes.js";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import BrandedStatusScreen from "./components/BrandedStatusScreen.jsx";
 import { startAppUpdateWatch } from "./lib/app-updates.js";
-import { startNotificationAlerts } from "./lib/notification-alerts.js";
+import { startNotificationAlerts, updateAppBadge } from "./lib/notification-alerts.js";
 import { announceNotificationChange } from "./lib/notification-events.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
@@ -491,23 +491,30 @@ function App() {
   // from filling the other's 20-row page with unrelated alerts.
   useEffect(() => {
     if (!activeWorkspaceId || session.loading || !session.user?.id) return undefined;
-    const reloadNotifications = () => {
+    const reloadNotifications = (event) => {
       const loadFeed = (query) =>
         fetch(`/api/workspaces/${activeWorkspaceId}/notifications/?${query}`, { credentials: "include" })
           .then((response) => (response.ok ? response.json() : null));
       Promise.all([loadFeed("exclude_chat=1&sort=newest"), loadFeed("only_conversation=1")])
         .then(([activityPayload, conversationPayload]) => {
           if (!activityPayload && !conversationPayload) return;
-          setWorkspaceData((current) => ({
-            ...current,
-            notifications: [
-              ...(conversationPayload?.notifications || []),
-              ...(activityPayload?.notifications || []),
-            ],
-            activityNotifications: activityPayload?.notifications || [],
-            conversationNotifications: conversationPayload?.notifications || [],
-            notificationCounts: activityPayload?.unread_counts ?? conversationPayload?.unread_counts ?? current.notificationCounts,
-          }));
+          const authoritativeActivityCount = event?.detail?.unreadCount;
+          setWorkspaceData((current) => {
+            const serverCounts = activityPayload?.unread_counts ?? conversationPayload?.unread_counts ?? current.notificationCounts;
+            const notificationCounts = typeof authoritativeActivityCount === "number" && serverCounts
+              ? { ...serverCounts, activity: Math.max(0, authoritativeActivityCount) }
+              : serverCounts;
+            return {
+              ...current,
+              notifications: [
+                ...(conversationPayload?.notifications || []),
+                ...(activityPayload?.notifications || []),
+              ],
+              activityNotifications: activityPayload?.notifications || [],
+              conversationNotifications: conversationPayload?.notifications || [],
+              notificationCounts,
+            };
+          });
         })
         .catch((error) => console.warn("Notifications could not be refreshed.", error));
     };
@@ -1852,7 +1859,8 @@ function App() {
       );
       if (!response.ok)
         return toast.error("Notifications could not be marked as read.");
-      announceNotificationChange("activity-read");
+      announceNotificationChange("activity-read", { unreadCount: 0 });
+      void updateAppBadge(0);
       setWorkspaceData((current) => ({
         ...current,
         notifications: current.notifications.map((notification) => ({
@@ -1891,7 +1899,22 @@ function App() {
       );
       if (!response.ok)
         return toast.error("Notification could not be marked as read.");
-      announceNotificationChange("notification-read");
+      const countedNotification = workspaceData.notifications.find(
+        (notification) => notification.id === notificationId,
+      );
+      const currentActivityCount = workspaceData.notificationCounts?.activity;
+      const nextActivityCount = typeof currentActivityCount === "number"
+        && countedNotification
+        && !countedNotification.read
+        && !isConversationNotification(countedNotification)
+        ? Math.max(0, currentActivityCount - 1)
+        : currentActivityCount;
+      if (typeof nextActivityCount === "number") {
+        announceNotificationChange("notification-read", { unreadCount: nextActivityCount });
+        void updateAppBadge(nextActivityCount);
+      } else {
+        announceNotificationChange("notification-read");
+      }
       setWorkspaceData((current) => {
         const cleared = current.notifications.find(
           (notification) => notification.id === notificationId,

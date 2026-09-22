@@ -18,9 +18,9 @@ function getNotificationChannel() {
   return notificationChannel
 }
 
-function publishCrossWindowChange(source) {
+function publishCrossWindowChange(source, changes = {}) {
   if (typeof window === 'undefined') return
-  const message = { type: NOTIFICATION_CHANGE_EVENT, source, at: Date.now() }
+  const message = { type: NOTIFICATION_CHANGE_EVENT, source, ...changes, at: Date.now() }
   let delivered = false
   try {
     if (getNotificationChannel()) {
@@ -39,21 +39,27 @@ function publishCrossWindowChange(source) {
   }
 }
 
-export function announceNotificationChange(source = 'client') {
+export function announceNotificationChange(source = 'client', changes = {}) {
   if (typeof window === 'undefined') return
-  publishCrossWindowChange(source)
-  window.dispatchEvent(new CustomEvent(NOTIFICATION_CHANGE_EVENT, { detail: { source } }))
+  publishCrossWindowChange(source, changes)
+  window.dispatchEvent(new CustomEvent(NOTIFICATION_CHANGE_EVENT, { detail: { source, ...changes } }))
 }
 
 export function startNotificationChangeBridge() {
   if (typeof window === 'undefined') return () => {}
   const channel = getNotificationChannel()
-  const receiveChange = () => window.dispatchEvent(new Event(NOTIFICATION_CHANGE_EVENT))
+  const receiveChange = detail => window.dispatchEvent(new CustomEvent(NOTIFICATION_CHANGE_EVENT, { detail }))
   const handleChannelMessage = event => {
-    if (event?.data?.type === NOTIFICATION_CHANGE_EVENT) receiveChange()
+    if (event?.data?.type === NOTIFICATION_CHANGE_EVENT) receiveChange(event.data)
   }
   const handleStorage = event => {
-    if (event.key === STORAGE_KEY && event.newValue) receiveChange()
+    if (event.key !== STORAGE_KEY || !event.newValue) return
+    try {
+      const detail = JSON.parse(event.newValue)
+      if (detail?.type === NOTIFICATION_CHANGE_EVENT) receiveChange(detail)
+    } catch {
+      // Ignore another app's malformed storage payload.
+    }
   }
   channel?.addEventListener('message', handleChannelMessage)
   window.addEventListener('storage', handleStorage)

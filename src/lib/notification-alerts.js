@@ -7,7 +7,8 @@ import { announceNotificationChange, startNotificationChangeBridge } from './not
 export async function updateAppBadge(count) {
   try {
     if (count > 0) await navigator.setAppBadge?.(count)
-    else await navigator.clearAppBadge?.()
+    else if (navigator.clearAppBadge) await navigator.clearAppBadge()
+    else await navigator.setAppBadge?.(0)
   } catch (error) {
     console.warn('App badge could not be updated.', error)
   }
@@ -42,11 +43,15 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     // or an open popout keeps showing the list it loaded with.
     if (arrived) announceNotificationChange('alert-arrival')
     latestNotificationId = nextNotificationId
-    latestUnreadCount = Number(data.unread_count) || 0
     hasBaseline = true
     onSummary(data)
-    document.title = data.unread_count ? `(${data.unread_count}) ${originalTitle}` : originalTitle
-    updateAppBadge(data.unread_count)
+    applyUnreadCount(data.unread_count)
+  }
+  const applyUnreadCount = count => {
+    const nextUnreadCount = Number(count) || 0
+    latestUnreadCount = nextUnreadCount
+    document.title = nextUnreadCount ? `(${nextUnreadCount}) ${originalTitle}` : originalTitle
+    updateAppBadge(nextUnreadCount)
   }
   const refresh = async () => {
     if (stopped) return
@@ -103,7 +108,12 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     if (event.data?.type === 'NOTIFICATIONS_CHANGED') refresh()
   }
   const onNotificationChange = event => {
-    if (event.detail?.source !== 'alert-arrival') refresh()
+    if (event.detail?.source === 'alert-arrival') return
+    const unreadCount = Number(event.detail?.unreadCount)
+    // A successful mark-read request is authoritative. Apply its count now so
+    // a failed or delayed summary refresh cannot leave a stale title or badge.
+    if (Number.isFinite(unreadCount)) applyUnreadCount(unreadCount)
+    else refresh()
   }
   const removeAudioUnlockListeners = () => {
     document.removeEventListener('pointerdown', unlockAudio, true)
