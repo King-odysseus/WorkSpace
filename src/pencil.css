@@ -8201,3 +8201,13 @@ html:not([data-theme='dark']) .screen-share-status.status-idle {
 html:not([data-theme='dark']) .settings-view .avatar-initials {
   color: var(--pencil-text-secondary);
 }
+
+/* Flowbite can emit its own white surface utilities even when the component
+   call site uses the WorkSpace semantic tokens. Keep those utilities from
+   punching light cards, popovers, or striped table rows through dark mode. */
+:is(html[data-theme='dark'], html.dark) :is(
+  [class~='bg-white'],
+  [class~='odd:bg-white']
+) {
+  background-color: var(--pencil-surface) !important;
+}
