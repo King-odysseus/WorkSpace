@@ -1610,6 +1610,18 @@ function SettingsView({
       return { ...current, [field]: "" };
     });
   };
+  const resetProfileChanges = () => {
+    const names = currentUserName.split(" ");
+    setProfileForm({
+      first_name: names.shift() || "",
+      last_name: names.join(" "),
+      email: currentUserEmail,
+      company: currentUserCompany,
+      job_role: currentUserJobRole,
+    });
+    setProfileFieldErrors({});
+    setProfileError("");
+  };
   const saveProfile = async (event) => {
     event.preventDefault();
     const normalizedProfile = Object.fromEntries(
@@ -2645,23 +2657,15 @@ function SettingsView({
                     presence={currentUserPresence}
                     className="settings-profile-avatar"
                   />
-                  <label
-                    className="avatar-upload-trigger"
-                  >
-                    <Camera size={14} />
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      aria-label="Change profile photo"
-                      accept="image/png,image/jpeg,image/gif,image/webp"
-                      onChange={handleAvatarChange}
-                      disabled={avatarUploading}
-                    />
-                  </label>
                 </span>
-                <div>
+                <div className="settings-profile-identity-copy">
                   <strong>{currentUserName}</strong>
-                  <span>{currentWorkspace?.name || "Workspace member"}</span>
+                  <span>
+                    {[profileForm.job_role, currentWorkspace?.name]
+                      .filter(Boolean)
+                      .join(" · ") || "Workspace member"}
+                  </span>
+                  <span className="settings-profile-email">{profileForm.email}</span>
                   {currentUserAvatarUrl && (
                     <button
                       type="button"
@@ -2673,6 +2677,17 @@ function SettingsView({
                     </button>
                   )}
                 </div>
+                <label className="settings-profile-photo-button">
+                  Change photo
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    aria-label="Change profile photo"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    onChange={handleAvatarChange}
+                    disabled={avatarUploading}
+                  />
+                </label>
               </div>
               {avatarError && (
                 <SettingsAlert
@@ -2695,7 +2710,7 @@ function SettingsView({
               <div className="settings-section-heading settings-profile-section-heading">
                 <div><strong>Personal details</strong></div>
               </div>
-              <form ref={profileFormRef} className="settings-profile-form" onSubmit={saveProfile}>
+              <form id="settings-profile-form" ref={profileFormRef} className="settings-profile-form" onSubmit={saveProfile}>
                 <div className="modal-grid">
                   <label>
                     First name
@@ -2795,11 +2810,8 @@ function SettingsView({
                     {profileError}
                   </SettingsAlert>
                 )}
-                <button className="secondary-button" disabled={profileSaving}>
-                  {profileSaving ? "Saving…" : "Save profile"}
-                </button>
               </form>
-              <div className="settings-section-heading">
+              <div className="settings-section-heading settings-profile-section-heading">
                 <div><strong>Availability</strong></div>
               </div>
               <div className="settings-row settings-control-row">
@@ -2837,16 +2849,26 @@ function SettingsView({
                   {presenceError}
                 </SettingsAlert>
               )}
-              <div className="settings-row">
-                <div>
-                  <strong>Workspace role</strong>
-                  <span>Access level for this workspace.</span>
+              <footer className="settings-profile-footer">
+                <span>Changes apply to this account everywhere.</span>
+                <div className="settings-profile-actions">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={resetProfileChanges}
+                    disabled={profileSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    form="settings-profile-form"
+                    disabled={profileSaving}
+                  >
+                    {profileSaving ? "Saving..." : "Save profile"}
+                  </Button>
                 </div>
-                <em>{roleLabel}</em>
-              </div>
-              <p className="settings-note">
-                Password changes remain available through your account provider.
-              </p>
+              </footer>
             </Card>
           )}
           {section === "templates" && (

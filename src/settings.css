@@ -295,40 +295,86 @@
 
 /* Profile */
 .settings-view .settings-profile-card {
-  display: flex;
+  display: grid;
   min-width: 0;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  margin: 24px 32px 0;
-  padding: 12px 16px;
+  margin: 20px 32px 0;
+  padding: 16px 20px;
   border: 1px solid var(--pencil-border);
   border-radius: 12px;
   background: var(--pencil-surface-muted);
 }
 
-.settings-view .settings-profile-card > div {
+.settings-view .settings-profile-identity-copy {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 2px;
 }
 
 .settings-view .settings-profile-card strong {
   color: var(--pencil-text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 19px;
+  line-height: 18px;
 }
 
-.settings-view .settings-profile-card span {
+.settings-view .settings-profile-identity-copy > span {
   color: var(--pencil-text-muted);
   font-size: 12px;
   line-height: 16px;
 }
 
 .settings-view .settings-profile-card strong,
-.settings-view .settings-profile-card > div > span {
+.settings-view .settings-profile-identity-copy > span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.settings-view .settings-profile-email {
+  color: var(--pencil-text-secondary) !important;
+}
+
+.settings-view .settings-profile-photo-button {
+  display: inline-flex;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid var(--pencil-border);
+  border-radius: 8px;
+  background: var(--pencil-surface);
+  color: var(--pencil-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-view .settings-profile-photo-button:hover {
+  background: var(--pencil-surface-hover);
+}
+
+.settings-view .settings-profile-photo-button:focus-within {
+  outline: 2px solid var(--pencil-navy-focus);
+  outline-offset: 2px;
+}
+
+.settings-view .settings-profile-photo-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.settings-view .settings-profile-photo-button:has(input:disabled) {
+  cursor: wait;
+  opacity: .58;
 }
 
 /* The workspace logo control. It reuses .avatar-upload-trigger for the camera
@@ -435,9 +481,8 @@
 
 .settings-view .settings-profile-form {
   display: grid;
-  gap: 20px;
-  padding: 24px 32px;
-  border-bottom: 1px solid var(--pencil-border-light);
+  gap: 18px;
+  padding: 0 32px 24px;
 }
 
 .settings-view .settings-profile-form .modal-grid {
@@ -457,10 +502,31 @@
   line-height: 15px;
 }
 
-.settings-view .settings-profile-form > .secondary-button,
-.settings-view .settings-profile-form > [data-slot='button'] {
-  min-width: 118px;
-  justify-self: end;
+.settings-view .settings-profile-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 32px;
+  border-top: 1px solid var(--pencil-border-light);
+}
+
+.settings-view .settings-profile-footer > span {
+  color: var(--pencil-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.settings-view .settings-profile-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-view .settings-profile-actions > [data-slot='button'] {
+  min-width: 96px;
 }
 
 /* Appearance */
@@ -1786,8 +1852,10 @@
   background: rgb(255 255 255 / 8%);
 }
 
-:is(html[data-theme='dark'], html.dark) .settings-view .settings-profile-card .avatar-upload-trigger {
-  border-color: var(--pencil-surface);
+:is(html[data-theme='dark'], html.dark) .settings-view .settings-profile-photo-button {
+  border-color: var(--pencil-glass-edge);
+  background: linear-gradient(145deg, rgb(0 28 98 / 82%) 0%, rgb(0 13 61 / 92%) 100%);
+  box-shadow: var(--pencil-glass-shadow-soft);
 }
 
 .settings-view .settings-manager-panel,
@@ -2306,13 +2374,26 @@
 
   .settings-view .settings-profile-card {
     align-items: flex-start;
-    margin: 18px;
-    padding: 18px;
+    grid-template-columns: 56px minmax(0, 1fr);
+    margin: 18px 18px 0;
+    padding: 16px;
+  }
+
+  .settings-view .settings-profile-avatar,
+  .settings-view .settings-profile-card .avatar {
+    width: 56px !important;
+    height: 56px !important;
+    flex-basis: 56px !important;
+  }
+
+  .settings-view .settings-profile-photo-button {
+    width: 100%;
+    grid-column: 1 / -1;
   }
 
   .settings-view .settings-profile-form {
     gap: 18px;
-    padding: 20px 18px;
+    padding: 0 18px 20px;
   }
 
   .settings-view .settings-profile-form .modal-grid,
@@ -2320,9 +2401,21 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .settings-view .settings-profile-form > [data-slot='button'] {
+  .settings-view .settings-profile-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 18px;
+  }
+
+  .settings-view .settings-profile-actions {
     width: 100%;
-    justify-self: stretch;
+  }
+
+  .settings-view .settings-profile-actions > [data-slot='button'] {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 0;
   }
 
   .settings-view .settings-theme-grid {

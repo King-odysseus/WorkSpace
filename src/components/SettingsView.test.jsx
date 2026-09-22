@@ -423,6 +423,34 @@ it('keeps the previous appearance when local persistence fails, then retries', (
   expect(onSetTheme).toHaveBeenCalledWith('dark')
 })
 
+it('restores the loaded profile values when the profile edit is canceled', () => {
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test User"
+      currentUserEmail="test@example.test"
+      currentUserCompany="Northstar"
+      currentUserJobRole="Engineer"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+    />,
+  )
+
+  fireEvent.change(screen.getByLabelText('First name'), {
+    target: { value: 'Changed' },
+  })
+  fireEvent.change(screen.getByLabelText('Email address'), {
+    target: { value: 'changed@example.test' },
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+  expect(screen.getByLabelText('First name')).toHaveValue('Test')
+  expect(screen.getByLabelText('Email address')).toHaveValue('test@example.test')
+  expect(screen.getByLabelText('Job role')).toHaveValue('Engineer')
+})
+
 it('keeps the previous profile photo, then retries the failed upload with the same file', async () => {
   const api = mockApi({})
   const onProfileUpdated = vi.fn()
@@ -553,7 +581,7 @@ it('validates profile fields locally and focuses the first invalid field', () =>
   const firstName = screen.getByLabelText('First name')
   fireEvent.change(firstName, { target: { value: '   ' } })
   fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'not-an-email' } })
-  fireEvent.submit(screen.getByRole('button', { name: 'Save profile' }).closest('form'))
+  fireEvent.submit(document.getElementById('settings-profile-form'))
 
   expect(screen.getByText('Enter your first name.')).toBeInTheDocument()
   expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument()
@@ -583,7 +611,7 @@ it('keeps a duplicate profile email on the field and focuses it', async () => {
 
   const email = screen.getByLabelText('Email address')
   fireEvent.change(email, { target: { value: 'owner@example.test' } })
-  fireEvent.submit(screen.getByRole('button', { name: 'Save profile' }).closest('form'))
+  fireEvent.submit(document.getElementById('settings-profile-form'))
 
   expect(await screen.findByText('That email address is already in use.')).toBeInTheDocument()
   expect(email).toHaveFocus()
