@@ -348,6 +348,23 @@ function calendarEventConflictCounts(events = []) {
   return conflicts
 }
 
+// The approved Calendar rail shows a status only when it can be derived from
+// real event data. Deadlines come from the event type, overlaps from the
+// conflict helper, and the imminent label from the event start time.
+function calendarUpcomingStatus(event, { now = new Date(), conflictCount = 0 } = {}) {
+  if (!event) return null
+  if (event.event_type === 'deadline') return { label: 'Deadline', tone: 'danger' }
+  if (conflictCount > 0) return { label: 'Overlaps', tone: 'warning' }
+
+  const start = new Date(event.start_at)
+  if (Number.isNaN(start.getTime())) return null
+  const minutesUntilStart = Math.ceil((start.getTime() - now.getTime()) / 60000)
+  if (minutesUntilStart > 0 && minutesUntilStart <= 60) {
+    return { label: `In ${minutesUntilStart} min`, tone: 'info' }
+  }
+  return null
+}
+
 function getCalendarDays(view, referenceDate) {
   const year = referenceDate.getFullYear()
   const month = referenceDate.getMonth()
@@ -427,6 +444,7 @@ export {
   calendarDayOffset,
   calendarUpcomingGroup,
   calendarEventConflictCounts,
+  calendarUpcomingStatus,
   getCalendarDays,
   getCsrfToken,
   readJsonResponse,

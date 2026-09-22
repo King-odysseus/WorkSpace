@@ -230,6 +230,7 @@ import {
   googleCalendarUrl,
   calendarEventConflictCounts,
   calendarUpcomingGroup,
+  calendarUpcomingStatus,
 } from "./lib/workspace-format.js";
 
 const isConversationNotification = (notification) =>
@@ -7227,6 +7228,21 @@ function WorkspaceView({
       .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
     const calendarEventConflicts =
       calendarEventConflictCounts(visibleCalendarEvents);
+    const calendarConflictEntries = visibleCalendarEvents
+      .map((event) => ({
+        event,
+        count: calendarEventConflicts.get(event.id) || 0,
+      }))
+      .filter((entry) => entry.count > 0)
+      .sort(
+        (left, right) =>
+          new Date(left.event.start_at) - new Date(right.event.start_at),
+      );
+    const calendarConflictTotal = Math.ceil(
+      calendarConflictEntries.reduce((total, entry) => total + entry.count, 0) /
+        2,
+    );
+    const calendarConflictLead = calendarConflictEntries[0] || null;
     const upcomingItems = [
       ...upcomingVisibleEvents.map((event) => ({
         kind: "event",
@@ -7356,6 +7372,7 @@ function WorkspaceView({
     const renderUpcomingEvent = (item) => {
       const event = item.event;
       const conflictCount = calendarEventConflicts.get(event.id) || 0;
+      const status = calendarUpcomingStatus(event, { conflictCount });
       return (
         <div
           className={`calendar-upcoming-event event-type-${event.event_type || "meeting"}`}
@@ -7368,18 +7385,15 @@ function WorkspaceView({
             aria-label={`View ${event.title} in the calendar`}
           >
             <CalendarDays size={15} />
-            <span>
+            <span className="calendar-upcoming-event-copy">
               <strong>{event.title}</strong>
-              <small>
-                {upcomingItemDateLabel(item)} · {event.event_type || "event"}
-              </small>
-              {conflictCount > 0 && (
-                <em className="calendar-upcoming-conflict">
-                  <AlertCircle size={12} /> Conflicts with {conflictCount} other
-                  event{conflictCount === 1 ? "" : "s"}
-                </em>
-              )}
+              <small>{upcomingItemDateLabel(item)}</small>
             </span>
+            {status && (
+              <em className={`calendar-upcoming-status tone-${status.tone}`}>
+                {status.label}
+              </em>
+            )}
           </button>
           <a
             className="calendar-upcoming-google"
@@ -7419,7 +7433,6 @@ function WorkspaceView({
       { value: "agenda", label: "Upcoming" },
     ];
     const calendarLegendOptions = [
-      { value: "all", label: "All events", tone: "navy" },
       { value: "meeting", label: "Meetings", tone: "blue" },
       { value: "deadline", label: "Deadlines", tone: "red" },
       { value: "focus", label: "Focus time", tone: "green" },
@@ -7868,7 +7881,7 @@ function WorkspaceView({
                 <div className="calendar-upcoming-content">
                   {upcomingItems.length ? (
                     <div className="calendar-upcoming-groups">
-                      {upcomingItems.slice(0, 6).map((item) =>
+                      {upcomingItems.slice(0, 5).map((item) =>
                         item.kind === "event" ? (
                           renderUpcomingEvent(item)
                         ) : (
@@ -7879,10 +7892,13 @@ function WorkspaceView({
                             onClick={() => onOpenTask(item.task)}
                           >
                             <CalendarDays size={15} />
-                            <span>
+                            <span className="calendar-upcoming-event-copy">
                               <small>{formatDay(item.task.due_date)}</small>
                               <strong>{item.task.title}</strong>
                             </span>
+                            <em className="calendar-upcoming-status tone-danger">
+                              Deadline
+                            </em>
                           </button>
                         ),
                       )}
@@ -7893,8 +7909,17 @@ function WorkspaceView({
                 </div>
               </Card>
               <Card className="calendar-calendars-card">
-                <div className="calendar-side-heading">
+                <div className="calendar-side-heading calendar-calendars-heading">
                   <h3>Calendars</h3>
+                  {calendarFilter !== "all" && (
+                    <button
+                      type="button"
+                      className="calendar-show-all"
+                      onClick={() => setCalendarFilter("all")}
+                    >
+                      Show all
+                    </button>
+                  )}
                 </div>
                 <div className="calendar-legend-list">
                   {calendarLegendOptions.map((option) => {
@@ -7922,6 +7947,29 @@ function WorkspaceView({
                     );
                   })}
                 </div>
+                <div
+                  className={`calendar-conflict-summary${calendarConflictLead ? " has-conflict" : ""}`}
+                >
+                  <AlertTriangle size={14} aria-hidden="true" />
+                  <p>
+                    {calendarConflictLead
+                      ? `${calendarConflictLead.event.title} overlaps with ${
+                          calendarConflictLead.count
+                        } other event${
+                          calendarConflictLead.count === 1 ? "" : "s"
+                        }. ${calendarConflictTotal} conflict${
+                          calendarConflictTotal === 1 ? "" : "s"
+                        } ${
+                          toDateKey(calendarConflictLead.event.start_at) === today
+                            ? "today"
+                            : `on ${formatDate(calendarConflictLead.event.start_at)}`
+                        }.`
+                      : "No overlapping events in this view."}
+                  </p>
+                </div>
+                <p className="calendar-conflict-note">
+                  Conflicts are flagged, never blocked.
+                </p>
                 <div className="calendar-legend-rule" />
                 <label className="calendar-work-filter">
                   <span>Task deadlines</span>

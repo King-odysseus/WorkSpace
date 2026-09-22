@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, effectivePresence, filterCheckInsByRange, formatDate, formatDateTime, formatDay, formatDayMonth, formatLastSeen, formatLongDate, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
+import { calendarDayOffset, calendarEventConflictCounts, calendarUpcomingGroup, calendarUpcomingStatus, effectivePresence, filterCheckInsByRange, formatDate, formatDateTime, formatDay, formatDayMonth, formatLastSeen, formatLongDate, mapTaskFromApi, sortMembersByRecentActivity, taskAssigneeLabel, taskDueLabel, taskIsAssignedTo, taskSearchText, readJsonResponse } from './workspace-format.js'
 import { taskMatchesScope } from '../components/WorkScopeSelector.jsx'
 
 const jsonResponse = (body, { ok = true, status = 200, contentType = 'application/json' } = {}) => ({
@@ -231,6 +231,52 @@ describe('calendarEventConflictCounts', () => {
     expect(conflicts.get(2)).toBe(2)
     expect(conflicts.get(3)).toBe(1)
     expect(conflicts.has(4)).toBe(false)
+  })
+})
+
+describe('calendarUpcomingStatus', () => {
+  const now = new Date(2026, 8, 13, 9, 0)
+
+  it('labels backend deadlines without inventing extra event types', () => {
+    expect(
+      calendarUpcomingStatus(
+        { event_type: 'deadline', start_at: '2026-09-13T17:00:00' },
+        { now },
+      ),
+    ).toEqual({ label: 'Deadline', tone: 'danger' })
+  })
+
+  it('surfaces an overlap ahead of the imminent time label', () => {
+    expect(
+      calendarUpcomingStatus(
+        { event_type: 'meeting', start_at: '2026-09-13T09:30:00' },
+        { now, conflictCount: 2 },
+      ),
+    ).toEqual({ label: 'Overlaps', tone: 'warning' })
+  })
+
+  it('labels events starting within the next hour', () => {
+    expect(
+      calendarUpcomingStatus(
+        { event_type: 'meeting', start_at: '2026-09-13T09:40:00' },
+        { now },
+      ),
+    ).toEqual({ label: 'In 40 min', tone: 'info' })
+  })
+
+  it('does not label far-future or already-started events', () => {
+    expect(
+      calendarUpcomingStatus(
+        { event_type: 'meeting', start_at: '2026-09-13T11:00:00' },
+        { now },
+      ),
+    ).toBeNull()
+    expect(
+      calendarUpcomingStatus(
+        { event_type: 'meeting', start_at: '2026-09-13T08:59:00' },
+        { now },
+      ),
+    ).toBeNull()
   })
 })
 
