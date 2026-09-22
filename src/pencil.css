@@ -304,6 +304,14 @@ html, body, #root { min-height: 100%; max-width: 100%; overflow-x: clip; }
 body { margin: 0; background: var(--pencil-canvas); color: var(--pencil-text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
+/* Not everything clickable is a button. A project card is opened by a delegated
+   click on the grid, an issue row and a file row carry their own handler, and
+   the slide rail actions are spans. None of them inherit the rule above, so
+   they read as inert under the cursor until they are told otherwise. */
+[role='button'],
+.projects-view .project-card,
+.project-issues-table tbody tr,
+.slide-rail-action { cursor: pointer; }
 .screen-share-video-source { display: none !important; }
 .skip-link { position: fixed; z-index: 100; top: -64px; left: 16px; padding: 8px 12px; border-radius: 8px; background: var(--pencil-navy); color: #fff; }
 .skip-link:focus { top: 16px; }
