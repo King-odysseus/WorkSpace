@@ -7986,3 +7986,139 @@ html[data-theme='dark'] .pencil-activity-view .activity-history {
     grid-column: 1 / -1;
   }
 }
+
+/* Final text-inset pass. Compact controls and dense data rows must keep a
+   readable gap between the label box and the visible surface edge. */
+.task-status-pill,
+[data-slot='select-trigger'].app-select-trigger:is(.task-status, .task-status-pill),
+.planner-task-card-details [data-slot='select-trigger'].planner-status-pill,
+.planner-task-card-details span.planner-status-pill,
+.projects-view [data-slot='select-trigger'].project-status,
+.project-kanban-status.app-select-trigger,
+.project-task-status,
+.project-task-status-select.app-select-trigger {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  line-height: 14px !important;
+}
+
+.project-health,
+.project-status-badge,
+.pencil-reports-view .report-project-status,
+.pencil-team-status,
+.pencil-followup-due {
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  line-height: 14px !important;
+}
+
+.project-task-priority,
+.project-register-table .record-severity,
+.project-issues-table .record-severity,
+.project-issue-drawer-badges .record-severity,
+.project-issue-mobile-list .record-severity {
+  min-height: 28px !important;
+  padding-inline: 11px !important;
+  line-height: 14px !important;
+}
+
+.calendar-date-number {
+  min-width: 28px !important;
+  height: 28px !important;
+  padding-inline: 6px !important;
+  line-height: 16px !important;
+}
+
+.chat-workspace-view .chat-filter-tabs {
+  height: 34px;
+}
+
+.chat-workspace-view .chat-filter-tabs button {
+  height: 34px;
+  padding-inline: 12px;
+}
+
+.projects-view .project-summary > div {
+  height: auto !important;
+  min-height: 116px !important;
+  padding: 18px 20px 22px !important;
+}
+
+.pencil-reports-view .report-project-row {
+  padding-inline: 20px;
+}
+
+.pencil-reports-view .report-member-row,
+.pencil-reports-view .report-member-header {
+  padding-inline: 14px;
+}
+
+.pencil-reports-view .report-week-chart {
+  padding-inline: 12px;
+}
+
+.calendar-month-weekdays {
+  height: 36px;
+}
+
+.calendar-month-weekdays span {
+  font-size: 10px;
+}
+
+.calendar-month-weekdays span:first-child {
+  padding-left: 4px;
+}
+
+.calendar-month-weekdays span:last-child {
+  padding-right: 4px;
+}
+
+.install-troubleshooting-card {
+  padding-bottom: 24px;
+}
+
+.install-troubleshooting-card details:last-child > p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .pencil-reports-view .report-project-row:not(.report-project-header) {
+    padding-inline: 12px;
+  }
+
+  .projects-view .project-summary > div {
+    min-height: 112px !important;
+    padding: 14px 16px 20px !important;
+  }
+
+  .personal-planner-header {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .planner-column-heading {
+    height: 48px !important;
+    padding: 8px 44px 8px 14px !important;
+  }
+
+  .pencil-team-row {
+    min-height: 88px;
+  }
+
+  .planner-mobile-sheet-peek {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .planner-mobile-sheet-peek > div {
+    padding-right: 1px;
+    scroll-padding-right: 12px;
+  }
+
+  .planner-mobile-sheet-peek button {
+    padding-inline: 12px;
+  }
+}

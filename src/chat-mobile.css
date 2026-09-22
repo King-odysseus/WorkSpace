@@ -60,12 +60,12 @@
     right: 16px;
     left: 16px;
     display: flex;
-    height: 30px;
+    height: 34px;
     gap: 8px;
   }
 
   .chat-workspace-view .chat-filter-tabs button {
-    height: 30px;
+    height: 34px;
     flex: 0 0 auto;
     padding: 0 12px;
     font-size: 12px;
