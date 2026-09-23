@@ -235,12 +235,8 @@ function PersonalPlanner({ workspaceId }) {
           {task.is_done && task.completed_at
             ? <span className="personal-task-flag is-quiet">Done {formatDay(task.completed_at)}</span>
             : <span className={`personal-task-flag${isOverdue(task, today, nowTime) ? ' is-overdue' : ''}`}>{task.due_date ? `Due ${formatDay(task.due_date)}${task.due_time ? ` ${task.due_time}` : ''}` : 'No due date'}</span>}
-          <span aria-hidden="true">-</span>
-          <button type="button" className={`personal-task-link${openNotesId === task.id ? ' is-active' : ''}`} onClick={() => setOpenNotesId(current => (current === task.id ? null : task.id))}>
-            {task.notes ? 'Notes' : 'Add notes'}
-          </button>
         </div>
-        {openNotesId === task.id && <div className="personal-task-notes-panel">
+        {openNotesId === task.id && <div className="personal-task-notes-panel" id={`personal-task-editor-${task.id}`}>
           <div className="personal-task-edit-controls">
             <label className="personal-task-date-control">
               <CalendarDays size={15} aria-hidden="true" />
@@ -257,19 +253,28 @@ function PersonalPlanner({ workspaceId }) {
                   true,
                 )}
               />
-              {task.due_date && <>
-                <Clock size={15} aria-hidden="true" />
-                <input
-                  type="time"
-                  className="personal-task-time-input"
-                  aria-label={`Due time for ${task.title}`}
-                  value={task.due_time || ''}
-                  onChange={event => patchTask(task, { due_time: event.target.value }, true)}
-                />
-              </>}
             </label>
-            <button type="button" className="personal-task-notes-toggle is-active"><NotebookPen size={15} /> Notes</button>
+            <label className={`personal-task-time-control${task.due_date ? '' : ' is-disabled'}`}>
+              <Clock size={15} aria-hidden="true" />
+              <input
+                type="time"
+                aria-label={`Due time for ${task.title}`}
+                value={task.due_time || ''}
+                disabled={!task.due_date}
+                title={task.due_date ? `Due time for ${task.title}` : 'Set a due date before adding a time'}
+                onChange={event => patchTask(task, { due_time: event.target.value }, true)}
+              />
+            </label>
+            <span className="personal-task-notes-toggle is-active"><NotebookPen size={15} /> Notes</span>
           </div>
+          {planners.length > 1 && <label className="personal-task-planner-control">
+            <span>Planner</span>
+            <select
+              aria-label={`Planner for ${task.title}`}
+              value={task.planner_id}
+              onChange={event => patchTask(task, { planner_id: Number(event.target.value) }, true)}
+            >{planners.map(planner => <option value={planner.id} key={planner.id}>{planner.name}</option>)}</select>
+          </label>}
           <textarea
             className="personal-task-notes"
             aria-label={`Notes for ${task.title}`}
@@ -281,12 +286,15 @@ function PersonalPlanner({ workspaceId }) {
         </div>}
       </div>
       <div className="personal-task-side">
-        {planners.length > 1 && <select
-          className="personal-task-move"
-          aria-label={`Planner for ${task.title}`}
-          value={task.planner_id}
-          onChange={event => patchTask(task, { planner_id: Number(event.target.value) }, true)}
-        >{planners.map(planner => <option value={planner.id} key={planner.id}>{planner.name}</option>)}</select>}
+        <button
+          type="button"
+          className={`personal-task-edit${openNotesId === task.id ? ' is-active' : ''}`}
+          aria-label={`${openNotesId === task.id ? 'Close editor for' : 'Edit'} ${task.title}`}
+          aria-expanded={openNotesId === task.id}
+          aria-controls={`personal-task-editor-${task.id}`}
+          title={`${openNotesId === task.id ? 'Close editor for' : 'Edit'} ${task.title}`}
+          onClick={() => setOpenNotesId(current => (current === task.id ? null : task.id))}
+        ><Pencil size={15} /></button>
         <button type="button" className="personal-task-delete" aria-label={`Delete ${task.title}`} title={`Delete ${task.title}`} onClick={() => setConfirmingTaskId(task.id)}><Trash2 size={15} /></button>
       </div>
     </div>

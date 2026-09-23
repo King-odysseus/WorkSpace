@@ -173,7 +173,7 @@ it('saves a renamed title once, on blur, and refuses to save an empty one', asyn
   expect(JSON.parse(patches[0][1].body)).toEqual({ title: 'Draft the handover notes' })
 })
 
-it('opens the notes on a row and saves them', async () => {
+it('opens a task editor from its pencil action and saves notes', async () => {
   const fetchMock = loadPlanner({
     '/personal/tasks/8/': { task: { ...tasks[1], notes: 'Ask about the van with the tail lift' } },
   })
@@ -182,7 +182,13 @@ it('opens the notes on a row and saves them', async () => {
   // Notes stay folded away until asked for, so a list of ten errands is still scannable.
   expect(screen.queryByLabelText('Notes for Book the van')).not.toBeInTheDocument()
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Notes' }))
+  const edit = await screen.findByRole('button', { name: 'Edit Book the van' })
+  expect(edit).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(edit)
+  expect(screen.getByRole('button', { name: 'Close editor for Book the van' })).toHaveAttribute('aria-expanded', 'true')
+  expect(screen.getByRole('button', { name: 'Close editor for Book the van' })).toHaveAttribute('aria-controls', 'personal-task-editor-8')
+  expect(screen.getByLabelText('Due date for Book the van')).toBeInTheDocument()
+  expect(screen.getByLabelText('Due time for Book the van')).toBeInTheDocument()
   const notes = screen.getByLabelText('Notes for Book the van')
   expect(notes).toHaveValue('Ask about the bigger one')
 
@@ -202,7 +208,7 @@ it('updates a task due date from the inline editor', async () => {
   })
 
   render(<PersonalPlanner workspaceId={4} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Notes' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Book the van' }))
   const dueDate = screen.getByLabelText('Due date for Book the van')
   fireEvent.change(dueDate, { target: { value: '2026-10-02' } })
 
@@ -223,7 +229,8 @@ it('shows a due time beside its date, and saves an edit to it', async () => {
   render(<PersonalPlanner workspaceId={4} />)
   expect(await screen.findByText('Due 02-10-26 09:00')).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Add notes' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Stand-up' }))
+  expect(screen.getByLabelText('Due date for Stand-up')).toHaveValue('2026-10-02')
   fireEvent.change(screen.getByLabelText('Due time for Stand-up'), { target: { value: '14:30' } })
 
   await waitFor(() => {
@@ -234,15 +241,15 @@ it('shows a due time beside its date, and saves an edit to it', async () => {
   expect(screen.getByText('Due 02-10-26 14:30')).toBeInTheDocument()
 })
 
-it('keeps the clock out of the way until an item has a due date', async () => {
+it('shows a disabled time control until an item has a due date', async () => {
   loadPlanner()
 
   render(<PersonalPlanner workspaceId={4} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Notes' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Book the van' }))
 
   // 'Book the van' has no due date, so there is nothing for a time to attach to.
   expect(screen.getByLabelText('Due date for Book the van')).toBeInTheDocument()
-  expect(screen.queryByLabelText('Due time for Book the van')).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Due time for Book the van')).toBeDisabled()
 })
 
 it('clears the clock with the date, in one request', async () => {
@@ -253,7 +260,7 @@ it('clears the clock with the date, in one request', async () => {
   })
 
   render(<PersonalPlanner workspaceId={4} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Add notes' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Stand-up' }))
   fireEvent.change(await screen.findByLabelText('Due date for Stand-up'), { target: { value: '' } })
 
   await waitFor(() => {
@@ -262,7 +269,7 @@ it('clears the clock with the date, in one request', async () => {
     // Sent together: the server refuses a time it cannot hang on a date.
     expect(JSON.parse(patches[0][1].body)).toEqual({ due_date: '', due_time: '' })
   })
-  expect(screen.queryByLabelText('Due time for Stand-up')).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Due time for Stand-up')).toBeDisabled()
   expect(screen.getByText('No due date')).toBeInTheDocument()
 })
 
@@ -343,6 +350,7 @@ it('moves a task to another private planner without changing the API shape', asy
   })
 
   render(<PersonalPlanner workspaceId={4} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Draft handover' }))
   const move = await screen.findByLabelText('Planner for Draft handover')
   fireEvent.change(move, { target: { value: '5' } })
 
