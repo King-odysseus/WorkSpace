@@ -4,12 +4,23 @@
 // remember to filter it out.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Check, MoreHorizontal, NotebookPen, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CalendarDays, Check, Clock, MoreHorizontal, NotebookPen, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { Card } from './ui/card.jsx'
 import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { formatDay, getCsrfToken, readJsonResponse, toDateKey } from '../lib/workspace-format.js'
+
+// A due time is the reason the field exists, so a task that named one is late the
+// moment it passes rather than at the end of the day. A task carrying only a date
+// keeps the older meaning: due on that day, late from the next one. today and
+// nowTime are passed in rather than read here so the row and the summary cannot
+// disagree about what "now" was.
+function isOverdue(task, today, nowTime) {
+  if (!task.due_date || task.is_done) return false
+  if (task.due_date !== today) return task.due_date < today
+  return Boolean(task.due_time) && task.due_time < nowTime
+}
 
 function PersonalPlanner({ workspaceId }) {
   const [planners, setPlanners] = useState([])
@@ -27,7 +38,11 @@ function PersonalPlanner({ workspaceId }) {
   const [confirmingPlannerId, setConfirmingPlannerId] = useState(null)
   const [confirmingTaskId, setConfirmingTaskId] = useState(null)
   const [openNotesId, setOpenNotesId] = useState(null)
-  const today = toDateKey(new Date())
+  const now = new Date()
+  const today = toDateKey(now)
+  // The clock half of "is this late", in the same HH:MM the server writes a due
+  // time in, so the two compare as strings without either side parsing the other.
+  const nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
   const request = useCallback(async (suffix, method, body) => {
     const response = await fetch(`/api/workspaces/${workspaceId}/personal${suffix}`, {
@@ -84,9 +99,9 @@ function PersonalPlanner({ workspaceId }) {
   const summary = useMemo(() => {
     if (!activeTasks.length) return 'Nothing planned yet.'
     const done = activeTasks.filter(task => task.is_done).length
-    const overdue = activeTasks.filter(task => !task.is_done && task.due_date && task.due_date < today).length
+    const overdue = activeTasks.filter(task => isOverdue(task, today, nowTime)).length
     return overdue ? `${done} of ${activeTasks.length} done - ${overdue} overdue` : `${done} of ${activeTasks.length} done`
-  }, [activeTasks, today])
+  }, [activeTasks, today, nowTime])
 
   const run = async (work) => {
     setSaving(true)
@@ -219,7 +234,7 @@ function PersonalPlanner({ workspaceId }) {
         <div className="personal-task-meta">
           {task.is_done && task.completed_at
             ? <span className="personal-task-flag is-quiet">Done {formatDay(task.completed_at)}</span>
-            : <span className={`personal-task-flag${task.due_date && task.due_date < today ? ' is-overdue' : ''}`}>{task.due_date ? `Due ${formatDay(task.due_date)}` : 'No due date'}</span>}
+            : <span className={`personal-task-flag${isOverdue(task, today, nowTime) ? ' is-overdue' : ''}`}>{task.due_date ? `Due ${formatDay(task.due_date)}${task.due_time ? ` ${task.due_time}` : ''}` : 'No due date'}</span>}
           <span aria-hidden="true">-</span>
           <button type="button" className={`personal-task-link${openNotesId === task.id ? ' is-active' : ''}`} onClick={() => setOpenNotesId(current => (current === task.id ? null : task.id))}>
             {task.notes ? 'Notes' : 'Add notes'}
@@ -233,8 +248,25 @@ function PersonalPlanner({ workspaceId }) {
                 type="date"
                 aria-label={`Due date for ${task.title}`}
                 value={task.due_date}
-                onChange={event => patchTask(task, { due_date: event.target.value }, true)}
+                // The day and the clock are one moment, so losing the day loses
+                // the time with it and in the same request: the server refuses a
+                // time it cannot hang on a date.
+                onChange={event => patchTask(
+                  task,
+                  event.target.value ? { due_date: event.target.value } : { due_date: '', due_time: '' },
+                  true,
+                )}
               />
+              {task.due_date && <>
+                <Clock size={15} aria-hidden="true" />
+                <input
+                  type="time"
+                  className="personal-task-time-input"
+                  aria-label={`Due time for ${task.title}`}
+                  value={task.due_time || ''}
+                  onChange={event => patchTask(task, { due_time: event.target.value }, true)}
+                />
+              </>}
             </label>
             <button type="button" className="personal-task-notes-toggle is-active"><NotebookPen size={15} /> Notes</button>
           </div>

@@ -213,6 +213,93 @@ it('updates a task due date from the inline editor', async () => {
   })
 })
 
+it('shows a due time beside its date, and saves an edit to it', async () => {
+  const scheduled = { id: 7, planner_id: 3, title: 'Stand-up', notes: '', due_date: '2026-10-02', due_time: '09:00', is_done: false, completed_at: '', position: 0 }
+  const fetchMock = mockApi({
+    '/personal/planners/': { planners: [planner], tasks: [scheduled] },
+    '/personal/tasks/7/': { task: { ...scheduled, due_time: '14:30' } },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  expect(await screen.findByText('Due 02-10-26 09:00')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add notes' }))
+  fireEvent.change(screen.getByLabelText('Due time for Stand-up'), { target: { value: '14:30' } })
+
+  await waitFor(() => {
+    const patches = fetchMock.mock.calls.filter(([, init = {}]) => init.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(JSON.parse(patches[0][1].body)).toEqual({ due_time: '14:30' })
+  })
+  expect(screen.getByText('Due 02-10-26 14:30')).toBeInTheDocument()
+})
+
+it('keeps the clock out of the way until an item has a due date', async () => {
+  loadPlanner()
+
+  render(<PersonalPlanner workspaceId={4} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Notes' }))
+
+  // 'Book the van' has no due date, so there is nothing for a time to attach to.
+  expect(screen.getByLabelText('Due date for Book the van')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Due time for Book the van')).not.toBeInTheDocument()
+})
+
+it('clears the clock with the date, in one request', async () => {
+  const scheduled = { id: 7, planner_id: 3, title: 'Stand-up', notes: '', due_date: '2026-10-02', due_time: '09:00', is_done: false, completed_at: '', position: 0 }
+  const fetchMock = mockApi({
+    '/personal/planners/': { planners: [planner], tasks: [scheduled] },
+    '/personal/tasks/7/': { task: { ...scheduled, due_date: '', due_time: '' } },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Add notes' }))
+  fireEvent.change(await screen.findByLabelText('Due date for Stand-up'), { target: { value: '' } })
+
+  await waitFor(() => {
+    const patches = fetchMock.mock.calls.filter(([, init = {}]) => init.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    // Sent together: the server refuses a time it cannot hang on a date.
+    expect(JSON.parse(patches[0][1].body)).toEqual({ due_date: '', due_time: '' })
+  })
+  expect(screen.queryByLabelText('Due time for Stand-up')).not.toBeInTheDocument()
+  expect(screen.getByText('No due date')).toBeInTheDocument()
+})
+
+it('marks an item late from its due time, not from the end of the day', async () => {
+  // Built from the real clock, a few minutes either side of now, so the assertion
+  // holds whichever side of midnight the suite happens to run on.
+  const keyOf = (value) => {
+    const at = new Date(value)
+    const pad = part => String(part).padStart(2, '0')
+    return [at.getFullYear(), pad(at.getMonth() + 1), pad(at.getDate())].join('-')
+  }
+  const clockOf = (value) => {
+    const at = new Date(value)
+    return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+  }
+  const past = Date.now() - 5 * 60 * 1000
+  const future = Date.now() + 5 * 60 * 1000
+
+  mockApi({
+    '/personal/planners/': {
+      planners: [planner],
+      tasks: [
+        { id: 7, planner_id: 3, title: 'Stand-up', notes: '', due_date: keyOf(past), due_time: clockOf(past), is_done: false, completed_at: '', position: 0 },
+        { id: 8, planner_id: 3, title: 'Later call', notes: '', due_date: keyOf(future), due_time: clockOf(future), is_done: false, completed_at: '', position: 1 },
+      ],
+    },
+  })
+
+  const { container } = render(<PersonalPlanner workspaceId={4} />)
+
+  expect(await screen.findByDisplayValue('Stand-up')).toBeInTheDocument()
+  const [late, later] = container.querySelectorAll('.personal-task-flag')
+  expect(late).toHaveClass('is-overdue')
+  expect(later).not.toHaveClass('is-overdue')
+  expect(screen.getByText('0 of 2 done - 1 overdue')).toBeInTheDocument()
+})
+
 it('renames a planner from its management controls', async () => {
   const fetchMock = loadPlanner({
     '/personal/planners/3/': { planner: { ...planner, name: 'This week' } },

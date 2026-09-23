@@ -1893,6 +1893,10 @@ class PersonalTask(models.Model):
     title = models.CharField(max_length=300)
     notes = models.TextField(blank=True)
     due_date = models.DateField(null=True, blank=True)
+    # Always paired with due_date: a time of day is only meaningful as part of a
+    # moment, so the view layer refuses one without a date rather than storing a
+    # clock reading that belongs to no day.
+    due_time = models.TimeField(null=True, blank=True)
     is_done = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
     position = models.PositiveSmallIntegerField(default=0)
@@ -1910,6 +1914,9 @@ class PersonalTask(models.Model):
             'title': self.title,
             'notes': self.notes,
             'due_date': self.due_date.isoformat() if self.due_date else '',
+            # HH:MM, the way an <input type="time"> reads and writes one, so the
+            # client never has to parse a server clock format to fill its field.
+            'due_time': self.due_time.strftime('%H:%M') if self.due_time else '',
             'is_done': self.is_done,
             'completed_at': self.completed_at.isoformat() if self.completed_at else '',
             'position': self.position,

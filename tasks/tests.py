@@ -4,7 +4,7 @@ import importlib
 import io
 import tempfile
 from io import StringIO
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -6151,6 +6151,61 @@ class PersonalPlannerApiTests(TestCase):
         accepted = self._add_task('Errand', due_date='2026-09-05')
         self.assertEqual(accepted.status_code, 201)
         self.assertEqual(accepted.json()['task']['due_date'], '2026-09-05')
+
+    def test_a_due_time_is_kept_beside_its_date(self):
+        self._as(self.member)
+        created = self._add_task('Stand-up', due_date='2026-09-05', due_time='09:30')
+        self.assertEqual(created.status_code, 201)
+        # HH:MM, the shape an <input type="time"> reads and writes.
+        self.assertEqual(created.json()['task']['due_time'], '09:30')
+
+        task_id = created.json()['task']['id']
+        self.assertEqual(PersonalTask.objects.get(id=task_id).due_time, time(9, 30))
+
+        # A task with no time keeps an empty string rather than null, so the field
+        # on the client is never nullish.
+        bare = self._add_task('Errand', due_date='2026-09-05')
+        self.assertEqual(bare.json()['task']['due_time'], '')
+
+    def test_a_due_time_must_be_a_clock_reading(self):
+        self._as(self.member)
+        self.assertEqual(self._add_task('Errand', due_date='2026-09-05', due_time='25:00').status_code, 400)
+        self.assertEqual(self._add_task('Errand', due_date='2026-09-05', due_time='2026-09-05').status_code, 400)
+
+    def test_a_due_time_without_a_date_is_refused(self):
+        # A clock reading belongs to a day, so half a moment is a client bug worth
+        # reporting rather than a row that cannot be rendered or compared.
+        self._as(self.member)
+        self.assertEqual(self._add_task('Errand', due_time='09:30').status_code, 400)
+        self.assertEqual(PersonalTask.objects.count(), 0)
+
+    def test_clearing_the_date_takes_the_time_with_it(self):
+        # The client clears the day first and the moment goes with it, so an undated
+        # task can never be left holding a time.
+        self._as(self.member)
+        task_id = self._add_task('Stand-up', due_date='2026-09-05', due_time='09:30').json()['task']['id']
+
+        cleared = self.client.patch(
+            self._task_detail_url(task_id),
+            data=json.dumps({'due_date': ''}),
+            content_type='application/json',
+        )
+        self.assertEqual(cleared.status_code, 200)
+        self.assertEqual(cleared.json()['task']['due_date'], '')
+        self.assertEqual(cleared.json()['task']['due_time'], '')
+        self.assertIsNone(PersonalTask.objects.get(id=task_id).due_time)
+
+    def test_a_time_cannot_be_added_to_an_undated_task(self):
+        self._as(self.member)
+        task_id = self._add_task('Errand').json()['task']['id']
+
+        response = self.client.patch(
+            self._task_detail_url(task_id),
+            data=json.dumps({'due_time': '09:30'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIsNone(PersonalTask.objects.get(id=task_id).due_time)
 
 
 class DisplayDateTests(TestCase):

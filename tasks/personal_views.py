@@ -11,7 +11,7 @@ workspace is the whole requirement.
 """
 
 import json
-from datetime import date
+from datetime import date, time
 
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Max
@@ -95,6 +95,19 @@ def _parse_due_date(value):
         return date.fromisoformat(str(value)), None
     except (TypeError, ValueError):
         return None, JsonResponse({'error': 'due_date must use YYYY-MM-DD format.'}, status=400)
+
+
+def _parse_due_time(value):
+    """Accept HH:MM (or HH:MM:SS) or an empty value, which clears the time."""
+    if value in (None, ''):
+        return None, None
+    try:
+        return time.fromisoformat(str(value)), None
+    except (TypeError, ValueError):
+        return None, JsonResponse({'error': 'due_time must use HH:MM format.'}, status=400)
+
+
+LONE_TIME_ERROR = 'A due time needs a due date.'
 
 
 @require_http_methods(['GET', 'POST'])
@@ -194,6 +207,11 @@ def personal_task_list(request, workspace_id):
     due_date, error = _parse_due_date(payload.get('due_date'))
     if error:
         return error
+    due_time, error = _parse_due_time(payload.get('due_time'))
+    if error:
+        return error
+    if due_time is not None and due_date is None:
+        return JsonResponse({'error': LONE_TIME_ERROR}, status=400)
     notes = str(payload.get('notes', ''))[:MAX_NOTES]
 
     task = PersonalTask.objects.create(
@@ -202,6 +220,7 @@ def personal_task_list(request, workspace_id):
         title=title,
         notes=notes,
         due_date=due_date,
+        due_time=due_time,
         position=_next_position(PersonalTask, planner=planner),
     )
     return JsonResponse({'task': task.as_dict()}, status=201)
@@ -234,12 +253,35 @@ def personal_task_detail(request, workspace_id, task_id):
     if 'notes' in payload:
         task.notes = str(payload['notes'])[:MAX_NOTES]
         fields.append('notes')
-    if 'due_date' in payload:
-        due_date, error = _parse_due_date(payload['due_date'])
-        if error:
-            return error
-        task.due_date = due_date
-        fields.append('due_date')
+    if 'due_date' in payload or 'due_time' in payload:
+        # Resolved as a pair, because the date decides whether the time is part of
+        # a moment or an orphan. Clearing the date drops the time with it, so a
+        # client that only manages dates cannot leave a half-set moment behind.
+        date_sent = 'due_date' in payload
+        time_sent = 'due_time' in payload
+        due_date = task.due_date
+        if date_sent:
+            due_date, error = _parse_due_date(payload['due_date'])
+            if error:
+                return error
+        due_time = task.due_time
+        if time_sent:
+            due_time, error = _parse_due_time(payload['due_time'])
+            if error:
+                return error
+        if due_time is not None and due_date is None:
+            if time_sent:
+                return JsonResponse({'error': LONE_TIME_ERROR}, status=400)
+            due_time = None
+        # A field that was sent is written even when it matches, the way every other
+        # field in this view behaves; the time the date cleared is written because
+        # the row changed, not because the client named it.
+        if date_sent or task.due_date != due_date:
+            task.due_date = due_date
+            fields.append('due_date')
+        if time_sent or task.due_time != due_time:
+            task.due_time = due_time
+            fields.append('due_time')
     if 'is_done' in payload:
         task.is_done = bool(payload['is_done'])
         # Stamped here rather than in the client, so "when was this finished" is

@@ -5964,6 +5964,10 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
 .personal-task-date-control, .personal-task-notes-toggle { display: inline-flex; min-height: 36px; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--pencil-border-strong); border-radius: 8px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); font-size: 12px; font-weight: 500; }
 .personal-task-date-control { cursor: pointer; }
 .personal-task-date-control input { width: 104px; min-width: 0; padding: 0; border: 0 !important; outline: 0; background: transparent !important; color: inherit; font-size: 12px; box-shadow: none !important; }
+/* The clock shares the date's chip rather than taking a second one: the two are
+   one moment, and a single control keeps the row inside a narrow phone. */
+.personal-task-date-control input[type='time'] { width: 72px; padding-left: 9px; border-left: 1px solid var(--pencil-border-strong) !important; }
+.personal-task-date-control input[type='time']::-webkit-calendar-picker-indicator { margin-left: 0; }
 .personal-task-notes-toggle.is-active { border-color: #DBEAFE; background: var(--pencil-navy-tint); color: var(--pencil-navy); font-weight: 600; }
 .personal-task-notes { width: 100%; min-height: 88px; resize: vertical; padding: 12px; border: 1px solid var(--pencil-border) !important; border-radius: 8px; outline: 0; background: var(--pencil-canvas) !important; color: var(--pencil-text); font-size: 12px; line-height: 18px; box-shadow: none !important; }
 .personal-task-notes:focus { border-color: var(--pencil-navy-focus) !important; box-shadow: 0 0 0 2px rgb(37 99 235 / 12%) !important; }
@@ -6147,6 +6151,49 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
   .personal-planner-error > span::before { display: block; width: 18px; height: 18px; border: 1.5px solid currentColor; border-radius: 999px; content: ''; }
   .personal-planner-error strong { font-size: 13px; line-height: 18px; }
   .personal-planner-error p { font-size: 12px; line-height: 17px; }
+}
+
+/* Mobile planner cards, corrected around the due time. The shell above pinned
+   every card to 84px and laid its editing state out with absolute boxes, and the
+   clock the due time adds no longer fits that row: the planner select was landing
+   on top of the date chip at every phone width, hiding the date it was meant to
+   sit beside. The card now sizes to its content, so a row whose meta wraps is not
+   crammed into a fixed height, and the editing state flows as a grid, so no
+   control can overlap another however narrow the phone is. */
+@media (max-width: 900px) {
+  .personal-task-shell { height: auto; }
+  /* 82 rather than 84: the shell's own border sits outside the row, and the card
+     still measures the 84px the rest of the mobile geometry is built on. */
+  .personal-task-row { height: auto; min-height: 82px; }
+  .personal-task-side { max-width: none; }
+  /* The select reads its own planner rather than a clipped first letter, and the
+     width it takes comes out of the title column, which ellipsizes on purpose. */
+  .personal-task-move { width: 88px; padding: 3px 14px 3px 6px; }
+
+  .personal-task-shell.is-editing { height: auto; min-height: 0; }
+  .personal-task-shell.is-editing .personal-task-row { position: static; display: grid; height: auto; min-height: 0; grid-template-columns: 20px minmax(0, 1fr) 28px; align-items: start; gap: 10px 12px; padding: 14px 14px 16px; }
+  /* The title, the panel and the controls are laid out by the row's grid rather
+     than by two boxes whose positions were fixed: display: contents dissolves the
+     wrappers so their children take grid areas directly. */
+  .personal-task-shell.is-editing .personal-task-body,
+  .personal-task-shell.is-editing .personal-task-side { display: contents; }
+  .personal-task-shell.is-editing .personal-task-tick { position: static; grid-area: 1 / 1; margin-top: 2px; }
+  .personal-task-shell.is-editing .personal-task-title { position: static; width: auto; height: auto; grid-area: 1 / 2; }
+  .personal-task-shell.is-editing .personal-task-delete { position: static; grid-area: 1 / 3; }
+  .personal-task-shell.is-editing .personal-task-notes-panel { position: static; grid-area: 2 / 1 / 3 / -1; gap: 12px; margin: 0; }
+  .personal-task-shell.is-editing .personal-task-edit-controls { height: auto; flex-wrap: wrap; }
+  /* Sized to what the two values actually need, and allowed to wrap onto a second
+     line inside the chip when the phone is too narrow for both: a date field that
+     clips the year it is showing is worse than a chip one line taller. */
+  .personal-task-shell.is-editing .personal-task-date-control { width: auto; max-width: 100%; height: auto; min-height: 36px; flex-wrap: wrap; padding: 0 10px; }
+  /* The chip already says what each field is, so the browser's own picker glyph is
+     a second icon taking the room the value needs. Tapping the field still opens
+     the picker on a phone, which is the only browser this layout is served to. */
+  .personal-task-shell.is-editing .personal-task-date-control input::-webkit-calendar-picker-indicator { display: none; }
+  .personal-task-shell.is-editing .personal-task-date-control input { width: 124px; min-width: 0; font-size: 11px; }
+  .personal-task-shell.is-editing .personal-task-date-control input[type='time'] { width: 78px; }
+  .personal-task-shell.is-editing .personal-task-notes-toggle { width: auto; padding: 0 12px; }
+  .personal-task-shell.is-editing .personal-task-move { position: static; width: 100%; max-width: none; grid-area: 3 / 1 / 4 / -1; height: 36px; min-height: 36px; padding-block: 9px; }
 }
 
 /* P16 Notifications. The frame defines a 712px newest-first list beside a
