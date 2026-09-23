@@ -5926,7 +5926,7 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
 .personal-planner-empty strong { max-width: 460px; color: var(--pencil-text); font-size: 17px; font-weight: 600; line-height: 24px; }
 .personal-planner-empty p { max-width: 390px; margin: 0; color: var(--pencil-text-muted); font-size: 12px; line-height: 18px; }
 .personal-planner-empty-action { display: none !important; }
-.personal-planner-composer { display: grid; min-width: 0; height: 44px; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 17px 20px 18px; padding: 0 6px 0 16px; border: 1px solid var(--pencil-border-strong); border-radius: 10px; background: var(--pencil-surface); }
+.personal-planner-composer { display: grid; min-width: 0; height: 44px; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 17px 24px 18px; padding: 0 6px 0 16px; border: 1px solid var(--pencil-border-strong); border-radius: 10px; background: var(--pencil-surface); }
 .personal-planner-composer > svg { color: var(--pencil-text-secondary); }
 .personal-planner-composer input { width: 100%; min-width: 0; height: 42px; padding: 0; border: 0 !important; outline: 0; background: transparent !important; color: var(--pencil-text); font-size: 13px; box-shadow: none !important; }
 .personal-planner-composer input::placeholder { color: var(--pencil-text-secondary); opacity: 1; }
@@ -6070,7 +6070,7 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
   .personal-planner-header-actions { position: absolute; top: 0; right: 0; display: block; color: var(--pencil-text-secondary); }
   .personal-planner-header-actions svg { display: block; }
   .personal-planner-saving { display: none; }
-  .personal-planner-composer { display: grid; height: 48px; min-height: 48px; grid-template-columns: 16px minmax(0, 1fr) 62px; align-items: center; gap: 12px; margin: 12px 0 0; padding: 0 6px 0 14px; border: 1px solid var(--pencil-border-strong); border-radius: 12px; background: var(--pencil-surface); }
+  .personal-planner-composer { display: grid; height: 48px; min-height: 48px; grid-template-columns: 16px minmax(0, 1fr) 62px; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 0 6px 0 14px; border: 1px solid var(--pencil-border-strong); border-radius: 12px; background: var(--pencil-surface); }
   .personal-planner-composer > svg { width: 16px; height: 16px; color: var(--pencil-text-muted); }
   .personal-planner-composer input { height: 46px; font-size: 13px; line-height: 16px; }
   .personal-planner-composer button { width: 62px; min-width: 62px; height: 36px; min-height: 36px; margin: 0; padding: 0; border-radius: 9px; font-size: 12px; font-weight: 600; }
