@@ -2990,6 +2990,63 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   color: var(--pencil-text);
   box-shadow: 0 18px 44px rgb(15 23 42 / 16%);
 }
+.chat-mention-popup {
+  z-index: 80;
+  width: min(300px, calc(100vw - 24px));
+  max-height: min(320px, var(--radix-popover-content-available-height, 320px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--pencil-border);
+  border-radius: 12px;
+  background: var(--pencil-surface);
+  color: var(--pencil-text);
+  box-shadow: 0 18px 44px rgb(15 23 42 / 16%);
+}
+.chat-mention-popup .chat-mention-picker { display: grid; gap: 2px; }
+.chat-mention-popup .chat-mention-picker button {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pencil-text);
+  text-align: left;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.chat-mention-popup .chat-mention-picker button:hover,
+.chat-mention-popup .chat-mention-picker button:focus-visible {
+  background: var(--pencil-selected);
+}
+.chat-mention-popup .chat-mention-picker button:focus-visible {
+  outline: 2px solid var(--pencil-navy-focus);
+  outline-offset: -2px;
+}
+.chat-mention-popup .chat-mention-picker strong,
+.chat-mention-popup .chat-mention-picker span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-mention-popup .chat-mention-picker strong { font-size: 13px; font-weight: 600; }
+.chat-mention-popup .chat-mention-picker span { color: var(--pencil-text-muted); font-size: 12px; }
+.chat-mention-empty { margin: 0; padding: 12px; color: var(--pencil-text-muted); font-size: 13px; }
+.chat-mention-popup-arrow { fill: var(--pencil-surface); }
+mark.chat-mention {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--pencil-alert-info-fill);
+  color: var(--pencil-alert-info-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 .chat-emoji-picker {
   display: grid;
   width: 100%;
