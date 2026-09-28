@@ -121,6 +121,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "./components/ui/dialog.jsx";
+import { Tooltip } from "./components/ui/tooltip.jsx";
 import {
   Select,
   SelectTrigger,
@@ -2946,21 +2947,22 @@ function App() {
         >
           {railCollapsed ? (
             <div className="relative" ref={workspaceMenuRef}>
-              <button
-                type="button"
-                onClick={() => setWorkspaceMenuOpen((current) => !current)}
-                className="flex size-9 items-center justify-center rounded-icon transition-colors hover:bg-surface-secondary"
-                aria-haspopup="true"
-                aria-expanded={workspaceMenuOpen}
-                aria-label={`Workspace: ${currentWorkspace?.name || "Workspace"}`}
-                title={currentWorkspace?.name || "Workspace"}
-              >
-                <img
-                  src={currentWorkspace?.logo_url || "/tijha-logo.png"}
-                  alt=""
-                  className="sidebar-brand-logo size-8 shrink-0 rounded-icon object-contain"
-                />
-              </button>
+              <Tooltip content={currentWorkspace?.name || "Workspace"} side="right">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceMenuOpen((current) => !current)}
+                  className="flex size-9 items-center justify-center rounded-icon transition-colors hover:bg-surface-secondary"
+                  aria-haspopup="true"
+                  aria-expanded={workspaceMenuOpen}
+                  aria-label={`Workspace: ${currentWorkspace?.name || "Workspace"}`}
+                >
+                  <img
+                    src={currentWorkspace?.logo_url || "/tijha-logo.png"}
+                    alt=""
+                    className="sidebar-brand-logo size-8 shrink-0 rounded-icon object-contain"
+                  />
+                </button>
+              </Tooltip>
               {workspaceMenuOpen && workspaceMenu}
             </div>
           ) : (
@@ -3049,51 +3051,53 @@ function App() {
               <ul className="space-y-0.5">
                 {group.items.map(({ label, icon: Icon, badge, badgeTone }) => (
                   <li key={label}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActive(label);
-                        setMobileOpen(false);
-                      }}
-                      title={railCollapsed ? label : undefined}
-                      aria-current={active === label ? "page" : undefined}
-                      className={cn(
-                        "group relative flex h-10 w-full items-center gap-2.5 rounded-icon px-3 text-sm leading-5 transition-colors",
-                        active === label
-                          ? "bg-selected font-semibold text-primary"
-                          : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary",
-                        railCollapsed && "justify-center px-0",
-                      )}
-                    >
-                      {/* The design marks the open item with a bar as well as a
-                          fill, so the state survives for anyone who cannot pick
-                          the two greys apart. Navy in light, the theme's own
-                          accent in dark, where navy would vanish into the fill. */}
-                      {active === label && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-chip bg-primary"
-                        />
-                      )}
-                      <Icon size={20} className="shrink-0" />
-                      {!railCollapsed && (
-                        <span className="truncate">{label}</span>
-                      )}
-                      {!railCollapsed && badge > 0 && (
-                        <span
-                          className={cn(
-                            "ml-auto flex h-[18px] min-w-6 items-center justify-center rounded-[9px] px-1.5 text-[11px] font-bold text-white",
-                            badgeTone === "info"
-                              ? "bg-primary"
-                              : badgeTone === "warning"
-                                ? "nav-badge-warning"
-                                : "bg-danger",
-                          )}
-                        >
-                          {notificationBadgeLabel(badge, 9)}
-                        </span>
-                      )}
-                    </button>
+                    <Tooltip content={railCollapsed ? label : undefined} side="right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActive(label);
+                          setMobileOpen(false);
+                        }}
+                        aria-label={label}
+                        aria-current={active === label ? "page" : undefined}
+                        className={cn(
+                          "group relative flex h-10 w-full items-center gap-2.5 rounded-icon px-3 text-sm leading-5 transition-colors",
+                          active === label
+                            ? "bg-selected font-semibold text-primary"
+                            : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary",
+                          railCollapsed && "justify-center px-0",
+                        )}
+                      >
+                        {/* The design marks the open item with a bar as well as a
+                            fill, so the state survives for anyone who cannot pick
+                            the two greys apart. Navy in light, the theme's own
+                            accent in dark, where navy would vanish into the fill. */}
+                        {active === label && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-chip bg-primary"
+                          />
+                        )}
+                        <Icon size={20} className="shrink-0" />
+                        {!railCollapsed && (
+                          <span className="truncate">{label}</span>
+                        )}
+                        {!railCollapsed && badge > 0 && (
+                          <span
+                            className={cn(
+                              "ml-auto flex h-[18px] min-w-6 items-center justify-center rounded-[9px] px-1.5 text-[11px] font-bold text-white",
+                              badgeTone === "info"
+                                ? "bg-primary"
+                                : badgeTone === "warning"
+                                  ? "nav-badge-warning"
+                                  : "bg-danger",
+                            )}
+                          >
+                            {notificationBadgeLabel(badge, 9)}
+                          </span>
+                        )}
+                      </button>
+                    </Tooltip>
                   </li>
                 ))}
               </ul>
@@ -3173,16 +3177,17 @@ function App() {
         </div>
 
         {!mobileOpen && (
-          <button
-            type="button"
-            className={`sidebar-expand-flyout${railCollapsed ? ' is-collapsed' : ' is-expanded'}`}
-            onClick={() => setSidebarCollapsed((current) => !current)}
-            aria-expanded={!sidebarCollapsed}
-            aria-label={railCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={railCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {railCollapsed ? <ChevronRight size={16} aria-hidden="true" /> : <ChevronLeft size={16} aria-hidden="true" />}
-          </button>
+          <Tooltip content={railCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} side="right">
+            <button
+              type="button"
+              className={`sidebar-expand-flyout${railCollapsed ? ' is-collapsed' : ' is-expanded'}`}
+              onClick={() => setSidebarCollapsed((current) => !current)}
+              aria-expanded={!sidebarCollapsed}
+              aria-label={railCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {railCollapsed ? <ChevronRight size={16} aria-hidden="true" /> : <ChevronLeft size={16} aria-hidden="true" />}
+            </button>
+          </Tooltip>
         )}
       </aside>
 
