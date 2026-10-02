@@ -307,3 +307,53 @@ it('keeps the attachment when the turn fails so it can be retried', async () => 
   expect(await screen.findByRole('alert')).toHaveTextContent('Zuri is unavailable.')
   expect(screen.getByText('quarterly.pdf')).toBeInTheDocument()
 })
+
+const uploadedFile = {
+  id: 9,
+  original_name: 'Quarterly review.pdf',
+  mime_type: 'application/pdf',
+  size: 2048,
+  url: '/api/workspace-files/9/download/',
+  uploaded_by: 'Nate Foster',
+  created_at: '2026-09-12T10:00:00Z',
+}
+
+it('opens an uploaded file inside the app instead of a browser tab', async () => {
+  // window.open left the app altogether - on mobile it hands the file to the
+  // system browser - so there was nothing to press to come back.
+  const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [uploadedFile] },
+    '/members/': { members: [] },
+  })
+
+  render(<FilesWorkspaceView workspaceId={4} currentUserId={1} />)
+  fireEvent.click(await screen.findByRole('button', { name: /^Quarterly review/ }))
+
+  expect(await screen.findByRole('dialog', { name: 'Preview of Quarterly review.pdf' })).toBeInTheDocument()
+  expect(openSpy).not.toHaveBeenCalled()
+  openSpy.mockRestore()
+})
+
+it('returns to the app from a document, not only to the file list', async () => {
+  const onExit = vi.fn()
+  mockApi({
+    '/documents/5/comments/': { comments: [] },
+    '/documents/5/shares/': { shares: [] },
+    '/documents/': { documents: [document] },
+    '/files/': { files: [] },
+    '/members/': { members: [] },
+  })
+
+  render(<FilesWorkspaceView workspaceId={4} currentUserId={1} onExit={onExit} exitLabel="Back to Today" />)
+  fireEvent.click(await screen.findByRole('button', { name: /^Launch brief/ }))
+  await screen.findByDisplayValue('Launch brief')
+
+  // The editor's own control still reaches the file list, so the way back to the
+  // app has to be a second, separate control.
+  expect(screen.getByRole('button', { name: 'All files' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Today' }))
+
+  expect(onExit).toHaveBeenCalledTimes(1)
+})

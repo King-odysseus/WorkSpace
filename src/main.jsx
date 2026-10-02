@@ -374,6 +374,13 @@ function App() {
   const backLabel = pageHistory.length
     ? `Back to ${pageHistory[pageHistory.length - 1]}`
     : "Back";
+  // The header's back control is an unlabelled chevron, which is enough to step
+  // back from a page the reader chose. It is not enough for Files: the page has
+  // no navigation entry of its own, so a reader who arrived on a document
+  // notification has no way to tell that the chevron is what returns them to the
+  // app. Files gets a named control instead, and it falls back to Today when
+  // there is no history to step through.
+  const leaveFiles = () => (pageHistory.length ? goBack() : setActive("Today"));
   // The board's exception filter lives here rather than in the board because the
   // dashboard's headline cards are what set it - Today and the board are rendered by
   // two different components. Leaving the board clears it, so arriving later from the
@@ -3713,6 +3720,8 @@ function App() {
                 setPendingCheckInId={setPendingCheckInId}
                 pendingDocumentId={pendingDocumentId}
                 setPendingDocumentId={setPendingDocumentId}
+                filesExit={leaveFiles}
+                filesExitLabel={backLabel}
                 pendingEventId={pendingEventId}
                 setPendingEventId={setPendingEventId}
                 pendingFollowUpId={pendingFollowUpId}
@@ -4164,6 +4173,8 @@ function WorkspaceView({
   setPendingCheckInId,
   pendingDocumentId,
   setPendingDocumentId,
+  filesExit = null,
+  filesExitLabel = "",
   pendingEventId,
   setPendingEventId,
   pendingFollowUpId,
@@ -8862,6 +8873,8 @@ function WorkspaceView({
           currentUserId={currentUserId}
           notificationDocumentId={pendingDocumentId}
           onNotificationDocumentHandled={() => setPendingDocumentId(null)}
+          onExit={filesExit}
+          exitLabel={filesExitLabel}
         />
       </Suspense>
     );

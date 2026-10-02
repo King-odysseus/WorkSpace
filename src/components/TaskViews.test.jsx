@@ -183,3 +183,29 @@ it('falls back to the email when a member has no name', async () => {
   openPicker()
   expect(rows()[2].closest('label')).toHaveTextContent('Primary')
 })
+
+it('opens an attachment in the viewer without leaving the app', async () => {
+  mockApi({
+    '/api/tasks/91/comments/': { comments: [] },
+    '/api/tasks/91/subtasks/': { subtasks: [] },
+    '/api/tasks/91/attachments/': {
+      attachments: [{ id: 3, original_name: 'design.pdf', file_url: '/api/attachments/3/download/' }],
+    },
+    '/api/workspaces/1/tasks/': { tasks: [] },
+  })
+
+  render(<TaskDetailDrawer task={task} workspaceId={1} onClose={vi.fn()} />)
+
+  // Exact name: the row's own delete control is labelled "Delete design.pdf".
+  fireEvent.click(await screen.findByRole('button', { name: 'design.pdf' }, { timeout: 8000 }))
+
+  expect(await screen.findByRole('dialog', { name: 'Preview of design.pdf' })).toBeInTheDocument()
+
+  // Escape belongs to the viewer while it is open. The drawer closes on Escape
+  // from its own document-level listener, so without the viewer taking the key
+  // first a single press would close both and lose the reader's place.
+  fireEvent.keyDown(document.body, { key: 'Escape' })
+
+  expect(screen.queryByRole('dialog', { name: 'Preview of design.pdf' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
+})

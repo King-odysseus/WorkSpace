@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { mockApi } from './test/setup-tests.js'
 
@@ -80,4 +80,11 @@ it('opens the exact document named by a notification history row', async () => {
 
   expect(await screen.findByDisplayValue('Launch brief', {}, { timeout: 20000 })).toBeInTheDocument()
   expect(screen.getByText('Ready for review.')).toBeInTheDocument()
+  // Files has no navigation entry of its own, so before this the reader who
+  // followed a document notification was left on a page with no way back to the
+  // app they came from. The bell was opened from Notifications, so that is where
+  // the editor's Back has to lead - not to the file list they never visited.
+  const commandbar = screen.getByDisplayValue('Launch brief').closest('.file-editor-commandbar')
+  expect(within(commandbar).getByRole('button', { name: 'Back to Notifications' })).toBeInTheDocument()
+  expect(within(commandbar).getByRole('button', { name: 'All files' })).toBeInTheDocument()
 }, 30000)

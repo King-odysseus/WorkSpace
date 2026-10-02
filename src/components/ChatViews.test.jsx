@@ -999,9 +999,17 @@ it('collects shared files and documents in the Files pane', async () => {
 
   fireEvent.click(screen.getByRole('tab', { name: /^Files/ }))
 
-  const fileLink = screen.getByRole('link', { name: /launch-brief.pdf/ })
-  expect(fileLink).toHaveAttribute('href', 'https://files.example/launch-brief.pdf')
-  expect(screen.getByText('Project brief').closest('a')).toBeNull()
+  // Opening a shared file happens in the app's own viewer now, not a new tab, so
+  // the row is a button rather than a link out.
+  const fileRow = screen.getByRole('button', { name: /launch-brief.pdf/ })
+  expect(screen.queryByRole('link', { name: /launch-brief.pdf/ })).not.toBeInTheDocument()
+
+  fireEvent.click(fileRow)
+
+  expect(await screen.findByRole('dialog', { name: 'Preview of launch-brief.pdf' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+  // A document with no URL is still listed, but stays inert.
+  expect(screen.getByText('Project brief').closest('button')).toBeNull()
   expect(screen.queryByRole('textbox', { name: 'Message' })).not.toBeInTheDocument()
 })
 

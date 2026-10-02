@@ -1810,8 +1810,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .task-dialog .attachment-row, .task-dialog .subtask-row, .task-dialog .dependency-row { min-width: 0; }
 .task-dialog .attachment-row { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 10px; }
 .task-dialog .attachment-row:hover, .task-dialog .subtask-row:hover, .task-dialog .dependency-row:hover { background: var(--pencil-surface-muted); }
-.task-dialog .attachment-row a { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 10px; color: var(--pencil-text); font-size: 12px; text-decoration: none; }
-.task-dialog .attachment-row a span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-dialog .attachment-row a, .task-dialog .attachment-row .attachment-open { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; color: var(--pencil-text); font: inherit; font-size: 12px; text-align: left; text-decoration: none; cursor: pointer; }
+.task-dialog .attachment-row a span, .task-dialog .attachment-row .attachment-open span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-dialog .attachment-thumb { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px; object-fit: cover; }
 .task-dialog .subtask-row, .task-dialog .dependency-row { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px; border-radius: 8px; }
 .task-dialog .subtask-row label, .task-dialog .dependency-row { grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 12px; font-weight: 400; }
@@ -3146,14 +3146,14 @@ mark.chat-mention {
   .chat-emoji-grid button { font-size: 20px; }
 }
 
-.chat-workspace-view .chat-shared-card { display: grid; width: min(260px, 100%); min-height: 56px; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 8px; padding: 9px 12px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); text-decoration: none; }
+.chat-workspace-view .chat-shared-card { display: grid; width: min(260px, 100%); min-height: 56px; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 8px; padding: 9px 12px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
 .chat-workspace-view .chat-shared-card > svg:first-child { width: 36px; height: 36px; padding: 10px; border-radius: 7px; background: var(--pencil-selected); color: var(--pencil-navy); }
 .chat-workspace-view .chat-shared-card span { display: grid; min-width: 0; gap: 2px; }
 .chat-workspace-view .chat-shared-card strong, .chat-workspace-view .chat-shared-card small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-workspace-view .chat-shared-card strong { font-size: 11px; font-weight: 500; line-height: 14px; }
 .chat-workspace-view .chat-shared-card small { color: var(--pencil-text-muted); font-size: 10px; line-height: 12px; }
 .chat-workspace-view .chat-shared-card-disabled { opacity: .72; }
-.chat-workspace-view .chat-shared-image { display: block; width: min(316px, 100%); margin-top: 8px; overflow: hidden; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); }
+.chat-workspace-view .chat-shared-image { display: block; width: min(316px, 100%); margin-top: 8px; padding: 0; overflow: hidden; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); cursor: pointer; }
 .chat-workspace-view .chat-shared-image img { display: block; width: 100%; max-height: 240px; object-fit: cover; }
 .chat-workspace-view .chat-new-message-divider { display: flex; height: 24px; align-items: center; gap: 10px; color: var(--pencil-navy); font-size: 11px; font-weight: 600; }
 .chat-workspace-view .chat-new-message-divider::before, .chat-workspace-view .chat-new-message-divider::after { height: 1px; flex: 1; background: var(--pencil-navy); opacity: .25; content: ''; }
@@ -3675,7 +3675,10 @@ mark.chat-mention {
   border-radius: 10px;
   background: var(--pencil-surface);
   color: var(--pencil-text);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 .chat-workspace-view .chat-resource-row:hover {
   border-color: var(--pencil-border-strong);
@@ -3789,22 +3792,36 @@ mark.chat-mention {
   margin-top: 6px;
 }
 .chat-workspace-view .chat-details-files > a,
+.chat-workspace-view .chat-details-files > button,
 .chat-workspace-view .chat-details-files > div {
   display: grid;
+  width: 100%;
   min-width: 0;
   min-height: 48px;
   grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   padding: 6px 4px;
+  border: 0;
   border-radius: 8px;
+  background: transparent;
   color: var(--pencil-text);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
-.chat-workspace-view .chat-details-files > a:hover {
+/* The div is the placeholder for an item with no URL, so it must not read as
+   clickable the way the two openable rows do. */
+.chat-workspace-view .chat-details-files > div {
+  cursor: default;
+}
+.chat-workspace-view .chat-details-files > a:hover,
+.chat-workspace-view .chat-details-files > button:hover {
   background: var(--pencil-surface-muted);
 }
 .chat-workspace-view .chat-details-files > a > svg,
+.chat-workspace-view .chat-details-files > button > svg,
 .chat-workspace-view .chat-details-files > div > svg {
   width: 28px;
   height: 28px;
@@ -3814,6 +3831,7 @@ mark.chat-mention {
   color: var(--pencil-navy);
 }
 .chat-workspace-view .chat-details-files > a > span,
+.chat-workspace-view .chat-details-files > button > span,
 .chat-workspace-view .chat-details-files > div > span {
   display: grid;
   min-width: 0;
@@ -4853,6 +4871,23 @@ mark.chat-mention {
 .document-revision-list article, .document-comment-list article, .document-share-row { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--pencil-border); border-radius: 9px; }
 .document-review-panel form { display: grid; gap: 9px; margin-top: 12px; }
 .document-review-panel textarea { min-height: 90px; padding: 10px; }
+.files-browser-back, .file-editor-exit { display: inline-flex; height: 38px; align-items: center; gap: 6px; padding: 0 12px; font-size: 12px; }
+.files-browser-back { margin-bottom: 12px; }
+
+/* The in-app file viewer. It portals to <body> rather than sitting inside a
+   view, so these rules are not scoped to one - and z-index 90 is what keeps it
+   above the two modal backdrops (70) and the task dialog (80). */
+.file-preview { position: fixed; z-index: 90; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--pencil-canvas); }
+.file-preview-bar { display: flex; min-height: 56px; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--pencil-border); background: var(--pencil-surface); }
+.file-preview-back, .file-preview-download { display: inline-flex; height: 38px; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 12px; font-size: 12px; text-decoration: none; }
+.file-preview-name { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--pencil-text); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.file-preview-body { display: flex; min-height: 0; padding: 16px; overflow: auto; }
+.file-preview-image { max-width: 100%; max-height: 100%; margin: auto; border-radius: 10px; object-fit: contain; }
+.file-preview-frame { min-width: 0; flex: 1 1 auto; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); }
+.file-preview-fallback { display: grid; margin: auto; place-items: center; gap: 6px; padding: 32px; border: 1px dashed var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); color: var(--pencil-text-muted); text-align: center; }
+.file-preview-fallback p { margin: 0; font-size: 13px; }
+.file-preview-fallback strong { color: var(--pencil-text); }
+.file-preview-fallback .primary-button { display: inline-flex; height: 40px; align-items: center; gap: 7px; margin-top: 8px; padding: 0 14px; font-size: 12px; text-decoration: none; }
 
 /* P19 Screen sharing. The page mirrors the approved active-session console with
    the real consent, policy, participant, audit, and capture API fields. */

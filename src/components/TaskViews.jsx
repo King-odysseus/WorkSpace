@@ -9,6 +9,7 @@ import { Check, ChevronDown, X } from 'lucide-react'
 import { DateField } from './workspace-ui.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
+import FilePreview from './FilePreview.jsx'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.jsx'
 import { getCsrfToken, isImageFileName, readJsonResponse, taskDueLabel, toDateKey } from '../lib/workspace-format.js'
 
@@ -91,6 +92,9 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const [comments, setComments] = useState([])
   const [subtasks, setSubtasks] = useState([])
   const [attachments, setAttachments] = useState([])
+  // The attachment open in the in-app viewer. Attachments used to open in a new
+  // browser tab, which took the reader out of the app with no way back.
+  const [preview, setPreview] = useState(null)
   const [comment, setComment] = useState('')
   const [subtask, setSubtask] = useState('')
   const [labelInput, setLabelInput] = useState((task.labels || []).join(', '))
@@ -397,10 +401,10 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
                   </div>
                   {attachments.map(attachment => (
                     <div className="attachment-row" key={attachment.id}>
-                      <a href={attachment.file_url} target="_blank" rel="noreferrer">
+                      <button type="button" className="attachment-open" onClick={() => setPreview({ url: attachment.file_url, name: attachment.original_name })}>
                         {isImageFileName(attachment.original_name) && <img className="attachment-thumb" src={attachment.file_url} alt="" loading="lazy" />}
                         <span>{attachment.original_name}</span>
-                      </a>
+                      </button>
                       {canEdit && (
                         <button type="button" className="inline-delete" onClick={() => deleteAttachment(attachment)} aria-label={`Delete ${attachment.original_name}`}>
                           <X size={14} />
@@ -520,6 +524,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
             </div>
           </div>
         </section>
+        {preview && <FilePreview file={preview} onClose={() => setPreview(null)} />}
       </div>
     )
 }
