@@ -29,3 +29,9 @@ QWEN.md
 # Scratch files from local agent runs: logs and minted sessions. The session
 # file holds a live cookie and must never be staged.
 .tmp-*
+
+# Scratch screenshots from local agent runs. They land in the repo root and
+# nothing in the app references them, so they only clutter status. Scoped to the
+# root on purpose: the icons and help images the app actually ships live under
+# public/ and must stay trackable.
+/*.png
