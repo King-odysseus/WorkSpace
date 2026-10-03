@@ -976,22 +976,39 @@ function writeAiHistory(workspaceId, turns) {
   }
 }
 
-function readAiPendingAction(workspaceId) {
+function readAiPendingActions(workspaceId) {
   try {
-    const stored = JSON.parse(window.localStorage.getItem(aiPendingActionKey(workspaceId)) || 'null')
-    return stored && typeof stored.id === 'number' && stored.status === 'pending' ? stored : null
+    const stored = JSON.parse(window.localStorage.getItem(aiPendingActionKey(workspaceId)) || '[]')
+    if (!Array.isArray(stored)) return []
+    return stored.filter(entry => entry && typeof entry.id === 'number' && entry.status === 'pending')
   } catch {
-    return null
+    return []
   }
 }
 
-function writeAiPendingAction(workspaceId, action) {
+function writeAiPendingActions(workspaceId, actions) {
   try {
-    if (action) window.localStorage.setItem(aiPendingActionKey(workspaceId), JSON.stringify(action))
+    const pending = (actions || []).filter(entry => entry && entry.status === 'pending')
+    if (pending.length) window.localStorage.setItem(aiPendingActionKey(workspaceId), JSON.stringify(pending))
     else window.localStorage.removeItem(aiPendingActionKey(workspaceId))
   } catch {
     // Persistence is optional; the in-memory confirmation still works.
   }
+}
+
+// What the reader is told once a confirmation has been answered. One action
+// keeps the single-line wording the transcript has always used; a list is listed,
+// because "Done. 9 actions" alone would not say which nine. Nothing becomes a
+// turn when none of them went through - the error banner already carries why.
+function describeDecision(decision, outcomes) {
+  const verb = decision === 'confirm' ? 'Done' : 'Cancelled'
+  const done = outcomes.filter(outcome => outcome.ok)
+  if (outcomes.length === 1) return done.length ? `${verb}. ${done[0].summary}` : ''
+  if (!done.length) return ''
+  const label = done.length === outcomes.length
+    ? `${done.length} actions`
+    : `${done.length} of ${outcomes.length} actions`
+  return `${verb}. ${label}:\n${done.map(outcome => `- ${outcome.summary}`).join('\n')}`
 }
 
 // What happened to an attached file is a fact about the request, not something to
@@ -1013,15 +1030,15 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
   const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   const [attachment, setAttachment] = useState(null); const [attaching, setAttaching] = useState(false); const [documentNote, setDocumentNote] = useState('')
   const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
-  const [pendingAction, setPendingAction] = useState(() => readAiPendingAction(workspaceId))
+  const [pendingActions, setPendingActions] = useState(() => readAiPendingActions(workspaceId))
   const [clearConfirm, setClearConfirm] = useState(null)
   useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
-  useEffect(() => { setPendingAction(readAiPendingAction(workspaceId)) }, [workspaceId])
+  useEffect(() => { setPendingActions(readAiPendingActions(workspaceId)) }, [workspaceId])
   useLayoutEffect(() => {
     const transcript = transcriptRef.current
     if (!transcript) return
     transcript.scrollTop = transcript.scrollHeight
-  }, [turns, busy, pendingAction, documentNote, error])
+  }, [turns, busy, pendingActions, documentNote, error])
   useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
   const attachFile = async event => {
     const chosen = event.target.files?.[0]
@@ -1070,9 +1087,9 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
       const answered = [...withQuestion, { role: 'assistant', content: result.answer }]
       setTurns(answered)
       writeAiHistory(workspaceId, answered)
-      if (result.pending_action) {
-        setPendingAction(result.pending_action)
-        writeAiPendingAction(workspaceId, result.pending_action)
+      if (result.pending_actions?.length) {
+        setPendingActions(result.pending_actions)
+        writeAiPendingActions(workspaceId, result.pending_actions)
       }
       if (result.action_error) setError(result.action_error)
     } catch (requestError) {
@@ -1082,39 +1099,54 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
       setBusy(false)
     }
   }
-  const resolvePendingAction = async decision => {
-    if (!pendingAction || busy) return
+  // A list is confirmed one entry at a time - each is its own proposal, and the
+  // server only ever executes the one it was asked about. A failure on one entry
+  // is recorded against it and the rest still go through, so a single bad row
+  // cannot cost the reader the whole list.
+  const resolvePendingActions = async decision => {
+    if (!pendingActions.length || busy) return
     setBusy(true)
     setError('')
+    const outcomes = []
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/ai/actions/${pendingAction.id}/`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ decision }),
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        if (result.action && result.action.status !== 'pending') {
-          setPendingAction(null)
-          writeAiPendingAction(workspaceId, null)
-        }
-        throw new Error(result.error || 'The workspace action could not be completed.')
+      for (const entry of pendingActions) {
+        const response = await fetch(`/api/workspaces/${workspaceId}/ai/actions/${entry.id}/`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ decision }),
+        })
+        const result = await response.json()
+        const action = result.action
+        outcomes.push({
+          summary: action?.summary || entry.summary,
+          ok: response.ok,
+          // Answered for either way, so it is no longer waiting on this card:
+          // the endpoint returns the action with its settled status.
+          resolved: response.ok || (action && action.status !== 'pending'),
+          message: response.ok ? '' : (result.error || 'The workspace action could not be completed.'),
+        })
       }
-      const action = result.action
-      const content = decision === 'confirm'
-        ? `Done. ${action.summary}`
-        : `Cancelled. ${action.summary}`
+    } catch (requestError) {
+      // The list stays on screen: whatever ran ran, and a retry is idempotent.
+      setError(requestError.message)
+      setBusy(false)
+      return
+    }
+    const content = describeDecision(decision, outcomes)
+    if (content) {
       const answered = [...turns, { role: 'assistant', content }]
       setTurns(answered)
       writeAiHistory(workspaceId, answered)
-      setPendingAction(null)
-      writeAiPendingAction(workspaceId, null)
-    } catch (requestError) {
-      setError(requestError.message)
-    } finally {
-      setBusy(false)
     }
+    const stillPending = pendingActions.filter((entry, index) => !outcomes[index]?.resolved)
+    setPendingActions(stillPending)
+    writeAiPendingActions(workspaceId, stillPending)
+    // Distinct messages only: twenty entries failing the same way is one thing
+    // to say, not twenty copies of it.
+    const failures = [...new Set(outcomes.filter(outcome => !outcome.ok).map(outcome => outcome.message).filter(Boolean))]
+    if (failures.length) setError(failures.join(' '))
+    setBusy(false)
   }
   // Everything the conversation holds is in localStorage, so clearing it is a
   // browser-side wipe: the stored transcript, the proposal waiting on an answer,
@@ -1133,8 +1165,8 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
       if (!confirmed) return
       setTurns([])
       writeAiHistory(workspaceId, [])
-      setPendingAction(null)
-      writeAiPendingAction(workspaceId, null)
+      setPendingActions([])
+      writeAiPendingActions(workspaceId, [])
       setMessage('')
       setAttachment(null)
       setDocumentNote('')
@@ -1159,7 +1191,7 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
           </div>
         </div>
         <div className="ai-chat-actions">
-          <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={busy || (!turns.length && !pendingAction)} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={17} /></button>
+          <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={busy || (!turns.length && !pendingActions.length)} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={17} /></button>
           {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={18} /></button>}
           <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={19} /></button>
         </div>
@@ -1182,15 +1214,24 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
             </div>
           </div>
         ))}
-        {pendingAction && (
-          <div className="ai-action-card" role="group" aria-label="Proposed workspace action">
+        {pendingActions.length > 0 && (
+          <div
+            className="ai-action-card"
+            role="group"
+            aria-label={pendingActions.length === 1 ? 'Proposed workspace action' : 'Proposed workspace actions'}
+          >
             <div className="ai-action-copy">
-              <span><Sparkles size={15} /> Proposed action</span>
-              <strong>{pendingAction.summary}</strong>
+              <span>
+                <Sparkles size={15} />
+                {pendingActions.length === 1 ? 'Proposed action' : `${pendingActions.length} proposed actions`}
+              </span>
+              {pendingActions.length === 1
+                ? <strong>{pendingActions[0].summary}</strong>
+                : <ul className="ai-action-list">{pendingActions.map(entry => <li key={entry.id}>{entry.summary}</li>)}</ul>}
             </div>
             <div className="ai-action-buttons">
-              <button type="button" className="secondary-button" onClick={() => resolvePendingAction('cancel')} disabled={busy}>Cancel</button>
-              <button type="button" className="primary-button" onClick={() => resolvePendingAction('confirm')} disabled={busy}><Check size={15} /> Confirm</button>
+              <button type="button" className="secondary-button" onClick={() => resolvePendingActions('cancel')} disabled={busy}>{pendingActions.length === 1 ? 'Cancel' : 'Cancel all'}</button>
+              <button type="button" className="primary-button" onClick={() => resolvePendingActions('confirm')} disabled={busy}><Check size={15} /> {pendingActions.length === 1 ? 'Confirm' : 'Confirm all'}</button>
             </div>
           </div>
         )}

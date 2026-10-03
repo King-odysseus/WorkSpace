@@ -6700,6 +6700,11 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
 .ai-action-copy { display: grid; gap: 5px; }
 .ai-action-copy > span { display: flex; align-items: center; gap: 6px; color: var(--pencil-text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .ai-action-copy strong { color: var(--pencil-text); font-size: 13px; line-height: 18px; }
+/* A batch is capped at twenty, which is taller than the window: the list scrolls
+   inside the card so the confirm buttons stay reachable without scrolling the
+   whole transcript past them. */
+.ai-action-list { max-height: 40vh; margin: 0; padding-left: 18px; overflow-y: auto; color: var(--pencil-text); font-size: 13px; line-height: 20px; }
+.ai-action-list li { margin-bottom: 3px; overflow-wrap: anywhere; }
 .ai-action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .ai-action-buttons .secondary-button, .ai-action-buttons .primary-button { width: auto; min-height: 34px; padding: 0 12px; font-size: 11px; }
 

@@ -201,12 +201,12 @@ it('shows a workspace action for confirmation before reporting success', async (
     },
     '/api/workspaces/4/ai/chat/': {
       answer: 'I prepared that action for your confirmation.',
-      pending_action: {
+      pending_actions: [{
         id: 7,
         kind: 'task.create',
         summary: 'Create task "Launch notes"',
         status: 'pending',
-      },
+      }],
     },
     '/api/workspaces/4/ai/actions/7/': {
       action: {
@@ -308,6 +308,76 @@ it('keeps the attachment when the turn fails so it can be retried', async () => 
   expect(screen.getByText('quarterly.pdf')).toBeInTheDocument()
 })
 
+it('confirms a proposed list in one step and accounts for every entry', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'I prepared three tasks for your confirmation.',
+      pending_actions: [
+        { id: 7, kind: 'task.create', summary: 'Create task "Write the brief"', status: 'pending' },
+        { id: 8, kind: 'task.create', summary: 'Create task "Book the venue"', status: 'pending' },
+        { id: 9, kind: 'task.create', summary: 'Create task "Send the invites"', status: 'pending' },
+      ],
+    },
+    '/api/workspaces/4/ai/actions/7/': { action: { id: 7, summary: 'Create task "Write the brief"', status: 'executed' } },
+    '/api/workspaces/4/ai/actions/8/': { action: { id: 8, summary: 'Create task "Book the venue"', status: 'executed' } },
+    '/api/workspaces/4/ai/actions/9/': { action: { id: 9, summary: 'Create task "Send the invites"', status: 'executed' } },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
+  const input = await screen.findByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'Add my three launch tasks.' } })
+  fireEvent.submit(input.closest('form'))
+
+  // The whole list is offered at once rather than one entry per round trip.
+  expect(await screen.findByText('Create task "Write the brief"')).toBeInTheDocument()
+  expect(screen.getByText('3 proposed actions')).toBeInTheDocument()
+  expect(window.localStorage.getItem('workspace-ai-action:4')).toContain('Send the invites')
+
+  fireEvent.click(screen.getByRole('button', { name: /Confirm all/ }))
+
+  expect(await screen.findByText(/Done\. 3 actions:/)).toBeInTheDocument()
+  expect(screen.getByText(/Write the brief/)).toBeInTheDocument()
+  expectRequest(fetchMock, '/api/workspaces/4/ai/actions/7/', 'POST')
+  expectRequest(fetchMock, '/api/workspaces/4/ai/actions/8/', 'POST')
+  expectRequest(fetchMock, '/api/workspaces/4/ai/actions/9/', 'POST')
+
+  await waitFor(() => expect(screen.queryByText('3 proposed actions')).not.toBeInTheDocument())
+  expect(window.localStorage.getItem('workspace-ai-action:4')).toBeNull()
+})
+
+it('keeps the entries that failed out of the cleared list and reports them', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'I prepared two tasks for your confirmation.',
+      pending_actions: [
+        { id: 7, kind: 'task.create', summary: 'Create task "Keep this one"', status: 'pending' },
+        { id: 8, kind: 'task.create', summary: 'Create task "Rejected one"', status: 'pending' },
+      ],
+    },
+    '/api/workspaces/4/ai/actions/7/': { action: { id: 7, summary: 'Create task "Keep this one"', status: 'executed' } },
+    '/api/workspaces/4/ai/actions/8/': { status: 403, body: { error: 'You do not have permission to create tasks.' } },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
+  const input = await screen.findByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'Add two tasks.' } })
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByText('Create task "Keep this one"')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Confirm all/ }))
+
+  expect(await screen.findByText(/Done\. 1 of 2 actions:/)).toBeInTheDocument()
+  expect(await screen.findByRole('alert')).toHaveTextContent('You do not have permission to create tasks.')
+})
+
 it('stays open when the user clicks somewhere else in the app', async () => {
   // The dock is a non-modal Radix dialog, and non-modal still dismisses on any
   // outside interaction - so clicking a nav tab closed the assistant outright.
@@ -369,12 +439,12 @@ it('clears the stored transcript and any waiting proposal after a confirmation',
     { role: 'user', content: 'Create a task called Launch notes.' },
     { role: 'assistant', content: 'I prepared that action for your confirmation.' },
   ]))
-  window.localStorage.setItem('workspace-ai-action:4', JSON.stringify({
+  window.localStorage.setItem('workspace-ai-action:4', JSON.stringify([{
     id: 7,
     kind: 'task.create',
     summary: 'Create task "Launch notes"',
     status: 'pending',
-  }))
+  }]))
 
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
 

@@ -26,7 +26,7 @@ from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelRea
 from . import cloud_storage
 from .auth_views import AVATAR_DEFAULT_SIZE
 from .automation import run_workspace_automation
-from .ai_actions import PrivacyBoundaryError, PrivacyRegistry
+from .ai_actions import MAX_ACTION_BATCH, PrivacyBoundaryError, PrivacyRegistry
 from .document_text import DOCUMENT_MAX_CHARS, extract_document_text
 from .views import create_notification, display_date, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
@@ -3922,7 +3922,7 @@ class WorkspaceAiSettingsApiTests(TestCase):
             },
         }))
         self.assertEqual(response.status_code, 200)
-        proposal = response.json()['pending_action']
+        [proposal] = response.json()['pending_actions']
         self.assertIsNotNone(proposal, response.json().get('action_error'))
 
         confirm_url = reverse('workspace-ai-action', args=[self.workspace.id, proposal['id']])
@@ -3953,7 +3953,7 @@ class WorkspaceAiSettingsApiTests(TestCase):
             },
         }))
         self.assertEqual(response.status_code, 200)
-        proposal = response.json()['pending_action']
+        [proposal] = response.json()['pending_actions']
         self.assertIsNotNone(proposal, response.json().get('action_error'))
         self.assertEqual(proposal['summary'], 'Create task "ZuriLoft UI"')
 
@@ -3992,7 +3992,7 @@ class WorkspaceAiSettingsApiTests(TestCase):
             },
         }))
         self.assertEqual(response.status_code, 200)
-        proposal = response.json()['pending_action']
+        [proposal] = response.json()['pending_actions']
         self.assertEqual(proposal['status'], 'pending')
         self.assertEqual(Task.objects.filter(workspace=self.workspace).count(), 0)
 
@@ -4021,7 +4021,7 @@ class WorkspaceAiSettingsApiTests(TestCase):
             },
         }))
         self.assertEqual(response.status_code, 200)
-        proposal = response.json()['pending_action']
+        [proposal] = response.json()['pending_actions']
         self.assertEqual(Project.objects.filter(workspace=self.workspace).count(), 0)
 
         confirmed = self.client.post(
@@ -4032,6 +4032,90 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertEqual(confirmed.status_code, 200)
         self.assertEqual(confirmed.json()['action']['status'], 'executed')
         self.assertTrue(Project.objects.filter(workspace=self.workspace, name='Website refresh').exists())
+
+    def test_a_list_of_tasks_is_proposed_together_and_confirmed_one_by_one(self):
+        # A week of work arrived one task per reply, so a plan took a dozen
+        # round trips. One reply now carries the whole list, and the entries are
+        # still separate proposals - each confirm runs the ordinary task endpoint.
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Add my three launch tasks.'}, captured, answer=json.dumps({
+            'answer': 'I prepared three tasks for your confirmation.',
+            'actions': [
+                {'kind': 'task.create', 'arguments': {'title': 'Write the brief'}},
+                {'kind': 'task.create', 'arguments': {'title': 'Book the venue'}},
+                {'kind': 'task.create', 'arguments': {'title': 'Send the invites'}},
+            ],
+        }))
+        self.assertEqual(response.status_code, 200)
+        proposals = response.json()['pending_actions']
+        self.assertEqual([entry['summary'] for entry in proposals], [
+            'Create task "Write the brief"',
+            'Create task "Book the venue"',
+            'Create task "Send the invites"',
+        ])
+        self.assertEqual(Task.objects.filter(workspace=self.workspace).count(), 0)
+
+        for proposal in proposals:
+            confirmed = self.client.post(
+                reverse('workspace-ai-action', args=[self.workspace.id, proposal['id']]),
+                data=json.dumps({'decision': 'confirm'}),
+                content_type='application/json',
+            )
+            self.assertEqual(confirmed.status_code, 200)
+            self.assertEqual(confirmed.json()['action']['status'], 'executed')
+
+        self.assertEqual(
+            sorted(Task.objects.filter(workspace=self.workspace).values_list('title', flat=True)),
+            ['Book the venue', 'Send the invites', 'Write the brief'],
+        )
+
+    def test_single_action_response_is_still_accepted(self):
+        # The prompt asks for an "actions" array, but a provider that answers
+        # with the older single "action" object must not come back empty.
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Create a task called Legacy shape.'}, captured, answer=json.dumps({
+            'answer': 'I prepared that task for your confirmation.',
+            'action': {'kind': 'task.create', 'arguments': {'title': 'Legacy shape'}},
+        }))
+        self.assertEqual(response.status_code, 200)
+        [proposal] = response.json()['pending_actions']
+        self.assertEqual(proposal['summary'], 'Create task "Legacy shape"')
+
+    def test_a_list_longer_than_the_batch_cap_points_at_the_importer(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Add all 22 tasks.'}, captured, answer=json.dumps({
+            'answer': 'Here are the tasks.',
+            'actions': [
+                {'kind': 'task.create', 'arguments': {'title': f'Task {index}'}}
+                for index in range(22)
+            ],
+        }))
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(len(body['pending_actions']), MAX_ACTION_BATCH)
+        self.assertIn('Import data', body['answer'])
+
+    def test_one_bad_entry_does_not_discard_the_rest_of_the_list(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Add two tasks.'}, captured, answer=json.dumps({
+            'answer': 'I prepared two tasks.',
+            'actions': [
+                {'kind': 'task.create', 'arguments': {'title': 'Keep this one'}},
+                {'kind': 'task.delete', 'arguments': {'task_id': 1}},
+            ],
+        }))
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual([entry['summary'] for entry in body['pending_actions']], ['Create task "Keep this one"'])
+        self.assertIn('not supported', body['action_error'])
 
     def test_action_proposal_is_rejected_when_the_member_lacks_permission(self):
         manager = User.objects.create_user(username='limited-manager@example.com', email='limited-manager@example.com', password='secure-pass-123')
@@ -4051,7 +4135,7 @@ class WorkspaceAiSettingsApiTests(TestCase):
             },
         }))
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.json()['pending_action'])
+        self.assertEqual(response.json()['pending_actions'], [])
         self.assertIn('permission', response.json()['action_error'])
         self.assertFalse(AiAction.objects.filter(workspace=self.workspace, requested_by=manager).exists())
 

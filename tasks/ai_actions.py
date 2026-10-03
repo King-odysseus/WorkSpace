@@ -13,6 +13,10 @@ from .views import task_detail, task_list, project_detail, project_list
 ACTION_TTL = timedelta(minutes=20)
 MAX_SNAPSHOT_TASKS = 80
 MAX_SNAPSHOT_PROJECTS = 50
+# A conversation can carry a short list - a week of tasks, say - but a whole
+# plan belongs in the spreadsheet importer, which previews every row before it
+# writes anything. This is the point where Zuri stops proposing and points there.
+MAX_ACTION_BATCH = 20
 
 ACTION_FIELDS = {
     'task.create': {
@@ -261,10 +265,13 @@ def build_workspace_snapshot(workspace_id, actor, registry):
 def action_instructions(snapshot):
     return (
         'You can help with workspace tasks and projects. Reads are answered directly from the snapshot. '
-        'For a create or update request, return strict JSON with an "answer" string and an "action" object. '
-        'For normal conversation, return strict JSON with "answer" and "action": null. '
-        'Use this exact action shape: {"answer":"...","action":{"kind":"task.create","arguments":{"title":"..."}}}. '
+        'For a create or update request, return strict JSON with an "answer" string and an "actions" array. '
+        'For normal conversation, return strict JSON with "answer" and "actions": null. '
+        'Use this exact action shape: {"answer":"...","actions":[{"kind":"task.create","arguments":{"title":"..."}}]}. '
         'Put every action field inside "arguments", including title or name. '
+        'One entry per change: a request covering several tasks returns one entry each, and the user confirms them all in a single step, so never spread a list of tasks across several replies or ask the user to confirm them one at a time. '
+        f'Propose at most {MAX_ACTION_BATCH} changes in one reply. '
+        'When a request needs more than that, or arrives as a whole plan, a schedule, or a spreadsheet, set "actions" to null and say in "answer" that a set this size belongs in Import data, which previews every row before anything is written. '
         'Allowed action kinds are task.create, task.update, project.create, and project.update. '
         'Never claim an action has happened: it only becomes a proposal that the user must confirm. '
         'Never use external personal data. Real names never leave the workspace: people appear as placeholders such as [MEMBER_2], '
@@ -281,11 +288,18 @@ def action_instructions(snapshot):
 
 
 def parse_provider_response(content, registry):
-    """Accept plain text for compatibility, but validate any structured action."""
+    """Accept plain text for compatibility and resolve any structured actions.
 
+    Providers drift between ``action`` and ``actions``, and put a single change
+    under either, so everything here comes back as a list for the caller to
+    handle in one shape. ``dropped`` counts what the batch cap left out, so the
+    reply can say so rather than quietly losing the rest of a long list.
+    """
+
+    empty = {'answer': 'Zuri returned an empty response.', 'actions': [], 'dropped': 0}
     text = str(content or '').strip()
     if not text:
-        return {'answer': 'Zuri returned an empty response.', 'action': None}
+        return empty
     candidate = text
     if candidate.startswith('```'):
         candidate = re.sub(r'^```(?:json)?\s*|\s*```$', '', candidate, flags=re.IGNORECASE)
@@ -295,18 +309,28 @@ def parse_provider_response(content, registry):
         start = candidate.find('{')
         end = candidate.rfind('}')
         if start < 0 or end <= start:
-            return {'answer': registry.expand(candidate), 'action': None}
+            return {**empty, 'answer': registry.expand(candidate)}
         try:
             parsed = json.loads(candidate[start:end + 1])
         except json.JSONDecodeError:
-            return {'answer': registry.expand(candidate), 'action': None}
+            return {**empty, 'answer': registry.expand(candidate)}
     if not isinstance(parsed, dict):
-        return {'answer': registry.expand(candidate), 'action': None}
+        return {**empty, 'answer': registry.expand(candidate)}
     answer = str(parsed.get('answer') or '').strip() or 'I prepared a workspace action for your confirmation.'
-    action = parsed.get('action')
-    if action is None:
-        return {'answer': registry.expand(answer), 'action': None}
-    return {'answer': registry.expand(answer), 'action': action}
+    proposed = parsed.get('actions')
+    if proposed is None:
+        proposed = parsed.get('action')
+    if isinstance(proposed, dict):
+        candidates = [proposed]
+    elif isinstance(proposed, list):
+        candidates = [entry for entry in proposed if isinstance(entry, dict)]
+    else:
+        candidates = []
+    return {
+        'answer': registry.expand(answer),
+        'actions': candidates[:MAX_ACTION_BATCH],
+        'dropped': max(0, len(candidates) - MAX_ACTION_BATCH),
+    }
 
 
 def _clean_string(value, registry, field, max_length):

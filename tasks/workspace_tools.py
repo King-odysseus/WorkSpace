@@ -27,6 +27,7 @@ from .file_responses import stored_file_response
 from .sanitize import sanitize_document_content
 from .views import parse_int, require_workspace_member
 from .ai_actions import (
+    MAX_ACTION_BATCH,
     ActionExecutionError,
     ActionValidationError,
     PrivacyBoundaryError,
@@ -394,17 +395,29 @@ def workspace_ai_chat(request, workspace_id):
             result = json.loads(response.read().decode())
         answer = (result.get('content', [{}])[0].get('text', '') if provider == 'claude' else result.get('choices', [{}])[0].get('message', {}).get('content', '')).strip()
         parsed = parse_provider_response(answer, privacy)
-        pending_action = None
-        if parsed['action'] is not None:
+        pending_actions = []
+        rejected = []
+        for candidate in parsed['actions']:
             try:
-                pending_action = create_action_proposal(parsed['action'], privacy, workspace_id, request.user)
+                pending_actions.append(create_action_proposal(candidate, privacy, workspace_id, request.user))
             except (ActionValidationError, PrivacyBoundaryError) as exc:
-                return JsonResponse({'answer': parsed['answer'], 'pending_action': None, 'action_error': str(exc), 'document': document_meta})
-        return JsonResponse({
-            'answer': parsed['answer'] or 'The assistant returned an empty response.',
-            'pending_action': pending_action.as_dict() if pending_action else None,
+                # One bad entry must not throw away the rest of a list the user
+                # asked for, so it is reported alongside the ones that did land.
+                rejected.append(str(exc))
+        reply = parsed['answer'] or 'The assistant returned an empty response.'
+        if parsed['dropped']:
+            reply = (
+                f"{reply}\n\nOnly the first {MAX_ACTION_BATCH} changes were prepared. "
+                'A plan this size belongs in Import data, which previews every row before anything is written.'
+            )
+        payload = {
+            'answer': reply,
+            'pending_actions': [proposal.as_dict() for proposal in pending_actions],
             'document': document_meta,
-        })
+        }
+        if rejected:
+            payload['action_error'] = ' '.join(rejected)
+        return JsonResponse(payload)
     except HTTPError as exc:
         if exc.code == 401:
             return JsonResponse({

@@ -642,18 +642,45 @@ function App() {
   const aiPreferenceKey = session.user?.id
     ? `workspace-ai-hidden-${session.user.id}`
     : null;
+  // Zuri is a docked window rather than a popover, so it comes back the way it
+  // was left, like the last page does. One key holds all three states: two
+  // booleans restored on their own could disagree, and "hidden" beats both.
+  const aiWindowKey = session.user?.id
+    ? `workspace-ai-window-${session.user.id}`
+    : null;
+  const aiWindowRestored = useRef(null);
+  // Declared before the restore that arms the ref, so the first pass has nothing
+  // to save and cannot write the defaults over the state it is about to read back.
   useEffect(() => {
+    if (!aiWindowKey || aiWindowRestored.current !== aiWindowKey) return;
+    const state = aiMinimized ? "minimized" : aiFlyoutOpen ? "open" : "closed";
     try {
-      setAiLauncherHidden(
-        aiPreferenceKey
-          ? localStorage.getItem(aiPreferenceKey) === "true"
-          : false,
-      );
+      localStorage.setItem(aiWindowKey, state);
+    } catch {
+      // Storage unavailable: the window still behaves for this session.
+    }
+  }, [aiWindowKey, aiFlyoutOpen, aiMinimized]);
+  useEffect(() => {
+    let hidden = false;
+    let windowState = "closed";
+    try {
+      hidden = aiPreferenceKey
+        ? localStorage.getItem(aiPreferenceKey) === "true"
+        : false;
+      const stored = aiWindowKey ? localStorage.getItem(aiWindowKey) : null;
+      if (stored === "open" || stored === "minimized") windowState = stored;
     } catch (error) {
       console.warn("AI button preference could not be read.", error);
-      setAiLauncherHidden(false);
     }
-  }, [aiPreferenceKey]);
+    setAiLauncherHidden(hidden);
+    // A hidden launcher has no window to restore: hiding it closes the one on
+    // screen, so reopening from storage would contradict the preference.
+    if (!hidden) {
+      setAiFlyoutOpen(windowState === "open");
+      setAiMinimized(windowState === "minimized");
+    }
+    aiWindowRestored.current = aiWindowKey;
+  }, [aiPreferenceKey, aiWindowKey]);
   const setAiLauncherVisibility = (hidden) => {
     setAiLauncherHidden(hidden);
     setAiMinimized(false);
@@ -2902,7 +2929,7 @@ function App() {
           targetSessionId={screenShareNotificationId}
         />
       </Suspense>
-      {aiFlyoutOpen && (
+      {aiFlyoutOpen && activeWorkspaceId && (
         <Suspense fallback={null}>
           <AssistantFlyout
             workspaceId={activeWorkspaceId}
