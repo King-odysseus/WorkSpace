@@ -251,8 +251,14 @@ def build_workspace_snapshot(workspace_id, actor, registry):
             'end_date': project.end_date.isoformat() if project.end_date else None,
         })
 
+    # The date the provider is answering on. Without it the assistant told users
+    # it could not see today's date, and any "what is overdue" or "push these to
+    # next week" answer was guesswork against dates it had no anchor for.
+    today = timezone.localdate()
     return {
         'actor_ref': registry.actor_ref,
+        'today': today.isoformat(),
+        'today_weekday': today.strftime('%A'),
         'task_count': Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').count(),
         'project_count': Project.objects.filter(workspace_id=workspace_id).count(),
         'members': registry.members,
@@ -265,6 +271,9 @@ def build_workspace_snapshot(workspace_id, actor, registry):
 def action_instructions(snapshot):
     return (
         'You can help with workspace tasks and projects. Reads are answered directly from the snapshot. '
+        'The snapshot\'s "today" is the current date in this workspace, with its weekday beside it: use them for every "today", "this week", "overdue" or "how long until" question, and work out any date the user implies from them. '
+        'Never tell the user you cannot see today\'s date, and never ask them what it is. '
+        'A task is overdue only when its due date is before "today"; state the date you are comparing against when you report one. '
         'For a create or update request, return strict JSON with an "answer" string and an "actions" array. '
         'For normal conversation, return strict JSON with "answer" and "actions": null. '
         'Use this exact action shape: {"answer":"...","actions":[{"kind":"task.create","arguments":{"title":"..."}}]}. '

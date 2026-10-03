@@ -3830,6 +3830,40 @@ class WorkspaceAiSettingsApiTests(TestCase):
         system_prompt = captured['body']['messages'][0]['content']
         return json.loads(system_prompt.split('Workspace snapshot: ', 1)[1])
 
+    def test_snapshot_carries_the_date_the_provider_is_answering_on(self):
+        # Without it the assistant told people it could not see today's date, so
+        # every "what is overdue" answer was guesswork.
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'What is overdue?'}, captured)
+        self.assertEqual(response.status_code, 200)
+        snapshot = self._snapshot(captured)
+
+        today = timezone.localdate()
+        self.assertEqual(snapshot['today'], today.isoformat())
+        self.assertEqual(snapshot['today_weekday'], today.strftime('%A'))
+        system_prompt = captured['body']['messages'][0]['content']
+        self.assertIn('Never tell the user you cannot see today', system_prompt)
+
+    def test_an_overdue_answer_is_measured_against_the_snapshot_date(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        Task.objects.create(
+            workspace=self.workspace, title='Late one',
+            due_date=timezone.localdate() - timedelta(days=2),
+        )
+        captured = {}
+        response = self._chat({'message': 'What is overdue?'}, captured)
+        self.assertEqual(response.status_code, 200)
+        snapshot = self._snapshot(captured)
+
+        overdue = [
+            row for row in snapshot['tasks']
+            if row['due_date'] and row['due_date'] < snapshot['today']
+        ]
+        self.assertEqual([row['title'] for row in overdue], ['Late one'])
+
     def test_snapshot_lists_every_member_as_a_placeholder_even_without_tasks(self):
         self.client.force_login(self.owner)
         self._enable_ai()
