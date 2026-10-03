@@ -65,6 +65,8 @@ it('reopens Zuri where the reader left it', async () => {
   await import('./main.jsx')
 
   await waitFor(() => expect(document.querySelector('.ai-chat-window')).not.toBeNull(), { timeout: 20000 })
+  // The assistant also has a page of its own, reachable from the sidebar.
+  expect(document.querySelector('aside nav button[aria-label="Zuri"]')).not.toBeNull()
   // Restored before the workspace resolves must not fetch settings against a
   // null workspace on the way in.
   const urls = fetchMock.mock.calls.map(([url]) => String(url))

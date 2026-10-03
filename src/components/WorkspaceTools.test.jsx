@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AssistantFlyout, FilesWorkspaceView, describeDocument } from './WorkspaceTools.jsx'
+import { AssistantFlyout, AssistantPage, FilesWorkspaceView, describeDocument } from './WorkspaceTools.jsx'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
 
 afterEach(() => {
@@ -376,6 +376,88 @@ it('keeps the entries that failed out of the cleared list and reports them', asy
 
   expect(await screen.findByText(/Done\. 1 of 2 actions:/)).toBeInTheDocument()
   expect(await screen.findByRole('alert')).toHaveTextContent('You do not have permission to create tasks.')
+})
+
+it('renders Zuri\'s markdown as text rather than showing the markers', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  window.localStorage.setItem('workspace-ai-chat:4', JSON.stringify([
+    { role: 'assistant', content: 'Two are overdue:\n\n### The project tasks\n1. **Design UI** — 18 Sep\n2. **create website UI** — 1 Oct' },
+  ]))
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
+
+  const heading = await screen.findByRole('heading', { name: 'The project tasks' })
+  expect(heading.tagName).toBe('H3')
+  expect(screen.getByText('Design UI').tagName).toBe('STRONG')
+  const bubble = screen.getByText('Two are overdue:').closest('.ai-chat-bubble')
+  expect(bubble).toHaveClass('is-rich')
+  // The markers themselves are gone from what the reader sees, and the two
+  // lines became a real list.
+  expect(bubble.textContent).not.toContain('**')
+  expect(bubble.querySelector('ol')).not.toBeNull()
+  expect(bubble.querySelectorAll('ol li')).toHaveLength(2)
+})
+
+it('leaves the reader\'s own turn as the text they typed', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  window.localStorage.setItem('workspace-ai-chat:4', JSON.stringify([
+    { role: 'user', content: 'Move **everything** in Daily Operation TIJHA back two weeks' },
+  ]))
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
+
+  const bubble = (await screen.findByText(/Daily Operation TIJHA/)).closest('.ai-chat-bubble')
+  expect(bubble.textContent).toBe('Move **everything** in Daily Operation TIJHA back two weeks')
+  expect(bubble.querySelector('strong')).toBeNull()
+})
+
+it('offers the conversation a page of its own', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  const onExpand = vi.fn()
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} onExpand={onExpand} />)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Expand Zuri' }))
+
+  expect(onExpand).toHaveBeenCalledTimes(1)
+})
+
+it('carries the same conversation onto the Zuri page', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  window.localStorage.setItem('workspace-ai-chat:4', JSON.stringify([
+    { role: 'user', content: 'What needs my attention?' },
+    { role: 'assistant', content: '**Design UI** is overdue.' },
+  ]))
+
+  render(<AssistantPage workspaceId={4} />)
+
+  expect(await screen.findByRole('heading', { name: 'Zuri' })).toBeInTheDocument()
+  expect(screen.getByText('What needs my attention?')).toBeInTheDocument()
+  expect(screen.getByText('Design UI').tagName).toBe('STRONG')
+  // The page owns the composer, the same one the dock shows.
+  const input = screen.getByLabelText('Message to Zuri')
+  expect(input.closest('.ai-chat-composer')).not.toBeNull()
+  expect(screen.getByRole('button', { name: 'Clear conversation' })).toBeEnabled()
 })
 
 it('stays open when the user clicks somewhere else in the app', async () => {

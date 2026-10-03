@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import DOMPurify from 'dompurify'
-import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, Maximize2, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Alert } from './ui/alert.jsx'
 import { Button } from './ui/button.jsx'
@@ -12,7 +12,8 @@ import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
 import Avatar from './Avatar.jsx'
 import FilePreview from './FilePreview.jsx'
-import { ConfirmDialog } from './workspace-ui.jsx'
+import { ConfirmDialog, WorkspaceViewHeading } from './workspace-ui.jsx'
+import { renderAssistantMarkdown } from '../lib/assistant-markdown.js'
 import { formatDate, formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 import { FORMULA_ERRORS, columnLabel, evaluateSheet } from '../lib/spreadsheet-formulas.js'
 
@@ -1024,10 +1025,12 @@ export function describeDocument(info) {
   return parts.length ? `Read ${info.name}. ${parts.join(', and ')}.` : `Read ${info.name}.`
 }
 
-export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
-  const launcherRef = useRef(document.activeElement)
-  const transcriptRef = useRef(null)
-  const [data, setData] = useState(null); const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+// The conversation, its storage, and every request it makes. The docked window
+// and the Zuri page are two layouts over this one implementation: the ask,
+// confirm and clear behaviour in two places would drift, and both read the same
+// stored transcript, so neither may hold its own copy of it.
+function useAssistantConversation(workspaceId, transcriptRef) {
+  const [provider, setProvider] = useState('openai'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   const [attachment, setAttachment] = useState(null); const [attaching, setAttaching] = useState(false); const [documentNote, setDocumentNote] = useState('')
   const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
   const [pendingActions, setPendingActions] = useState(() => readAiPendingActions(workspaceId))
@@ -1039,7 +1042,7 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
     if (!transcript) return
     transcript.scrollTop = transcript.scrollHeight
   }, [turns, busy, pendingActions, documentNote, error])
-  useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) { setData(result); setProvider(result.settings.ai_default_provider || 'openai') } else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
+  useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) setProvider(result.settings.ai_default_provider || 'openai'); else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
   const attachFile = async event => {
     const chosen = event.target.files?.[0]
     event.target.value = ''
@@ -1173,96 +1176,147 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
       setError('')
     })
   }
-  const providers = data?.providers || {}; const enabled = data?.settings?.ai_enabled_providers || Object.keys(providers).filter(key => providers[key])
+  return {
+    turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote,
+    attachFile, ask, resolvePendingActions, clearConversation, clearConfirm, setClearConfirm,
+    canClear: !busy && (turns.length > 0 || pendingActions.length > 0),
+  }
+}
+
+// The transcript, the action card and the composer, shared by the dock and the
+// page. Only the dock has a heading of its own - the page wears the standard
+// page header - so it arrives as a slot.
+function AssistantChatBody({ conversation, transcriptRef, heading }) {
+  const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, ask, resolvePendingActions, clearConfirm, setClearConfirm } = conversation
+  return <>
+    {heading}
+    <div ref={transcriptRef} className="ai-chat-messages" role="log" aria-live="polite" aria-label="Zuri conversation">
+      {!turns.length && !error && <div className="ai-chat-empty">
+        <span className="ai-chat-empty-icon" aria-hidden="true"><Sparkles size={20} /></span>
+        <strong>Start a conversation</strong>
+        <span>Ask about work in this workspace or attach a file.</span>
+        <div className="ai-chat-prompts" aria-label="Suggested questions">
+          {AI_STARTER_PROMPTS.map(([label, Icon]) => <button type="button" key={label} onClick={() => setMessage(label)}><Icon size={14} /> {label}</button>)}
+        </div>
+      </div>}
+      {turns.map((turn, index) => (
+        <div className={`ai-chat-row is-${turn.role}`} key={`${turn.role}-${index}`}>
+          <span className="ai-chat-avatar" aria-hidden="true">{turn.role === 'user' ? <UserRound size={13} /> : <Sparkles size={13} />}</span>
+          <div className="ai-chat-turn">
+            <span className="ai-chat-sender">{turn.role === 'user' ? 'You' : 'Zuri'}</span>
+            {/* Zuri answers in markdown, and only what this app renders reaches
+                the page: the converter escapes the model's text on the way in and
+                the sanitiser validates what comes out. The reader's own turn is
+                text as typed, so it stays a plain node. */}
+            {turn.role === 'assistant'
+              ? <div className="ai-chat-bubble is-rich" dangerouslySetInnerHTML={{ __html: cleanHtml(renderAssistantMarkdown(turn.content)) }} />
+              : <div className="ai-chat-bubble">{turn.content}</div>}
+          </div>
+        </div>
+      ))}
+      {pendingActions.length > 0 && (
+        <div
+          className="ai-action-card"
+          role="group"
+          aria-label={pendingActions.length === 1 ? 'Proposed workspace action' : 'Proposed workspace actions'}
+        >
+          <div className="ai-action-copy">
+            <span>
+              <Sparkles size={15} />
+              {pendingActions.length === 1 ? 'Proposed action' : `${pendingActions.length} proposed actions`}
+            </span>
+            {pendingActions.length === 1
+              ? <strong>{pendingActions[0].summary}</strong>
+              : <ul className="ai-action-list">{pendingActions.map(entry => <li key={entry.id}>{entry.summary}</li>)}</ul>}
+          </div>
+          <div className="ai-action-buttons">
+            <button type="button" className="secondary-button" onClick={() => resolvePendingActions('cancel')} disabled={busy}>{pendingActions.length === 1 ? 'Cancel' : 'Cancel all'}</button>
+            <button type="button" className="primary-button" onClick={() => resolvePendingActions('confirm')} disabled={busy}><Check size={15} /> {pendingActions.length === 1 ? 'Confirm' : 'Confirm all'}</button>
+          </div>
+        </div>
+      )}
+      {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-avatar" aria-hidden="true"><Sparkles size={13} /></span><div className="ai-chat-turn"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div></div>}
+      {documentNote && <div className="ai-chat-doc-note" role="status">{documentNote}</div>}
+      {error && <div role="alert" className="ai-chat-error">{error}</div>}
+    </div>
+    <form onSubmit={ask} className="ai-chat-composer is-stacked">
+      {attachment && <div className="ai-chat-attachment">
+        <FileText size={15} />
+        <span title={attachment.name}>{attachment.name}</span>
+        <button type="button" onClick={() => setAttachment(null)} aria-label={`Remove ${attachment.name}`}><X size={14} /></button>
+      </div>}
+      {attaching && <p className="ai-chat-attach-status" role="status">Attaching...</p>}
+      <div className="ai-chat-composer-row">
+        <div className="ai-chat-input-shell">
+          <label className="ai-chat-attach" title="Attach a document for Zuri to read">
+            <Paperclip size={19} />
+            <input type="file" onChange={attachFile} disabled={attaching || busy} accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.log,.yaml,.yml,.xlsx,.xlsm,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp" aria-label="Attach a document for Zuri to read" />
+          </label>
+          <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
+        </div>
+        <button className="ai-chat-send" disabled={busy || (!message.trim() && !attachment)} aria-label="Send message"><Send size={20} /></button>
+      </div>
+    </form>
+    <ConfirmDialog
+      state={clearConfirm}
+      onClose={() => setClearConfirm(null)}
+    />
+  </>
+}
+
+export function AssistantFlyout({ workspaceId, onClose, onMinimize, onExpand }) {
+  const launcherRef = useRef(document.activeElement)
+  const transcriptRef = useRef(null)
+  const conversation = useAssistantConversation(workspaceId, transcriptRef)
+  const { busy, canClear, clearConversation } = conversation
   // Non-modal still dismisses on any outside interaction, which closed the
   // assistant the moment anyone clicked a nav tab. A docked window is not a
   // popover: it stays put and leaves Escape and the close button as the ways out.
   return <Dialog open modal={false} onOpenChange={open => { if (!open) onClose() }}>
     <DialogContent position="dock" className="ai-chat-window" overlayClassName="ai-chat-overlay" showCloseButton={false} aria-describedby={undefined} onInteractOutside={event => event.preventDefault()} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
-      <div className="ai-chat-heading">
-        <div className="ai-chat-heading-copy">
-          <span className="ai-chat-title-icon" aria-hidden="true"><Sparkles size={17} /></span>
-          <div>
-            <div className="ai-chat-title-row">
-              <DialogTitle className="ai-chat-title">Zuri</DialogTitle>
-              <span className="ai-chat-status"><span aria-hidden="true" /> Ready</span>
+      <AssistantChatBody
+        conversation={conversation}
+        transcriptRef={transcriptRef}
+        heading={<div className="ai-chat-heading">
+          <div className="ai-chat-heading-copy">
+            <span className="ai-chat-title-icon" aria-hidden="true"><Sparkles size={17} /></span>
+            <div>
+              <div className="ai-chat-title-row">
+                <DialogTitle className="ai-chat-title">Zuri</DialogTitle>
+                <span className="ai-chat-status"><span aria-hidden="true" /> Ready</span>
+              </div>
+              <p>Workspace assistant</p>
             </div>
-            <p>Workspace assistant</p>
           </div>
-        </div>
-        <div className="ai-chat-actions">
-          <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={busy || (!turns.length && !pendingActions.length)} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={17} /></button>
-          {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={18} /></button>}
-          <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={19} /></button>
-        </div>
-      </div>
-      <div ref={transcriptRef} className="ai-chat-messages" role="log" aria-live="polite" aria-label="Zuri conversation">
-        {!turns.length && !error && <div className="ai-chat-empty">
-          <span className="ai-chat-empty-icon" aria-hidden="true"><Sparkles size={20} /></span>
-          <strong>Start a conversation</strong>
-          <span>Ask about work in this workspace or attach a file.</span>
-          <div className="ai-chat-prompts" aria-label="Suggested questions">
-            {AI_STARTER_PROMPTS.map(([label, Icon]) => <button type="button" key={label} onClick={() => setMessage(label)}><Icon size={14} /> {label}</button>)}
+          <div className="ai-chat-actions">
+            <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={!canClear} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={17} /></button>
+            {onExpand && <button type="button" className="ai-chat-action-button" onClick={onExpand} aria-label="Expand Zuri" title="Open Zuri as a full page"><Maximize2 size={17} /></button>}
+            {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={18} /></button>}
+            <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={19} /></button>
           </div>
         </div>}
-        {turns.map((turn, index) => (
-          <div className={`ai-chat-row is-${turn.role}`} key={`${turn.role}-${index}`}>
-            <span className="ai-chat-avatar" aria-hidden="true">{turn.role === 'user' ? <UserRound size={13} /> : <Sparkles size={13} />}</span>
-            <div className="ai-chat-turn">
-              <span className="ai-chat-sender">{turn.role === 'user' ? 'You' : 'Zuri'}</span>
-              <div className="ai-chat-bubble">{turn.content}</div>
-            </div>
-          </div>
-        ))}
-        {pendingActions.length > 0 && (
-          <div
-            className="ai-action-card"
-            role="group"
-            aria-label={pendingActions.length === 1 ? 'Proposed workspace action' : 'Proposed workspace actions'}
-          >
-            <div className="ai-action-copy">
-              <span>
-                <Sparkles size={15} />
-                {pendingActions.length === 1 ? 'Proposed action' : `${pendingActions.length} proposed actions`}
-              </span>
-              {pendingActions.length === 1
-                ? <strong>{pendingActions[0].summary}</strong>
-                : <ul className="ai-action-list">{pendingActions.map(entry => <li key={entry.id}>{entry.summary}</li>)}</ul>}
-            </div>
-            <div className="ai-action-buttons">
-              <button type="button" className="secondary-button" onClick={() => resolvePendingActions('cancel')} disabled={busy}>{pendingActions.length === 1 ? 'Cancel' : 'Cancel all'}</button>
-              <button type="button" className="primary-button" onClick={() => resolvePendingActions('confirm')} disabled={busy}><Check size={15} /> {pendingActions.length === 1 ? 'Confirm' : 'Confirm all'}</button>
-            </div>
-          </div>
-        )}
-        {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-avatar" aria-hidden="true"><Sparkles size={13} /></span><div className="ai-chat-turn"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div></div>}
-        {documentNote && <div className="ai-chat-doc-note" role="status">{documentNote}</div>}
-        {error && <div role="alert" className="ai-chat-error">{error}</div>}
-      </div>
-      <form onSubmit={ask} className="ai-chat-composer is-stacked">
-        {attachment && <div className="ai-chat-attachment">
-          <FileText size={15} />
-          <span title={attachment.name}>{attachment.name}</span>
-          <button type="button" onClick={() => setAttachment(null)} aria-label={`Remove ${attachment.name}`}><X size={14} /></button>
-        </div>}
-        {attaching && <p className="ai-chat-attach-status" role="status">Attaching...</p>}
-        <div className="ai-chat-composer-row">
-          <div className="ai-chat-input-shell">
-            <label className="ai-chat-attach" title="Attach a document for Zuri to read">
-              <Paperclip size={19} />
-              <input type="file" onChange={attachFile} disabled={attaching || busy} accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.log,.yaml,.yml,.xlsx,.xlsm,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp" aria-label="Attach a document for Zuri to read" />
-            </label>
-            <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
-          </div>
-          <button className="ai-chat-send" disabled={busy || (!message.trim() && !attachment)} aria-label="Send message"><Send size={20} /></button>
-        </div>
-      </form>
-      <ConfirmDialog
-        state={clearConfirm}
-        onClose={() => setClearConfirm(null)}
       />
     </DialogContent>
   </Dialog>
+}
+
+// The same conversation on a page of its own, for work that needs more room than
+// the dock gives: a long plan, a transcript worth reading back, a document to
+// discuss beside its answer.
+export function AssistantPage({ workspaceId }) {
+  const transcriptRef = useRef(null)
+  const conversation = useAssistantConversation(workspaceId, transcriptRef)
+  return <section className="workspace-view ai-page">
+    <div className="ai-page-column">
+      <WorkspaceViewHeading
+        eyebrow="Assistant"
+        title="Zuri"
+        subtitle="Ask about work in this workspace, or attach a file for Zuri to read."
+        actions={<button type="button" className="secondary-button" onClick={conversation.clearConversation} disabled={!conversation.canClear}><Trash2 size={16} /> Clear conversation</button>}
+      />
+      <AssistantChatBody conversation={conversation} transcriptRef={transcriptRef} />
+    </div>
+  </section>
 }
 
 export function AISettingsPanel({ workspaceId, members = [], canManageMembers }) {

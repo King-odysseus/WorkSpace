@@ -107,6 +107,11 @@ const AssistantFlyout = lazy(() =>
     default: module.AssistantFlyout,
   })),
 );
+const AssistantPage = lazy(() =>
+  import("./components/WorkspaceTools.jsx").then((module) => ({
+    default: module.AssistantPage,
+  })),
+);
 const FilesWorkspaceView = lazy(() =>
   import("./components/WorkspaceTools.jsx").then((module) => ({
     default: module.FilesWorkspaceView,
@@ -2547,6 +2552,10 @@ function App() {
         { label: "My planner", icon: List },
         { label: "Daily operations", icon: RefreshCw },
         { label: "Team", icon: Users },
+        // The assistant's own page, alongside the dock's Assistant button in
+        // the header: the dock is for a quick question, this is for reading a
+        // whole answer or working through a plan.
+        { label: "Zuri", icon: Sparkles },
       ],
     },
     {
@@ -2938,6 +2947,12 @@ function App() {
               setAiFlyoutOpen(false);
               setAiLauncherVisibility(false);
               setAiMinimized(true);
+            }}
+            // The page is the same conversation in more room, so the dock steps
+            // aside rather than leaving two live views of one transcript.
+            onExpand={() => {
+              setAiFlyoutOpen(false);
+              setActive("Zuri");
             }}
           />
         </Suspense>
@@ -5787,6 +5802,7 @@ function WorkspaceView({
   const subtitle = {
     "My tasks": "Your personal work, deadlines, and follow-ups.",
     Team: "See workload, availability, and the work that needs attention.",
+    Zuri: "Ask about work in this workspace, or attach a file for Zuri to read.",
     Planner: "Plan work visually across buckets, owners, and priorities.",
     "Daily operations": "Track recurring and day-to-day work outside projects.",
     Calendar: "Meetings, focus time, and deadlines in one view.",
@@ -7282,6 +7298,11 @@ function WorkspaceView({
       </Suspense>
     );
   }
+  if (active === "Zuri") return (
+    <Suspense fallback={null}>
+      <AssistantPage workspaceId={workspaceId} />
+    </Suspense>
+  );
   if (active === "Import data") return <ImportView workspaceId={workspaceId} role={currentWorkspace?.role} />;
   if (active === "My planner") return <PersonalPlanner workspaceId={workspaceId} />;
   if (active === "What's new") return <WhatsNew onOpen={onWhatsNewSeen} onNavigate={onNavigate} />;

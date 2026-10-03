@@ -6694,6 +6694,51 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
   box-shadow: 0 5px 14px rgb(0 13 61 / 6%);
 }
 
+/* Zuri's own answer arrives as rendered markdown rather than as typed text, so
+   the bubble hands line breaks and spacing to the elements below it. The plain
+   variant keeps pre-wrap, which is what preserves a reader's own line breaks. */
+.ai-chat-bubble.is-rich { white-space: normal; }
+.ai-chat-bubble.is-rich > :first-child { margin-top: 0; }
+.ai-chat-bubble.is-rich > :last-child { margin-bottom: 0; }
+.ai-chat-bubble.is-rich p { margin: 0 0 8px; }
+/* Headings sit inside a 13px bubble, so the scale is compressed: one step up for
+   the first two levels, the body size for the rest, weight carrying the rest of
+   the hierarchy. */
+.ai-chat-bubble.is-rich :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; font-size: 13px; font-weight: 700; line-height: 18px; }
+.ai-chat-bubble.is-rich :is(h1, h2) { font-size: 15px; line-height: 20px; }
+.ai-chat-bubble.is-rich :is(ul, ol) { margin: 0 0 8px; padding-left: 20px; }
+/* Tailwind's preflight strips the markers off every list in the app, so a
+   rendered one has to ask for its own back. */
+.ai-chat-bubble.is-rich ul { list-style: disc; }
+.ai-chat-bubble.is-rich ol { list-style: decimal; }
+.ai-chat-bubble.is-rich li { margin-bottom: 3px; }
+.ai-chat-bubble.is-rich li:last-child { margin-bottom: 0; }
+.ai-chat-bubble.is-rich li::marker { color: var(--pencil-text-muted); }
+.ai-chat-bubble.is-rich code { padding: 1px 5px; border-radius: 6px; background: var(--pencil-surface-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.ai-chat-bubble.is-rich a { color: var(--pencil-navy); text-decoration: underline; text-underline-offset: 2px; }
+.ai-chat-bubble.is-rich a:hover { color: var(--pencil-navy-focus); }
+.ai-chat-bubble.is-rich hr { margin: 10px 0; border: 0; border-top: 1px solid var(--pencil-border); }
+
+html[data-theme='dark'] .ai-chat-bubble.is-rich a { color: var(--pencil-bronze-muted); }
+html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-bronze-soft); }
+
+/* The Zuri page is the dock's transcript and composer given the viewport instead
+   of a 430px window. It takes a definite height rather than a minimum so the
+   transcript scrolls inside the page and the composer stays where it is, which
+   is how the dock behaves; a growing page would push the composer off-screen.
+   The 64px offset is the shell header, as the Chats page also assumes. */
+.page-content:has(> .ai-page) { min-height: calc(100dvh - 64px); padding: 0; }
+.ai-page { display: flex; height: calc(100dvh - 64px); flex-direction: column; margin: 0; }
+.ai-page-column { display: flex; width: min(880px, 100%); min-height: 0; flex: 1 1 auto; flex-direction: column; margin: 0 auto; padding: 0 24px; }
+.ai-page .ai-chat-messages { padding: 20px 0 28px; background: transparent; }
+.ai-page .ai-chat-composer.is-stacked { padding: 12px 0 14px; border-top: 1px solid var(--pencil-border) !important; background: transparent; }
+/* The mobile TabBar is fixed over the bottom edge, so the page stops above it
+   rather than putting the composer underneath it. */
+@media (max-width: 1023px) {
+  .ai-page { height: calc(100dvh - 64px - 80px); }
+  .ai-page-column { padding: 0 16px; }
+}
+
 .ai-chat-bubble.is-thinking { color: var(--pencil-text-muted); font-style: italic; }
 
 .ai-action-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--pencil-border); border-radius: 14px; background: var(--pencil-surface); box-shadow: 0 5px 14px rgb(0 13 61 / 5%); }
@@ -6703,8 +6748,9 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
 /* A batch is capped at twenty, which is taller than the window: the list scrolls
    inside the card so the confirm buttons stay reachable without scrolling the
    whole transcript past them. */
-.ai-action-list { max-height: 40vh; margin: 0; padding-left: 18px; overflow-y: auto; color: var(--pencil-text); font-size: 13px; line-height: 20px; }
+.ai-action-list { max-height: 40vh; margin: 0; padding-left: 20px; overflow-y: auto; color: var(--pencil-text); font-size: 13px; line-height: 20px; list-style: disc; }
 .ai-action-list li { margin-bottom: 3px; overflow-wrap: anywhere; }
+.ai-action-list li::marker { color: var(--pencil-text-muted); }
 .ai-action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .ai-action-buttons .secondary-button, .ai-action-buttons .primary-button { width: auto; min-height: 34px; padding: 0 12px; font-size: 11px; }
 
