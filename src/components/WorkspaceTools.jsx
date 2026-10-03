@@ -12,6 +12,7 @@ import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
 import Avatar from './Avatar.jsx'
 import FilePreview from './FilePreview.jsx'
+import { ConfirmDialog } from './workspace-ui.jsx'
 import { formatDate, formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 import { FORMULA_ERRORS, columnLabel, evaluateSheet } from '../lib/spreadsheet-formulas.js'
 
@@ -1013,6 +1014,7 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
   const [attachment, setAttachment] = useState(null); const [attaching, setAttaching] = useState(false); const [documentNote, setDocumentNote] = useState('')
   const [turns, setTurns] = useState(() => readAiHistory(workspaceId))
   const [pendingAction, setPendingAction] = useState(() => readAiPendingAction(workspaceId))
+  const [clearConfirm, setClearConfirm] = useState(null)
   useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
   useEffect(() => { setPendingAction(readAiPendingAction(workspaceId)) }, [workspaceId])
   useLayoutEffect(() => {
@@ -1114,9 +1116,37 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
       setBusy(false)
     }
   }
+  // Everything the conversation holds is in localStorage, so clearing it is a
+  // browser-side wipe: the stored transcript, the proposal waiting on an answer,
+  // and anything typed but not yet sent. The unconfirmed proposal is left to
+  // expire server-side rather than cancelled - it can only run on a confirm, and
+  // this button just took away the card that offers one.
+  const clearConversation = () => {
+    if (busy) return
+    new Promise(resolve => setClearConfirm({
+      title: 'Clear conversation',
+      message: 'This removes the transcript and any proposed action from this browser. It cannot be undone.',
+      confirmLabel: 'Clear',
+      cancelLabel: 'Keep',
+      resolve,
+    })).then(confirmed => {
+      if (!confirmed) return
+      setTurns([])
+      writeAiHistory(workspaceId, [])
+      setPendingAction(null)
+      writeAiPendingAction(workspaceId, null)
+      setMessage('')
+      setAttachment(null)
+      setDocumentNote('')
+      setError('')
+    })
+  }
   const providers = data?.providers || {}; const enabled = data?.settings?.ai_enabled_providers || Object.keys(providers).filter(key => providers[key])
+  // Non-modal still dismisses on any outside interaction, which closed the
+  // assistant the moment anyone clicked a nav tab. A docked window is not a
+  // popover: it stays put and leaves Escape and the close button as the ways out.
   return <Dialog open modal={false} onOpenChange={open => { if (!open) onClose() }}>
-    <DialogContent position="dock" className="ai-chat-window" overlayClassName="ai-chat-overlay" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
+    <DialogContent position="dock" className="ai-chat-window" overlayClassName="ai-chat-overlay" showCloseButton={false} aria-describedby={undefined} onInteractOutside={event => event.preventDefault()} onCloseAutoFocus={event => { event.preventDefault(); if (launcherRef.current?.isConnected) launcherRef.current.focus() }}>
       <div className="ai-chat-heading">
         <div className="ai-chat-heading-copy">
           <span className="ai-chat-title-icon" aria-hidden="true"><Sparkles size={17} /></span>
@@ -1129,6 +1159,7 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
           </div>
         </div>
         <div className="ai-chat-actions">
+          <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={busy || (!turns.length && !pendingAction)} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={17} /></button>
           {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={18} /></button>}
           <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={19} /></button>
         </div>
@@ -1185,6 +1216,10 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize }) {
           <button className="ai-chat-send" disabled={busy || (!message.trim() && !attachment)} aria-label="Send message"><Send size={20} /></button>
         </div>
       </form>
+      <ConfirmDialog
+        state={clearConfirm}
+        onClose={() => setClearConfirm(null)}
+      />
     </DialogContent>
   </Dialog>
 }

@@ -6578,6 +6578,12 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
 
 .ai-chat-actions .ai-chat-action-button:hover { border-color: rgb(255 255 255 / 28%); background: rgb(255 255 255 / 15%); }
 .ai-chat-actions .ai-chat-action-button.is-close:hover { border-color: rgb(255 143 143 / 38%); background: rgb(199 0 54 / 28%); }
+/* Clearing the conversation is destructive too, but it sits beside Minimize and
+   Close, so the red only arrives on hover - a permanently red button in a
+   three-button cluster reads as an error rather than an action. */
+.ai-chat-actions .ai-chat-action-button.is-clear:hover { border-color: rgb(255 143 143 / 38%); background: rgb(199 0 54 / 28%); }
+.ai-chat-actions .ai-chat-action-button:disabled { opacity: 45%; cursor: not-allowed; }
+.ai-chat-actions .ai-chat-action-button:disabled:hover { border-color: rgb(255 255 255 / 14%); background: rgb(255 255 255 / 8%); }
 .ai-chat-actions .ai-chat-action-button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 .ai-chat-messages {

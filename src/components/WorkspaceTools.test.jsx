@@ -308,6 +308,117 @@ it('keeps the attachment when the turn fails so it can be retried', async () => 
   expect(screen.getByText('quarterly.pdf')).toBeInTheDocument()
 })
 
+it('stays open when the user clicks somewhere else in the app', async () => {
+  // The dock is a non-modal Radix dialog, and non-modal still dismisses on any
+  // outside interaction - so clicking a nav tab closed the assistant outright.
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  const onClose = vi.fn()
+
+  render(
+    <>
+      <button type="button">My tasks</button>
+      <AssistantFlyout workspaceId={4} onClose={onClose} onMinimize={vi.fn()} />
+    </>,
+  )
+  await screen.findByRole('button', { name: 'Minimize Zuri' })
+
+  const navTab = screen.getByRole('button', { name: 'My tasks' })
+  // A click outside is a pointerdown followed by a click; Radix listens for
+  // both, and attaches its listener a tick after mount.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+  fireEvent.pointerDown(navTab, { button: 0 })
+  fireEvent.click(navTab)
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+
+  expect(onClose).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: 'Minimize Zuri' })).toBeInTheDocument()
+})
+
+it('still closes the assistant on Escape', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  const onClose = vi.fn()
+
+  render(<AssistantFlyout workspaceId={4} onClose={onClose} onMinimize={vi.fn()} />)
+  await screen.findByRole('button', { name: 'Minimize Zuri' })
+
+  // Escape is read by Radix off the dialog's own document, which in this
+  // environment is not the stub bound to the global `document`.
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+
+  await waitFor(() => expect(onClose).toHaveBeenCalled())
+})
+
+it('clears the stored transcript and any waiting proposal after a confirmation', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  window.localStorage.setItem('workspace-ai-chat:4', JSON.stringify([
+    { role: 'user', content: 'Create a task called Launch notes.' },
+    { role: 'assistant', content: 'I prepared that action for your confirmation.' },
+  ]))
+  window.localStorage.setItem('workspace-ai-action:4', JSON.stringify({
+    id: 7,
+    kind: 'task.create',
+    summary: 'Create task "Launch notes"',
+    status: 'pending',
+  }))
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
+
+  expect(await screen.findByText('Create a task called Launch notes.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Clear conversation' }))
+
+  // Nothing is wiped until the confirmation is answered.
+  const clear = await screen.findByRole('button', { name: 'Clear' })
+  expect(window.localStorage.getItem('workspace-ai-chat:4')).toContain('Launch notes')
+  expect(screen.getByRole('button', { name: 'Keep' })).toBeInTheDocument()
+
+  fireEvent.click(clear)
+
+  await waitFor(() => expect(screen.queryByText('Create a task called Launch notes.')).not.toBeInTheDocument())
+  expect(screen.queryByText('Create task "Launch notes"')).not.toBeInTheDocument()
+  expect(screen.getByText('Start a conversation')).toBeInTheDocument()
+  expect(window.localStorage.getItem('workspace-ai-chat:4')).toBe('[]')
+  expect(window.localStorage.getItem('workspace-ai-action:4')).toBeNull()
+  // With nothing left to clear, the control is inert rather than hidden.
+  expect(screen.getByRole('button', { name: 'Clear conversation' })).toBeDisabled()
+})
+
+it('keeps the transcript when the clear confirmation is declined', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+  })
+  window.localStorage.setItem('workspace-ai-chat:4', JSON.stringify([
+    { role: 'user', content: 'Create a task called Launch notes.' },
+  ]))
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
+
+  expect(await screen.findByText('Create a task called Launch notes.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Clear conversation' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Keep' }))
+
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Keep' })).not.toBeInTheDocument())
+  expect(screen.getByText('Create a task called Launch notes.')).toBeInTheDocument()
+  expect(window.localStorage.getItem('workspace-ai-chat:4')).toContain('Launch notes')
+})
+
 const uploadedFile = {
   id: 9,
   original_name: 'Quarterly review.pdf',
