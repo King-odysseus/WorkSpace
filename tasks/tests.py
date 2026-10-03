@@ -4505,6 +4505,127 @@ class ZuriDocumentChatTests(TestCase):
         self.assertIn('archives', response.json()['document']['reason'])
         self.assertNotIn('BEGIN DOCUMENT', captured['body']['messages'][0]['content'])
 
+    def _png(self, size=(40, 24), colour='white'):
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new('RGB', size, colour).save(buffer, format='PNG')
+        return buffer.getvalue()
+
+    def test_an_image_reaches_the_model_as_a_picture(self):
+        # OCR is a lossy stand-in for a picture: a screenshot of a chart, a form
+        # or a layout comes through as rubble. A model that can see gets the
+        # image itself instead.
+        self._enable_ai()
+        item = self._attach('dashboard.png', self._png())
+        captured = {}
+        response = self._chat({'message': 'What does this show?', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        content = captured['body']['messages'][-1]['content']
+        self.assertIsInstance(content, list)
+        self.assertEqual(content[0], {'type': 'text', 'text': 'What does this show?'})
+        self.assertEqual(content[1]['type'], 'image_url')
+        self.assertTrue(content[1]['image_url']['url'].startswith('data:image/png;base64,'))
+        # The picture is not also pasted in as text beside the system prompt.
+        self.assertNotIn('BEGIN DOCUMENT', captured['body']['messages'][0]['content'])
+        self.assertIn('AN IMAGE ATTACHED BY THE USER', captured['body']['messages'][0]['content'])
+        self.assertTrue(response.json()['document']['image'])
+
+    def test_a_model_without_vision_keeps_the_text_path_it_had(self):
+        from .workspace_tools import _setting
+
+        self._enable_ai()
+        setting = _setting(self.workspace.id)
+        # The provider config, not ai_model: an AI_MODEL in the environment
+        # outranks the setting, and the config is what an administrator saves.
+        setting.ai_provider_config = {'openai': {'model': 'gpt-3.5-turbo'}}
+        setting.save()
+        item = self._attach('dashboard.png', self._png())
+        captured = {}
+        response = self._chat({'message': 'What does this show?', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        # No picture block anywhere: this model never gets one.
+        self.assertNotIn('image_url', json.dumps(captured['body']))
+        self.assertIsInstance(captured['body']['messages'][-1]['content'], str)
+
+    def test_a_format_no_provider_takes_as_a_picture_keeps_the_text_path(self):
+        from PIL import Image
+
+        self._enable_ai()
+        buffer = io.BytesIO()
+        Image.new('RGB', (40, 24), 'white').save(buffer, format='BMP')
+        item = self._attach('scan.bmp', buffer.getvalue())
+        captured = {}
+        response = self._chat({'message': 'What does this show?', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('image_url', json.dumps(captured['body']))
+
+    def test_an_oversized_image_is_not_sent_as_a_picture(self):
+        self._enable_ai()
+        item = self._attach('huge.png', self._png(size=(400, 400)))
+        captured = {}
+        with mock.patch('tasks.document_text.VISION_MAX_BYTES', 100):
+            response = self._chat({'message': 'What does this show?', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('image_url', json.dumps(captured['body']))
+
+    def test_a_model_that_refuses_the_image_is_asked_again_without_it(self):
+        from urllib.error import HTTPError
+
+        self._enable_ai()
+        item = self._attach('dashboard.png', self._png())
+        captured = {}
+        attempts = []
+
+        class _Response:
+            def read(self):
+                return json.dumps({'choices': [{'message': {'content': 'Asked without it.'}}]}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            body = json.loads(request.data.decode())
+            captured['body'] = body
+            attempts.append(json.dumps(body).count('image_url'))
+            if len(attempts) == 1:
+                raise HTTPError(request.full_url, 400, 'Bad Request', None, None)
+            return _Response()
+
+        with mock.patch('tasks.workspace_tools.urlrequest.urlopen', fake_urlopen):
+            with mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test-key'}):
+                response = self.client.post(
+                    reverse('workspace-ai-chat', args=[self.workspace.id]),
+                    data=json.dumps({'message': 'What does this show?', 'file_id': item.id}),
+                    content_type='application/json',
+                )
+
+        # The turn survives: the picture is dropped, and the user is told why.
+        # Two occurrences on the first attempt, because the block names the type
+        # and holds the key; the second asks with no picture at all.
+        self.assertEqual(attempts, [2, 0])
+        self.assertFalse(response.json()['document']['ok'])
+        self.assertIn('could not read the image', response.json()['document']['reason'])
+
+    def test_model_reads_images_matches_what_each_provider_takes(self):
+        from .workspace_tools import model_reads_images
+
+        self.assertTrue(model_reads_images('deepseek', 'deepseek-flash'))
+        self.assertTrue(model_reads_images('deepseek', 'deepseek-v4-flash'))
+        self.assertTrue(model_reads_images('openai', 'gpt-4o-mini'))
+        self.assertTrue(model_reads_images('claude', 'claude-3-5-haiku-latest'))
+        # The default Kimi model is text-only, so it keeps reading images as text.
+        self.assertFalse(model_reads_images('kimi', 'moonshot-v1-8k'))
+        self.assertFalse(model_reads_images('deepseek', 'deepseek-chat'))
+        self.assertFalse(model_reads_images('openai', 'gpt-3.5-turbo'))
+
     def test_a_file_from_another_workspace_is_never_read(self):
         self._enable_ai()
         item = self._attach('secret.txt', b'The acquisition price is confidential.', workspace=self.other_workspace)

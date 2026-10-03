@@ -6814,6 +6814,12 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .ai-chat-attachment button { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--pencil-text-muted); }
 .ai-chat-attachment button:hover { background: var(--pencil-border); color: var(--pencil-text); }
 .ai-chat-attach-status { margin: 0; color: var(--pencil-text-muted); font-size: 11px; }
+.ai-chat-attach-notice { margin: 0; color: var(--pencil-text-muted); font-size: 11px; line-height: 15px; }
+/* Two sizes of the same preview: a chip beside the file name before sending,
+   and the picture itself on the turn once it has gone. Both are bounded so a
+   tall screenshot cannot take over the transcript. */
+.ai-chat-attachment-thumb { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 7px; border: 1px solid var(--pencil-border); background: var(--pencil-surface); object-fit: cover; }
+.ai-chat-thumb { display: block; width: 100%; max-width: 240px; max-height: 240px; margin: 0 0 7px; border-radius: 10px; background: var(--pencil-surface); object-fit: contain; }
 
 .ai-minimized-toast {
   position: fixed;

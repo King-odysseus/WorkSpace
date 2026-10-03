@@ -1012,11 +1012,21 @@ function describeDecision(decision, outcomes) {
   return `${verb}. ${label}:\n${done.map(outcome => `- ${outcome.summary}`).join('\n')}`
 }
 
+// The formats Zuri can hand to a provider as a picture. Deliberately the same
+// list the server will send: BMP and TIFF are still read, but as text, and
+// telling someone their TIFF was sent as an image would be wrong.
+const IMAGE_ATTACHMENT_PATTERN = /\.(png|jpe?g|gif|webp)$/i
+
+export function isImageAttachment(name) {
+  return IMAGE_ATTACHMENT_PATTERN.test(String(name || ''))
+}
+
 // What happened to an attached file is a fact about the request, not something to
 // hope the model volunteers, so the server reports it and the composer says it.
 export function describeDocument(info) {
   if (!info || !info.name) return ''
   if (!info.ok) return `${info.name}: ${info.reason || 'that file could not be read.'}`
+  if (info.image) return `Sent ${info.name} to Zuri as an image.`
   const parts = []
   const counts = info.redacted || {}
   const redacted = Object.values(counts).reduce((total, count) => total + count, 0)
@@ -1055,7 +1065,7 @@ function useAssistantConversation(workspaceId, transcriptRef) {
       const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: await csrf(headers(workspaceId)), body })
       const result = await readJsonResponse(response, 'That file could not be attached.')
       if (!response.ok) throw new Error(result.error || 'That file could not be attached.')
-      setAttachment({ id: result.file.id, name: result.file.original_name || chosen.name })
+      setAttachment({ id: result.file.id, name: result.file.original_name || chosen.name, url: result.file.url || '' })
     } catch (uploadError) {
       setError(uploadError.message)
     } finally {
@@ -1071,7 +1081,14 @@ function useAssistantConversation(workspaceId, transcriptRef) {
     // Show the question immediately and clear the box, so the transcript reads
     // like a conversation instead of the answer appearing with no prompt.
     const history = turns.slice(-AI_HISTORY_TURNS)
-    const withQuestion = [...turns, { role: 'user', content: asked }]
+    // The attachment rides on the turn so the transcript can show what was sent
+    // with it. Only role and content are replayed to the provider, so the extra
+    // key is dropped before it leaves the browser.
+    const withQuestion = [...turns, {
+      role: 'user',
+      content: asked,
+      ...(attachment ? { attachment: { name: attachment.name, url: attachment.url } } : {}),
+    }]
     setTurns(withQuestion)
     writeAiHistory(workspaceId, withQuestion)
     setMessage('')
@@ -1210,7 +1227,12 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
                 text as typed, so it stays a plain node. */}
             {turn.role === 'assistant'
               ? <div className="ai-chat-bubble is-rich" dangerouslySetInnerHTML={{ __html: cleanHtml(renderAssistantMarkdown(turn.content)) }} />
-              : <div className="ai-chat-bubble">{turn.content}</div>}
+              : <div className="ai-chat-bubble">
+                {turn.attachment?.url && isImageAttachment(turn.attachment.name) && (
+                  <img className="ai-chat-thumb" src={turn.attachment.url} alt={turn.attachment.name} />
+                )}
+                {turn.content}
+              </div>}
           </div>
         </div>
       ))}
@@ -1241,10 +1263,17 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
     </div>
     <form onSubmit={ask} className="ai-chat-composer is-stacked">
       {attachment && <div className="ai-chat-attachment">
-        <FileText size={15} />
+        {isImageAttachment(attachment.name) && attachment.url
+          ? <img className="ai-chat-attachment-thumb" src={attachment.url} alt="" />
+          : <FileText size={15} />}
         <span title={attachment.name}>{attachment.name}</span>
         <button type="button" onClick={() => setAttachment(null)} aria-label={`Remove ${attachment.name}`}><X size={14} /></button>
       </div>}
+      {/* Text is redacted before it leaves the workspace; a picture cannot be,
+          so the reader is told which one they are about to send. */}
+      {attachment && isImageAttachment(attachment.name) && (
+        <p className="ai-chat-attach-notice">An image is sent to the AI provider as a picture, and is not redacted.</p>
+      )}
       {attaching && <p className="ai-chat-attach-status" role="status">Attaching...</p>}
       <div className="ai-chat-composer-row">
         <div className="ai-chat-input-shell">

@@ -244,6 +244,74 @@ it('describes what happened to an attached document, including what was withheld
   )
 })
 
+it('says an image goes as a picture and shows what is attached', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/files/': {
+      file: { id: 9, original_name: 'dashboard.png', url: '/api/workspace-files/9/download/' },
+    },
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'It is a chart.',
+      document: { name: 'dashboard.png', ok: true, image: true },
+    },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  const picker = await screen.findByLabelText('Attach a document for Zuri to read')
+  fireEvent.change(picker, { target: { files: [new File(['x'], 'dashboard.png', { type: 'image/png' })] } })
+
+  // The chip previews the picture, and the notice says what will happen to it -
+  // an image cannot be redacted the way document text is.
+  const chip = (await screen.findByText('dashboard.png')).closest('.ai-chat-attachment')
+  expect(chip.querySelector('.ai-chat-attachment-thumb')).not.toBeNull()
+  expect(screen.getByText(/sent to the AI provider as a picture, and is not redacted/)).toBeInTheDocument()
+
+  const input = screen.getByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'What does this show?' } })
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByText('Sent dashboard.png to Zuri as an image.')).toBeInTheDocument()
+  // The turn keeps the picture it was sent with, so the transcript shows it.
+  const turn = (await screen.findByText('What does this show?')).closest('.ai-chat-turn')
+  expect(turn.querySelector('.ai-chat-thumb')).not.toBeNull()
+  expectRequest(fetchMock, '/api/workspaces/4/ai/chat/', 'POST')
+})
+
+it('leaves a document attachment described the way it always was', async () => {
+  mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/files/': {
+      file: { id: 9, original_name: 'contacts.txt', url: '/api/workspace-files/9/download/' },
+    },
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'Two names.',
+      document: { name: 'contacts.txt', ok: true, redacted: { EMAIL: 1 }, truncated: false },
+    },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  const picker = await screen.findByLabelText('Attach a document for Zuri to read')
+  fireEvent.change(picker, { target: { files: [new File(['x'], 'contacts.txt', { type: 'text/plain' })] } })
+
+  expect(await screen.findByText('contacts.txt')).toBeInTheDocument()
+  // No picture notice, no preview: this one is redacted as text.
+  expect(screen.queryByText(/sent to the AI provider as a picture/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('img')).not.toBeInTheDocument()
+
+  const input = screen.getByLabelText('Message to Zuri')
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByText('Read contacts.txt. 1 piece of personal data replaced with placeholders.')).toBeInTheDocument()
+})
+
 it('sends an attached file with the question and reports what Zuri made of it', async () => {
   const fetchMock = mockApi({
     '/api/workspaces/4/ai/settings/': {

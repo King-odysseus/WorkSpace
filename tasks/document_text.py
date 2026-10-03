@@ -11,6 +11,7 @@ as Python ones. An environment without them must still be able to summarise a
 CSV.
 """
 
+import base64
 import codecs
 import io
 import logging
@@ -53,6 +54,23 @@ UNREADABLE_HINTS = {
 }
 
 READABLE_ADVICE = 'Save it as PDF, DOCX, XLSX, CSV, text or an image and try again.'
+
+# The formats the vision APIs accept. Deliberately narrower than
+# IMAGE_EXTENSIONS: BMP and TIFF are readable here by the OCR path but no
+# provider takes them as a picture, so those keep going through OCR.
+VISION_MEDIA_TYPES = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+}
+
+# A single image may be up to 32 MiB at the providers and base64 inflates it by
+# about a third, against a 48 MiB request body. A screenshot worth reading is far
+# smaller than this ceiling; anything larger falls back to OCR instead of being
+# sent, which keeps one attachment from making every turn slow.
+VISION_MAX_BYTES = 8 * 1024 * 1024
 
 
 class DocumentReadError(Exception):
@@ -184,6 +202,39 @@ def _read_image(stored_file):
         ) from exc
     except Exception as exc:
         raise DocumentReadError('That image could not be read.') from exc
+
+
+def read_image_for_vision(stored_file, original_name=''):
+    """Read an attached image as bytes a vision request can carry.
+
+    Returns ``{'data': base64 str, 'media_type': str, 'reason': str}``. A
+    non-empty ``reason`` means the picture cannot ride along - an unreadable
+    format, or one the providers will not take - and the caller falls back to
+    reading the file as text instead.
+    """
+    if not stored_file:
+        return {'data': '', 'media_type': '', 'reason': 'That file is no longer stored, so Zuri cannot read it.'}
+
+    name = str(original_name or getattr(stored_file, 'name', '') or '')
+    media_type = VISION_MEDIA_TYPES.get(os.path.splitext(name)[1].lower())
+    if not media_type:
+        return {'data': '', 'media_type': '', 'reason': 'That image format cannot be sent as a picture.'}
+
+    try:
+        stored_file.open('rb')
+        try:
+            raw = stored_file.read()
+        finally:
+            stored_file.close()
+    except Exception:
+        logger.exception('Could not open an image for a vision request: %s', name)
+        return {'data': '', 'media_type': '', 'reason': 'That image could not be opened.'}
+
+    if not raw:
+        return {'data': '', 'media_type': '', 'reason': 'That image is empty.'}
+    if len(raw) > VISION_MAX_BYTES:
+        return {'data': '', 'media_type': '', 'reason': 'That image is too large to send as a picture.'}
+    return {'data': base64.b64encode(raw).decode('ascii'), 'media_type': media_type, 'reason': ''}
 
 
 def extract_document_text(stored_file, original_name=''):
