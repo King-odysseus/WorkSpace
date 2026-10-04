@@ -6,12 +6,35 @@
 // tests focused on behaviour instead of request plumbing.
 
 import '@testing-library/jest-dom/vitest'
-import { afterEach, expect, vi } from 'vitest'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+})
+
+// happy-dom's fetch is real, and it resolves a relative URL against its own
+// default origin, so a test that never stubbed anything does not fail - it
+// quietly attempts a connection to localhost:3000 and leaves "ECONNREFUSED" in
+// the output for somebody to wonder about. This makes that a failure with the
+// request in it instead.
+//
+// It stands aside for tests that already stubbed, which is why it asks whether
+// fetch is a mock rather than replacing it outright: mockApi() is often called
+// in a before() hook that has already run by the time this does.
+beforeEach(() => {
+  if (vi.isMockFunction(globalThis.fetch)) return
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input) => {
+      const url = typeof input === 'string' ? input : input?.url
+      throw new Error(
+        `A test made a network request with nothing stubbed: ${url}. ` +
+          'Call mockApi() with the routes this test needs.',
+      )
+    }),
+  )
 })
 
 // Note for form tests: happy-dom does not implicitly submit a form when a submit
