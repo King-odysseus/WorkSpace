@@ -112,7 +112,7 @@ Estimate: 4-7 days. Dependency: notification-volume review and agreed delivery r
 | UX-20 | Define notification preferences for mentions, assignments, reminders, and general updates. Add quiet hours and reminder snoozing. Specify timezone, overnight windows, daylight-saving, and urgent-event behavior. | Preferences apply consistently to in-app sound, push, email, and automation where supported. Quiet hours preserve unread work; snoozed reminders resume once without duplicates. |
 | UX-21 | Verify foreground/background/closed-app notification delivery on supported real devices. | Permission denial, unsupported devices, reconnect, and disabled sound have clear outcomes. Delivery limitations are documented. |
 | UX-22 | Run the ten skipped sanitizer cases in a supported browser environment using installed tooling. Tighten component-test network isolation. | Done - see Progress. |
-| UX-23 | Complete the CI daily journey: task capture/update, exact search, chat, check-in, draft recovery, failure/retry, and mobile keyboard use. | Partial - capture/update, search, failure/retry and mobile keyboard are in CI; chat, check-in and draft recovery are not. | CI provides repeatable fixtures, cleanup, and useful failure artifacts. Release checks pass. |
+| UX-23 | Complete the CI daily journey: task capture/update, exact search, chat, check-in, draft recovery, failure/retry, and mobile keyboard use. | Done - see Progress. |
 
 Likely files: `tasks/models.py`, `tasks/automation.py`, `tasks/push.py`,
 `tasks/mailer.py`, `src/components/SettingsView.jsx`, `public/sw.js`, and CI/tests.
@@ -795,10 +795,12 @@ attempt a connection and leave ECONNREFUSED in the output rather than failing.
 It now fails with the URL and the remedy. The noise went from tens of lines to
 none.
 
-**UX-23 is partial.** What CI now does, on every push and pull request: install
+**UX-23 is done.** What CI does on every push and pull request: install
 Chromium, run the browser journeys against the build it just made, run the
-rich-text cases, and keep a screenshot of any journey that failed. Of the journey
-contents the task lists, capture and update, exact search, failure and retry, and
-mobile keyboard use are covered. **Chat, check-in, and draft recovery are not** -
-each needs fixtures the seed does not have yet, and they are the remaining work
-on this task.
+rich-text cases, and keep a screenshot of any journey that failed. Every journey
+content the task lists is covered - task capture and update, exact search, chat,
+check-in, draft recovery, failure and retry, and mobile keyboard use - in
+thirteen journeys that pass in about forty seconds. The fixture grew a channel
+with a message, a seeded unread alert, and a workspace to switch from, so each
+journey starts from the same place. Fixtures are recreated per run and the
+database is deleted afterwards, so nothing accumulates.
