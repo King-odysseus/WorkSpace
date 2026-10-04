@@ -726,7 +726,10 @@ aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] { border-color:
 aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] span:not([aria-hidden]) { color: #fff !important; }
 aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] [aria-hidden='true'] { background: var(--pencil-bronze) !important; color: #fff !important; }
 aside[class*='bg-navy'] > div:first-child .bg-border, aside[class*='bg-navy'] > .sidebar-account .bg-border { background: rgb(255 255 255 / 12%) !important; }
-aside[class*='bg-navy'] nav { padding: 15px 16px 8px !important; }
+/* The rail's first destination used to sit 15px under the workspace switcher,
+   which read as crowded against the divider above it. 28px drops the menu clear
+   of the header without pushing the last group near the account block. */
+aside[class*='bg-navy'] nav { padding: 28px 16px 8px !important; }
 aside[class*='bg-navy'] nav { scrollbar-width: none; }
 aside[class*='bg-navy'] nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 aside[class*='bg-navy'] nav > div { margin-bottom: 17px !important; }
@@ -1235,6 +1238,21 @@ input.shell-search[type='search']::-webkit-search-results-decoration {
   -webkit-appearance: none;
   appearance: none;
   display: none;
+}
+
+/* Same trap on the title-first capture row: its wrapper already owns the
+   surface, and the global field rule painted the input as well, so a second
+   rounded outline sat inside the first. The id outranks that rule. */
+input#quick-task-capture {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+input#quick-task-capture:focus {
+  outline: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Wrapper-owned fields draw the surface once. Keep their inner controls free
