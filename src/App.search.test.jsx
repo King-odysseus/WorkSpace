@@ -94,6 +94,10 @@ const routes = {
       body: { error: 'Search is unavailable right now.' },
     },
     '/api/workspaces/1/search/?q=empty': { results: [], query: 'empty' },
+    '/api/workspaces/1/search/?q=expired': {
+      status: 401,
+      body: { error: 'Authentication is required.' },
+    },
 }
 
 // The shared setup unstubs globals after every test, so the app mounted once in
@@ -120,6 +124,9 @@ const clickResult = async (title) => {
 
 const searchRequestCount = (query) =>
   fetchMock.mock.calls.filter(([url]) => String(url).includes(`/search/?q=${query}`)).length
+
+const sessionRequestCount = () =>
+  fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/auth/me/')).length
 
 it('opens the exact task a hit names, loading it when the board does not hold it', async () => {
   await searchFor('renew')
@@ -190,4 +197,14 @@ it('shows a failed search as a failure with a retry, never as no matches', async
   // The retry repeats the query that failed, rather than the box being reset or
   // the retry reusing whatever was typed first.
   await waitFor(() => expect(searchRequestCount('broken')).toBe(before + 1))
+}, 60000)
+
+it('treats an expired session as a failed search and asks who the reader is', async () => {
+  expect(sessionRequestCount()).toBe(0)
+  await searchFor('expired')
+
+  expect(await screen.findByText('Authentication is required.', {}, { timeout: 15000 })).toBeInTheDocument()
+  // The app already listens for this event to re-read the session. Without it an
+  // expired session was indistinguishable from a query with no matches.
+  await waitFor(() => expect(sessionRequestCount()).toBeGreaterThan(0))
 }, 60000)
