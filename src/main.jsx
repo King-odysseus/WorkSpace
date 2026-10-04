@@ -10,7 +10,6 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 
 import { AppSelect } from "./components/ui/select.jsx";
 import React, {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -100,23 +99,23 @@ import {
 // Today, so each is fetched when its destination is opened rather than shipped
 // in the entry bundle. The Suspense boundary around the workspace view below is
 // what lets them suspend.
-const PlannerBoard = lazy(() => import("./components/PlannerBoard.jsx"));
-const ProjectKanbanBoard = lazy(() => import("./components/ProjectKanbanBoard.jsx"));
-const ProjectTaskTable = lazy(() => import("./components/ProjectTaskTable.jsx"));
+const PlannerBoard = lazyRoute("PlannerBoard", () => import("./components/PlannerBoard.jsx"));
+const ProjectKanbanBoard = lazyRoute("ProjectKanbanBoard", () => import("./components/ProjectKanbanBoard.jsx"));
+const ProjectTaskTable = lazyRoute("ProjectTaskTable", () => import("./components/ProjectTaskTable.jsx"));
 import WorkScopeSelector, {
   taskMatchesScope,
 } from "./components/WorkScopeSelector.jsx";
-const AssistantFlyout = lazy(() =>
+const AssistantFlyout = lazyRoute("AssistantFlyout", () =>
   import("./components/WorkspaceTools.jsx").then((module) => ({
     default: module.AssistantFlyout,
   })),
 );
-const AssistantPage = lazy(() =>
+const AssistantPage = lazyRoute("AssistantPage", () =>
   import("./components/WorkspaceTools.jsx").then((module) => ({
     default: module.AssistantPage,
   })),
 );
-const FilesWorkspaceView = lazy(() =>
+const FilesWorkspaceView = lazyRoute("FilesWorkspaceView", () =>
   import("./components/WorkspaceTools.jsx").then((module) => ({
     default: module.FilesWorkspaceView,
   })),
@@ -161,58 +160,58 @@ import {
 } from "./components/BoardViews.jsx";
 import { WorkspaceComposer } from "./components/WorkspaceComposer.jsx";
 import Avatar from "./components/Avatar.jsx";
-const ChatWorkspaceView = lazy(() =>
+const ChatWorkspaceView = lazyRoute("ChatWorkspaceView", () =>
   import("./components/ChatViews.jsx").then((module) => ({
     default: module.ChatWorkspaceView,
   })),
 );
 // The record dialogs and the task drawer only ever appear once something has
 // been opened, so none of them belong in the entry bundle either.
-const CalendarEventEditDialog = lazy(() =>
+const CalendarEventEditDialog = lazyRoute("CalendarEventEditDialog", () =>
   import("./components/RecordDialogs.jsx").then((module) => ({
     default: module.CalendarEventEditDialog,
   })),
 );
-const CheckInDetailDialog = lazy(() =>
+const CheckInDetailDialog = lazyRoute("CheckInDetailDialog", () =>
   import("./components/RecordDialogs.jsx").then((module) => ({
     default: module.CheckInDetailDialog,
   })),
 );
-const CheckInEditDialog = lazy(() =>
+const CheckInEditDialog = lazyRoute("CheckInEditDialog", () =>
   import("./components/RecordDialogs.jsx").then((module) => ({
     default: module.CheckInEditDialog,
   })),
 );
-const FollowUpEditDialog = lazy(() =>
+const FollowUpEditDialog = lazyRoute("FollowUpEditDialog", () =>
   import("./components/RecordDialogs.jsx").then((module) => ({
     default: module.FollowUpEditDialog,
   })),
 );
-const ProjectEditDialog = lazy(() =>
+const ProjectEditDialog = lazyRoute("ProjectEditDialog", () =>
   import("./components/RecordDialogs.jsx").then((module) => ({
     default: module.ProjectEditDialog,
   })),
 );
-const AssigneePicker = lazy(() =>
+const AssigneePicker = lazyRoute("AssigneePicker", () =>
   import("./components/TaskViews.jsx").then((module) => ({
     default: module.AssigneePicker,
   })),
 );
-const TaskDetailDrawer = lazy(() =>
+const TaskDetailDrawer = lazyRoute("TaskDetailDrawer", () =>
   import("./components/TaskViews.jsx").then((module) => ({
     default: module.TaskDetailDrawer,
   })),
 );
-const SettingsView = lazy(() => import("./components/SettingsView.jsx"));
-const ScreenSharingView = lazy(() => import("./components/ScreenSharing.jsx"));
-const ScreenShareControl = lazy(() =>
+const SettingsView = lazyRoute("SettingsView", () => import("./components/SettingsView.jsx"));
+const ScreenSharingView = lazyRoute("ScreenSharingView", () => import("./components/ScreenSharing.jsx"));
+const ScreenShareControl = lazyRoute("ScreenShareControl", () =>
   import("./components/ScreenSharing.jsx").then((module) => ({
     default: module.ScreenShareControl,
   })),
 );
-const ImportView = lazy(() => import("./components/ImportView.jsx"));
-const PersonalPlanner = lazy(() => import("./components/PersonalPlanner.jsx"));
-const CreateWorkspaceDialog = lazy(() => import("./components/CreateWorkspaceDialog.jsx"));
+const ImportView = lazyRoute("ImportView", () => import("./components/ImportView.jsx"));
+const PersonalPlanner = lazyRoute("PersonalPlanner", () => import("./components/PersonalPlanner.jsx"));
+const CreateWorkspaceDialog = lazyRoute("CreateWorkspaceDialog", () => import("./components/CreateWorkspaceDialog.jsx"));
 import { releaseNotesUnread } from "./lib/release-notes.js";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import BrandedStatusScreen from "./components/BrandedStatusScreen.jsx";
@@ -221,6 +220,9 @@ import { startNotificationAlerts, updateAppBadge } from "./lib/notification-aler
 import { announceNotificationChange } from "./lib/notification-events.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget, resolveSearchResultTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
+// Route views are fetched on demand; this reloads once if the build they were
+// named in has been replaced under the reader. See src/lib/lazy-route.js.
+import { lazyRoute } from "./lib/lazy-route.js";
 import { signalAuthenticationRequired } from "./lib/auth-events.js";
 import {
   clearRecordDraft,
