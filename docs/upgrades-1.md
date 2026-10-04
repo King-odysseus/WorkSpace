@@ -2,7 +2,7 @@
 
 Prepared: 4 October 2026.
 Source: [Usability audit](usability-audit-2026-10-04.md).
-Status: Phase 1 (UX-04 to UX-07) delivered. See Progress at the end of this file.
+Status: Phases 1 and 2 (UX-04 to UX-11) delivered. See Progress at the end of this file.
 
 ## Objective and scope
 
@@ -208,4 +208,74 @@ Known limits:
 - Phase 0 was not part of this delivery, so no browser walkthrough or startup
   measurement baseline exists yet. Phase 3 targets still have nothing to measure
   against.
+
+### Phase 2: UX-08 to UX-11 - delivered 4 October 2026
+
+| ID | Task | Status |
+| --- | --- | --- |
+| UX-08 | Draft recovery for new tasks, check-ins, events, projects, and follow-ups | Done |
+| UX-09 | Protect changed forms against accidental dismissal | Done |
+| UX-10 | Title-first shared task capture | Done |
+| UX-11 | Discoverable shortcuts for search and capture | Done |
+
+What shipped:
+
+- One draft store (`src/lib/record-drafts.js`) keyed by reader, workspace, and
+  record type, expiring after seven days, with every storage call wrapped so a
+  full or unavailable store cannot block editing. A draft is the base of an
+  opened form and the caller's own request wins over it, so clicking a calendar
+  slot still means that slot. A successful save clears only its own type.
+  Signing out clears that reader's drafts.
+- One dismissal path. Escape, the backdrop, and the close button all reach the
+  same guard, which refuses while a request is in flight. Escape belongs to the
+  top layer: the composer and the task form take it on window in the capture
+  phase and stop it there, so one press closes one layer instead of the composer
+  and everything behind it. Both submit paths hold a flag set synchronously
+  around the request, so a second submit in the same tick cannot create twice.
+  The composer hands focus back to the control that opened it.
+- Title-first capture on Today: one field, the same endpoint and the same
+  defaults as the full form, a line saying where the task will land, and an
+  "Add details" action that opens the full form with the typed title carried
+  over. It deliberately sends no owner, so the server keeps applying its own
+  member-defaults-to-self rule.
+- The shortcuts the help centre already listed now exist. `/` searches (as
+  before), `N` captures a task, `Shift N` opens notifications, and `Ctrl \`
+  toggles the sidebar. Every one stands down while the caret is in a field,
+  while a dialog owns the keyboard, and while a key is held down. The capture
+  field shows its own `N` hint, and the help page now says what the guards do.
+
+Verification:
+
+- Frontend suite: 73 files, 619 passed, 10 skipped
+  (`npx vitest run --maxWorkers=2`), against 590 passed before this phase.
+- Production build: passed.
+- Each new test was confirmed to fail against the behaviour it replaces:
+  removing the draft write, the in-flight close guard, the duplicate-submit
+  guard, the Escape stop, the typing guard, the title hand-off, or the refusal
+  retention each fails its test.
+
+Readings and limits:
+
+- UX-09 asks for changed forms to be protected from accidental dismissal. With
+  UX-08 in place, closing no longer loses anything: the draft keeps the work and
+  the form offers it back. So dismissal was not given a confirmation prompt,
+  which would only interrupt someone whose typing is already safe. What was
+  fixed is what that reading leaves broken - Escape reaching a handler that
+  emptied the page, and any of the three exits abandoning a request mid-flight.
+- UX-10 asks for ownership and project defaults to be "visible, editable". They
+  are stated on the row and edited by opening the full form with the title
+  carried across, rather than by putting owner and project pickers into the
+  compact field, which would have made it three controls again. If the intent
+  was inline pickers, that is a design question for the frame below.
+- No OpenPencil coverage was authored, because the design tool was not connected
+  in this session. Only primitives already in the design system were used: the
+  existing composer, the Alert component for the draft notice, the ConfirmDialog,
+  the Button, and the same bordered-field pattern as the header search. A
+  dedicated frame should fold the draft notice, the capture row, and its key
+  hint into the approved coverage before this is treated as designed.
+- Drafts live in localStorage keyed by user id, so a shared browser's other
+  accounts cannot read them, but anyone with access to the browser profile can.
+  That was judged acceptable for the retention it buys, and is worth revisiting
+  if drafts ever hold anything more sensitive than a task title.
+
 
