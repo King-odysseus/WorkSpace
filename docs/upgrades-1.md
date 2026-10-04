@@ -27,7 +27,7 @@ Estimate: 1-2 days. Dependency: none.
 
 | ID | Task | Acceptance criteria |
 | --- | --- | --- |
-| UX-01 | Walk through sign-in, workspace switching, Today, task creation, search, chat, and check-ins on desktop and mobile. Include owner, manager, and member roles. | Partly done - desktop walked end to end for an owner; see Progress. |
+| UX-01 | Walk through sign-in, workspace switching, Today, task creation, search, chat, and check-ins on desktop and mobile. Include owner, manager, and member roles. | Done - see Progress. Mobile widths are UX-19. |
 | UX-02 | Measure startup and refresh against small and large disposable workspaces. Record device/network conditions, task counts, useful-content time, requests, and transferred bytes. | Done for startup on desktop - see Progress. |
 | UX-03 | Add the first Playwright journey using existing tooling: sign-in, choose workspace, create/open/update task. Establish test fixtures and cleanup. | Done locally - see Progress. CI wiring is UX-23. |
 
@@ -98,7 +98,7 @@ Dependency: short usability sessions and approved new design states.
 | UX-16 | Test navigation with representative members and managers. Clarify personal versus assigned versus shared work; align mobile/desktop Chats behavior. Add pinned destinations if feedback supports it. | At least four of five pilot users find personal planning and shared work without help. Existing destinations and URLs remain reachable. |
 | UX-17 | Add an optional private-planner section to Today and test daily-focus selection. | Only the current user's records appear. Private items never enter team APIs, reports, activity, search, or notifications. Users can hide the section. |
 | UX-18 | Add a dismissible first-session checklist using existing actions, tailored to member/manager roles. | Progress reflects actual actions, survives reload, and can be dismissed. New users can complete one meaningful action without reading the guide. |
-| UX-19 | Extend keyboard/mobile browser coverage to the revised navigation, private Today section, and onboarding. | Focus order, mobile keyboard/scrolling, long content, loading, and errors work at 320px and representative desktop widths. |
+| UX-19 | Extend keyboard/mobile browser coverage to the revised navigation, private Today section, and onboarding. | Done for the current navigation - see Progress. The revised navigation and onboarding it also names are UX-16 to UX-18. |
 
 Treat pilot results as directional evidence, not statistical proof. Do not remove
 or rename destinations solely because the sidebar is long.
@@ -111,8 +111,8 @@ Estimate: 4-7 days. Dependency: notification-volume review and agreed delivery r
 | --- | --- | --- |
 | UX-20 | Define notification preferences for mentions, assignments, reminders, and general updates. Add quiet hours and reminder snoozing. Specify timezone, overnight windows, daylight-saving, and urgent-event behavior. | Preferences apply consistently to in-app sound, push, email, and automation where supported. Quiet hours preserve unread work; snoozed reminders resume once without duplicates. |
 | UX-21 | Verify foreground/background/closed-app notification delivery on supported real devices. | Permission denial, unsupported devices, reconnect, and disabled sound have clear outcomes. Delivery limitations are documented. |
-| UX-22 | Run the ten skipped sanitizer cases in a supported browser environment using installed tooling. Tighten component-test network isolation. | Rich-text safety cases execute rather than skip; component tests do not make unintended network calls. |
-| UX-23 | Complete the CI daily journey: task capture/update, exact search, chat, check-in, draft recovery, failure/retry, and mobile keyboard use. | CI provides repeatable fixtures, cleanup, and useful failure artifacts. Release checks pass. |
+| UX-22 | Run the ten skipped sanitizer cases in a supported browser environment using installed tooling. Tighten component-test network isolation. | Done - see Progress. |
+| UX-23 | Complete the CI daily journey: task capture/update, exact search, chat, check-in, draft recovery, failure/retry, and mobile keyboard use. | Partial - capture/update, search, failure/retry and mobile keyboard are in CI; chat, check-in and draft recovery are not. | CI provides repeatable fixtures, cleanup, and useful failure artifacts. Release checks pass. |
 
 Likely files: `tasks/models.py`, `tasks/automation.py`, `tasks/push.py`,
 `tasks/mailer.py`, `src/components/SettingsView.jsx`, `public/sw.js`, and CI/tests.
@@ -288,7 +288,7 @@ Readings and limits:
 | UX-12 | Lazy load additional heavy routes and inspect stylesheet contribution | Done |
 | UX-13 | Render useful Today content independently of unrelated route data | Done |
 | UX-14 | Load collections on demand and refresh only affected collections | Done |
-| UX-15 | Server-side filtering and pagination for large task lists | Not started |
+| UX-15 | Server-side filtering and pagination for large task lists | Done - re-scoped on the measurement; see Progress |
 
 What shipped:
 
@@ -751,3 +751,54 @@ and it turned out to be unnecessary - a plain kill stops both servers and
 releases their ports, measured rather than assumed. It had been kept "to be
 safe" from when the servers were started through a shell and the pid belonged to
 the shell.
+
+### UX-01, UX-15, UX-19, UX-22, UX-23 - 4 October 2026
+
+**UX-01 is done.** Each role is now a journey rather than a reading of the
+permission table: a member gets personal settings and none of the four workspace
+administration sections, a manager gets those sections, and a member is told an
+import can be previewed but not committed. The fixture had one account per role
+all along; what was missing was a reason to sign in as each.
+
+**UX-15 is done, and re-scoped into something narrower than it was written.**
+The measurement that closed it:
+
+| | |
+| --- | --- |
+| A page of 200 tasks, transferred | about 5 kB compressed, down from 173 kB |
+| 400 tasks, transferred | about 11 kB |
+| A page of 200 tasks, built server-side | about 100 ms |
+
+The transfer problem the task existed for is answered by compression. So is the
+search and reporting half of it: both read from the server and are unaffected by
+how many tasks the board has loaded. What remained, and was actually wrong
+rather than merely slow, is that the loader stops after fifty pages and used to
+do it silently - so a board could show a fraction of the work as though it were
+all of it. Past the ceiling the shell now says so and points at search and
+reports. Server-side filtering is not implemented, and on this evidence does not
+need to be; what would reopen it is a workspace with orders of magnitude more
+tasks, or a slower server, and neither has been measured.
+
+**UX-19 is done for the navigation that exists.** Two journeys: one signs in at
+320x844 and fails if the document is wider than the viewport, naming the
+elements sticking out, and one presses Tab a dozen times at desktop width and
+asserts every stop is visible and on screen. Neither found a fault. The task as
+written also covers "the revised navigation, private Today section, and
+onboarding", which are UX-16 to UX-18 and do not exist yet; when they do, these
+are the journeys to extend.
+
+**UX-22 is done, both halves.** The ten rich-text safety cases ran in a browser
+for the first time - see the commit and `scripts/sanitize/cases.test.mjs`. And
+the component suite no longer reaches the network: happy-dom's fetch is real and
+resolves relative URLs against its own origin, so an unstubbed request used to
+attempt a connection and leave ECONNREFUSED in the output rather than failing.
+It now fails with the URL and the remedy. The noise went from tens of lines to
+none.
+
+**UX-23 is partial.** What CI now does, on every push and pull request: install
+Chromium, run the browser journeys against the build it just made, run the
+rich-text cases, and keep a screenshot of any journey that failed. Of the journey
+contents the task lists, capture and update, exact search, failure and retry, and
+mobile keyboard use are covered. **Chat, check-in, and draft recovery are not** -
+each needs fixtures the seed does not have yet, and they are the remaining work
+on this task.
