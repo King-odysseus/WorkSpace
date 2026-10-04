@@ -2,7 +2,8 @@
 
 Prepared: 4 October 2026.
 Source: [Usability audit](usability-audit-2026-10-04.md).
-Status: Phases 1 and 2 (UX-04 to UX-11) delivered. See Progress at the end of this file.
+Status: Phases 1 and 2 (UX-04 to UX-11) delivered, and UX-12 from Phase 3.
+See Progress at the end of this file.
 
 ## Objective and scope
 
@@ -279,3 +280,75 @@ Readings and limits:
   if drafts ever hold anything more sensitive than a task title.
 
 
+
+### Phase 3: UX-12 - delivered 4 October 2026
+
+| ID | Task | Status |
+| --- | --- | --- |
+| UX-12 | Lazy load additional heavy routes and inspect stylesheet contribution | Done |
+| UX-13 | Render useful Today content independently of unrelated route data | Not started |
+| UX-14 | Load collections on demand and refresh only affected collections | Not started |
+| UX-15 | Server-side filtering and pagination for large task lists | Not started |
+
+What shipped:
+
+- Every route-only view is fetched when its destination opens rather than
+  shipped in the entry bundle: the planner board, the project board and table,
+  the import wizard, the personal planner, Settings, the create-workspace
+  dialog, the five record dialogs, the task drawer, and the assignee picker.
+  The workspace view carries one Suspense boundary, so the shell's chrome stays
+  put while a chunk arrives; the surfaces the shell raises over everything get
+  their own.
+- react-day-picker moved out of the entry bundle. It is the largest single
+  dependency in the build, and it is now one lazy component exported from
+  workspace-ui, so the shell's own date field shares a chunk with the form
+  fields instead of pulling a second copy.
+
+Measured, against the same build command:
+
+| Asset | Before | After | Change |
+| --- | --- | --- | --- |
+| Entry JavaScript | 1,159.36 kB / 319.82 kB gzip | 847.71 kB / 239.46 kB gzip | -26.9% raw, -25.1% gzip |
+| Stylesheet | 621.26 kB / 91.30 kB gzip | 570.20 kB / 85.04 kB gzip | -8.2% raw, -6.9% gzip |
+
+The plan's provisional target was at least 25% off the initial compressed
+JavaScript, so this meets it. The stylesheet moved without being touched,
+because the settings styles now travel with the settings view instead.
+
+Verification:
+
+- Frontend suite: 74 files, 620 passed, 10 skipped
+  (`npx vitest run --maxWorkers=2`), against 619 before.
+- Production build: passed.
+- A new test walks to Planner, Settings, Import data, and My planner and
+  asserts each view is really on screen, because the failure mode of this
+  change is a destination that renders nothing rather than one that throws.
+  It caught two wrong markers while it was being written. It does not cover the
+  Suspense placement: removing a boundary makes React delay the render rather
+  than fail, so the test still passes. Worth knowing if it is ever relied on to
+  protect that.
+
+Two measurements taken by rebuilding without the code, both worth keeping:
+
+- `@sentry/react` costs this bundle nothing. The whole of it sits behind
+  `import.meta.env.VITE_SENTRY_DSN` and tree-shakes away when no DSN is set. A
+  deployment that sets one would pay for it.
+- `flowbite-react` costs about 16.7 kB compressed. Removing it is not a
+  performance change but a design one: the Button primitive renders Flowbite's
+  control behind 78 call sites, and `ui/button.jsx` already carries a
+  hand-written `buttonVariants` that only the calendar uses. Left alone
+  deliberately, and flagged here rather than done quietly.
+
+The stylesheet contribution, inspected but not changed:
+
+- `src/pencil.css` is 592 kB of source and 8,618 lines, and it is the single
+  largest asset the app ships, larger than the entry JavaScript. It declares
+  5,173 selectors, of which 1,196 are repeat declarations of a selector already
+  declared earlier in the same file; `.chat-modal-actions` and
+  `.file-delete-actions` each appear seven times.
+- Consolidating those is the obvious next step for this task, and it was not
+  attempted here. The repeats are not necessarily dead: this file carries the
+  design's overrides, and an earlier pass already found a selector painted half
+  by one stylesheet and half by another. Each repeat needs reading against its
+  call site and then a browser check, which is a different kind of work from the
+  mechanical split this pass did, and a bulk edit would be the wrong tool.
