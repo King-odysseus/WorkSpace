@@ -27,8 +27,8 @@ Estimate: 1-2 days. Dependency: none.
 
 | ID | Task | Acceptance criteria |
 | --- | --- | --- |
-| UX-01 | Walk through sign-in, workspace switching, Today, task creation, search, chat, and check-ins on desktop and mobile. Include owner, manager, and member roles. | Each issue has steps, expected/actual behavior, role, and screen size. Audit assumptions are confirmed or corrected. |
-| UX-02 | Measure startup and refresh against small and large disposable workspaces. Record device/network conditions, task counts, useful-content time, requests, and transferred bytes. | Repeatable baseline exists; large datasets do not silently truncate. No production data is changed. |
+| UX-01 | Walk through sign-in, workspace switching, Today, task creation, search, chat, and check-ins on desktop and mobile. Include owner, manager, and member roles. | Partly done - see Progress. |
+| UX-02 | Measure startup and refresh against small and large disposable workspaces. Record device/network conditions, task counts, useful-content time, requests, and transferred bytes. | Done for startup on desktop - see Progress. |
 | UX-03 | Add the first Playwright journey using existing tooling: sign-in, choose workspace, create/open/update task. Establish test fixtures and cleanup. | Journey runs reproducibly in CI and locally, without production credentials or data. |
 
 Exit: reproducible baseline and a browser test protecting the core daily workflow.
@@ -457,3 +457,75 @@ Limits:
   query does not include those tables. They are therefore only refetched on a
   load or a fallback refresh, which is what they did before this change - the
   selective path has not made it worse, but it has not fixed it either.
+
+### Phase 0: UX-02 measured, 4 October 2026
+
+Conditions. The production build, served by `vite preview` on port 5183 with an
+API proxy added for the purpose, against the Django dev server on 8000. Chromium
+driven by Playwright on the same machine, desktop viewport. Browser cache
+disabled over CDP and the service worker unregistered for the first-visit runs,
+so those are genuinely cold. No CPU or network throttling: these are
+unconstrained local numbers and are not a device benchmark, which is what the
+plan's 30% target asks for. Three runs per workspace, reporting the range.
+
+Fixtures. Two disposable workspaces owned by a throwaway account
+(`claude-verify@example.com`): "Claude Verify Workspace" with 6 tasks and
+"Claude Verify Large" with 401. Seeded with `bulk_create`, no invitations sent,
+no notifications raised, nothing outside the local database touched.
+
+| | Small (6 tasks) | Large (401 tasks) |
+| --- | --- | --- |
+| First visit, useful Today content | 800 ms | 817 ms |
+| Returning visit, useful Today content | 300-682 ms | 663-716 ms |
+| First visit, requests / transferred | 17 / 457 kB | 37 / 809 kB |
+| Returning visit, requests / transferred | 15-20 / 122 kB | 36 / 472 kB |
+| API requests | 6-7 | 26 |
+
+What the numbers say:
+
+- The task table dominates the data, and it is fetched whole. 173 kB per page of
+  200, three pages for 401 tasks, so about 520 kB of task JSON on a load that
+  renders five rows. On a load without a change it is 347 kB of the 472 kB
+  transferred. This is the measured problem UX-15 exists for, and it is larger
+  than the audit guessed from reading the loader.
+- The API does not compress. `transferSize` equals `decodedBodySize` on every
+  task page, so 173 kB of highly repetitive JSON goes over the wire as 173 kB.
+  Compressing the API is a far smaller change than pagination with a comparable
+  effect on this data, and it is a decision for whoever owns the middleware
+  rather than something to slip into a pagination task. Not done here.
+- `tijha-logo.png` is 98 kB. On a returning visit that single image is most of
+  what the browser fetches.
+- Startup time barely differs between 6 tasks and 401 (800 ms against 817 ms),
+  because locally the delay is the bundle rather than the data. On a real
+  connection 347 kB of uncompressed JSON would not be free, which is the part
+  these numbers cannot show.
+- Large datasets do not silently truncate: 401 tasks came back as three pages,
+  200 + 200 + 1, with no cap reached. The loader's page ceiling is 50 pages.
+
+The selective refresh, verified live rather than only in tests. In the
+production-build session, nine consecutive pulse ticks while the app sat idle
+produced: nothing refetched in five of them, the members collection alone in
+one, tasks (three pages) plus reports in one, and nothing in the last two. The
+one tick that read tasks and reports is the tick after a task was inserted
+server-side. Before this change the same tick refetched around twenty
+collections.
+
+One thing that measurement exposed: the `members` domain moves on the viewer's
+own `last_seen` heartbeat, so an idle tab still refetches members every tick or
+two. Excluding the viewer's own stamp from that domain is the obvious
+refinement and was not attempted.
+
+### Phase 0: UX-01 partly done, 4 October 2026
+
+Walked in a real browser: sign-in with email and password, the workspace
+switcher, Today with a populated task list, the quick capture field, and the
+pulse-driven refresh. Not yet walked: task creation through the dialog end to
+end, search, chat, check-ins, the manager and member roles, and any mobile
+viewport. Those need the same session and are the next step, not a claim.
+
+One obstacle worth recording for anyone repeating this: `.env` narrows
+`WORKSPACE_CSRF_TRUSTED_ORIGINS` to port 5175, so a browser session on any other
+port can read the API but every write is refused with a 403 and an Origin
+message in the Django log. Read-only measurement is unaffected; anything that
+creates a record has to run on 5175 or the trusted-origins environment variable
+has to be widened for the session.
