@@ -38,3 +38,6 @@ QWEN.md
 
 # Playwright MCP writes page snapshots and console logs here while a browser check runs.
 .playwright-mcp/
+
+# What a failed browser journey saw, kept for CI to collect as an artifact.
+journey-failure-*.png

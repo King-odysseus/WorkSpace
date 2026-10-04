@@ -8,7 +8,8 @@
 // only exists in a browser.
 
 import assert from 'node:assert/strict'
-import { after, before, test } from 'node:test'
+import { after, before } from 'node:test'
+import { journey } from './support.mjs'
 import { chromium } from 'playwright'
 
 const appUrl = process.env.JOURNEY_APP_URL
@@ -72,7 +73,7 @@ after(async () => {
   await browser?.close()
 })
 
-test('a task can be written, opened, changed, and found changed', async () => {
+journey('a task can be written, opened, changed, and found changed', async () => {
   const written = `Journey task ${Date.now()}`
   const changed = `${written} (updated)`
 
@@ -124,4 +125,4 @@ test('a task can be written, opened, changed, and found changed', async () => {
     changed,
     'the edit should have been saved',
   )
-})
+}, { getPage: () => page })

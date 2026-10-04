@@ -13,6 +13,8 @@ WORKSPACE_DB_NAME so it cannot touch the development one by accident, because
 it deletes and recreates the workspace's tasks on every run.
 """
 
+import json
+
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -132,10 +134,16 @@ class Command(BaseCommand):
             target_id=str(target.id),
         )
 
-        # Ids and counts only. Nothing secret, so this is safe in CI logs.
+        # Ids, counts and addresses only. Nothing secret, so this is safe in CI
+        # logs, and the accounts go out as JSON so the runner can pass them to
+        # the journeys rather than repeating the list and letting it drift.
         self.stdout.write(
             f'workspace_slug={workspace.slug} '
             f'workspace_id={workspace.id} '
             f'tasks={Task.objects.filter(workspace=workspace).count()} '
             f'notification_target={target.code}'
+        )
+        self.stdout.write(
+            'fixture_accounts='
+            + json.dumps({role: address for address, role in ACCOUNTS})
         )

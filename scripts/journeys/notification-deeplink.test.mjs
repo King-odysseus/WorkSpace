@@ -6,7 +6,8 @@
 // one unread alert naming a task, and this follows it.
 
 import assert from 'node:assert/strict'
-import { after, before, test } from 'node:test'
+import { after, before } from 'node:test'
+import { journey } from './support.mjs'
 import { chromium } from 'playwright'
 
 const appUrl = process.env.JOURNEY_APP_URL
@@ -44,7 +45,7 @@ after(async () => {
   await browser?.close()
 })
 
-test('a bell row opens the record it names, not just the page it lives on', async () => {
+journey('a bell row opens the record it names, not just the page it lives on', async () => {
   await page.getByRole('button', { name: 'Open workspace activity notifications' }).click()
 
   const row = page.getByRole('button', { name: `Open ${ALERT}` })
@@ -62,4 +63,4 @@ test('a bell row opens the record it names, not just the page it lives on', asyn
     /^Fixture task \d$/,
     'the alert should have opened the task it named',
   )
-})
+}, { getPage: () => page })

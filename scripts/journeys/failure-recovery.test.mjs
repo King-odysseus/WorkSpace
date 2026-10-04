@@ -12,7 +12,8 @@
 // and taken away again.
 
 import assert from 'node:assert/strict'
-import { after, before, test } from 'node:test'
+import { after, before } from 'node:test'
+import { journey } from './support.mjs'
 import { chromium } from 'playwright'
 
 const appUrl = process.env.JOURNEY_APP_URL
@@ -61,7 +62,7 @@ after(async () => {
   await browser?.close()
 })
 
-test('a search that fails says so, and offers a retry that works', async () => {
+journey('a search that fails says so, and offers a retry that works', async () => {
   let failNext = true
   await page.route('**/search/**', (route) =>
     failNext
@@ -89,9 +90,9 @@ test('a search that fails says so, and offers a retry that works', async () => {
   await page.locator('div.shadow-elevated', { hasText: 'Fixture task' }).first().waitFor()
 
   await page.unroute('**/search/**')
-})
+}, { getPage: () => page })
 
-test('an expired session during a search is reported, not swallowed', async () => {
+journey('an expired session during a search is reported, not swallowed', async () => {
   await page.route('**/search/**', (route) =>
     json(route, 401, { error: 'Authentication is required.' }),
   )
@@ -110,9 +111,9 @@ test('an expired session during a search is reported, not swallowed', async () =
   )
 
   await page.unroute('**/search/**')
-})
+}, { getPage: () => page })
 
-test('a refresh that fails keeps the records already on screen, and says so', async () => {
+journey('a refresh that fails keeps the records already on screen, and says so', async () => {
   // Make the pulse report that chat moved, then fail the chat refetch. That is
   // the shape of the original defect: one endpoint fails during a refresh and
   // the records the reader could already see are replaced by nothing.
@@ -152,4 +153,4 @@ test('a refresh that fails keeps the records already on screen, and says so', as
 
   await page.unroute('**/pulse/**')
   await page.unroute('**/chat-messages/**')
-})
+}, { getPage: () => page })
