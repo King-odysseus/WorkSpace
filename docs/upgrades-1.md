@@ -582,3 +582,31 @@ Two things checked and found to be fine, recorded so nobody re-investigates:
   artefact, not a bug; with real keystrokes the box clears.
 - The app reopening on the last page after a reload is deliberate - `active` is
   seeded from `localStorage["workspace-last-page"]`, not from the URL.
+
+### Findings from reading the permission model, 4 October 2026
+
+Not a phase deliverable - recorded because it belongs in a later phase rather
+than being fixed on sight.
+
+- **The interface does not reflect a narrowed manager grant.** The server has
+  thirteen granular permission keys and enforces every one of them
+  (`require_permission` in tasks/views.py; owners always pass, managers pass
+  unless the permission was revoked from their membership, members pass only
+  for their five defaults). An owner can therefore revoke, say, `manage_projects`
+  from one manager. But the interface gates on the raw role - `canManageMembers`
+  and `canManageTasks` are `["owner","manager"].includes(role)` - and uses
+  exactly one granular key anywhere, `comment_check_ins`. So a manager whose
+  projects access was revoked still sees every project control and meets a 403
+  when they use one. The code is explicit that this is deliberate - "This is a
+  UI convenience, not the authorization boundary" - and it is safe, because the
+  server is the boundary. It is a usability gap, not a security one: the
+  interface promises something the server refuses.
+- Closing it means gating the affected controls on the permission rather than
+  the role, which the session payload already carries per workspace
+  (`permissions` in tasks/auth_views.py). That is a broad front-end change
+  across the project, task, Zuri, template and import surfaces, which is why it
+  is recorded rather than done inside a performance phase.
+
+The role and permission behaviour itself is now written up for readers in
+docs/user-guide.md section 17, including what each role sees and the manager
+limits.

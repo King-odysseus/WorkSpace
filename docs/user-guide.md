@@ -460,10 +460,66 @@ Member invitations and role changes are available from Team.
 
 ## 17. Roles and permissions
 
-- **Owner**: full workspace control, including member management.
-- **Manager**: manages members and most workspace work.
-- **Member**: completes tasks, joins conversations, sends check-ins, and manages
-  their own items.
+Every member of a workspace has one of three roles. Two things are worth knowing
+before the detail. First, the same navigation is shown to everyone, so seeing a
+page does not mean every control on it will work. Second, every action is checked
+on the server, so a control you can see is not a promise that the action will be
+allowed - if it is not, you get an explanation instead of a silent failure.
 
-Some actions, such as inviting members or changing project ownership, are only
-available to owners and managers.
+| | Owner | Manager | Member |
+| --- | --- | --- | --- |
+| Create tasks | Yes | Yes | Yes |
+| Edit tasks assigned to you | Yes | Yes | Yes |
+| Edit anyone's task | Yes | Yes | No |
+| Assign a task to someone else | Yes | Yes | No |
+| Archive a task | Yes | Yes | No |
+| Permanently delete a task | Yes | No | No |
+| Create and manage projects | Yes | Yes | No |
+| Create and manage workstreams | Yes | Yes | No |
+| Use Zuri | Yes | Yes | Yes |
+| Comment on check-ins | Yes | Yes | Yes |
+| View reports | Yes | Yes | Yes |
+| Manage Zuri member access and providers | Yes | Yes | No |
+| Manage members, roles and invitations | Yes | Yes, with limits | No |
+| Commit an import | Yes | Yes | No |
+| Archive, restore or delete the workspace | Yes | No | No |
+| Leave the workspace | No - archive or delete it instead | Yes | Yes |
+
+An assigned member can also change a follow-up's status; the person who created
+it, an assignee, or a workspace leader can change the rest of it.
+
+### What a manager cannot do
+
+Managers can manage members, but not everything about them:
+
+- A manager cannot change an owner's role or permissions.
+- A manager cannot promote anyone to manager - only an owner can.
+- A manager cannot change another manager's permissions.
+
+### What each role sees
+
+**Navigation** is the same for every role: Today, My tasks, My planner, Daily
+operations, Team, Zuri, Channels, Chats, Follow-up, Check-ins, Planner,
+Projects, Calendar, Import data, Reports and Activity, plus Settings from the
+account menu.
+
+**Settings** is where the difference shows. Everyone gets Profile, Appearance,
+Notifications and Workspaces, along with What's new, Install app, Screen
+sharing, Help and Legal. **Workspace access**, **AI settings**, **Integrations**
+and **Templates** appear only for owners and managers.
+
+**Import data** is open to everyone for previewing a file. Only owners and
+managers can commit the changes it would make; members see that their role can
+preview but not apply.
+
+**Task details** open for anyone who can see the task, but the fields are
+editable only on tasks assigned to the reader, and the assignee control is
+available only to owners and managers.
+
+### When a manager's access has been narrowed
+
+An owner can turn individual permissions off for a specific manager. When that
+happens the manager keeps full navigation and still sees controls for the
+revoked capability; the action is refused when they use it. Until the interface
+reflects the narrower grant, treat the refusal message as the source of truth
+rather than the presence of the control.
