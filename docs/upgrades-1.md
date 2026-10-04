@@ -2,7 +2,7 @@
 
 Prepared: 4 October 2026.
 Source: [Usability audit](usability-audit-2026-10-04.md).
-Status: planned, implementation has not started.
+Status: Phase 1 (UX-04 to UX-07) delivered. See Progress at the end of this file.
 
 ## Objective and scope
 
@@ -142,3 +142,70 @@ is the next milestone. Performance and broader product changes follow the eviden
 Total provisional effort: 21-36 engineering days, excluding waiting for design,
 feedback, and deployment access. Re-estimate after Phase 0; deliver useful fixes
 at the end of each phase rather than holding everything for one large release.
+
+## Progress
+
+### Phase 1: UX-04 to UX-07 - delivered 4 October 2026
+
+| ID | Task | Status |
+| --- | --- | --- |
+| UX-04 | Route every supported search result to its exact record or message | Done |
+| UX-05 | Distinct search loading, empty, and error states with retry | Done |
+| UX-06 | Retain successful collection data on refresh failure | Done |
+| UX-07 | Extend browser coverage to search navigation, failed refresh, empty responses, session expiry, and recovery | Partial - see Remaining below |
+
+What shipped:
+
+- Search hits now go through the same target navigation notifications use
+  (`resolveSearchResultTarget` in `src/lib/notification-navigation.js` plus one
+  `openTarget` in `src/main.jsx`). A channel or direct-message hit opens the
+  thread on the matched message, a check-in or follow-up hit opens that record,
+  and a task the loaded board does not hold is fetched and added to the task
+  list before the drawer opens.
+- A missing or unreachable target now says so and clears its pending id, so a
+  click on a deleted record no longer looks like it did nothing.
+- A search that fails, is refused, or meets an expired session shows the failure
+  with a Retry that repeats the current query and workspace. It can no longer be
+  read as "No matches". Rows from a previous query are dropped as soon as the
+  query or workspace changes.
+- The workspace loader tags every collection read and applies only the reads
+  that actually arrived, keeping the previous copy for the rest. A later task
+  page that fails no longer publishes the pages that did arrive as a whole list.
+  The shell names which collections are stale, reports when the data on screen
+  was last loaded in full, and offers a retry.
+
+Verification:
+
+- Frontend suite: 68 files, 590 passed, 10 skipped
+  (`npx vitest run --maxWorkers=2`), against 577 passed before this phase.
+- Production build: passed.
+- No backend change was needed in this phase, so no Django behaviour changed.
+  `workspace_search` already returned the target and message ids the frontend
+  was ignoring.
+- The new tests were confirmed to reproduce the original defects: forcing the
+  old unconditional merge back into the loader fails the retention test, and
+  retaining on an empty response fails the clearing test.
+
+Remaining from UX-07:
+
+- The regression coverage lives in the component-test suite
+  (`src/App.search.test.jsx`, `src/App.refresh-failure.test.jsx`,
+  `src/lib/notification-navigation.test.js`). No Playwright journey exists yet,
+  because UX-03 has to establish the browser fixtures first and UX-23 has to
+  turn these journeys into the CI check. Nothing in this phase reduces the work
+  UX-03 and UX-23 still describe.
+- Existing notification deep links are covered by the tests that already
+  existed and still pass (`App.notification-document.test.jsx`,
+  `App.notifications.test.jsx`).
+
+Known limits:
+
+- A task-comment hit opens the task that holds the comment. The search response
+  carries no comment id and the task drawer has no comment anchor, so opening
+  the exact comment needs both.
+- Search still returns at most eight results per kind, with no result-type
+  filters and no full results view. The audit lists those as follow-on work.
+- Phase 0 was not part of this delivery, so no browser walkthrough or startup
+  measurement baseline exists yet. Phase 3 targets still have nothing to measure
+  against.
+
