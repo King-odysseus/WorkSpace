@@ -246,6 +246,39 @@ import {
 const isConversationNotification = (notification) =>
   ["chat_channel", "direct_conversation"].includes(notification?.target_type);
 
+// The collections the workspace loader refreshes, named as a reader would say
+// them, so a refresh that partly failed can say what is stale rather than
+// "some data". Keys match the ones the loader tags each read with.
+const workspaceCollectionLabels = {
+  tasks: "tasks",
+  members: "members",
+  projects: "projects",
+  lookupValues: "lists",
+  taskTemplates: "task templates",
+  projectTemplates: "project templates",
+  messages: "chat messages",
+  channels: "channels",
+  directConversations: "direct messages",
+  archivedConversations: "archived chats",
+  followUps: "follow-ups",
+  events: "calendar events",
+  checkIns: "check-ins",
+  workShifts: "time clock",
+  activityNotifications: "notifications",
+  conversationNotifications: "chat alerts",
+  activity: "activity",
+  auditLogs: "audit log",
+  buckets: "plan buckets",
+  invitations: "invitations",
+  reports: "reports",
+};
+
+const describeCollectionFailures = (keys) => {
+  const labels = keys.map((key) => workspaceCollectionLabels[key] || key);
+  if (labels.length <= 3) return labels.join(", ");
+  return `${labels.slice(0, 3).join(", ")} and ${labels.length - 3} more`;
+};
+
 const notificationBadgeLabel = (count, max = 99) =>
   count > max ? `${max}+` : String(count);
 
@@ -599,6 +632,13 @@ function App() {
   }, [activeWorkspaceId, session.loading, session.user?.id]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
+  // Which collections the last refresh could not read, and when the workspace
+  // last refreshed in full. The two together are what let the shell say "this is
+  // the last good copy" instead of showing a failed endpoint as an empty one.
+  const [syncStatus, setSyncStatus] = useState({
+    failed: [],
+    lastSuccessAt: null,
+  });
   const [workspaceNotice, setWorkspaceNotice] = useState("");
   const [workspaceReload, setWorkspaceReload] = useState(0);
   const activeRef = useRef(active);
@@ -1144,23 +1184,29 @@ function App() {
     setWorkspaceLoading(true);
     setWorkspaceError("");
 
-    const read = (path, fallback = {}) =>
-      fetch(path, {
-        credentials: "include",
-        headers: { "X-Workspace-Id": String(workspaceId) },
-      })
-        .then((response) => {
-          if (!response.ok)
-            throw new Error(`${path} returned ${response.status}`);
-          return response.json();
-        })
-        .catch((error) => {
-          console.warn(
-            "Optional workspace data could not be loaded.",
-            error.message,
-          );
-          return fallback;
+    // Reads one collection and reports whether it actually arrived. A failed
+    // read must never look like an empty collection: the caller keeps the last
+    // good copy and records the failure, so work that was already loaded cannot
+    // vanish because one request did not come back. `key` is what lets the merge
+    // below apply the answer to the right slice of state.
+    const read = async (key, path, fallback = {}) => {
+      try {
+        const response = await fetch(path, {
+          credentials: "include",
+          headers: { "X-Workspace-Id": String(workspaceId) },
         });
+        if (!response.ok)
+          throw new Error(`${path} returned ${response.status}`);
+        return { key, ok: true, data: await response.json() };
+      } catch (error) {
+        console.warn(
+          "Workspace data could not be refreshed; keeping the last copy.",
+          key,
+          error.message,
+        );
+        return { key, ok: false, data: fallback };
+      }
+    };
     // The task endpoint paginates (200 max per page), so a workspace with more
     // than one page of tasks would otherwise be silently truncated in every board.
     const readAllTasks = async () => {
@@ -1168,14 +1214,19 @@ function App() {
       let pageNumber = 1;
       for (;;) {
         const page = await read(
+          "tasks",
           `/api/tasks/?page=${pageNumber}&page_size=200`,
           { tasks: [], pagination: null },
         );
-        collected.push(...(page.tasks || []));
-        if (!page.pagination?.has_next || pageNumber >= 50) break;
+        // A later page that fails must not publish the pages that did arrive as
+        // though they were the whole list.
+        if (!page.ok)
+          return { key: "tasks", ok: false, data: { tasks: collected } };
+        collected.push(...(page.data.tasks || []));
+        if (!page.data.pagination?.has_next || pageNumber >= 50) break;
         pageNumber += 1;
       }
-      return { tasks: collected };
+      return { key: "tasks", ok: true, data: { tasks: collected } };
     };
     const workspaceRole = session.user.workspaces.find(
       (workspace) => workspace.id === workspaceId,
@@ -1186,134 +1237,142 @@ function App() {
       refreshInFlight = true;
       const notificationStateRevision = notificationStateRevisionRef.current;
       const auditRequest = ["owner", "manager"].includes(workspaceRole)
-        ? read(`/api/workspaces/${workspaceId}/audit-logs/`, { audit_logs: [] })
-        : Promise.resolve({ audit_logs: [] });
+        ? read("auditLogs", `/api/workspaces/${workspaceId}/audit-logs/`, {
+            audit_logs: [],
+          })
+        : Promise.resolve({ key: "auditLogs", ok: true, data: { audit_logs: [] } });
       // Team owns its own paginated task query. Skipping the full task table
-      // here keeps that page from re-downloading every task on every refresh.
+      // here keeps that page from re-downloading every task on every refresh,
+      // and leaving Team reloads it (see the previousActiveRef effect).
       const taskRequest =
         activeRef.current === "Team"
-          ? Promise.resolve({ tasks: [] })
+          ? Promise.resolve({ key: "tasks", ok: true, data: { tasks: [] } })
           : readAllTasks();
       const refreshRequest = Promise.all([
         taskRequest,
-        read(`/api/workspaces/${workspaceId}/members/?page_size=500`, {
+        read("members", `/api/workspaces/${workspaceId}/members/?page_size=500`, {
           members: [],
         }),
-        read(`/api/workspaces/${workspaceId}/projects/?page_size=500`, {
+        read("projects", `/api/workspaces/${workspaceId}/projects/?page_size=500`, {
           projects: [],
         }),
-        read(`/api/workspaces/${workspaceId}/lookup-values/`, {
+        read("lookupValues", `/api/workspaces/${workspaceId}/lookup-values/`, {
           lookup_values: [],
         }),
-        read(`/api/workspaces/${workspaceId}/task-templates/?page_size=500`, {
+        read("taskTemplates", `/api/workspaces/${workspaceId}/task-templates/?page_size=500`, {
           task_templates: [],
         }),
         read(
+          "projectTemplates",
           `/api/workspaces/${workspaceId}/project-templates/?page_size=500`,
           { project_templates: [] },
         ),
-        read(`/api/workspaces/${workspaceId}/chat-messages/`, { messages: [] }),
-        read(`/api/workspaces/${workspaceId}/chat-channels/`, { channels: [] }),
-        read(`/api/workspaces/${workspaceId}/direct-conversations/`, {
+        read("messages", `/api/workspaces/${workspaceId}/chat-messages/`, { messages: [] }),
+        read("channels", `/api/workspaces/${workspaceId}/chat-channels/`, { channels: [] }),
+        read("directConversations", `/api/workspaces/${workspaceId}/direct-conversations/`, {
           conversations: [],
         }),
-        read(`/api/workspaces/${workspaceId}/direct-conversations/?archived=true`, {
+        read("archivedConversations", `/api/workspaces/${workspaceId}/direct-conversations/?archived=true`, {
           conversations: [],
         }),
-        read(`/api/workspaces/${workspaceId}/follow-ups/`, { follow_ups: [] }),
-        read(`/api/workspaces/${workspaceId}/calendar-events/`, { events: [] }),
-        read(`/api/workspaces/${workspaceId}/check-ins/?date=${today}`, {
+        read("followUps", `/api/workspaces/${workspaceId}/follow-ups/`, { follow_ups: [] }),
+        read("events", `/api/workspaces/${workspaceId}/calendar-events/`, { events: [] }),
+        read("checkIns", `/api/workspaces/${workspaceId}/check-ins/?date=${today}`, {
           check_ins: [],
         }),
-        read(`/api/workspaces/${workspaceId}/work-shifts/`, {
+        read("workShifts", `/api/workspaces/${workspaceId}/work-shifts/`, {
           work_shifts: [],
         }),
-        read(`/api/workspaces/${workspaceId}/notifications/?exclude_chat=1&sort=newest`, {
+        read("activityNotifications", `/api/workspaces/${workspaceId}/notifications/?exclude_chat=1&sort=newest`, {
           notifications: [],
         }),
-        read(`/api/workspaces/${workspaceId}/notifications/?only_conversation=1`, {
+        read("conversationNotifications", `/api/workspaces/${workspaceId}/notifications/?only_conversation=1`, {
           notifications: [],
         }),
-        read(`/api/workspaces/${workspaceId}/activity/?page_size=50&date_from=${today}&include_filters=0&include_summary=0`, {
+        read("activity", `/api/workspaces/${workspaceId}/activity/?page_size=50&date_from=${today}&include_filters=0&include_summary=0`, {
           activity: [],
         }),
-        read(`/api/workspaces/${workspaceId}/plan-buckets/`, { buckets: [] }),
-        read(`/api/workspaces/${workspaceId}/invitations/?page_size=500`, {
+        read("buckets", `/api/workspaces/${workspaceId}/plan-buckets/`, { buckets: [] }),
+        read("invitations", `/api/workspaces/${workspaceId}/invitations/?page_size=500`, {
           invitations: [],
         }),
         read(
+          "reports",
           `/api/workspaces/${workspaceId}/reports/summary/?range=${reportRange}&shift_page=${shiftLogPage}${shiftLogUserId ? `&shift_user_id=${shiftLogUserId}` : ""}`,
           { summary: null },
         ),
         auditRequest,
       ])
         .then(
-          ([
-            taskData,
-            memberData,
-            projectData,
-            lookupData,
-            taskTemplateData,
-            projectTemplateData,
-            messageData,
-            channelData,
-            directData,
-            archivedDirectData,
-            followUpData,
-            eventData,
-            checkInData,
-            workShiftData,
-            activityNotificationData,
-            conversationNotificationData,
-            activityData,
-            bucketData,
-            invitationData,
-            reportData,
-            auditData,
-          ]) => {
+          (results) => {
             if (!isCurrent) return;
-            setTasks(
-              taskData.tasks.map((task) =>
-                mapTaskFromApi(task, {
-                  today,
-                  workspaceRole,
-                  currentUserId: session.user.id,
-                }),
-              ),
-            );
+            const collection = {};
+            for (const result of results) collection[result.key] = result;
+            const loaded = (key) => collection[key]?.ok === true;
+            const value = (key) => collection[key]?.data ?? {};
+            const failed = results
+              .filter((result) => !result.ok)
+              .map((result) => result.key);
+            // Each slice is written only from a collection that actually
+            // arrived, so a genuine empty response still clears its records
+            // while a failed one leaves the last good copy in place.
+            if (loaded("tasks")) {
+              setTasks(
+                value("tasks").tasks.map((task) =>
+                  mapTaskFromApi(task, {
+                    today,
+                    workspaceRole,
+                    currentUserId: session.user.id,
+                  }),
+                ),
+              );
+            }
             setWorkspaceData((current) => ({
               ...current,
-              members: memberData.members,
-              projects: projectData.projects,
-              messages: messageData.messages,
-              channels: channelData.channels,
-              directConversations: directData.conversations,
-              archivedConversations: archivedDirectData.conversations,
-              followUps: followUpData.follow_ups,
-              events: eventData.events,
-              checkIns: checkInData.check_ins,
-              workShifts: workShiftData.work_shifts,
-              ...(notificationStateRevision === notificationStateRevisionRef.current
+              ...(loaded("members") ? { members: value("members").members } : {}),
+              ...(loaded("projects") ? { projects: value("projects").projects } : {}),
+              ...(loaded("messages") ? { messages: value("messages").messages } : {}),
+              ...(loaded("channels") ? { channels: value("channels").channels } : {}),
+              ...(loaded("directConversations")
+                ? { directConversations: value("directConversations").conversations }
+                : {}),
+              ...(loaded("archivedConversations")
+                ? { archivedConversations: value("archivedConversations").conversations }
+                : {}),
+              ...(loaded("followUps") ? { followUps: value("followUps").follow_ups } : {}),
+              ...(loaded("events") ? { events: value("events").events } : {}),
+              ...(loaded("checkIns") ? { checkIns: value("checkIns").check_ins } : {}),
+              ...(loaded("workShifts") ? { workShifts: value("workShifts").work_shifts } : {}),
+              // The bell reads two independent collections; writing either one
+              // without the other would show a list the badge does not agree
+              // with, so this pair moves together or not at all.
+              ...(notificationStateRevision === notificationStateRevisionRef.current &&
+              loaded("activityNotifications") &&
+              loaded("conversationNotifications")
                 ? {
                     notifications: [
-                      ...(conversationNotificationData.notifications || []),
-                      ...(activityNotificationData.notifications || []),
+                      ...(value("conversationNotifications").notifications || []),
+                      ...(value("activityNotifications").notifications || []),
                     ],
-                    activityNotifications: activityNotificationData.notifications || [],
-                    conversationNotifications: conversationNotificationData.notifications || [],
-                    notificationCounts: activityNotificationData.unread_counts ?? conversationNotificationData.unread_counts ?? null,
+                    activityNotifications: value("activityNotifications").notifications || [],
+                    conversationNotifications: value("conversationNotifications").notifications || [],
+                    notificationCounts: value("activityNotifications").unread_counts ?? value("conversationNotifications").unread_counts ?? null,
                   }
                 : {}),
-              activity: activityData.activity,
-              auditLogs: auditData.audit_logs,
-              buckets: bucketData.buckets,
-              invitations: invitationData.invitations,
-              lookupValues: lookupData.lookup_values,
-              taskTemplates: taskTemplateData.task_templates,
-              projectTemplates: projectTemplateData.project_templates,
-              reports: reportData.summary,
+              ...(loaded("activity") ? { activity: value("activity").activity } : {}),
+              ...(loaded("auditLogs") ? { auditLogs: value("auditLogs").audit_logs } : {}),
+              ...(loaded("buckets") ? { buckets: value("buckets").buckets } : {}),
+              ...(loaded("invitations") ? { invitations: value("invitations").invitations } : {}),
+              ...(loaded("lookupValues") ? { lookupValues: value("lookupValues").lookup_values } : {}),
+              ...(loaded("taskTemplates") ? { taskTemplates: value("taskTemplates").task_templates } : {}),
+              ...(loaded("projectTemplates") ? { projectTemplates: value("projectTemplates").project_templates } : {}),
+              ...(loaded("reports") ? { reports: value("reports").summary } : {}),
             }));
-            setReportLastUpdated(new Date());
+            if (failed.length === 0) setReportLastUpdated(new Date());
+            setSyncStatus((current) => ({
+              failed,
+              lastSuccessAt: failed.length === 0 ? new Date() : current.lastSuccessAt,
+            }));
             setWorkspaceLoading(false);
           },
         )
@@ -2705,6 +2764,7 @@ function App() {
           <p className="text-xs text-text-muted">{globalSearchError}</p>
           <button
             type="button"
+            aria-label="Retry search"
             onClick={() => setGlobalSearchRetry((current) => current + 1)}
             className="shrink-0 text-xs font-semibold text-text-primary underline underline-offset-2"
           >
@@ -3715,6 +3775,31 @@ function App() {
                 }
               >
                 {workspaceError}
+              </Alert>
+            )}
+            {/* A refresh that only partly came back is not a load failure: the
+                reader is looking at real records, just not the newest ones, so
+                the copy has to say which of the two this is. */}
+            {!workspaceError && syncStatus.failed.length > 0 && (
+              <Alert
+                tone={syncStatus.lastSuccessAt ? "warning" : "danger"}
+                title={
+                  syncStatus.lastSuccessAt
+                    ? "Some workspace data could not be refreshed"
+                    : "Workspace data could not be loaded"
+                }
+                action={
+                  <button
+                    className="secondary-button"
+                    onClick={() => setWorkspaceReload((current) => current + 1)}
+                  >
+                    Retry
+                  </button>
+                }
+              >
+                {syncStatus.lastSuccessAt
+                  ? `Showing the last data loaded at ${formatCalendarDate(syncStatus.lastSuccessAt, { timeStyle: "short" })}. Could not refresh ${describeCollectionFailures(syncStatus.failed)}.`
+                  : `Could not load ${describeCollectionFailures(syncStatus.failed)}.`}
               </Alert>
             )}
             {active !== "Today" && (

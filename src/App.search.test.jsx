@@ -185,7 +185,7 @@ it('shows a failed search as a failure with a retry, never as no matches', async
   expect(screen.queryByText(/No matches for/)).toBeNull()
 
   const before = searchRequestCount('broken')
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry search' }))
 
   // The retry repeats the query that failed, rather than the box being reset or
   // the retry reusing whatever was typed first.
