@@ -29,7 +29,7 @@ Estimate: 1-2 days. Dependency: none.
 | --- | --- | --- |
 | UX-01 | Walk through sign-in, workspace switching, Today, task creation, search, chat, and check-ins on desktop and mobile. Include owner, manager, and member roles. | Partly done - desktop walked end to end for an owner; see Progress. |
 | UX-02 | Measure startup and refresh against small and large disposable workspaces. Record device/network conditions, task counts, useful-content time, requests, and transferred bytes. | Done for startup on desktop - see Progress. |
-| UX-03 | Add the first Playwright journey using existing tooling: sign-in, choose workspace, create/open/update task. Establish test fixtures and cleanup. | Journey runs reproducibly in CI and locally, without production credentials or data. |
+| UX-03 | Add the first Playwright journey using existing tooling: sign-in, choose workspace, create/open/update task. Establish test fixtures and cleanup. | Done locally - see Progress. CI wiring is UX-23. |
 
 Exit: reproducible baseline and a browser test protecting the core daily workflow.
 Keep the remaining browser tests alongside the features they protect, rather than
@@ -610,3 +610,75 @@ than being fixed on sight.
 The role and permission behaviour itself is now written up for readers in
 docs/user-guide.md section 17, including what each role sees and the manager
 limits.
+
+### API compression, 4 October 2026
+
+The measurement above said the task table was the dominant data cost and that it
+was not compressed. Compression is now on, and it changes what UX-15 is for.
+
+| On the 401 task workspace | Before | After |
+| --- | --- | --- |
+| Task pages, transferred | about 340 kB | about 11 kB |
+| Whole page, transferred | 472 kB | 132 kB |
+| Decoded | unchanged | unchanged |
+
+Measured on the built app against the same endpoints as the baseline, browser
+cache disabled.
+
+- It is Django's middleware with one change: streaming responses are returned
+  untouched. Django's own version compresses them, which would put the
+  server-sent notification stream through a compressor - and a compressor holds
+  bytes back until it has a block's worth, which is the one thing an event
+  stream cannot afford. `backend/middleware.py`, three tests in
+  `tasks/test_compression.py`.
+- **What this means for UX-15.** The task with that ID exists because large task
+  lists were expected to cause measured problems. The transfer problem is now
+  largely gone: 400 tasks cost about 11 kB, so 2,000 would cost about 55 kB. It
+  is no longer obviously the right next thing to build. What remains unmeasured
+  is the server building and serialising every task on every load, and the
+  client rendering them - neither of which compression touches. UX-15 should be
+  re-scoped against those, or dropped, rather than done because it is next in a
+  list.
+- A product decision taken at the same time, for the record: a team leader's
+  quick capture stays **unassigned**. It would otherwise disagree with the full
+  form, which starts unassigned for everyone, and the audit warns against
+  guessing ownership. The row's copy already says which it will be; the README
+  for that behaviour is the copy, not code.
+
+### Phase 0: UX-03 delivered, 4 October 2026
+
+`npm run test:browser` drives the built app in a real browser against its own
+throwaway database. It passes in about six seconds and leaves nothing behind -
+no servers, no database file, and no credentials, because the fixture password
+is generated per run and the fixture accounts only ever exist in that file.
+
+Three pieces, so the next journey is a file rather than a project:
+
+- `tasks/management/commands/seed_browser_fixtures.py` creates a disposable
+  workspace with one account per role, a project, and six tasks. It recreates
+  the tasks on every run, so a journey always starts from the same board, and
+  it takes the password as an argument rather than carrying one in the
+  repository.
+- `scripts/browser-journey.mjs` points Django at `.tmp-browser-journey.sqlite3`,
+  migrates and seeds it, starts the API and the built app, runs the journeys
+  with node's own test runner, then stops both and deletes the file. It uses the
+  `playwright` package already installed rather than adding a test runner, so
+  the dependency list is unchanged.
+- `scripts/journeys/task-lifecycle.test.mjs` is the journey UX-03 asks for:
+  sign in, choose a workspace, write a task through the full form, find it
+  through search, open it, change its title, reload, and find the change still
+  there.
+
+Two things worth knowing for whoever writes the next one:
+
+- The workspace switcher is not persisted. The app remembers the last *page*
+  across a reload (`localStorage["workspace-last-page"]`) but re-reads the
+  workspace from the account default, so a reload puts you back in whichever
+  workspace the account opens on. The journey re-chooses it after reloading, and
+  says why. Whether that inconsistency is worth fixing is a product question,
+  not a bug this work introduced - recorded here rather than changed, because a
+  journey should describe the app as it is.
+- Servers must be started without a shell wrapper and stopped as a process tree.
+  On Windows a shell in between means the kill reaches the wrapper and leaves
+  Django holding the database file, which then cannot be deleted. This cost more
+  debugging than the journey itself.
