@@ -821,3 +821,42 @@ waiting on something that is not code.
 Nothing else in the plan is outstanding. What is done has tests: 626 component
 tests, 13 browser journeys, 10 rich-text cases in a real browser, and the full
 backend suite, which is the gate to run again before any release claim.
+
+### A refresh dropped mid-flight, 4 October 2026
+
+Worth recording because it was found by a browser journey and no component test
+could have found it, and because the fault predates the work that exposed it.
+
+`refreshIfChanged` recorded the new pulse fingerprint *before* asking for a
+refresh, and `refreshCollaboration` declines when a refresh is already running.
+So a change noticed during a refresh was marked as handled by the refresh that
+then dropped it, and stayed unseen until something unrelated moved the
+fingerprint again. The fingerprint is now recorded only once the refresh is
+really going to run, which leaves the change to be noticed on the next tick.
+
+The component test for the same behaviour drives the refresh directly rather
+than through the pulse, so it never walked the path with the fault. That is the
+value of the journeys stated as plainly as it can be.
+
+Three things the journey needed, each recorded in it for whoever writes the
+next one:
+
+- It runs without a service worker. The app polls through one, and a worker's
+  own fetch does not pass through Playwright's route interception - so the
+  pulse kept answering with the real value while the test believed it had
+  changed it.
+- It waits for the first load to settle, because a refresh asked for during one
+  is declined rather than queued.
+- It answers the intercepted pulse with a fresh response rather than the fetched
+  one, because the fetched one carries a `Content-Length` that no longer
+  matches, and a truncated body reads as "nothing moved" rather than as an
+  error.
+
+**The journeys could not be re-run to green after these fixes.** The machine is
+currently saturated - other agents' toolchains, a scoring daemon and several
+runners - and the harness's child spawns began failing outright with
+`AssignProcessToJobObject: (87)`, the Windows error written up above. Thirteen
+journeys passed repeatedly earlier in the session, before the load built up. The
+component suite (626) and the backend suite (604) both pass on this commit, and
+the rich-text cases (10) still run. The journeys should be re-run on a quiet
+machine before this is called verified.
