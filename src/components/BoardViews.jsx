@@ -6073,7 +6073,12 @@ function TodayDashboard({
                 </Button>
               </div>
               <p className="mt-1.5 text-[11px] leading-4 text-text-muted">
-                Goes to Backlog, assigned to you.{" "}
+                {/* The server self-assigns only for a member (see the create
+                    view's "role == 'member'" rule), so this said "assigned to
+                    you" to owners and managers whose captures arrived
+                    unassigned. Say which one it will actually be. */}
+                Goes to Backlog,{" "}
+                {canManageMembers ? "unassigned" : "assigned to you"}.{" "}
                 <button
                   type="button"
                   onClick={() => onAddTaskWithTitle(quickTask.trim())}

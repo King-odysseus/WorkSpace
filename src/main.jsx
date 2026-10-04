@@ -2703,9 +2703,13 @@ function App() {
   };
   // Title-first capture: one field, the same endpoint the full form posts to,
   // and the same defaults that form starts from. It deliberately does not send
-  // assignee_ids, so the server keeps applying its "a member defaults to
-  // themselves" rule exactly as it does for the full form rather than the quick
-  // path guessing at ownership.
+  // assignee_ids, so the create view's own rule decides ownership rather than
+  // the quick path guessing at it.
+  //
+  // That rule is narrower than it sounds: tasks/views.py self-assigns only when
+  // membership.role is "member". An owner or manager capturing here gets an
+  // unassigned task, which is why the row's copy branches on the role instead
+  // of promising the task will be theirs.
   const captureTask = async (title) => {
     const trimmed = String(title || "").trim();
     if (!trimmed) throw new Error("Task name is required.");

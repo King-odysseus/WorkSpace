@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { MyTasksView, ProjectRiskIssuePanel, TeamBoardView, TodayDashboard } from './BoardViews.jsx'
@@ -376,6 +376,23 @@ it('shows only tasks assigned to the current user today', () => {
   expect(panel.getByText('Mine to do')).toBeInTheDocument()
   expect(panel.queryByText('Nobody owns this')).not.toBeInTheDocument()
   expect(panel.queryByText('Someone else owns this')).not.toBeInTheDocument()
+})
+
+it('says what the capture row will actually do about ownership', () => {
+  // The create view self-assigns only for a member, so an owner or manager
+  // capturing here gets an unassigned task. The row promised "assigned to you"
+  // to everyone, which a browser walkthrough caught: two tasks created by an
+  // owner both arrived with no assignee.
+  renderDashboard([], noop, [], { canManageMembers: false })
+  expect(
+    within(todayPanel('tasks')).getByText(/Goes to Backlog, assigned to you\./),
+  ).toBeInTheDocument()
+
+  cleanup()
+  renderDashboard([], noop, [], { canManageMembers: true })
+  const ownerCopy = within(todayPanel('tasks')).getByText(/Goes to Backlog,/)
+  expect(ownerCopy).toHaveTextContent('Goes to Backlog, unassigned.')
+  expect(ownerCopy).not.toHaveTextContent('assigned to you')
 })
 
 it('does not treat an unassigned task as yours when the name lookup fails', () => {
