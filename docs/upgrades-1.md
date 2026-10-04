@@ -726,3 +726,25 @@ lifecycle from UX-03, and the notification deep link.
 - These journeys assert the fixed behaviour but were not watched failing against
   the broken code; the equivalent component tests were, one fix at a time, when
   Phase 1 shipped. That is where the two-way evidence lives.
+
+### Known flake in the browser journeys, 4 October 2026
+
+`npm run test:browser` passes, but one failure mode is worth writing down
+because its symptom points nowhere near its cause.
+
+On Windows, a run started soon after a process tree has been force-killed can
+die before the tests start with:
+
+    AssignProcessToJobObject: (87) The parameter is incorrect.
+
+That is Node failing to spawn the test runner, and it complains about a process
+the runner never asked for. It follows the runner's own teardown, which has to
+force-kill the servers as a tree because a plain kill leaves them holding their
+ports. Running it again works. Nothing about the app is involved, and the guard
+described below means the worst outcome is a refused run rather than a
+misleading green one.
+
+The guard, added at the same time: a run refuses to start if either port is
+already answering. Without it a crashed run leaves a server behind, the next
+run's server cannot bind, and the journeys quietly pass against the *old*
+server and its old database.
