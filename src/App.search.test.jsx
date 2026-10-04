@@ -89,6 +89,11 @@ const routes = {
       results: [{ kind: 'task', id: 501, title: 'Retired cleanup script', snippet: '', target_type: 'task', target_id: 501, meta: 'todo' }],
       query: 'gone',
     },
+    '/api/workspaces/1/search/?q=broken': {
+      status: 500,
+      body: { error: 'Search is unavailable right now.' },
+    },
+    '/api/workspaces/1/search/?q=empty': { results: [], query: 'empty' },
 }
 
 // The shared setup unstubs globals after every test, so the app mounted once in
@@ -112,6 +117,9 @@ const clickResult = async (title) => {
   const label = await screen.findByText(title, {}, { timeout: 15000 })
   fireEvent.click(label.closest('button'))
 }
+
+const searchRequestCount = (query) =>
+  fetchMock.mock.calls.filter(([url]) => String(url).includes(`/search/?q=${query}`)).length
 
 it('opens the exact task a hit names, loading it when the board does not hold it', async () => {
   await searchFor('renew')
@@ -158,4 +166,28 @@ it('says so when the record a hit names cannot be opened', async () => {
   await clickResult('Retired cleanup script')
 
   expect(await screen.findByText('That task is no longer available.', {}, { timeout: 15000 })).toBeInTheDocument()
+}, 60000)
+
+it('shows a search that is running before it knows the answer', async () => {
+  const fields = await screen.findAllByLabelText('Search workspace', {}, { timeout: 30000 })
+  fireEvent.change(fields[0], { target: { value: 'empty' } })
+
+  expect(screen.getByText('Searching…')).toBeInTheDocument()
+  expect(await screen.findByText('No matches for "empty".', {}, { timeout: 15000 })).toBeInTheDocument()
+}, 60000)
+
+it('shows a failed search as a failure with a retry, never as no matches', async () => {
+  await searchFor('broken')
+
+  expect(await screen.findByText('Search is unavailable right now.', {}, { timeout: 15000 })).toBeInTheDocument()
+  // The whole point of the fix: a search that never ran cannot read as a search
+  // that found nothing.
+  expect(screen.queryByText(/No matches for/)).toBeNull()
+
+  const before = searchRequestCount('broken')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+  // The retry repeats the query that failed, rather than the box being reset or
+  // the retry reusing whatever was typed first.
+  await waitFor(() => expect(searchRequestCount('broken')).toBe(before + 1))
 }, 60000)

@@ -192,6 +192,7 @@ import { startNotificationAlerts, updateAppBadge } from "./lib/notification-aler
 import { announceNotificationChange } from "./lib/notification-events.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget, resolveSearchResultTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
+import { signalAuthenticationRequired } from "./lib/auth-events.js";
 import { startInstallPromptCapture } from "./lib/install-prompt.js";
 import {
   CookieConsent,
@@ -498,6 +499,11 @@ function App() {
   const [globalSearchResults, setGlobalSearchResults] = useState([]);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
+  const [globalSearchError, setGlobalSearchError] = useState("");
+  // Bumping this re-runs the search with the query and workspace as they are
+  // now, which is what a retry needs: the failure may have been the network
+  // rather than the request.
+  const [globalSearchRetry, setGlobalSearchRetry] = useState(0);
   const [theme, setTheme] = useState(readWorkspaceTheme);
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () =>
@@ -1060,40 +1066,51 @@ function App() {
     const query = searchQuery.trim();
     if (!activeWorkspaceId || query.length < 2) {
       setGlobalSearchResults([]);
+      setGlobalSearchError("");
       setGlobalSearchOpen(false);
+      setGlobalSearchLoading(false);
       return undefined;
     }
+    // A changed query or workspace invalidates whatever the last request
+    // answered, so drop it now. Leaving it up while the debounce runs reads as
+    // results for what was just typed, which is worse than an empty panel.
+    setGlobalSearchResults([]);
+    setGlobalSearchError("");
+    setGlobalSearchOpen(true);
     let isCurrent = true;
     setGlobalSearchLoading(true);
-    const timer = setTimeout(() => {
-      fetch(
-        `/api/workspaces/${activeWorkspaceId}/search/?q=${encodeURIComponent(query)}`,
-        {
-          credentials: "include",
-          headers: { "X-Workspace-Id": String(activeWorkspaceId) },
-        },
-      )
-        .then((response) =>
-          response.json().then((data) => ({ ok: response.ok, data })),
-        )
-        .then(({ ok, data }) => {
-          if (isCurrent && ok) {
-            setGlobalSearchResults(data.results);
-            setGlobalSearchOpen(true);
-          }
-        })
-        .catch((error) => {
-          if (isCurrent) console.error("Global search failed", error);
-        })
-        .finally(() => {
-          if (isCurrent) setGlobalSearchLoading(false);
-        });
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/workspaces/${activeWorkspaceId}/search/?q=${encodeURIComponent(query)}`,
+          {
+            credentials: "include",
+            headers: { "X-Workspace-Id": String(activeWorkspaceId) },
+          },
+        );
+        const data = await readJsonResponse(response, "Search failed.");
+        if (!isCurrent) return;
+        if (response.status === 401) signalAuthenticationRequired();
+        // A failed search is not an empty one, so none of these may fall through
+        // to the "No matches" line: that is the reading the fix exists to stop.
+        if (!response.ok)
+          throw new Error(
+            response.status === 403
+              ? "You do not have access to search this workspace."
+              : data.error || `Search failed (${response.status}).`,
+          );
+        setGlobalSearchResults(data.results || []);
+      } catch (error) {
+        if (isCurrent) setGlobalSearchError(error.message || "Search failed.");
+      } finally {
+        if (isCurrent) setGlobalSearchLoading(false);
+      }
     }, 300);
     return () => {
       isCurrent = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, activeWorkspaceId]);
+  }, [searchQuery, activeWorkspaceId, globalSearchRetry]);
 
   const refreshSession = useCallback(async () => {
     try {
@@ -2678,13 +2695,30 @@ function App() {
       onMouseDown={(event) => event.preventDefault()}
     >
       {globalSearchLoading && (
-        <p className="px-4 py-3 text-xs text-text-muted">Searching…</p>
+        <p className="px-4 py-3 text-xs text-text-muted" role="status">Searching…</p>
       )}
-      {!globalSearchLoading && !globalSearchResults.length && (
-        <p className="px-4 py-3 text-xs text-text-muted">
-          No matches for "{searchQuery.trim()}".
-        </p>
+      {!globalSearchLoading && globalSearchError && (
+        <div
+          className="flex items-start justify-between gap-3 px-4 py-3"
+          role="alert"
+        >
+          <p className="text-xs text-text-muted">{globalSearchError}</p>
+          <button
+            type="button"
+            onClick={() => setGlobalSearchRetry((current) => current + 1)}
+            className="shrink-0 text-xs font-semibold text-text-primary underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </div>
       )}
+      {!globalSearchLoading &&
+        !globalSearchError &&
+        !globalSearchResults.length && (
+          <p className="px-4 py-3 text-xs text-text-muted">
+            No matches for "{searchQuery.trim()}".
+          </p>
+        )}
       {globalSearchResults.map((result) => (
         <button
           key={`${result.kind}-${result.id}`}
