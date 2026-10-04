@@ -1,4 +1,4 @@
-# WorkSpace usability improvement plan
+# Upgrades 1
 
 Prepared: 4 October 2026.
 Source: [Usability audit](usability-audit-2026-10-04.md).
