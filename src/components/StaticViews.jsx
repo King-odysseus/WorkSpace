@@ -287,7 +287,7 @@ function HelpView({ onNavigate }) {
                 <span key={label}><strong>{label}</strong><kbd>{keys}</kbd></span>
               ))}
             </div>
-            <small>Shortcuts follow your operating system conventions.</small>
+            <small>Shortcuts follow your operating system conventions. None of them fire while you are typing in a field, or while a dialog is open, so they never take a key you meant for the text.</small>
           </Card>
         </aside>
       </div>

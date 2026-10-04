@@ -5573,6 +5573,8 @@ function TodayDashboard({
   members,
   canManageMembers,
   onAddTask,
+  onCaptureTask,
+  onAddTaskWithTitle,
   onAddEvent,
   onCheckIn,
   onInvite,
@@ -5588,6 +5590,27 @@ function TodayDashboard({
   onChangePresence,
 }) {
   const [profileMember, setProfileMember] = useState(null);
+  // The title-first capture: what has been typed, whether it is being saved, and
+  // what came back if it was not.
+  const [quickTask, setQuickTask] = useState("");
+  const [quickTaskBusy, setQuickTaskBusy] = useState(false);
+  const [quickTaskError, setQuickTaskError] = useState("");
+  const submitQuickTask = async (event) => {
+    event.preventDefault();
+    const title = quickTask.trim();
+    if (!title || quickTaskBusy) return;
+    setQuickTaskBusy(true);
+    setQuickTaskError("");
+    try {
+      await onCaptureTask(title);
+      setQuickTask("");
+    } catch (error) {
+      // Kept in the field so a rejected task is not thrown away with the error.
+      setQuickTaskError(error.message || "Task could not be added.");
+    } finally {
+      setQuickTaskBusy(false);
+    }
+  };
   const isOpen = (task) => task.status !== "done";
   // Counted through BOARD_FOCUS so each headline number is the same question the
   // Team answers when the card opens it.
@@ -6017,6 +6040,53 @@ function TodayDashboard({
                 See all tasks
               </button>
             </div>
+            {/* Capture in one field, and say where it will land. The row is
+                above the list rather than inside it so the panel keeps its
+                fixed height however many tasks the day holds. */}
+            <form className="mt-3.5" onSubmit={submitQuickTask}>
+              <div className="flex items-center gap-2 rounded-card border border-border bg-card px-3 py-1.5 transition-colors focus-within:border-info">
+                <Plus size={16} className="shrink-0 text-text-muted" aria-hidden="true" />
+                <input
+                  id="quick-task-capture"
+                  type="text"
+                  value={quickTask}
+                  onChange={(event) => setQuickTask(event.target.value)}
+                  placeholder="Add a task"
+                  aria-label="Add a task"
+                  className="h-8 min-w-0 flex-1 bg-transparent text-body-small text-text-primary outline-none placeholder:text-text-muted"
+                />
+                {/* The key the help centre already lists, shown where it acts,
+                    the way the header search field shows its own. */}
+                <kbd
+                  aria-hidden="true"
+                  className="pointer-events-none hidden h-5 w-6 shrink-0 items-center justify-center rounded-badge border border-border bg-background text-[11px] font-medium text-text-muted md:flex"
+                >
+                  N
+                </kbd>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={quickTaskBusy || !quickTask.trim()}
+                >
+                  {quickTaskBusy ? "Adding..." : "Add"}
+                </Button>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-4 text-text-muted">
+                Goes to Backlog, assigned to you.{" "}
+                <button
+                  type="button"
+                  onClick={() => onAddTaskWithTitle(quickTask.trim())}
+                  className="font-medium text-navy underline underline-offset-2 transition-colors hover:text-text-primary"
+                >
+                  Add details
+                </button>
+              </p>
+              {quickTaskError && (
+                <p className="mt-1.5 text-[11px] leading-4 text-danger" role="alert">
+                  {quickTaskError}
+                </p>
+              )}
+            </form>
             <div className="mt-3.5 flex h-[304px] flex-col overflow-hidden rounded-card border border-border bg-card pb-2 pt-3.5">
               {todayTaskRows.length ? (
                 todayTaskRows.map(renderTodayTaskRow)

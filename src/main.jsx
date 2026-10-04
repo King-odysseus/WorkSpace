@@ -542,6 +542,9 @@ function App() {
   const [newPriority, setNewPriority] = useState("normal");
   const [newTaskStatus, setNewTaskStatus] = useState("todo");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
+  // What "N" does, read at press time so the key never closes over a stale task
+  // form.
+  const startCaptureRef = useRef(() => {});
   // Set synchronously around the request rather than derived from state, so a
   // second Enter in the same tick cannot start a second create.
   const taskSubmitInFlightRef = useRef(false);
@@ -1019,6 +1022,38 @@ function App() {
     };
     document.addEventListener("keydown", focusSearch);
     return () => document.removeEventListener("keydown", focusSearch);
+  }, []);
+
+  // The shortcuts the help centre lists, made real. It listed N, Shift N and
+  // Ctrl \ long before anything answered them, which is its own kind of broken
+  // promise. Every one stands down while the caret is in a field, while a
+  // dialog owns the keyboard, and while the key is held down, so none of them
+  // can eat a character someone meant to type.
+  useEffect(() => {
+    const typingInAField = (target) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+    const onKeyDown = (event) => {
+      if (typingInAField(event.target)) return;
+      if (event.repeat) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      if (event.ctrlKey && event.key === "\\") {
+        event.preventDefault();
+        setSidebarCollapsed((current) => !current);
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== "n" && event.key !== "N") return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        setNotificationOpen(true);
+        return;
+      }
+      startCaptureRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   useEffect(() => {
@@ -2028,7 +2063,9 @@ function App() {
     // draft fills in the rest of the form rather than overriding the click.
     const draft = readRecordDraft(session.user?.id, activeWorkspaceId, "task");
     const saved = draft?.fields || {};
-    setNewTask(saved.newTask || "");
+    // An explicit title from the caller wins over the draft: somebody who typed
+    // it in the quick field and asked for details means that title.
+    setNewTask(options.title || saved.newTask || "");
     setNewTaskTemplate(saved.newTaskTemplate || "");
     setNewDescription(saved.newDescription || "");
     setNewAssigneeIds(
@@ -2434,11 +2471,63 @@ function App() {
       setTaskSubmitting(false);
     }
   };
+  // "N" means capture a task. On a page that has the title-first field it puts
+  // the caret there, because that is the shorter path; anywhere else it opens
+  // the full form, so capture is always one key away and the fuller form is
+  // never taken away.
+  startCaptureRef.current = () => {
+    const field = document.getElementById("quick-task-capture");
+    if (field instanceof HTMLElement) {
+      field.focus();
+      field.select();
+      return;
+    }
+    openTaskModal();
+  };
   // Closing the task form never loses the task: the draft keeps it and the form
   // offers it back. Only a save in flight blocks the exit.
   const requestCloseTaskForm = () => {
     if (taskSubmitInFlightRef.current) return;
     setShowModal(false);
+  };
+  // Title-first capture: one field, the same endpoint the full form posts to,
+  // and the same defaults that form starts from. It deliberately does not send
+  // assignee_ids, so the server keeps applying its "a member defaults to
+  // themselves" rule exactly as it does for the full form rather than the quick
+  // path guessing at ownership.
+  const captureTask = async (title) => {
+    const trimmed = String(title || "").trim();
+    if (!trimmed) throw new Error("Task name is required.");
+    const response = await fetch("/api/tasks/", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": await getCsrfToken(),
+        "X-Workspace-Id": String(activeWorkspaceId || ""),
+      },
+      body: JSON.stringify({
+        title: trimmed,
+        bucket: "Backlog",
+        status: "todo",
+        priority: "normal",
+        recurrence: "none",
+      }),
+    });
+    const data = await readJsonResponse(response, "Task could not be created.");
+    if (!response.ok)
+      throw new Error(data.error || "Task could not be created.");
+    setTasks((current) => [
+      ...current,
+      mapTaskFromApi(data.task, {
+        today,
+        workspaceRole: currentWorkspace?.role,
+        currentUserId: session.user.id,
+      }),
+    ]);
+    setWorkspaceNotice(`Added "${trimmed}" to Backlog.`);
+    setWorkspaceReload((current) => current + 1);
+    return data.task;
   };
 
   const workspaceId = activeWorkspaceId;
@@ -4025,6 +4114,8 @@ function App() {
                 members={workspaceData.members}
                 canManageMembers={canManageMembers}
                 onAddTask={() => openTaskModal()}
+                onCaptureTask={captureTask}
+                onAddTaskWithTitle={(title) => openTaskModal(null, { title })}
                 onAddEvent={() => {
                   setPendingComposer({ type: "calendar", prefill: { date: today } });
                   setActive("Calendar");
