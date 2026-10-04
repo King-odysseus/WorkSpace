@@ -311,6 +311,11 @@ const workspaceCollectionSlices = {
 // yet", which is the difference the loading and error states exist to make.
 const todayCollectionKeys = ["tasks", "events", "followUps", "checkIns"];
 
+// How many pages of tasks the loader will read before giving up. 200 a page, so
+// this is the point where a workspace stops being a list and starts being a
+// database query, and where the board says so rather than pretending.
+const TASK_PAGE_CEILING = 50;
+
 // What to refetch when the pulse says a domain moved. The domain names come
 // from tasks/pulse.py, whose DOMAIN_LABELS is held to the same names by its own
 // test, so this is the only mapping between the two ends.
@@ -749,6 +754,10 @@ function App() {
   // difference is what stops "nothing is assigned to you today" being shown to
   // somebody whose tasks simply have not arrived yet.
   const [todayData, setTodayData] = useState({});
+  // True when the workspace holds more tasks than the loader will read. The
+  // board is then a window on the work rather than all of it, and saying so is
+  // the difference between a limit and a lie.
+  const [tasksTruncated, setTasksTruncated] = useState(false);
   const [workspaceNotice, setWorkspaceNotice] = useState("");
   const [workspaceReload, setWorkspaceReload] = useState(0);
   const activeRef = useRef(active);
@@ -1226,6 +1235,7 @@ function App() {
     // Nothing has answered for this workspace yet, and saying otherwise would
     // let the new workspace's first render claim the old one's collections.
     setTodayData({});
+    setTasksTruncated(false);
     setWorkspaceData({
       members: [],
       projects: [],
@@ -1485,7 +1495,15 @@ function App() {
         // though they were the whole list.
         if (!page.ok) return { key: "tasks", ok: false, data: { tasks: collected } };
         collected.push(...(page.data.tasks || []));
-        if (!page.data.pagination?.has_next || pageNumber >= 50) break;
+        if (!page.data.pagination?.has_next) break;
+        // The ceiling guards against a workspace so large the tab never settles.
+        // It is not a claim that these are all the tasks there are, and it used
+        // to be silent - so a board could show a fraction of the work as though
+        // it were all of it.
+        if (pageNumber >= TASK_PAGE_CEILING) {
+          if (isCurrent) setTasksTruncated(true);
+          break;
+        }
         pageNumber += 1;
       }
       if (isCurrent) {
@@ -4182,6 +4200,27 @@ function App() {
                 }
               >
                 {workspaceError}
+              </Alert>
+            )}
+            {/* A workspace can hold more tasks than the board will read. The
+                board is then a window on the work rather than all of it, and a
+                window that does not say so looks like the whole room. */}
+            {tasksTruncated && (
+              <Alert
+                tone="warning"
+                title="Showing the first tasks in this workspace"
+                action={
+                  <button
+                    className="secondary-button"
+                    onClick={() => setActive("Reports")}
+                  >
+                    Open reports
+                  </button>
+                }
+              >
+                This workspace holds more tasks than a board can hold at once, so
+                the lists show the first {TASK_PAGE_CEILING * 200}. Search and
+                reports cover all of them.
               </Alert>
             )}
             {/* A refresh that only partly came back is not a load failure: the
