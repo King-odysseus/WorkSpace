@@ -51,6 +51,27 @@ export function parseNotificationDeepLink(value) {
   }
 }
 
+// Which search kinds are a hit on a message rather than on its container. The
+// other kinds already point their target at the matched row itself.
+const SEARCH_MESSAGE_KINDS = new Set(['chat_message', 'direct_message'])
+
+// A search hit is shaped differently from an alert: `kind` says what the matched
+// row is, while `target_type`/`target_id` name the container that holds it. Chat
+// is the case that needs care - a hit's own `id` is the message while its target
+// is the thread - so the message id is carried across as `message_id`, which is
+// the slot the resolver and the Chats view already read. Returns null when the
+// response is missing the pair every destination needs.
+export function resolveSearchResultTarget(result = {}) {
+  const targetType = String(result.target_type || '')
+  const targetId = String(result.target_id ?? '')
+  if (!targetType || !targetId) return null
+  return {
+    target_type: targetType,
+    target_id: targetId,
+    message_id: SEARCH_MESSAGE_KINDS.has(result.kind) ? String(result.id ?? '') : '',
+  }
+}
+
 export function resolveNotificationTarget(notification, { tasks = [], events = [], followUps = [], projects = [], lookupValues = [] } = {}) {
   const targetId = String(notification.target_id || '')
   const targetType = notification.target_type

@@ -190,7 +190,7 @@ import BrandedStatusScreen from "./components/BrandedStatusScreen.jsx";
 import { hardRefreshApp, startAppUpdateWatch } from "./lib/app-updates.js";
 import { startNotificationAlerts, updateAppBadge } from "./lib/notification-alerts.js";
 import { announceNotificationChange } from "./lib/notification-events.js";
-import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget } from "./lib/notification-navigation.js";
+import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget, resolveSearchResultTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
 import { startInstallPromptCapture } from "./lib/install-prompt.js";
 import {
@@ -2064,107 +2064,117 @@ function App() {
       toast.error(error.message || "Notification could not be marked as read.");
     }
   };
-  const openNotification = async (notification) => {
-    setNotificationOpen(false);
-    setMessagesOpen(false);
-    markNotificationRead(notification.id);
-    const resolved = resolveNotificationTarget(notification, {
+  // Every entry point that lands on a record - a bell row, a push deep link, a
+  // global search hit - funnels through here, so the mapping from a target to the
+  // page that can show it lives in exactly one place. This only navigates: the
+  // caller has already dismissed the surface it was opened from, and knows
+  // whether the target also needs marking read.
+  const openTarget = async (target) => {
+    const targetType = target.target_type;
+    const targetId = String(target.target_id ?? "");
+    const resolved = resolveNotificationTarget(target, {
       tasks,
       events: workspaceData.events,
       followUps: workspaceData.followUps,
       projects: workspaceData.projects,
       lookupValues: workspaceData.lookupValues,
     });
-    if (notification.target_type === "screen_share_session") {
+    if (targetType === "screen_share_session") {
       setScreenShareNotificationId(resolved.targetId);
       setActive("Screen sharing");
       return;
     }
-    if (notification.target_type === "check_in") {
-      setPendingCheckInId(String(notification.target_id));
+    if (targetType === "check_in") {
+      setPendingCheckInId(targetId);
       setActive("Check-ins");
       return;
     }
-    if (notification.target_type === "document") {
-      setPendingDocumentId(String(notification.target_id));
+    if (targetType === "document") {
+      setPendingDocumentId(targetId);
       setActive("Files");
       return;
     }
-    if (notification.target_type === "workstream") {
-      setPendingWorkstreamNotification(notification.target_id);
+    if (targetType === "workstream") {
+      setPendingWorkstreamNotification(targetId);
       setActive("Planner");
       return;
     }
-    if (["project", "risk_issue", "risk"].includes(notification.target_type)) {
+    if (["project", "risk_issue", "risk"].includes(targetType)) {
       setPendingProjectNotification({
         id: resolved.targetId,
         operation: resolved.operation || "",
-        targetType: notification.target_type,
+        targetType,
       });
       setActive("Projects");
       return;
     }
-    if (notification.target_type === "calendar_event") {
+    if (targetType === "calendar_event") {
       const targetEvent = resolved.action === "open" ? resolved.target : null;
       if (targetEvent) setSelectedEvent(targetEvent);
-      else setPendingEventId(String(notification.target_id));
+      else setPendingEventId(targetId);
       setActive("Calendar");
       return;
     }
-    if (notification.target_type === "follow_up") {
+    if (targetType === "follow_up") {
       const targetFollowUp = resolved.action === "open" ? resolved.target : null;
       if (targetFollowUp) setSelectedFollowUp(targetFollowUp);
-      else setPendingFollowUpId(String(notification.target_id));
+      else setPendingFollowUpId(targetId);
       setActive("Follow-up");
       return;
     }
-    if (notification.target_type === "task") {
+    if (targetType === "task") {
       const targetTask = resolved.action === "open" ? resolved.target : null;
       if (targetTask) {
         setSelectedTask(targetTask);
         return;
       }
+      // A search hit or an old alert can name a task the loaded board does not
+      // hold. Load it and keep it: the shell clears a selected task that is not
+      // in the task list, so opening the drawer without adding the task would
+      // close it again on the next render.
       try {
-        const response = await fetch(`/api/tasks/${notification.target_id}/`, {
+        const response = await fetch(`/api/tasks/${targetId}/`, {
           credentials: "include",
           headers: { "X-Workspace-Id": String(activeWorkspaceId) },
         });
-        if (!response.ok) throw new Error("Task could not be loaded.");
+        if (!response.ok) throw new Error(`Task returned ${response.status}`);
         const payload = await response.json();
-        setSelectedTask(payload.task);
+        const mapped = mapApiTask(payload.task);
+        setTasks((current) =>
+          current.some((task) => task.id === mapped.id)
+            ? current
+            : [...current, mapped],
+        );
+        setSelectedTask(mapped);
       } catch {
-        toast.error("Task could not be opened.");
+        toast.error("That task is no longer available.");
       }
       return;
     }
     if (resolved.action === "chat") {
-      requestChatThread(notification.target_type, notification.target_id, resolved.messageId);
+      requestChatThread(targetType, targetId, resolved.messageId);
       setChatThreadRequest((current) => current + 1);
       setActive(resolved.destination);
       return;
     }
-    const destination = notificationDestinations[notification.target_type];
+    const destination = notificationDestinations[targetType];
     if (destination) setActive(destination);
   };
-  const searchResultDestinations = {
-    follow_up: "Follow-up",
-    chat_channel: "Channels",
-    direct_conversation: "Chats",
-    check_in: "Check-ins",
-    risk_issue: "Projects",
+  const openNotification = async (notification) => {
+    setNotificationOpen(false);
+    setMessagesOpen(false);
+    markNotificationRead(notification.id);
+    await openTarget(notification);
   };
   const openSearchResult = (result) => {
     setGlobalSearchOpen(false);
     setSearchQuery("");
-    if (result.target_type === "task") {
-      const targetTask = tasks.find(
-        (task) => String(task.id) === String(result.target_id),
-      );
-      if (targetTask) setSelectedTask(targetTask);
+    const target = resolveSearchResultTarget(result);
+    if (!target) {
+      toast.error("That result can no longer be opened.");
       return;
     }
-    const destination = searchResultDestinations[result.target_type];
-    if (destination) setActive(destination);
+    openTarget(target);
   };
   const searchResultLabels = {
     task: "Task",
@@ -4644,19 +4654,39 @@ function WorkspaceView({
         if (active === "Follow-up" && pendingFollowUpId && !localData.followUps.some((item) => String(item.id) === String(pendingFollowUpId))) {
           const payload = await read(`/api/workspaces/${workspaceId}/follow-ups/`);
           const target = (payload.follow_ups || []).find((item) => String(item.id) === String(pendingFollowUpId));
-          if (current && target) setLocalData((data) => ({ ...data, followUps: [...data.followUps.filter((item) => String(item.id) !== String(target.id)), target] }));
+          if (!current) return;
+          if (target) {
+            setLocalData((data) => ({ ...data, followUps: [...data.followUps.filter((item) => String(item.id) !== String(target.id)), target] }));
+          } else {
+            // Clearing the pending id is what stops a click on a deleted record
+            // from looking like it did nothing at all.
+            onActionError("That follow-up is no longer available.");
+            setPendingFollowUpId(null);
+          }
           return;
         }
         if (active === "Calendar" && pendingEventId && !localData.events.some((item) => String(item.id) === String(pendingEventId))) {
           const payload = await read(`/api/workspaces/${workspaceId}/calendar-events/`);
           const target = (payload.events || []).find((item) => String(item.id) === String(pendingEventId));
-          if (current && target) setLocalData((data) => ({ ...data, events: [...data.events.filter((item) => String(item.id) !== String(target.id)), target] }));
+          if (!current) return;
+          if (target) {
+            setLocalData((data) => ({ ...data, events: [...data.events.filter((item) => String(item.id) !== String(target.id)), target] }));
+          } else {
+            onActionError("That calendar event is no longer available.");
+            setPendingEventId(null);
+          }
           return;
         }
         if (active === "Planner" && pendingWorkstreamNotification && !localData.lookupValues.some((item) => item.kind === "workstream" && String(item.id) === String(pendingWorkstreamNotification))) {
           const payload = await read(`/api/workspaces/${workspaceId}/lookup-values/`);
           const target = (payload.lookup_values || []).find((item) => item.kind === "workstream" && String(item.id) === String(pendingWorkstreamNotification));
-          if (current && target) setLocalData((data) => ({ ...data, lookupValues: [...data.lookupValues.filter((item) => item.id !== target.id), target] }));
+          if (!current) return;
+          if (target) {
+            setLocalData((data) => ({ ...data, lookupValues: [...data.lookupValues.filter((item) => item.id !== target.id), target] }));
+          } else {
+            onActionError("That workstream is no longer available.");
+            setPendingWorkstreamNotification(null);
+          }
           return;
         }
         if (active === "Projects" && pendingProjectNotification) {
@@ -4664,7 +4694,13 @@ function WorkspaceView({
           if (["risk_issue", "risk"].includes(targetType)) {
             const payload = await read(`/api/workspaces/${workspaceId}/risks-issues/`);
             const risk = (payload.records || []).find((item) => String(item.id) === String(id));
-            if (!risk?.project_id) return;
+            if (!risk?.project_id) {
+              if (current) {
+                onActionError("That risk is no longer available.");
+                setPendingProjectNotification(null);
+              }
+              return;
+            }
             const project = localData.projects.find((item) => String(item.id) === String(risk.project_id));
             if (project && current) {
               setSelectedProjectWorkspace(project);
@@ -4673,14 +4709,26 @@ function WorkspaceView({
             } else {
               const projects = await read(`/api/workspaces/${workspaceId}/projects/?page_size=500`);
               const targetProject = (projects.projects || []).find((item) => String(item.id) === String(risk.project_id));
-              if (current && targetProject) {
+              if (!current) return;
+              if (targetProject) {
                 setLocalData((data) => ({ ...data, projects: [...data.projects.filter((item) => String(item.id) !== String(targetProject.id)), targetProject] }));
+              } else {
+                // The risk survives but the project it belongs to is out of
+                // reach, so there is no page that can show it.
+                onActionError("That risk's project is no longer available.");
+                setPendingProjectNotification(null);
               }
             }
           } else if (!localData.projects.some((item) => String(item.id) === String(id))) {
             const payload = await read(`/api/workspaces/${workspaceId}/projects/?page_size=500`);
             const target = (payload.projects || []).find((item) => String(item.id) === String(id));
-            if (current && target) setLocalData((data) => ({ ...data, projects: [...data.projects.filter((item) => String(item.id) !== String(target.id)), target] }));
+            if (!current) return;
+            if (target) {
+              setLocalData((data) => ({ ...data, projects: [...data.projects.filter((item) => String(item.id) !== String(target.id)), target] }));
+            } else {
+              onActionError("That project is no longer available.");
+              setPendingProjectNotification(null);
+            }
           }
         }
       } catch (error) {
@@ -4754,6 +4802,9 @@ function WorkspaceView({
         );
         if (targetCheckIn) {
           setSelectedCheckInDetail(targetCheckIn);
+          setPendingCheckInId(null);
+        } else if (pendingCheckInId) {
+          onActionError("That check-in is no longer available.");
           setPendingCheckInId(null);
         }
       })

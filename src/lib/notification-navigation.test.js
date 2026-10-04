@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { messageIdFromGroupKey, parseNotificationDeepLink, resolveNotificationTarget } from './notification-navigation.js'
+import { messageIdFromGroupKey, parseNotificationDeepLink, resolveNotificationTarget, resolveSearchResultTarget } from './notification-navigation.js'
 
 const notification = (target_type, target_id) => ({ target_type, target_id })
 
@@ -41,6 +41,31 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget({ target_type: 'direct_conversation', target_id: 12, group_key: 'message:88' })).toMatchObject({ action: 'chat', messageId: '88' })
     expect(resolveNotificationTarget({ target_type: 'chat_channel', target_id: 'general', message_id: '91' })).toMatchObject({ action: 'chat', messageId: '91' })
     expect(resolveNotificationTarget({ target_type: 'chat_channel', target_id: 'general', group_key: 'chat_channel:general' })).toMatchObject({ action: 'chat', messageId: '' })
+  })
+})
+
+describe('resolveSearchResultTarget', () => {
+  it('names the matched record for task, check-in, and follow-up hits', () => {
+    expect(resolveSearchResultTarget({ kind: 'task', id: 4, target_type: 'task', target_id: 4 })).toEqual({ target_type: 'task', target_id: '4', message_id: '' })
+    expect(resolveSearchResultTarget({ kind: 'check_in', id: 6, target_type: 'check_in', target_id: 6 })).toEqual({ target_type: 'check_in', target_id: '6', message_id: '' })
+    expect(resolveSearchResultTarget({ kind: 'follow_up', id: 2, target_type: 'follow_up', target_id: 2 })).toEqual({ target_type: 'follow_up', target_id: '2', message_id: '' })
+    expect(resolveSearchResultTarget({ kind: 'risk_issue', id: 9, target_type: 'risk_issue', target_id: 9 })).toEqual({ target_type: 'risk_issue', target_id: '9', message_id: '' })
+  })
+
+  it('carries the message id for a chat hit, whose target is the thread', () => {
+    expect(resolveSearchResultTarget({ kind: 'chat_message', id: 55, target_type: 'chat_channel', target_id: 'design' })).toEqual({ target_type: 'chat_channel', target_id: 'design', message_id: '55' })
+    expect(resolveSearchResultTarget({ kind: 'direct_message', id: 56, target_type: 'direct_conversation', target_id: 12 })).toEqual({ target_type: 'direct_conversation', target_id: '12', message_id: '56' })
+  })
+
+  it('opens the parent task for a comment hit, which has no target of its own', () => {
+    expect(resolveSearchResultTarget({ kind: 'task_comment', id: 77, target_type: 'task', target_id: 4 })).toEqual({ target_type: 'task', target_id: '4', message_id: '' })
+  })
+
+  it('returns null rather than a target it cannot open', () => {
+    expect(resolveSearchResultTarget({ kind: 'task', id: 4 })).toBeNull()
+    expect(resolveSearchResultTarget({ kind: 'task', target_type: 'task' })).toBeNull()
+    expect(resolveSearchResultTarget()).toBeNull()
+    expect(resolveSearchResultTarget({ kind: 'task', target_type: 'task', target_id: 0 })).toEqual({ target_type: 'task', target_id: '0', message_id: '' })
   })
 })
 
