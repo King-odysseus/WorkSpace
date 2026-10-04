@@ -682,3 +682,17 @@ Two things worth knowing for whoever writes the next one:
   On Windows a shell in between means the kill reaches the wrapper and leaves
   Django holding the database file, which then cannot be deleted. This cost more
   debugging than the journey itself.
+
+### The full backend suite, 4 October 2026
+
+The audit that started this plan recorded that the backend suite was started,
+then stopped after more than ten minutes, and that no full-suite pass was
+claimed. It has now been run to completion, because adding middleware that
+touches every response is exactly the change that needs it:
+
+    python manage.py test tasks    ->  Ran 600 tests in 789s, OK
+
+Thirteen minutes, exit code 0, no failures and no errors. That closes the
+"complete the previously interrupted backend suite" line in the delivery rules
+for this point in the work - it does not stand in for one after every future
+change, and the release gate still wants a fresh run.
