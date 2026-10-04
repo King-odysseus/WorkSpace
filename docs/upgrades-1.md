@@ -44,7 +44,7 @@ Estimate: 4-7 days. Dependency: Phase 0 baseline; reuse existing approved states
 | UX-04 | Route every supported search result to its exact record or message using shared target navigation. Fetch tasks absent from local state. | Task/comment, channel/direct message, check-in, follow-up, and risk results open the correct item. Deleted or inaccessible items show an actionable outcome. Browser Back and workspace boundaries remain correct. |
 | UX-05 | Add distinct search loading, empty, and error states with retry. Discard obsolete responses after query/workspace changes. | Offline, 403, 401, and server-error outcomes do not appear as successful empty results; retries use the current query and workspace. |
 | UX-06 | Retain successful collection data on refresh failure. Track each collection's state and last successful refresh. Retry failures without requiring another data change. | A failed endpoint or later task page does not erase records or publish a partial list as complete. Genuine successful empty responses still clear old records. Workspace switches never display another workspace's data. |
-| UX-07 | Extend browser coverage to search navigation, failed refresh, successful empty responses, session expiry, and recovery. | Done except notification deep links - see Progress. |
+| UX-07 | Extend browser coverage to search navigation, failed refresh, successful empty responses, session expiry, and recovery. | Done - see Progress. |
 
 Likely files: `src/main.jsx`, `src/lib/notification-navigation.js`,
 `src/components/ChatViews.jsx`, `tasks/views.py`, and their relevant tests.
@@ -709,8 +709,8 @@ requests the real app makes and looks at what a person would see:
 | An expired session | Answers `/search/` with a 401 and asserts it is reported rather than passing as an empty result |
 | A failed refresh | Makes the pulse report that chat moved, fails the chat refetch, and asserts the board still shows its rows and the banner names what went stale |
 
-Four journeys now pass in about fifteen seconds: the three above and the task
-lifecycle from UX-03.
+Five journeys now pass in about twenty seconds: the three above, the task
+lifecycle from UX-03, and the notification deep link.
 
 - One fixture fault it found: the seeded board was unassigned, and the daily
   view shows what is assigned to you, so the account the journeys sign in as was
@@ -719,9 +719,10 @@ lifecycle from UX-03.
   now hold it: each role exists and can sign in, the board is the owner's,
   running it twice leaves the same fixture rather than a second copy, and the
   owner opens on a different workspace so that choosing one is a real step.
-- **Not yet covered by a journey: notification deep links**, which UX-07 also
-  names. That needs a seeded notification and a click on a bell row, so it is
-  the next journey rather than a claim. Everything else UX-07 lists is covered.
+- **Notification deep links are covered too**, which was the last item on
+  UX-07's list: the fixture seeds one unread alert naming a task, and a journey
+  follows the bell row and asserts the drawer opens on that task rather than
+  merely on the page it lives on.
 - These journeys assert the fixed behaviour but were not watched failing against
   the broken code; the equivalent component tests were, one fix at a time, when
   Phase 1 shipped. That is where the two-way evidence lives.

@@ -17,7 +17,14 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from tasks.models import Membership, Project, Task, UserProfile, Workspace
+from tasks.models import (
+    Membership,
+    Project,
+    Task,
+    UserProfile,
+    Workspace,
+    WorkspaceNotification,
+)
 
 SLUG = 'browser-fixtures'
 # A second, empty workspace the owner also belongs to, and opens on. Choosing
@@ -109,9 +116,26 @@ class Command(BaseCommand):
             ]
         )
 
+        # One unread alert naming the first task, so the bell has a row to open
+        # and following it can be checked to land on the record it names.
+        target = Task.objects.filter(workspace=workspace).order_by('position').first()
+        WorkspaceNotification.objects.filter(
+            workspace=workspace, recipient=owner, kind='test_fixture'
+        ).delete()
+        WorkspaceNotification.objects.create(
+            workspace=workspace,
+            recipient=owner,
+            kind='test_fixture',
+            title='Fixture alert naming a task',
+            body='Seeded for the notification journey.',
+            target_type='task',
+            target_id=str(target.id),
+        )
+
         # Ids and counts only. Nothing secret, so this is safe in CI logs.
         self.stdout.write(
             f'workspace_slug={workspace.slug} '
             f'workspace_id={workspace.id} '
-            f'tasks={Task.objects.filter(workspace=workspace).count()}'
+            f'tasks={Task.objects.filter(workspace=workspace).count()} '
+            f'notification_target={target.code}'
         )
