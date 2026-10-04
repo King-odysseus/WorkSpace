@@ -282,6 +282,35 @@ import {
 const isConversationNotification = (notification) =>
   ["chat_channel", "direct_conversation"].includes(notification?.target_type);
 
+// Which slice of workspace state each collection fills. The loader applies a
+// collection the moment it arrives rather than once the whole batch is in, so
+// this has to be a plain data mapping rather than one large merge.
+const workspaceCollectionSlices = {
+  members: (data) => ({ members: data.members }),
+  projects: (data) => ({ projects: data.projects }),
+  lookupValues: (data) => ({ lookupValues: data.lookup_values }),
+  taskTemplates: (data) => ({ taskTemplates: data.task_templates }),
+  projectTemplates: (data) => ({ projectTemplates: data.project_templates }),
+  messages: (data) => ({ messages: data.messages }),
+  channels: (data) => ({ channels: data.channels }),
+  directConversations: (data) => ({ directConversations: data.conversations }),
+  archivedConversations: (data) => ({ archivedConversations: data.conversations }),
+  followUps: (data) => ({ followUps: data.follow_ups }),
+  events: (data) => ({ events: data.events }),
+  checkIns: (data) => ({ checkIns: data.check_ins }),
+  workShifts: (data) => ({ workShifts: data.work_shifts }),
+  activity: (data) => ({ activity: data.activity }),
+  auditLogs: (data) => ({ auditLogs: data.audit_logs }),
+  buckets: (data) => ({ buckets: data.buckets }),
+  invitations: (data) => ({ invitations: data.invitations }),
+  reports: (data) => ({ reports: data.summary }),
+};
+
+// The collections the daily view is made of. Knowing whether one has answered
+// yet is what separates "nothing is assigned to you today" from "we do not know
+// yet", which is the difference the loading and error states exist to make.
+const todayCollectionKeys = ["tasks", "events", "followUps", "checkIns"];
+
 // The collections the workspace loader refreshes, named as a reader would say
 // them, so a refresh that partly failed can say what is stale rather than
 // "some data". Keys match the ones the loader tags each read with.
@@ -693,6 +722,11 @@ function App() {
     failed: [],
     lastSuccessAt: null,
   });
+  // How each collection the daily view is made of last answered: missing until
+  // it answers this load, "ready" once it has, "failed" when it could not. The
+  // difference is what stops "nothing is assigned to you today" being shown to
+  // somebody whose tasks simply have not arrived yet.
+  const [todayData, setTodayData] = useState({});
   const [workspaceNotice, setWorkspaceNotice] = useState("");
   const [workspaceReload, setWorkspaceReload] = useState(0);
   const activeRef = useRef(active);
@@ -1167,6 +1201,9 @@ function App() {
     setTasks([]);
     setSelectedTask(null);
     setNotificationOpen(false);
+    // Nothing has answered for this workspace yet, and saying otherwise would
+    // let the new workspace's first render claim the old one's collections.
+    setTodayData({});
     setWorkspaceData({
       members: [],
       projects: [],
@@ -1318,7 +1355,73 @@ function App() {
     // good copy and records the failure, so work that was already loaded cannot
     // vanish because one request did not come back. `key` is what lets the merge
     // below apply the answer to the right slice of state.
-    const read = async (key, path, fallback = {}) => {
+    // The notification revision the batch now in flight started from. Read when
+    // the batch begins, checked again when its answers land, so a read that was
+    // overtaken by a newer mark-read cannot put the old count back.
+    let notificationBatchRevision = notificationStateRevisionRef.current;
+    // Which collections the daily view has heard from this load, so its
+    // sections can tell "nothing there" from "not answered yet".
+    const markAnswered = (key) => {
+      if (!todayCollectionKeys.includes(key)) return;
+      setTodayData((current) =>
+        current[key] === "ready" ? current : { ...current, [key]: "ready" },
+      );
+    };
+    const markFailed = (key) => {
+      if (!todayCollectionKeys.includes(key)) return;
+      setTodayData((current) => ({ ...current, [key]: "failed" }));
+    };
+    // The bell reads two collections and the count on it has to agree with the
+    // list under it, so this pair is the one thing that cannot be applied the
+    // moment it arrives.
+    const notificationAnswers = {
+      activityNotifications: null,
+      conversationNotifications: null,
+    };
+    const applyNotificationAnswers = () => {
+      const activity = notificationAnswers.activityNotifications;
+      const conversation = notificationAnswers.conversationNotifications;
+      if (!activity || !conversation) return;
+      setWorkspaceData((current) => ({
+        ...current,
+        notifications: [
+          ...(conversation.notifications || []),
+          ...(activity.notifications || []),
+        ],
+        activityNotifications: activity.notifications || [],
+        conversationNotifications: conversation.notifications || [],
+        notificationCounts:
+          activity.unread_counts ?? conversation.unread_counts ?? null,
+      }));
+    };
+    // Writes one collection's answer into state the moment it lands. This is the
+    // whole point of the split: reports, templates and archived conversations
+    // are slow or irrelevant to the daily view, and under a single batch merge
+    // any one of them held back the tasks and events Today is made of.
+    const applyCollection = (key, data) => {
+      if (key === "tasks") {
+        setTasks(
+          data.tasks.map((task) =>
+            mapTaskFromApi(task, {
+              today,
+              workspaceRole,
+              currentUserId: session.user.id,
+            }),
+          ),
+        );
+        return;
+      }
+      if (key === "activityNotifications" || key === "conversationNotifications") {
+        if (notificationStateRevisionRef.current !== notificationBatchRevision) return;
+        notificationAnswers[key] = data;
+        applyNotificationAnswers();
+        return;
+      }
+      const slice = workspaceCollectionSlices[key];
+      if (!slice) return;
+      setWorkspaceData((current) => ({ ...current, ...slice(data) }));
+    };
+    const read = async (key, path, fallback = {}, { defer = false } = {}) => {
       try {
         const response = await fetch(path, {
           credentials: "include",
@@ -1326,13 +1429,19 @@ function App() {
         });
         if (!response.ok)
           throw new Error(`${path} returned ${response.status}`);
-        return { key, ok: true, data: await response.json() };
+        const data = await response.json();
+        if (isCurrent && !defer) {
+          applyCollection(key, data);
+          markAnswered(key);
+        }
+        return { key, ok: true, data };
       } catch (error) {
         console.warn(
           "Workspace data could not be refreshed; keeping the last copy.",
           key,
           error.message,
         );
+        if (isCurrent) markFailed(key);
         return { key, ok: false, data: fallback };
       }
     };
@@ -1342,18 +1451,24 @@ function App() {
       const collected = [];
       let pageNumber = 1;
       for (;;) {
+        // Deferred, unlike every other read: one page of several must not be
+        // published as though it were the whole list.
         const page = await read(
           "tasks",
           `/api/tasks/?page=${pageNumber}&page_size=200`,
           { tasks: [], pagination: null },
+          { defer: true },
         );
         // A later page that fails must not publish the pages that did arrive as
         // though they were the whole list.
-        if (!page.ok)
-          return { key: "tasks", ok: false, data: { tasks: collected } };
+        if (!page.ok) return { key: "tasks", ok: false, data: { tasks: collected } };
         collected.push(...(page.data.tasks || []));
         if (!page.data.pagination?.has_next || pageNumber >= 50) break;
         pageNumber += 1;
+      }
+      if (isCurrent) {
+        applyCollection("tasks", { tasks: collected });
+        markAnswered("tasks");
       }
       return { key: "tasks", ok: true, data: { tasks: collected } };
     };
@@ -1364,7 +1479,7 @@ function App() {
     const refreshCollaboration = () => {
       if (refreshInFlight) return;
       refreshInFlight = true;
-      const notificationStateRevision = notificationStateRevisionRef.current;
+      notificationBatchRevision = notificationStateRevisionRef.current;
       const auditRequest = ["owner", "manager"].includes(workspaceRole)
         ? read("auditLogs", `/api/workspaces/${workspaceId}/audit-logs/`, {
             audit_logs: [],
@@ -1375,7 +1490,15 @@ function App() {
       // and leaving Team reloads it (see the previousActiveRef effect).
       const taskRequest =
         activeRef.current === "Team"
-          ? Promise.resolve({ key: "tasks", ok: true, data: { tasks: [] } })
+          ? Promise.resolve({ key: "tasks", ok: true, data: { tasks: [] } }).then(
+              (result) => {
+                if (isCurrent) {
+                  applyCollection("tasks", result.data);
+                  markAnswered("tasks");
+                }
+                return result;
+              },
+            )
           : readAllTasks();
       const refreshRequest = Promise.all([
         taskRequest,
@@ -1432,79 +1555,20 @@ function App() {
         ),
         auditRequest,
       ])
-        .then(
-          (results) => {
-            if (!isCurrent) return;
-            const collection = {};
-            for (const result of results) collection[result.key] = result;
-            const loaded = (key) => collection[key]?.ok === true;
-            const value = (key) => collection[key]?.data ?? {};
-            const failed = results
-              .filter((result) => !result.ok)
-              .map((result) => result.key);
-            // Each slice is written only from a collection that actually
-            // arrived, so a genuine empty response still clears its records
-            // while a failed one leaves the last good copy in place.
-            if (loaded("tasks")) {
-              setTasks(
-                value("tasks").tasks.map((task) =>
-                  mapTaskFromApi(task, {
-                    today,
-                    workspaceRole,
-                    currentUserId: session.user.id,
-                  }),
-                ),
-              );
-            }
-            setWorkspaceData((current) => ({
-              ...current,
-              ...(loaded("members") ? { members: value("members").members } : {}),
-              ...(loaded("projects") ? { projects: value("projects").projects } : {}),
-              ...(loaded("messages") ? { messages: value("messages").messages } : {}),
-              ...(loaded("channels") ? { channels: value("channels").channels } : {}),
-              ...(loaded("directConversations")
-                ? { directConversations: value("directConversations").conversations }
-                : {}),
-              ...(loaded("archivedConversations")
-                ? { archivedConversations: value("archivedConversations").conversations }
-                : {}),
-              ...(loaded("followUps") ? { followUps: value("followUps").follow_ups } : {}),
-              ...(loaded("events") ? { events: value("events").events } : {}),
-              ...(loaded("checkIns") ? { checkIns: value("checkIns").check_ins } : {}),
-              ...(loaded("workShifts") ? { workShifts: value("workShifts").work_shifts } : {}),
-              // The bell reads two independent collections; writing either one
-              // without the other would show a list the badge does not agree
-              // with, so this pair moves together or not at all.
-              ...(notificationStateRevision === notificationStateRevisionRef.current &&
-              loaded("activityNotifications") &&
-              loaded("conversationNotifications")
-                ? {
-                    notifications: [
-                      ...(value("conversationNotifications").notifications || []),
-                      ...(value("activityNotifications").notifications || []),
-                    ],
-                    activityNotifications: value("activityNotifications").notifications || [],
-                    conversationNotifications: value("conversationNotifications").notifications || [],
-                    notificationCounts: value("activityNotifications").unread_counts ?? value("conversationNotifications").unread_counts ?? null,
-                  }
-                : {}),
-              ...(loaded("activity") ? { activity: value("activity").activity } : {}),
-              ...(loaded("auditLogs") ? { auditLogs: value("auditLogs").audit_logs } : {}),
-              ...(loaded("buckets") ? { buckets: value("buckets").buckets } : {}),
-              ...(loaded("invitations") ? { invitations: value("invitations").invitations } : {}),
-              ...(loaded("lookupValues") ? { lookupValues: value("lookupValues").lookup_values } : {}),
-              ...(loaded("taskTemplates") ? { taskTemplates: value("taskTemplates").task_templates } : {}),
-              ...(loaded("projectTemplates") ? { projectTemplates: value("projectTemplates").project_templates } : {}),
-              ...(loaded("reports") ? { reports: value("reports").summary } : {}),
-            }));
-            if (failed.length === 0) setReportLastUpdated(new Date());
-            setSyncStatus((current) => ({
-              failed,
-              lastSuccessAt: failed.length === 0 ? new Date() : current.lastSuccessAt,
-            }));
-            setWorkspaceLoading(false);
-          },
-        )
+        .then((results) => {
+          if (!isCurrent) return;
+          // Every collection has already been written as it arrived, so
+          // all that is left is to record how the batch as a whole went.
+          const failed = results
+            .filter((result) => !result.ok)
+            .map((result) => result.key);
+          if (failed.length === 0) setReportLastUpdated(new Date());
+          setSyncStatus((current) => ({
+            failed,
+            lastSuccessAt: failed.length === 0 ? new Date() : current.lastSuccessAt,
+          }));
+          setWorkspaceLoading(false);
+        })
         .catch((error) => {
           if (!isCurrent) return;
           setWorkspaceLoading(false);
@@ -4153,6 +4217,7 @@ function App() {
                 members={workspaceData.members}
                 canManageMembers={canManageMembers}
                 onAddTask={() => openTaskModal()}
+                dataState={todayData}
                 onCaptureTask={captureTask}
                 onAddTaskWithTitle={(title) => openTaskModal(null, { title })}
                 onAddEvent={() => {

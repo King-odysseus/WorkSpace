@@ -5572,6 +5572,7 @@ function TodayDashboard({
   workShifts,
   members,
   canManageMembers,
+  dataState = {},
   onAddTask,
   onCaptureTask,
   onAddTaskWithTitle,
@@ -6090,7 +6091,20 @@ function TodayDashboard({
             <div className="mt-3.5 flex h-[304px] flex-col overflow-hidden rounded-card border border-border bg-card pb-2 pt-3.5">
               {todayTaskRows.length ? (
                 todayTaskRows.map(renderTodayTaskRow)
-              ) : (
+              ) : dataState.tasks === "failed" ? (
+                // An empty box here would claim the day is clear when the truth
+                // is that nobody answered. The stale-data banner above says the
+                // same thing for the workspace as a whole.
+                <div className="grid h-full content-center justify-items-center gap-2 px-4 text-center">
+                  <Clock3 size={22} className="text-text-muted" aria-hidden="true" />
+                  <p className="text-body-small text-text-secondary" role="alert">
+                    Your tasks could not be loaded.
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" onClick={onAddTask}>
+                    Plan a task <ArrowUpRight size={14} aria-hidden="true" />
+                  </Button>
+                </div>
+              ) : dataState.tasks === "ready" ? (
                 <div className="grid h-full content-center justify-items-center gap-2 px-4 text-center">
                   <CheckCircle2 size={22} className="text-text-muted" aria-hidden="true" />
                   <p className="text-body-small text-text-secondary">
@@ -6099,6 +6113,12 @@ function TodayDashboard({
                   <Button type="button" variant="ghost" size="sm" onClick={onAddTask}>
                     Plan a task <ArrowUpRight size={14} aria-hidden="true" />
                   </Button>
+                </div>
+              ) : (
+                <div className="grid h-full content-center justify-items-center gap-2 px-4 text-center">
+                  <p className="text-body-small text-text-secondary" role="status">
+                    Loading your tasks...
+                  </p>
                 </div>
               )}
             </div>

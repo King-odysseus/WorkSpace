@@ -30,6 +30,10 @@ const renderDashboard = (tasks, onOpenBoard = noop, followUps = [], overrides = 
       workShifts={[]}
       members={[]}
       canManageMembers={false}
+      // The loader has answered for everything in these tests, so the sections
+      // are showing what they know rather than waiting. A test that wants the
+      // waiting or failed state passes its own dataState through overrides.
+      dataState={{ tasks: 'ready', events: 'ready', followUps: 'ready', checkIns: 'ready' }}
       onAddTask={noop}
       onInvite={noop}
       onOpenTask={noop}
