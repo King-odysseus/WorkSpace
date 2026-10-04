@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import DOMPurify from 'dompurify'
 import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, Maximize2, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Alert } from './ui/alert.jsx'
@@ -16,6 +15,9 @@ import { ConfirmDialog, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { renderAssistantMarkdown } from '../lib/assistant-markdown.js'
 import { formatDate, formatDateTime, readJsonResponse } from '../lib/workspace-format.js'
 import { FORMULA_ERRORS, columnLabel, evaluateSheet } from '../lib/spreadsheet-formulas.js'
+// The sanitizer moved to its own module so it can be run in a real browser;
+// see the note at the top of that file.
+import { cleanHtml, safeUrl } from '../lib/sanitize.js'
 
 const headers = id => ({ 'X-Workspace-Id': String(id) })
 const AI_PROVIDERS = [['openai', 'OpenAI'], ['claude', 'Claude'], ['kimi', 'Kimi'], ['deepseek', 'DeepSeek']]
@@ -23,42 +25,6 @@ async function csrf(extra = {}) {
   await fetch('/api/auth/csrf/', { credentials: 'include' })
   const token = document.cookie.split('; ').find(value => value.startsWith('csrftoken='))?.split('=')[1] || ''
   return { ...extra, 'X-CSRFToken': token }
-}
-
-// Schemes a link or image may use. Anything else - javascript:, vbscript:,
-// data: with a non-image type - can run script when a reader clicks it.
-const SAFE_URL = /^(?:https?:\/\/|mailto:|tel:|\/|#|\.\/|\.\.\/)/i
-const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,[a-z0-9+/=\s]+$/i
-
-export function safeUrl(value) {
-  if (typeof value !== 'string') return ''
-  const trimmed = value.trim()
-  if (!trimmed) return ''
-  // Browsers ignore control characters, so "java\tscript:alert(1)" still runs.
-  const [head, ...rest] = trimmed.split('/')
-  const candidate = [head.replace(/[\x00-\x20]/g, ''), ...rest].join('/')
-  return SAFE_DATA_IMAGE.test(candidate) || SAFE_URL.test(candidate) ? candidate : ''
-}
-
-// DOMPurify does the tag/attribute filtering (including the mutation-XSS cases a
-// hand-written pass tends to miss). The hook keeps this app's own two rules on
-// top of it: URLs must satisfy safeUrl, and links never get to reach back into
-// the opening page.
-DOMPurify.addHook('afterSanitizeAttributes', node => {
-  for (const attribute of ['href', 'src']) {
-    if (!node.hasAttribute(attribute)) continue
-    const url = safeUrl(node.getAttribute(attribute))
-    if (url) node.setAttribute(attribute, url)
-    else node.removeAttribute(attribute)
-  }
-  if (node.tagName === 'A' && node.hasAttribute('href')) node.setAttribute('rel', 'noopener noreferrer')
-})
-
-export function cleanHtml(value) {
-  if (typeof window === 'undefined') return value || ''
-  // USE_PROFILES html keeps the editor's formatting markup while excluding the
-  // SVG and MathML grammars the previous implementation stripped by hand.
-  return DOMPurify.sanitize(value || '', { USE_PROFILES: { html: true } })
 }
 
 // Commands whose on/off state the toolbar reflects. execCommand is the engine

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:browser": "node scripts/browser-journey.mjs"
+    "test:browser": "node scripts/browser-journey.mjs",
+    "test:sanitize": "node --test scripts/sanitize/cases.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

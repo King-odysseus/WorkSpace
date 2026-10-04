@@ -66,6 +66,9 @@ jobs:
       - name: Install the browser the journeys drive
         run: npx playwright install --with-deps chromium
 
+      - name: Run the rich-text safety cases in a real browser
+        run: npm run test:sanitize
+
       - name: Run the browser journeys
         # The build above already produced dist/, so the harness reuses it.
         env:
