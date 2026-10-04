@@ -483,6 +483,13 @@ function App() {
       const dialog = taskModalRef.current;
       if (event.key === "Escape") {
         event.preventDefault();
+        // Escape belongs to the top layer. Stopped on the way down so one press
+        // does not also close the notification panel or the record behind this
+        // dialog. A save in flight is the one thing that must not be
+        // interrupted: the request may already have been accepted, and the
+        // reader would have nothing to tell them either way.
+        event.stopPropagation();
+        if (taskSubmitInFlightRef.current) return;
         setShowModal(false);
         return;
       }
@@ -499,9 +506,11 @@ function App() {
         first.focus();
       }
     };
-    document.addEventListener("keydown", onKeyDown);
+    // Window, in the capture phase, so the stop above reaches every listener
+    // underneath - the pattern the file viewer uses for the same reason.
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
       document.body.style.overflow = previousOverflow;
       if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
     };
@@ -533,6 +542,9 @@ function App() {
   const [newPriority, setNewPriority] = useState("normal");
   const [newTaskStatus, setNewTaskStatus] = useState("todo");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
+  // Set synchronously around the request rather than derived from state, so a
+  // second Enter in the same tick cannot start a second create.
+  const taskSubmitInFlightRef = useRef(false);
   // The draft the open task form was restored from, so it can say so and offer
   // to throw it away. Null when the form started empty.
   const [taskDraftNotice, setTaskDraftNotice] = useState(null);
@@ -1010,13 +1022,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Escape closes the loose surfaces. The task form is not one of them: it
+    // owns Escape while it is open, so that one press does not also empty the
+    // page behind it, and so that a save in flight is not interrupted.
     const closeOverlays = (event) => {
       if (event.key !== "Escape") return;
       setNotificationOpen(false);
       setMessagesOpen(false);
       setProfileMenuOpen(false);
       setWorkspaceMenuOpen(false);
-      setShowModal(false);
       setSelectedTask(null);
     };
     window.addEventListener("keydown", closeOverlays);
@@ -2338,12 +2352,15 @@ function App() {
   };
   const addTask = async (event) => {
     event.preventDefault();
-    if (taskSubmitting) return;
+    // The ref, not the state: two submits in one tick both read submitting as
+    // false, and the second create is the one nobody wanted.
+    if (taskSubmitInFlightRef.current) return;
     setTaskError("");
     if (!newTask.trim()) {
       setTaskError("Task name is required.");
       return;
     }
+    taskSubmitInFlightRef.current = true;
     setTaskSubmitting(true);
     try {
       const response = await fetch("/api/tasks/", {
@@ -2413,8 +2430,15 @@ function App() {
       setTaskError(error.message || "Task could not be created.");
       console.error("Task could not be created.", error.message);
     } finally {
+      taskSubmitInFlightRef.current = false;
       setTaskSubmitting(false);
     }
+  };
+  // Closing the task form never loses the task: the draft keeps it and the form
+  // offers it back. Only a save in flight blocks the exit.
+  const requestCloseTaskForm = () => {
+    if (taskSubmitInFlightRef.current) return;
+    setShowModal(false);
   };
 
   const workspaceId = activeWorkspaceId;
@@ -4119,7 +4143,7 @@ function App() {
         </div>}
 
       {showModal && (
-        <div className="modal-backdrop task-dialog-backdrop" onMouseDown={() => setShowModal(false)}>
+        <div className="modal-backdrop task-dialog-backdrop" onMouseDown={requestCloseTaskForm}>
           <form
             className="task-dialog task-composer-modal"
             ref={taskModalRef}
@@ -4139,7 +4163,7 @@ function App() {
               <button
                 type="button"
                 className="close-button task-dialog-close"
-                onClick={() => setShowModal(false)}
+                onClick={requestCloseTaskForm}
                 aria-label="Close add task dialog"
               >
                 <X size={18} />
@@ -4309,7 +4333,7 @@ function App() {
               )}
             </div>
             <div className="task-dialog-footer task-composer-footer">
-              <button type="button" className="secondary-button" onClick={() => setShowModal(false)}>
+              <button type="button" className="secondary-button" onClick={requestCloseTaskForm}>
                 Cancel
               </button>
               <button type="submit" className="primary-button modal-submit" disabled={taskSubmitting}>
@@ -4473,6 +4497,9 @@ function WorkspaceView({
   const [composerType, setComposerType] = useState("chat");
   const [composerError, setComposerError] = useState("");
   const [composerDraft, setComposerDraft] = useState(null);
+  // Set synchronously around the request, so a second Enter in the same tick
+  // cannot run the create twice and cannot be interrupted by a dismissal.
+  const composerSubmitInFlightRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [newBucketName, setNewBucketName] = useState("");
   const [bucketError, setBucketError] = useState("");
@@ -4819,9 +4846,11 @@ function WorkspaceView({
     };
   }, [active, selectedProjectWorkspace, localData.projects]);
   useEffect(() => {
+    // The composer is deliberately missing here: it owns Escape while it is
+    // open, so a press closes the composer alone rather than clearing every
+    // detail panel underneath it as well.
     const closeOverlays = (event) => {
       if (event.key !== "Escape") return;
-      setComposerOpen(false);
       setReplyTo(null);
       setSelectedProject(null);
       setSelectedFollowUp(null);
@@ -5069,14 +5098,35 @@ function WorkspaceView({
     // back with its text.
     const draft = readRecordDraft(currentUserId, workspaceId, type);
     setComposerDraft(draft);
+    // Remembered so Escape and the close button can put the reader back where
+    // they were, rather than at the top of the page.
+    composerOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setForm({ ...blankComposerForm(), ...(draft?.fields || {}), ...prefill });
     if (type !== "chat") setReplyTo(null);
     setComposerOpen(true);
   };
+  const composerOpenerRef = useRef(null);
+  const composerCloseRef = useRef(() => {});
   const closeComposer = () => {
     setComposerOpen(false);
     setComposerDraft(null);
+    setReplyTo(null);
+    // The composer is not a Radix dialog, so nothing else hands focus back to
+    // the control that opened it. After the dialog is gone, not while it closes.
+    const opener = composerOpenerRef.current;
+    composerOpenerRef.current = null;
+    if (opener?.focus) window.setTimeout(() => opener.focus(), 0);
   };
+  // Escape, the backdrop and the close button all land here, so a form has one
+  // exit rather than three. A save in flight must not be interrupted: the
+  // request may already have been accepted, and closing would leave the reader
+  // with no way to tell.
+  const requestCloseComposer = () => {
+    if (composerSubmitInFlightRef.current) return;
+    closeComposer();
+  };
+  composerCloseRef.current = requestCloseComposer;
   // Discarding starts the form over rather than closing it: the reader asked to
   // lose the text, not the form.
   const discardComposerDraft = () => {
@@ -5091,6 +5141,20 @@ function WorkspaceView({
     if (!composerOpen || !currentUserId || !workspaceId) return;
     writeRecordDraft(currentUserId, workspaceId, composerType, form);
   }, [composerOpen, composerType, form, currentUserId, workspaceId]);
+  // Escape belongs to the top layer. Registered on window in the capture phase
+  // and stopped, so one press closes the composer rather than the composer and
+  // whatever panel it was opened over.
+  useEffect(() => {
+    if (!composerOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      composerCloseRef.current?.();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [composerOpen]);
 
   useEffect(() => {
     if (!pendingComposer) return;
@@ -5102,7 +5166,11 @@ function WorkspaceView({
 
   const submitComposer = async (event, typeOverride) => {
     event.preventDefault();
+    // See addTask: the ref is what stops a double create, because two submits in
+    // one tick both read the submitting state as false.
+    if (composerSubmitInFlightRef.current) return;
     const composerKind = typeOverride || composerType;
+    composerSubmitInFlightRef.current = true;
     setComposerError("");
     setSubmitting(true);
     const endpoints = {
@@ -5198,6 +5266,7 @@ function WorkspaceView({
     } catch (submitError) {
       setComposerError(submitError.message);
     } finally {
+      composerSubmitInFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -8401,7 +8470,7 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={closeComposer}
+            onClose={requestCloseComposer}
             draftNotice={
               composerDraft
                 ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
@@ -8613,7 +8682,7 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={closeComposer}
+            onClose={requestCloseComposer}
             draftNotice={
               composerDraft
                 ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
@@ -9190,7 +9259,7 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={closeComposer}
+            onClose={requestCloseComposer}
             draftNotice={
               composerDraft
                 ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
@@ -9346,7 +9415,7 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={closeComposer}
+            onClose={requestCloseComposer}
             draftNotice={
               composerDraft
                 ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
@@ -9418,7 +9487,7 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={closeComposer}
+            onClose={requestCloseComposer}
             draftNotice={
               composerDraft
                 ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
