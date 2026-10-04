@@ -20,6 +20,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from tasks.models import (
+    ChatChannel,
+    ChatMessage,
     Membership,
     Project,
     Task,
@@ -116,6 +118,19 @@ class Command(BaseCommand):
                 )
                 for index in range(SEEDED_TASKS)
             ]
+        )
+
+        # A channel with one message in it, so the chat journey has something to
+        # open and read rather than an empty room.
+        channel, _ = ChatChannel.objects.get_or_create(
+            workspace=workspace, name='general', defaults={'description': 'Team updates'}
+        )
+        ChatMessage.objects.filter(workspace=workspace).delete()
+        ChatMessage.objects.create(
+            workspace=workspace,
+            author=owner,
+            channel=channel.name,
+            message='Fixture message for the chat journey.',
         )
 
         # One unread alert naming the first task, so the bell has a row to open
