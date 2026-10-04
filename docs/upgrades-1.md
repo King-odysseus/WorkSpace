@@ -804,3 +804,20 @@ thirteen journeys that pass in about forty seconds. The fixture grew a channel
 with a message, a seeded unread alert, and a workspace to switch from, so each
 journey starts from the same place. Fixtures are recreated per run and the
 database is deleted afterwards, so nothing accumulates.
+
+### What is left, and what each is waiting for, 4 October 2026
+
+Eighteen of the twenty-three tasks are done. The five that are not are all
+waiting on something that is not code.
+
+| ID | Waiting for |
+| --- | --- |
+| UX-16 | **Five pilot users.** Its own criterion is that four of five find personal planning and shared work without help, which is a statement about people. The navigation changes it asks for should follow that evidence, not precede it. |
+| UX-17 | **A product decision and then a design.** An optional private section on Today is a hypothesis the audit lists as an opportunity; the plan puts it behind user testing. Building it also means holding the private/shared boundary - private items must never reach team APIs, reports, activity, search or notifications - which is its own piece of careful work. |
+| UX-18 | **A design and a measurement.** A first-session checklist is a new surface, and the plan asks for onboarding completion to be measured before it is built. |
+| UX-20 | **Agreed delivery rules.** Quiet hours and snoozing need decisions about timezones, overnight windows, daylight saving and what counts as urgent, and a review of notification volume. Codes them without those is guessing at the schema. |
+| UX-21 | **Real devices.** Foreground, background and closed-app delivery, permission denial and disabled sound cannot be verified from a development machine. |
+
+Nothing else in the plan is outstanding. What is done has tests: 626 component
+tests, 13 browser journeys, 10 rich-text cases in a real browser, and the full
+backend suite, which is the gate to run again before any release claim.
