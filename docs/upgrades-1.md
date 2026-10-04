@@ -44,7 +44,7 @@ Estimate: 4-7 days. Dependency: Phase 0 baseline; reuse existing approved states
 | UX-04 | Route every supported search result to its exact record or message using shared target navigation. Fetch tasks absent from local state. | Task/comment, channel/direct message, check-in, follow-up, and risk results open the correct item. Deleted or inaccessible items show an actionable outcome. Browser Back and workspace boundaries remain correct. |
 | UX-05 | Add distinct search loading, empty, and error states with retry. Discard obsolete responses after query/workspace changes. | Offline, 403, 401, and server-error outcomes do not appear as successful empty results; retries use the current query and workspace. |
 | UX-06 | Retain successful collection data on refresh failure. Track each collection's state and last successful refresh. Retry failures without requiring another data change. | A failed endpoint or later task page does not erase records or publish a partial list as complete. Genuine successful empty responses still clear old records. Workspace switches never display another workspace's data. |
-| UX-07 | Extend browser coverage to search navigation, failed refresh, successful empty responses, session expiry, and recovery. | Tests reproduce the original defects and pass with the fixes. Existing notification deep links still work. |
+| UX-07 | Extend browser coverage to search navigation, failed refresh, successful empty responses, session expiry, and recovery. | Done except notification deep links - see Progress. |
 
 Likely files: `src/main.jsx`, `src/lib/notification-navigation.js`,
 `src/components/ChatViews.jsx`, `tasks/views.py`, and their relevant tests.
@@ -696,3 +696,32 @@ Thirteen minutes, exit code 0, no failures and no errors. That closes the
 "complete the previously interrupted backend suite" line in the delivery rules
 for this point in the work - it does not stand in for one after every future
 change, and the release gate still wants a fresh run.
+
+### Phase 1: UX-07 in the browser, 4 October 2026
+
+Phase 1 shipped with component-test coverage, which mocks the client rather than
+the network. `scripts/journeys/failure-recovery.test.mjs` now fails the real
+requests the real app makes and looks at what a person would see:
+
+| Behaviour | What the journey does |
+| --- | --- |
+| A failed search | Fails `/search/`, asserts the failure is shown and that "No matches" is not, then lets the retry through and sees the results arrive |
+| An expired session | Answers `/search/` with a 401 and asserts it is reported rather than passing as an empty result |
+| A failed refresh | Makes the pulse report that chat moved, fails the chat refetch, and asserts the board still shows its rows and the banner names what went stale |
+
+Four journeys now pass in about fifteen seconds: the three above and the task
+lifecycle from UX-03.
+
+- One fixture fault it found: the seeded board was unassigned, and the daily
+  view shows what is assigned to you, so the account the journeys sign in as was
+  looking at an empty page. The fixture tasks now belong to the owner.
+- The seed command is load-bearing for every journey, so four tests of its own
+  now hold it: each role exists and can sign in, the board is the owner's,
+  running it twice leaves the same fixture rather than a second copy, and the
+  owner opens on a different workspace so that choosing one is a real step.
+- **Not yet covered by a journey: notification deep links**, which UX-07 also
+  names. That needs a seeded notification and a click on a bell row, so it is
+  the next journey rather than a claim. Everything else UX-07 lists is covered.
+- These journeys assert the fixed behaviour but were not watched failing against
+  the broken code; the equivalent component tests were, one fix at a time, when
+  Phase 1 shipped. That is where the two-way evidence lives.
