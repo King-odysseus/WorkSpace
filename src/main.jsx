@@ -193,6 +193,12 @@ import { announceNotificationChange } from "./lib/notification-events.js";
 import { notificationDestinations, parseNotificationDeepLink, resolveNotificationTarget, resolveSearchResultTarget } from "./lib/notification-navigation.js";
 import { requestChatThread } from "./lib/chat-navigation.js";
 import { signalAuthenticationRequired } from "./lib/auth-events.js";
+import {
+  clearRecordDraft,
+  clearUserRecordDrafts,
+  readRecordDraft,
+  writeRecordDraft,
+} from "./lib/record-drafts.js";
 import { startInstallPromptCapture } from "./lib/install-prompt.js";
 import {
   CookieConsent,
@@ -527,6 +533,9 @@ function App() {
   const [newPriority, setNewPriority] = useState("normal");
   const [newTaskStatus, setNewTaskStatus] = useState("todo");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
+  // The draft the open task form was restored from, so it can say so and offer
+  // to throw it away. Null when the form started empty.
+  const [taskDraftNotice, setTaskDraftNotice] = useState(null);
   const [selectedFilter, setSelectedFilter] = useState("All work");
   const [searchQuery, setSearchQuery] = useState("");
   const [globalSearchResults, setGlobalSearchResults] = useState([]);
@@ -800,6 +809,9 @@ function App() {
         headers: { "X-CSRFToken": await getCsrfToken() },
       });
     } finally {
+      // Half-written private notes must not survive on a shared browser for the
+      // next person who signs in.
+      clearUserRecordDrafts(session.user?.id);
       setSession({ loading: false, user: null, error: "" });
     }
   };
@@ -1151,6 +1163,44 @@ function App() {
       clearTimeout(timer);
     };
   }, [searchQuery, activeWorkspaceId, globalSearchRetry]);
+
+  // Keep the new-task form on disk while it is open, so a reload or an
+  // accidental close cannot take the typing with it. Written on every change
+  // rather than on close, because the reload is the case being protected
+  // against and there is no close to hook. The session and workspace guard keeps
+  // a draft from following a reader into another workspace.
+  useEffect(() => {
+    if (!showModal) return;
+    if (!session.user?.id || !activeWorkspaceId) return;
+    writeRecordDraft(session.user.id, activeWorkspaceId, "task", {
+      newTask,
+      newDescription,
+      newAssigneeIds,
+      newProjectId,
+      newWorkstreamId,
+      newBucket,
+      newDueDate,
+      newRecurrence,
+      newPriority,
+      newTaskStatus,
+      newTaskTemplate,
+    });
+  }, [
+    showModal,
+    session.user,
+    activeWorkspaceId,
+    newTask,
+    newDescription,
+    newAssigneeIds,
+    newProjectId,
+    newWorkstreamId,
+    newBucket,
+    newDueDate,
+    newRecurrence,
+    newPriority,
+    newTaskStatus,
+    newTaskTemplate,
+  ]);
 
   const refreshSession = useCallback(async () => {
     try {
@@ -1956,27 +2006,52 @@ function App() {
   const openTaskModal = (assigneeId, options = {}) => {
     const requestedBucket = sessionStorage.getItem("workspace-new-task-bucket");
     sessionStorage.removeItem("workspace-new-task-bucket");
-    setNewTask("");
-    setNewTaskTemplate("");
-    setNewDescription("");
-    setNewAssigneeIds(assigneeId ? [String(assigneeId)] : []);
-    setNewProjectId(options.projectId ? String(options.projectId) : "");
-    setNewWorkstreamId("");
-    setNewDueDate("");
     const requestedProjectId = options.projectId
       ? String(options.projectId)
       : "";
+    // A draft is the base and the caller's request wins over it. Somebody who
+    // clicks "add task" on a person or a project means those two things, so the
+    // draft fills in the rest of the form rather than overriding the click.
+    const draft = readRecordDraft(session.user?.id, activeWorkspaceId, "task");
+    const saved = draft?.fields || {};
+    setNewTask(saved.newTask || "");
+    setNewTaskTemplate(saved.newTaskTemplate || "");
+    setNewDescription(saved.newDescription || "");
+    setNewAssigneeIds(
+      assigneeId ? [String(assigneeId)] : saved.newAssigneeIds || [],
+    );
+    setNewProjectId(requestedProjectId || saved.newProjectId || "");
+    setNewWorkstreamId(saved.newWorkstreamId || "");
+    setNewDueDate(saved.newDueDate || "");
     const matchingBucket = requestedProjectId
       ? workspaceData.buckets.find(
           (bucket) => String(bucket.project_id || "") === requestedProjectId,
         )
       : null;
-    setNewBucket(requestedBucket || matchingBucket?.name || "Backlog");
-    setNewRecurrence("none");
-    setNewPriority("normal");
-    setNewTaskStatus(options.status || "todo");
+    setNewBucket(requestedBucket || matchingBucket?.name || saved.newBucket || "Backlog");
+    setNewRecurrence(saved.newRecurrence || "none");
+    setNewPriority(saved.newPriority || "normal");
+    setNewTaskStatus(options.status || saved.newTaskStatus || "todo");
+    setTaskDraftNotice(draft);
     setTaskError("");
     setShowModal(true);
+  };
+  // Throwing the draft away means starting the form over, not closing it: the
+  // reader asked to lose the text, not the form.
+  const discardTaskDraft = () => {
+    clearRecordDraft(session.user?.id, activeWorkspaceId, "task");
+    setTaskDraftNotice(null);
+    setNewTask("");
+    setNewTaskTemplate("");
+    setNewDescription("");
+    setNewAssigneeIds([]);
+    setNewProjectId("");
+    setNewWorkstreamId("");
+    setNewDueDate("");
+    setNewBucket("Backlog");
+    setNewRecurrence("none");
+    setNewPriority("normal");
+    setNewTaskStatus("todo");
   };
   const openComposer = (type) => {
     if (type === "invite") {
@@ -2323,6 +2398,10 @@ function App() {
       setNewDueDate("");
       setNewRecurrence("none");
       setNewPriority("normal");
+      // Saved, so the draft has done its job. Only this type is cleared: an
+      // open check-in draft somewhere else is still wanted.
+      clearRecordDraft(session.user.id, activeWorkspaceId, "task");
+      setTaskDraftNotice(null);
       setShowModal(false);
       setWorkspaceNotice(
         newDueDate && newDueDate > today
@@ -4067,6 +4146,26 @@ function App() {
               </button>
             </div>
             <div className="task-dialog-body task-composer-body">
+              {taskDraftNotice && (
+                <div className="mb-4">
+                  <Alert
+                    tone="info"
+                    compact
+                    title="Restored your unsaved task"
+                    action={
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={discardTaskDraft}
+                      >
+                        Discard draft
+                      </button>
+                    }
+                  >
+                    Started {formatCalendarDate(taskDraftNotice.savedAt, { dateStyle: "medium", timeStyle: "short" })}. It was kept in case this form closed by accident.
+                  </Alert>
+                </div>
+              )}
               <label className="task-composer-field">
                 Task name
                 <input
@@ -4373,6 +4472,7 @@ function WorkspaceView({
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerType, setComposerType] = useState("chat");
   const [composerError, setComposerError] = useState("");
+  const [composerDraft, setComposerDraft] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [newBucketName, setNewBucketName] = useState("");
   const [bucketError, setBucketError] = useState("");
@@ -4938,35 +5038,59 @@ function WorkspaceView({
     };
   }, [active, workspaceId, pendingCheckInId]);
 
+  // Where every composer form starts. Written down once so discarding a draft
+  // and opening a fresh composer cannot drift apart.
+  const blankComposerForm = () => ({
+    title: "",
+    name: "",
+    description: "",
+    start_at: "",
+    end_at: "",
+    event_type: "meeting",
+    reminder_minutes: 15,
+    completed: "",
+    next_steps: "",
+    blockers: "",
+    message: "",
+    channel: chatChannel,
+    note: "",
+    due_date: "",
+    assigned_to: "",
+    task_id: "",
+    date: today,
+    email: "",
+    role: "member",
+  });
   const openComposer = (type, prefill = {}) => {
     setComposerType(type);
     setComposerError("");
-    setForm((current) => ({
-      ...current,
-      title: "",
-      name: "",
-      description: "",
-      start_at: "",
-      end_at: "",
-      event_type: "meeting",
-      reminder_minutes: 15,
-      completed: "",
-      next_steps: "",
-      blockers: "",
-      message: "",
-      channel: chatChannel,
-      note: "",
-      due_date: "",
-      assigned_to: "",
-      task_id: "",
-      date: today,
-      email: "",
-      role: "member",
-      ...prefill,
-    }));
+    // A draft is the base and the caller's prefill wins over it, so clicking a
+    // calendar slot still lands on that slot while a half-written check-in comes
+    // back with its text.
+    const draft = readRecordDraft(currentUserId, workspaceId, type);
+    setComposerDraft(draft);
+    setForm({ ...blankComposerForm(), ...(draft?.fields || {}), ...prefill });
     if (type !== "chat") setReplyTo(null);
     setComposerOpen(true);
   };
+  const closeComposer = () => {
+    setComposerOpen(false);
+    setComposerDraft(null);
+  };
+  // Discarding starts the form over rather than closing it: the reader asked to
+  // lose the text, not the form.
+  const discardComposerDraft = () => {
+    clearRecordDraft(currentUserId, workspaceId, composerType);
+    setComposerDraft(null);
+    setForm(blankComposerForm());
+  };
+  // Keep the open form on disk so a reload or a stray backdrop click cannot take
+  // the typing with it. Written on every change because a reload offers no
+  // moment to hook.
+  useEffect(() => {
+    if (!composerOpen || !currentUserId || !workspaceId) return;
+    writeRecordDraft(currentUserId, workspaceId, composerType, form);
+  }, [composerOpen, composerType, form, currentUserId, workspaceId]);
 
   useEffect(() => {
     if (!pendingComposer) return;
@@ -5062,6 +5186,9 @@ function WorkspaceView({
             : [...current[collection], item],
       }));
       onRefresh();
+      // Saved, so this type's draft has done its job. The others are left alone.
+      clearRecordDraft(currentUserId, workspaceId, composerKind);
+      setComposerDraft(null);
       setComposerOpen(false);
       setReplyTo(null);
       if (composerKind === "invite")
@@ -8274,7 +8401,12 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={() => setComposerOpen(false)}
+            onClose={closeComposer}
+            draftNotice={
+              composerDraft
+                ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
+                : null
+            }
             onSubmit={submitComposer}
           />
         )}
@@ -8481,7 +8613,12 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={() => setComposerOpen(false)}
+            onClose={closeComposer}
+            draftNotice={
+              composerDraft
+                ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
+                : null
+            }
             onSubmit={submitComposer}
           />
         )}
@@ -9053,7 +9190,12 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={() => setComposerOpen(false)}
+            onClose={closeComposer}
+            draftNotice={
+              composerDraft
+                ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
+                : null
+            }
             onSubmit={submitComposer}
             projectTemplates={localData.projectTemplates || []}
           />
@@ -9204,7 +9346,12 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={() => setComposerOpen(false)}
+            onClose={closeComposer}
+            draftNotice={
+              composerDraft
+                ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
+                : null
+            }
             onSubmit={submitComposer}
             members={localData.members}
             tasks={tasks}
@@ -9271,7 +9418,12 @@ function WorkspaceView({
             setForm={setForm}
             error={composerError}
             submitting={submitting}
-            onClose={() => setComposerOpen(false)}
+            onClose={closeComposer}
+            draftNotice={
+              composerDraft
+                ? { savedAt: composerDraft.savedAt, onDiscard: discardComposerDraft }
+                : null
+            }
             onSubmit={submitComposer}
           />
         )}
