@@ -286,7 +286,7 @@ Readings and limits:
 | ID | Task | Status |
 | --- | --- | --- |
 | UX-12 | Lazy load additional heavy routes and inspect stylesheet contribution | Done |
-| UX-13 | Render useful Today content independently of unrelated route data | Not started |
+| UX-13 | Render useful Today content independently of unrelated route data | Done |
 | UX-14 | Load collections on demand and refresh only affected collections | Not started |
 | UX-15 | Server-side filtering and pagination for large task lists | Not started |
 
@@ -352,3 +352,48 @@ The stylesheet contribution, inspected but not changed:
   by one stylesheet and half by another. Each repeat needs reading against its
   call site and then a browser check, which is a different kind of work from the
   mechanical split this pass did, and a bulk edit would be the wrong tool.
+
+### Phase 3: UX-13 - delivered 4 October 2026
+
+What shipped:
+
+- Every collection read writes its own slice of state the moment it answers,
+  instead of the loader writing all twenty at the end of the batch. A slow
+  reports endpoint, template list, or archived-conversation read can no longer
+  hold back the tasks and events the day is made of.
+- Three collections keep their grouping, because publishing them alone would be
+  wrong: tasks, which arrive in pages and must never appear as a partial list,
+  and the two the bell reads, whose count has to agree with the list under it.
+  The batch still records how the load as a whole went, which is what the stale
+  banner reports.
+- Today now knows whether its own collections have answered. Until the tasks
+  read answers, the panel says it is loading; when it fails, the panel says so.
+  Neither is the empty state, which is reserved for a read that answered and
+  found nothing.
+
+Verification:
+
+- Frontend suite: 75 files, 621 passed, 10 skipped
+  (`npx vitest run --maxWorkers=2`), against 620 before.
+- Production build: passed.
+- `src/App.today-independence.test.jsx` holds four endpoints open - the reports
+  summary, both template lists, and the archived conversations - and then holds
+  the task read as well. It asserts the panel says it is loading rather than
+  that the day is clear, releases the task read, and asserts the task appears
+  while the other four are still outstanding.
+- Both halves were confirmed to fail against the behaviour they replace:
+  restoring the batch-then-write order leaves the task row absent, and letting
+  the panel show its empty state before an answer fails the loading assertion.
+
+Notes and limits:
+
+- The loading and error states were added for the tasks panel, which is the
+  section that had a visible dishonest one. The dashboard's other sections get
+  the same signal through the same prop and can adopt it; they were not changed
+  here, so a slow or failed events or follow-ups read still shows whatever it
+  showed before.
+- `TodayDashboard`'s own unit test now states the data state it renders in,
+  because the component's contract gained one. Absent deliberately means
+  nothing is known yet, so a caller that forgets the prop can only ever
+  under-claim, never claim the day is clear. A future caller that wants the
+  empty state has to say the read answered.
