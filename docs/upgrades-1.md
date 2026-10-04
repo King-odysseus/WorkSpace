@@ -27,7 +27,7 @@ Estimate: 1-2 days. Dependency: none.
 
 | ID | Task | Acceptance criteria |
 | --- | --- | --- |
-| UX-01 | Walk through sign-in, workspace switching, Today, task creation, search, chat, and check-ins on desktop and mobile. Include owner, manager, and member roles. | Partly done - see Progress. |
+| UX-01 | Walk through sign-in, workspace switching, Today, task creation, search, chat, and check-ins on desktop and mobile. Include owner, manager, and member roles. | Partly done - desktop walked end to end for an owner; see Progress. |
 | UX-02 | Measure startup and refresh against small and large disposable workspaces. Record device/network conditions, task counts, useful-content time, requests, and transferred bytes. | Done for startup on desktop - see Progress. |
 | UX-03 | Add the first Playwright journey using existing tooling: sign-in, choose workspace, create/open/update task. Establish test fixtures and cleanup. | Journey runs reproducibly in CI and locally, without production credentials or data. |
 
@@ -529,3 +529,56 @@ port can read the API but every write is refused with a 403 and an Origin
 message in the Django log. Read-only measurement is unaffected; anything that
 creates a record has to run on 5175 or the trusted-origins environment variable
 has to be widened for the session.
+
+### Phase 0: UX-01 walkthrough, 4 October 2026
+
+Walked on the dev server at port 5175 (the only origin `.env` trusts for
+writes), desktop viewport at 1440 and a 390x844 mobile viewport, signed in as a
+throwaway **owner**. Later phases had only been exercised through component
+tests with a mocked API until now; these are the results from a real server and
+a real database.
+
+What was walked, and held up:
+
+- Sign-in with email and password, and the shell coming up on the remembered
+  page.
+- Quick capture on Today: typed a title, pressed Add, the field cleared, a 201
+  came back and the task exists in the database with the code the sequence
+  expects.
+- The title hand-off into the full form: typed in the quick field, "Add
+  details" opened the full form with the title carried across.
+- Escape on a changed task form: closed it, and reopening offered the draft
+  back with "Restored your unsaved task" and the time it was kept.
+- Search to exact record: typed a task name, the result row appeared, clicking
+  it opened that task's drawer and cleared the box.
+- Check-in draft recovery: a typed check-in survived closing the composer and
+  came back with "Restored your unsaved draft". The keys the app wrote were
+  `workspace-record-draft:76:52:task` and `workspace-record-draft:76:52:checkin`
+  - the user, workspace and record type are all in the key, which is what the
+  draft store was built to guarantee.
+- Mobile at 390x844: no horizontal overflow, the tab bar is present.
+
+What it found:
+
+- **The capture row lied about ownership, and it is fixed.** It said "Goes to
+  Backlog, assigned to you" to everyone. The create view self-assigns only when
+  the membership role is `member`, so an owner's captures arrived unassigned -
+  and because the Today list shows what is assigned to you, the task did not
+  appear where the reader had just typed it. The copy now branches on the role.
+  Two browser checks that no mocked test could have made: the component test
+  asserted the absence of `assignee_ids` and the mock server never applied the
+  rule, so the test passed while the promise was false.
+
+What it could not confirm:
+
+- The manager and member roles. Only an owner was walked.
+- Chat, and task creation through the full dialog to a save.
+- Anything needing a second person: invitations, mentions, notifications
+  arriving.
+- The remaining mobile surfaces beyond Today's shell.
+
+Two things checked and found to be fine, recorded so nobody re-investigates:
+- The search box appearing not to clear after a result is a Playwright `fill()`
+  artefact, not a bug; with real keystrokes the box clears.
+- The app reopening on the last page after a reload is deliberate - `active` is
+  seeded from `localStorage["workspace-last-page"]`, not from the URL.
