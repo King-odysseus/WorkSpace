@@ -96,9 +96,13 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "./components/ui/popover.jsx";
-import PlannerBoard from "./components/PlannerBoard.jsx";
-import ProjectKanbanBoard from "./components/ProjectKanbanBoard.jsx";
-import ProjectTaskTable from "./components/ProjectTaskTable.jsx";
+// Route-only views. None of them are on screen for the first paint, which is
+// Today, so each is fetched when its destination is opened rather than shipped
+// in the entry bundle. The Suspense boundary around the workspace view below is
+// what lets them suspend.
+const PlannerBoard = lazy(() => import("./components/PlannerBoard.jsx"));
+const ProjectKanbanBoard = lazy(() => import("./components/ProjectKanbanBoard.jsx"));
+const ProjectTaskTable = lazy(() => import("./components/ProjectTaskTable.jsx"));
 import WorkScopeSelector, {
   taskMatchesScope,
 } from "./components/WorkScopeSelector.jsx";
@@ -117,7 +121,6 @@ const FilesWorkspaceView = lazy(() =>
     default: module.FilesWorkspaceView,
   })),
 );
-import { Calendar as DatePicker } from "./components/ui/calendar.jsx";
 import {
   Dialog,
   DialogContent,
@@ -163,27 +166,53 @@ const ChatWorkspaceView = lazy(() =>
     default: module.ChatWorkspaceView,
   })),
 );
-import {
-  CalendarEventEditDialog,
-  CheckInDetailDialog,
-  CheckInEditDialog,
-  FollowUpEditDialog,
-  ProjectEditDialog,
-} from "./components/RecordDialogs.jsx";
-import {
-  AssigneePicker,
-  TaskDetailDrawer,
-} from "./components/TaskViews.jsx";
-import SettingsView from "./components/SettingsView.jsx";
-import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.jsx";
+// The record dialogs and the task drawer only ever appear once something has
+// been opened, so none of them belong in the entry bundle either.
+const CalendarEventEditDialog = lazy(() =>
+  import("./components/RecordDialogs.jsx").then((module) => ({
+    default: module.CalendarEventEditDialog,
+  })),
+);
+const CheckInDetailDialog = lazy(() =>
+  import("./components/RecordDialogs.jsx").then((module) => ({
+    default: module.CheckInDetailDialog,
+  })),
+);
+const CheckInEditDialog = lazy(() =>
+  import("./components/RecordDialogs.jsx").then((module) => ({
+    default: module.CheckInEditDialog,
+  })),
+);
+const FollowUpEditDialog = lazy(() =>
+  import("./components/RecordDialogs.jsx").then((module) => ({
+    default: module.FollowUpEditDialog,
+  })),
+);
+const ProjectEditDialog = lazy(() =>
+  import("./components/RecordDialogs.jsx").then((module) => ({
+    default: module.ProjectEditDialog,
+  })),
+);
+const AssigneePicker = lazy(() =>
+  import("./components/TaskViews.jsx").then((module) => ({
+    default: module.AssigneePicker,
+  })),
+);
+const TaskDetailDrawer = lazy(() =>
+  import("./components/TaskViews.jsx").then((module) => ({
+    default: module.TaskDetailDrawer,
+  })),
+);
+const SettingsView = lazy(() => import("./components/SettingsView.jsx"));
 const ScreenSharingView = lazy(() => import("./components/ScreenSharing.jsx"));
 const ScreenShareControl = lazy(() =>
   import("./components/ScreenSharing.jsx").then((module) => ({
     default: module.ScreenShareControl,
   })),
 );
-import ImportView from "./components/ImportView.jsx";
-import PersonalPlanner from "./components/PersonalPlanner.jsx";
+const ImportView = lazy(() => import("./components/ImportView.jsx"));
+const PersonalPlanner = lazy(() => import("./components/PersonalPlanner.jsx"));
+const CreateWorkspaceDialog = lazy(() => import("./components/CreateWorkspaceDialog.jsx"));
 import { releaseNotesUnread } from "./lib/release-notes.js";
 import AppUpdateBanner from "./components/AppUpdateBanner.jsx";
 import BrandedStatusScreen from "./components/BrandedStatusScreen.jsx";
@@ -210,6 +239,7 @@ import {
 import {
   ConfirmDialog,
   DateField,
+  DatePicker,
   DateTimeField,
   EmptyState,
   SelectField,
@@ -1646,11 +1676,13 @@ function App() {
           decliningInvitationId={pendingInvitationBusyId}
           error={inviteActionError}
         />
-        <CreateWorkspaceDialog
-          open={createWorkspaceOpen}
-          onOpenChange={setCreateWorkspaceOpen}
-          onCreated={handleWorkspaceCreated}
-        />
+        <Suspense fallback={null}>
+          <CreateWorkspaceDialog
+            open={createWorkspaceOpen}
+            onOpenChange={setCreateWorkspaceOpen}
+            onCreated={handleWorkspaceCreated}
+          />
+        </Suspense>
       </>
     );
   const mapApiTask = (apiTask) =>
@@ -3995,6 +4027,12 @@ function App() {
               </Alert>
             )}
             {active !== "Today" && (
+              <Suspense fallback={null}>
+              {/* One boundary for the whole workspace view. Its route-only
+                  children are lazy, so opening Planner, Projects, Settings,
+                  Import, or My planner fetches that chunk then; the boundary is
+                  here rather than inside each view so the shell's own chrome
+                  stays put while a chunk arrives. */}
               <WorkspaceView
                 key={workspaceId}
                 active={active}
@@ -4094,6 +4132,7 @@ function App() {
                 pendingWorkstreamNotification={pendingWorkstreamNotification}
                 setPendingWorkstreamNotification={setPendingWorkstreamNotification}
               />
+              </Suspense>
             )}
             {active === "Today" && (
               <TodayDashboard
@@ -4306,11 +4345,13 @@ function App() {
               <div className="modal-grid task-composer-grid">
                 <label>
                   Assign to
-                  <AssigneePicker
-                    members={workspaceData.members}
-                    value={newAssigneeIds}
-                    onChange={setNewAssigneeIds}
-                  />
+                  <Suspense fallback={null}>
+                    <AssigneePicker
+                      members={workspaceData.members}
+                      value={newAssigneeIds}
+                      onChange={setNewAssigneeIds}
+                    />
+                  </Suspense>
                 </label>
                 <DateField
                   label="Due date"
@@ -4445,12 +4486,15 @@ function App() {
           onSubmit={submitInvite}
         />
       )}
-      <CreateWorkspaceDialog
-        open={createWorkspaceOpen}
-        onOpenChange={setCreateWorkspaceOpen}
-        onCreated={handleWorkspaceCreated}
-      />
+      <Suspense fallback={null}>
+        <CreateWorkspaceDialog
+          open={createWorkspaceOpen}
+          onOpenChange={setCreateWorkspaceOpen}
+          onCreated={handleWorkspaceCreated}
+        />
+      </Suspense>
       {selectedTask && (
+        <Suspense fallback={null}>
         <TaskDetailDrawer
           task={selectedTask}
           workspaceId={activeWorkspaceId}
@@ -4479,6 +4523,7 @@ function App() {
           }}
           tasks={tasks}
         />
+        </Suspense>
       )}
       <CookieConsent onOpenLegal={() => setActive("Legal")} />
     </div>
@@ -8207,12 +8252,14 @@ function WorkspaceView({
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <DatePicker
-                  mode="single"
-                  selected={calendarDate}
-                  defaultMonth={calendarDate}
-                  onSelect={(date) => date && setCalendarDate(date)}
-                />
+                <Suspense fallback={null}>
+                  <DatePicker
+                    mode="single"
+                    selected={calendarDate}
+                    defaultMonth={calendarDate}
+                    onSelect={(date) => date && setCalendarDate(date)}
+                  />
+                </Suspense>
               </PopoverContent>
             </Popover>
             <Button

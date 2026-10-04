@@ -2,11 +2,18 @@
 // date/select fields the forms use instead of native inputs, the empty-state
 // placeholder, and the app's replacement for window.confirm().
 
+import { Suspense, lazy } from 'react'
 import { Button } from './ui/button.jsx'
 import { PageHeader } from './ui/page-header.jsx'
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover.jsx'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, AppSelect } from './ui/select.jsx'
-import { Calendar as DatePicker } from './ui/calendar.jsx'
+// react-day-picker is the largest single dependency the app ships, and it is
+// only ever needed once somebody opens a date field's calendar. Lazy keeps it
+// out of the entry bundle; every call site here already renders it inside a
+// popover, which mounts nothing until it is opened.
+const DatePicker = lazy(() =>
+  import('./ui/calendar.jsx').then(module => ({ default: module.Calendar })),
+)
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog.jsx'
@@ -46,7 +53,7 @@ function DateTimeField({ label, name, value, onChange, required }) {
   return <label>{label}<div className="datetime-field">
     <Popover>
       <PopoverTrigger asChild><Button type="button" variant="outline" className="datetime-trigger w-full justify-start font-medium"><CalendarDays size={14} />{datePart ? formatDay(datePart) : 'Select date'}</Button></PopoverTrigger>
-      <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked), null)} /></PopoverContent>
+      <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><Suspense fallback={null}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked), null)} /></Suspense></PopoverContent>
     </Popover>
     <div className="datetime-time-row">
       <AppSelect className="datetime-time" aria-label="Hour" value={hour} onChange={event => event.target.value && commit(null, `${event.target.value}:${minute || '00'}`)}>
@@ -70,7 +77,7 @@ function DateField({ label, name, value, onChange, required, disabled, placehold
   const commit = picked => onChange({ target: { name, value: picked } })
   return <label>{label}<Popover>
     <PopoverTrigger asChild><Button type="button" variant="outline" disabled={disabled} className="date-field-trigger w-full justify-start font-medium"><CalendarDays size={14} />{value ? formatDay(value) : placeholder}</Button></PopoverTrigger>
-    <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked))} /></PopoverContent>
+    <PopoverContent className="w-auto p-0 z-[80]" align="start" onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><Suspense fallback={null}><DatePicker mode="single" selected={dateObj} defaultMonth={dateObj} onSelect={picked => picked && commit(toDateKey(picked))} /></Suspense></PopoverContent>
   </Popover>
   {required && <input type="text" className="date-field-required-shadow" value={value || ''} required onChange={() => {}} tabIndex={-1} aria-hidden="true" />}
   </label>
@@ -99,4 +106,7 @@ function ConfirmDialog({ state, onClose }) {
   </Dialog>
 }
 
-export { WorkspaceViewHeading, SelectField, DateTimeField, DateField, EmptyState, ConfirmDialog }
+// DatePicker is exported so the shell's own date field uses the same lazy
+// component, and therefore the same chunk, rather than a second copy of the
+// dependency in the entry bundle.
+export { WorkspaceViewHeading, SelectField, DateTimeField, DateField, EmptyState, ConfirmDialog, DatePicker }
