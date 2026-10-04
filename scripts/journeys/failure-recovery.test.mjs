@@ -53,7 +53,10 @@ const searchBox = () => page.getByLabel('Search workspace').first()
 
 before(async () => {
   browser = await chromium.launch()
-  page = await browser.newPage()
+  // No service worker. The app polls through it, and a worker's own fetch does
+  // not pass through route interception - so the pulse would keep answering
+  // with the real thing while the test believed it had changed it.
+  page = await browser.newPage({ serviceWorkers: 'block' })
   page.setDefaultTimeout(20000)
   await signIn()
 }, { timeout: 90000 })
@@ -117,26 +120,62 @@ journey('a refresh that fails keeps the records already on screen, and says so',
   // Make the pulse report that chat moved, then fail the chat refetch. That is
   // the shape of the original defect: one endpoint fails during a refresh and
   // the records the reader could already see are replaced by nothing.
+  let pulseIntercepts = 0
+  let chatIntercepts = 0
   await page.route('**/pulse/**', async (route) => {
+    pulseIntercepts += 1
     const response = await route.fetch()
     const body = await response.json()
-    // A digest that cannot match what the client last saw.
+    // Both have to move. The client compares the overall fingerprint first and
+    // skips everything when it matches, so changing only the domain digest
+    // makes this test pass or fail on whether the app happened to have read the
+    // pulse yet - which is how it passed before it was written properly.
+    body.fingerprint = 'moved-for-the-test'
     if (body.domains) body.domains.chat = 'moved-for-the-test'
-    await route.fulfill({ response, body: JSON.stringify(body) })
+    // A fresh response rather than the one that was fetched: fulfilling with
+    // the original keeps its Content-Length, and a longer body than the header
+    // promises arrives truncated - which reads as "nothing moved" rather than
+    // as an error.
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
-  await page.route('**/chat-messages/**', (route) =>
-    json(route, 500, { error: 'Chat is unavailable.' }),
-  )
+  await page.route('**/chat-messages/**', (route) => {
+    chatIntercepts += 1
+    return json(route, 500, { error: 'Chat is unavailable.' })
+  })
 
   const tasksBefore = await page.locator('[data-panel="tasks"]').innerText()
   assert.match(tasksBefore, /Fixture task \d/, 'the fixture should be on screen to begin with')
+
+  // Let the first load finish. A refresh asked for while one is already running
+  // is declined rather than queued, which is correct but means the test has to
+  // wait for the page to be settled before asking.
+  await page.waitForFunction(
+    () => !document.body.innerText.includes('Loading workspace data'),
+    undefined,
+    { timeout: 30000 },
+  )
+
+  // What the page asked for after reconnecting, so a failure here says whether
+  // the refresh ran at all rather than only that a banner is missing.
+  const asked = []
+  page.on('request', (request) => asked.push(request.url()))
 
   // Reconnecting asks the pulse straight away, which is how a refresh is
   // started without waiting out the polling timer.
   await page.evaluate(() => window.dispatchEvent(new Event('online')))
 
   const banner = page.getByText('Some workspace data could not be refreshed')
-  await banner.waitFor({ timeout: 30000 })
+  try {
+    await banner.waitFor({ timeout: 20000 })
+  } catch {
+    const pulses = asked.filter((url) => url.includes('/pulse/')).length
+    const chats = asked.filter((url) => url.includes('chat-messages')).length
+    throw new Error(
+      `no stale banner appeared. After reconnecting the page made ${pulses} pulse ` +
+        `request(s) and ${chats} chat request(s), and the interceptors saw ` +
+        `${pulseIntercepts} pulse and ${chatIntercepts} chat.`,
+    )
+  }
 
   assert.equal(
     await page.locator('[data-panel="tasks"]').count(),

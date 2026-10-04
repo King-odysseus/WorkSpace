@@ -1728,6 +1728,12 @@ function App() {
       if (document.visibilityState !== "visible") return;
       const pulse = await readFingerprint();
       if (!isCurrent || !pulse || pulse.fingerprint === lastFingerprint) return;
+      // Recorded only once the refresh is really going to happen. A refresh in
+      // flight makes refreshCollaboration return without doing anything, and
+      // recording the fingerprint first meant the change was marked as handled
+      // by the refresh that then dropped it - so it stayed unseen until
+      // something unrelated moved the fingerprint again.
+      if (refreshInFlight) return;
       const keys = collectionsForDomains(lastDomains, pulse.domains);
       lastFingerprint = pulse.fingerprint;
       lastDomains = pulse.domains;
