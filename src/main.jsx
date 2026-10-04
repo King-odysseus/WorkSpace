@@ -311,6 +311,28 @@ const workspaceCollectionSlices = {
 // yet", which is the difference the loading and error states exist to make.
 const todayCollectionKeys = ["tasks", "events", "followUps", "checkIns"];
 
+// What to refetch when the pulse says a domain moved. The domain names come
+// from tasks/pulse.py, whose DOMAIN_LABELS is held to the same names by its own
+// test, so this is the only mapping between the two ends.
+//
+// Reports is not a domain of its own: it is derived from tasks, check-ins and
+// shifts, so it is refetched when any of the three it is built from moves.
+const pulseDomainCollections = {
+  tasks: ["tasks", "reports"],
+  projects: ["projects", "reports"],
+  calendar: ["events"],
+  checkIns: ["checkIns", "reports"],
+  workShifts: ["workShifts", "reports"],
+  followUps: ["followUps"],
+  chat: ["messages", "channels", "directConversations", "archivedConversations"],
+  activity: ["activity"],
+  buckets: ["buckets"],
+  invitations: ["invitations"],
+  lookupValues: ["lookupValues"],
+  members: ["members"],
+  notifications: ["activityNotifications", "conversationNotifications"],
+};
+
 // The collections the workspace loader refreshes, named as a reader would say
 // them, so a refresh that partly failed can say what is stale rather than
 // "some data". Keys match the ones the loader tags each read with.
@@ -1475,98 +1497,161 @@ function App() {
     const workspaceRole = session.user.workspaces.find(
       (workspace) => workspace.id === workspaceId,
     )?.role;
+    // Every collection the loader reads, as the path that answers it. Keyed by
+    // the same names the state slices and the pulse's domains use, so the two
+    // ends cannot disagree about what a name means.
+    const collectionRequests = {
+      members: {
+        path: `/api/workspaces/${workspaceId}/members/?page_size=500`,
+        fallback: { members: [] },
+      },
+      projects: {
+        path: `/api/workspaces/${workspaceId}/projects/?page_size=500`,
+        fallback: { projects: [] },
+      },
+      lookupValues: {
+        path: `/api/workspaces/${workspaceId}/lookup-values/`,
+        fallback: { lookup_values: [] },
+      },
+      taskTemplates: {
+        path: `/api/workspaces/${workspaceId}/task-templates/?page_size=500`,
+        fallback: { task_templates: [] },
+      },
+      projectTemplates: {
+        path: `/api/workspaces/${workspaceId}/project-templates/?page_size=500`,
+        fallback: { project_templates: [] },
+      },
+      messages: {
+        path: `/api/workspaces/${workspaceId}/chat-messages/`,
+        fallback: { messages: [] },
+      },
+      channels: {
+        path: `/api/workspaces/${workspaceId}/chat-channels/`,
+        fallback: { channels: [] },
+      },
+      directConversations: {
+        path: `/api/workspaces/${workspaceId}/direct-conversations/`,
+        fallback: { conversations: [] },
+      },
+      archivedConversations: {
+        path: `/api/workspaces/${workspaceId}/direct-conversations/?archived=true`,
+        fallback: { conversations: [] },
+      },
+      followUps: {
+        path: `/api/workspaces/${workspaceId}/follow-ups/`,
+        fallback: { follow_ups: [] },
+      },
+      events: {
+        path: `/api/workspaces/${workspaceId}/calendar-events/`,
+        fallback: { events: [] },
+      },
+      checkIns: {
+        path: `/api/workspaces/${workspaceId}/check-ins/?date=${today}`,
+        fallback: { check_ins: [] },
+      },
+      workShifts: {
+        path: `/api/workspaces/${workspaceId}/work-shifts/`,
+        fallback: { work_shifts: [] },
+      },
+      activityNotifications: {
+        path: `/api/workspaces/${workspaceId}/notifications/?exclude_chat=1&sort=newest`,
+        fallback: { notifications: [] },
+      },
+      conversationNotifications: {
+        path: `/api/workspaces/${workspaceId}/notifications/?only_conversation=1`,
+        fallback: { notifications: [] },
+      },
+      activity: {
+        path: `/api/workspaces/${workspaceId}/activity/?page_size=50&date_from=${today}&include_filters=0&include_summary=0`,
+        fallback: { activity: [] },
+      },
+      buckets: {
+        path: `/api/workspaces/${workspaceId}/plan-buckets/`,
+        fallback: { buckets: [] },
+      },
+      invitations: {
+        path: `/api/workspaces/${workspaceId}/invitations/?page_size=500`,
+        fallback: { invitations: [] },
+      },
+      reports: {
+        path: `/api/workspaces/${workspaceId}/reports/summary/?range=${reportRange}&shift_page=${shiftLogPage}${shiftLogUserId ? `&shift_user_id=${shiftLogUserId}` : ""}`,
+        fallback: { summary: null },
+      },
+      auditLogs: {
+        path: `/api/workspaces/${workspaceId}/audit-logs/`,
+        fallback: { audit_logs: [] },
+      },
+    };
+    // Tasks are not in that map because they arrive in pages, and the audit log
+    // is not either because a member has no business asking for it.
+    const allCollectionKeys = [...Object.keys(collectionRequests), "tasks"];
+
     let refreshInFlight = false;
-    const refreshCollaboration = () => {
+    const refreshCollaboration = (keys = allCollectionKeys) => {
       if (refreshInFlight) return;
       refreshInFlight = true;
       notificationBatchRevision = notificationStateRevisionRef.current;
-      const auditRequest = ["owner", "manager"].includes(workspaceRole)
-        ? read("auditLogs", `/api/workspaces/${workspaceId}/audit-logs/`, {
-            audit_logs: [],
-          })
-        : Promise.resolve({ key: "auditLogs", ok: true, data: { audit_logs: [] } });
-      // Team owns its own paginated task query. Skipping the full task table
-      // here keeps that page from re-downloading every task on every refresh,
-      // and leaving Team reloads it (see the previousActiveRef effect).
-      const taskRequest =
-        activeRef.current === "Team"
-          ? Promise.resolve({ key: "tasks", ok: true, data: { tasks: [] } }).then(
-              (result) => {
-                if (isCurrent) {
-                  applyCollection("tasks", result.data);
-                  markAnswered("tasks");
-                }
-                return result;
-              },
-            )
-          : readAllTasks();
-      const refreshRequest = Promise.all([
-        taskRequest,
-        read("members", `/api/workspaces/${workspaceId}/members/?page_size=500`, {
-          members: [],
-        }),
-        read("projects", `/api/workspaces/${workspaceId}/projects/?page_size=500`, {
-          projects: [],
-        }),
-        read("lookupValues", `/api/workspaces/${workspaceId}/lookup-values/`, {
-          lookup_values: [],
-        }),
-        read("taskTemplates", `/api/workspaces/${workspaceId}/task-templates/?page_size=500`, {
-          task_templates: [],
-        }),
-        read(
-          "projectTemplates",
-          `/api/workspaces/${workspaceId}/project-templates/?page_size=500`,
-          { project_templates: [] },
-        ),
-        read("messages", `/api/workspaces/${workspaceId}/chat-messages/`, { messages: [] }),
-        read("channels", `/api/workspaces/${workspaceId}/chat-channels/`, { channels: [] }),
-        read("directConversations", `/api/workspaces/${workspaceId}/direct-conversations/`, {
-          conversations: [],
-        }),
-        read("archivedConversations", `/api/workspaces/${workspaceId}/direct-conversations/?archived=true`, {
-          conversations: [],
-        }),
-        read("followUps", `/api/workspaces/${workspaceId}/follow-ups/`, { follow_ups: [] }),
-        read("events", `/api/workspaces/${workspaceId}/calendar-events/`, { events: [] }),
-        read("checkIns", `/api/workspaces/${workspaceId}/check-ins/?date=${today}`, {
-          check_ins: [],
-        }),
-        read("workShifts", `/api/workspaces/${workspaceId}/work-shifts/`, {
-          work_shifts: [],
-        }),
-        read("activityNotifications", `/api/workspaces/${workspaceId}/notifications/?exclude_chat=1&sort=newest`, {
-          notifications: [],
-        }),
-        read("conversationNotifications", `/api/workspaces/${workspaceId}/notifications/?only_conversation=1`, {
-          notifications: [],
-        }),
-        read("activity", `/api/workspaces/${workspaceId}/activity/?page_size=50&date_from=${today}&include_filters=0&include_summary=0`, {
-          activity: [],
-        }),
-        read("buckets", `/api/workspaces/${workspaceId}/plan-buckets/`, { buckets: [] }),
-        read("invitations", `/api/workspaces/${workspaceId}/invitations/?page_size=500`, {
-          invitations: [],
-        }),
-        read(
-          "reports",
-          `/api/workspaces/${workspaceId}/reports/summary/?range=${reportRange}&shift_page=${shiftLogPage}${shiftLogUserId ? `&shift_user_id=${shiftLogUserId}` : ""}`,
-          { summary: null },
-        ),
-        auditRequest,
-      ])
+      const wanted = new Set(keys);
+      const reads = [];
+      if (wanted.has("tasks")) {
+        // Built only when the tasks are actually wanted: calling readAllTasks()
+        // to decide would fetch every page of the task table on a refresh that
+        // asked for none of it.
+        //
+        // Team owns its own paginated task query. Skipping the full task table
+        // here keeps that page from re-downloading every task on every refresh,
+        // and leaving Team reloads it (see the previousActiveRef effect).
+        reads.push(
+          activeRef.current === "Team"
+            ? Promise.resolve({ key: "tasks", ok: true, data: { tasks: [] } }).then(
+                (result) => {
+                  if (isCurrent) {
+                    applyCollection("tasks", result.data);
+                    markAnswered("tasks");
+                  }
+                  return result;
+                },
+              )
+            : readAllTasks(),
+        );
+      }
+      for (const [key, spec] of Object.entries(collectionRequests)) {
+        if (!wanted.has(key)) continue;
+        if (key === "auditLogs") {
+          reads.push(
+            ["owner", "manager"].includes(workspaceRole)
+              ? read(key, spec.path, spec.fallback)
+              : Promise.resolve({ key, ok: true, data: spec.fallback }),
+          );
+          continue;
+        }
+        reads.push(read(key, spec.path, spec.fallback));
+      }
+      const refreshRequest = Promise.all(reads)
         .then((results) => {
           if (!isCurrent) return;
-          // Every collection has already been written as it arrived, so
-          // all that is left is to record how the batch as a whole went.
-          const failed = results
+          // Every collection has already been written as it arrived, so all
+          // that is left is to record how the batch as a whole went. A partial
+          // refresh only speaks for the collections it asked for: whatever was
+          // stale before and was not refetched is still stale.
+          const failedHere = results
             .filter((result) => !result.ok)
             .map((result) => result.key);
-          if (failed.length === 0) setReportLastUpdated(new Date());
-          setSyncStatus((current) => ({
-            failed,
-            lastSuccessAt: failed.length === 0 ? new Date() : current.lastSuccessAt,
-          }));
+          const reportsHere = results.some(
+            (result) => result.key === "reports" && result.ok,
+          );
+          setSyncStatus((current) => {
+            const failed = [
+              ...current.failed.filter((key) => !wanted.has(key)),
+              ...failedHere,
+            ];
+            return {
+              failed,
+              lastSuccessAt:
+                failed.length === 0 ? new Date() : current.lastSuccessAt,
+            };
+          });
+          if (reportsHere) setReportLastUpdated(new Date());
           setWorkspaceLoading(false);
         })
         .catch((error) => {
@@ -1586,33 +1671,59 @@ function App() {
     };
 
     // A full refresh refetches ~20 collections, so don't run one on a timer.
-    // Ask the pulse endpoint (a few indexed aggregates) whether anything actually
-    // moved, and only pay for the full refresh when the fingerprint changes.
+    // Ask the pulse endpoint (a few indexed aggregates) which domains have
+    // actually moved, and pay only for those. A message arriving no longer drags
+    // the task table, the calendar and the audit log along with it.
     let lastFingerprint = null;
+    let lastDomains = null;
     const readFingerprint = async () => {
       try {
         const response = await fetch(`/api/workspaces/${workspaceId}/pulse/`, {
           credentials: "include",
           headers: { "X-Workspace-Id": String(workspaceId) },
         });
-        return response.ok ? (await response.json()).fingerprint : null;
+        if (!response.ok) return null;
+        const payload = await response.json();
+        return {
+          fingerprint: payload.fingerprint,
+          domains: payload.domains || null,
+        };
       } catch {
         return null; // Network blip - keep the current data and try again next tick.
       }
     };
+    // Which collections to refetch for a domain the pulse says has moved. A
+    // domain naming nothing this client knows how to fetch, or a server too old
+    // to send domains at all, means refetch everything - the safe direction.
+    const collectionsForDomains = (previous, next) => {
+      if (!next || !previous) return null;
+      const changed = new Set();
+      for (const [domain, digest] of Object.entries(next)) {
+        if (previous[domain] === digest) continue;
+        const keys = pulseDomainCollections[domain];
+        if (!keys) return null;
+        keys.forEach((key) => changed.add(key));
+      }
+      return [...changed];
+    };
     const refreshIfChanged = async () => {
       if (document.visibilityState !== "visible") return;
-      const fingerprint = await readFingerprint();
-      if (!isCurrent || fingerprint === null || fingerprint === lastFingerprint)
-        return;
-      lastFingerprint = fingerprint;
-      refreshCollaboration();
+      const pulse = await readFingerprint();
+      if (!isCurrent || !pulse || pulse.fingerprint === lastFingerprint) return;
+      const keys = collectionsForDomains(lastDomains, pulse.domains);
+      lastFingerprint = pulse.fingerprint;
+      lastDomains = pulse.domains;
+      // Nothing this client renders moved, or no domain actually changed.
+      if (keys && keys.length === 0) return;
+      refreshCollaboration(keys || allCollectionKeys);
     };
 
     // Read the fingerprint *before* loading, so a change that lands mid-load
     // still trips the next tick rather than being silently absorbed.
-    readFingerprint().then((fingerprint) => {
-      if (isCurrent) lastFingerprint = fingerprint;
+    readFingerprint().then((pulse) => {
+      if (!isCurrent || !pulse) return;
+      lastFingerprint = pulse.fingerprint;
+      lastDomains = pulse.domains;
     });
     refreshCollaboration();
     const refreshTimer = window.setInterval(refreshIfChanged, 15000);
@@ -1621,11 +1732,15 @@ function App() {
       if (document.visibilityState === "visible") refreshIfChanged();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
+    // A tab that was offline missed every pulse in between. Reconnecting should
+    // not wait for the next tick to find out what it missed.
+    window.addEventListener("online", refreshIfChanged);
 
     return () => {
       isCurrent = false;
       window.clearInterval(refreshTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", refreshIfChanged);
     };
   }, [
     session.user,

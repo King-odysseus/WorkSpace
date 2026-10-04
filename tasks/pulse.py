@@ -2,13 +2,9 @@
 
 The client used to refetch roughly twenty collections every fifteen seconds and
 replace all of its state, whether or not anything had changed. This endpoint
-answers the only question that loop actually needs to ask - "has anything moved
-since I last looked?" - and the client pays for the full refresh only when the
-answer changes.
-
-That keeps the existing (well covered) full-refresh path as the single place
-that writes client state, rather than introducing per-collection merge logic on
-the client.
+answers the two questions that loop actually needs - "has anything moved since I
+last looked?" and "which part of it moved?" - so the client refreshes only when
+something has, and only the collections belonging to the domains that did.
 
 Cost matters here because this runs on a timer in every open tab, so the
 per-collection aggregates are folded into one ``UNION ALL`` round trip instead
@@ -74,9 +70,40 @@ MUTATION_STAMPS = {
     'messages': ('deleted_at', 'edited_at'),
 }
 
+# Which labels each client-facing domain covers. A domain is what the client
+# refreshes as one unit, and its name matches the client's own collection key
+# where one exists, so there is only ever one mapping to keep right.
+#
+# Every label ``_workspace_parts`` can produce must appear in exactly one domain:
+# a label nobody claims would move the overall fingerprint without telling the
+# client what to refetch, and the change would sit unseen until something
+# unrelated moved. ``PulseDomainTests`` holds that line.
+DOMAIN_LABELS = {
+    'tasks': ('tasks',),
+    'projects': ('projects', 'risks'),
+    'calendar': ('events',),
+    'checkIns': ('check_ins',),
+    'workShifts': ('work_shifts',),
+    'followUps': ('follow_ups',),
+    'chat': (
+        'messages',
+        'channels',
+        'direct_conversations',
+        'direct',
+        'channel_reads',
+        'conversation_reads',
+    ),
+    'activity': ('activity',),
+    'buckets': ('buckets',),
+    'invitations': ('invitations',),
+    'lookupValues': ('lookup_values',),
+    'members': ('members', 'presence'),
+    'notifications': ('notifications',),
+}
+
 
 def _workspace_parts(workspace_id, user):
-    """One round trip returning ``(label, newest_timestamp, row_count)`` per collection.
+    """One round trip returning ``{label: "newest:count"}`` for every collection.
 
     Table and column names come from the model metadata so a rename in the ORM
     cannot silently desynchronise this query.
@@ -108,7 +135,30 @@ def _workspace_parts(workspace_id, user):
 
     with connection.cursor() as cursor:
         cursor.execute(' UNION ALL '.join(selects + read_selects), params + read_params)
-        return [f'{label}:{newest or ""}:{total}' for label, newest, total in cursor.fetchall()]
+        return {label: f'{newest or ""}:{total}' for label, newest, total in cursor.fetchall()}
+
+
+def _digest(parts):
+    return hashlib.sha256('|'.join(parts).encode('utf-8')).hexdigest()[:32]
+
+
+def workspace_domains(workspace_id, user, parts=None):
+    """A digest per group of collections the client refreshes together.
+
+    The single digest answers "has anything moved?". This answers "what moved?" -
+    so a client can refetch the chat when a message arrives without also
+    refetching the task table, the calendar and the audit log. Domains are named
+    after the client's own collection keys wherever they line up, which keeps the
+    client from needing a second mapping to get wrong.
+    """
+    # Every part, not just the shared ones: notifications, direct messages and
+    # presence are per-viewer, and a domain computed without them would miss the
+    # change it exists to catch.
+    parts = workspace_parts(workspace_id, user) if parts is None else parts
+    return {
+        domain: _digest([f'{label}:{parts.get(label, "")}' for label in labels])
+        for domain, labels in DOMAIN_LABELS.items()
+    }
 
 
 def _read_state_selects(workspace_id, user):
@@ -158,25 +208,17 @@ def _read_state_selects(workspace_id, user):
     return selects, params
 
 
-def workspace_fingerprint(workspace_id, user):
-    """A short digest that changes whenever anything this viewer renders changes.
+def _viewer_parts(workspace_id, user):
+    """The parts that are per-viewer rather than per-workspace.
 
-    Row counts sit alongside the newest timestamp so deletions register too - a
-    removed row moves the count without moving ``max(updated_at)``.
+    Two people in the same workspace legitimately see different notification and
+    direct-message state, so these cannot sit in the shared UNION above.
     """
-    parts = _workspace_parts(workspace_id, user)
-
-    # Per-viewer collections: two people in the same workspace legitimately see
-    # different notification and direct-message state.
     notifications = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=user).aggregate(
         newest=Max('created_at'),
         total=Count('id'),
         unread=Count('id', filter=Q(read_at__isnull=True)),
     )
-    parts.append(
-        f'notifications:{notifications["newest"] or ""}:{notifications["total"]}:{notifications["unread"]}'
-    )
-
     direct = DirectMessage.objects.filter(
         conversation__workspace_id=workspace_id, conversation__participants=user
     ).aggregate(
@@ -185,8 +227,6 @@ def workspace_fingerprint(workspace_id, user):
         edited=Max('edited_at'),
         deleted=Max('deleted_at'),
     )
-    parts.append(f'direct:{direct["newest"] or ""}:{direct["total"]}:{direct["edited"] or ""}:{direct["deleted"] or ""}')
-
     # Presence and last-seen live on UserProfile (not Membership), so a member's
     # status change or a LastSeenMiddleware stamp would otherwise leave this
     # fingerprint unchanged and the team-online card would go stale.
@@ -194,9 +234,28 @@ def workspace_fingerprint(workspace_id, user):
         newest_presence=Max('presence_updated_at'),
         newest_seen=Max('last_seen_at'),
     )
-    parts.append(f'presence:{presence["newest_presence"] or ""}:{presence["newest_seen"] or ""}')
+    return {
+        'notifications': f'{notifications["newest"] or ""}:{notifications["total"]}:{notifications["unread"]}',
+        'direct': f'{direct["newest"] or ""}:{direct["total"]}:{direct["edited"] or ""}:{direct["deleted"] or ""}',
+        'presence': f'{presence["newest_presence"] or ""}:{presence["newest_seen"] or ""}',
+    }
 
-    return hashlib.sha256('|'.join(str(part) for part in parts).encode('utf-8')).hexdigest()[:32]
+
+def workspace_parts(workspace_id, user):
+    """Every part, shared and per-viewer, in one dict."""
+    parts = _workspace_parts(workspace_id, user)
+    parts.update(_viewer_parts(workspace_id, user))
+    return parts
+
+
+def workspace_fingerprint(workspace_id, user, parts=None):
+    """A short digest that changes whenever anything this viewer renders changes.
+
+    Row counts sit alongside the newest timestamp so deletions register too - a
+    removed row moves the count without moving ``max(updated_at)``.
+    """
+    parts = workspace_parts(workspace_id, user) if parts is None else parts
+    return _digest(f'{label}:{value}' for label, value in parts.items())
 
 
 @require_http_methods(['GET'])
@@ -206,4 +265,11 @@ def workspace_pulse(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
-    return JsonResponse({'fingerprint': workspace_fingerprint(workspace_id, request.user)})
+    parts = workspace_parts(workspace_id, request.user)
+    return JsonResponse({
+        'fingerprint': workspace_fingerprint(workspace_id, request.user, parts),
+        # Which domains moved, so the client can refetch the chat without
+        # refetching the task table. The single digest is kept because it is
+        # the cheap question the polling loop asks.
+        'domains': workspace_domains(workspace_id, request.user, parts),
+    })
