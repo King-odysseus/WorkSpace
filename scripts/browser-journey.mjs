@@ -224,7 +224,12 @@ const main = async () => {
   if (!journeyFiles.length) throw new Error(`No journeys found in ${journeyDir}`)
 
   console.log(`browser journeys: running ${journeyFiles.length} file(s)`)
-  await run(process.execPath, ['--test', ...journeyFiles], {
+  // One file at a time. Node runs test files concurrently by default, and these
+  // share a single SQLite fixture: a journey that saves while another reads is
+  // enough to lock the database and turn an unrelated request into a failure.
+  // The symptom points nowhere near the cause - a task panel saying it could not
+  // load - so it is worth saying why the journeys do not run in parallel.
+  await run(process.execPath, ['--test', '--test-concurrency=1', ...journeyFiles], {
     env: {
       ...env,
       JOURNEY_APP_URL: appUrl,
