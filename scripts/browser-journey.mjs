@@ -76,12 +76,20 @@ const waitFor = async (url, { timeoutMs = 60000, label = url } = {}) => {
   }
 }
 
+// Windows needs the tree killed; a plain kill leaves the servers holding their
+// ports. The cost is real and worth knowing about: force-killing a tree leaves
+// job-object state that makes the *next* process spawn fail outright with
+// "AssignProcessToJobObject: (87) The parameter is incorrect". A run
+// immediately after one of these teardowns can therefore die before the tests
+// start, and leaves its own servers behind; running it again works. This is a
+// Windows and Node interaction rather than anything about the app, and it is
+// recorded here because the symptom - an unrelated-sounding spawn error - gives
+// no hint of it.
 const stopAll = () => {
   for (const child of children) {
     if (child.exitCode !== null || child.signalCode !== null) continue
     try {
       if (process.platform === 'win32') {
-        // A dev server can fork or hold a worker; /T takes the tree.
         spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
       } else {
         child.kill()
@@ -105,20 +113,50 @@ const removeDatabase = () => {
   }
 }
 
+const isAnswering = async (url) => {
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(1000) })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Nothing may be listening before a run starts. Without this check a leftover
+// server from a crashed run answers on the port the new one could not bind, and
+// the journeys quietly pass against the old one and its old database - which is
+// worse than failing.
+const refuseOccupiedPorts = async () => {
+  const occupied = []
+  if (await isAnswering(`http://127.0.0.1:${apiPort}/api/auth/me/`)) occupied.push(apiPort)
+  if (await isAnswering(appUrl)) occupied.push(appPort)
+  if (occupied.length) {
+    throw new Error(
+      `port(s) ${occupied.join(' and ')} are already answering. A previous run left a server ` +
+        'behind; stop it before running the journeys, or the results will describe it rather than this run.',
+    )
+  }
+}
+
 const cleanup = async () => {
   stopAll()
-  // Give the signed-off children a moment to let go of the database. Without
-  // this the delete is refused and a 1.3 MB file is left in the repository.
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  // Wait for the servers to actually stop, checking the thing that matters -
+  // that they no longer answer - rather than trusting a signal to have landed.
+  // Only then can the database file be deleted.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 300))
     removeDatabase()
-    if (!existsSync(databaseFile)) return
+    const apiGone = !(await isAnswering(`http://127.0.0.1:${apiPort}/api/auth/me/`))
+    const appGone = !(await isAnswering(appUrl))
+    if (apiGone && appGone && !existsSync(databaseFile)) return
   }
   // Still there, and still gitignored. Not worth failing a run over.
 }
 
 const main = async () => {
-  cleanup()
+  await refuseOccupiedPorts()
+  // A crashed run can leave the file behind; this one wants its own.
+  removeDatabase()
 
   console.log('browser journeys: preparing a throwaway database')
   await run(python, ['manage.py', 'migrate', '--no-input', '--verbosity', '0'])
@@ -154,6 +192,18 @@ const main = async () => {
     env: { ...env, JOURNEY_APP_URL: appUrl, JOURNEY_EMAIL: email, JOURNEY_PASSWORD: password },
   })
 }
+
+// Node can die outright on Windows while spawning - "AssignProcessToJobObject:
+// (87) The parameter is incorrect" - which is rare, seems to follow another
+// process tree being force-killed, and takes the teardown with it. This is the
+// belt for that: whatever ends the process, the servers are asked to stop.
+// It cannot delete the database on that path, so a crashed run may leave the
+// file behind for the next one to clear.
+process.on('exit', stopAll)
+process.on('SIGINT', () => {
+  stopAll()
+  process.exit(130)
+})
 
 main()
   .then(async () => {
