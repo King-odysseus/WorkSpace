@@ -727,24 +727,27 @@ lifecycle from UX-03, and the notification deep link.
   the broken code; the equivalent component tests were, one fix at a time, when
   Phase 1 shipped. That is where the two-way evidence lives.
 
-### Known flake in the browser journeys, 4 October 2026
+### A stale port looks like a spawn error, 4 October 2026
 
-`npm run test:browser` passes, but one failure mode is worth writing down
-because its symptom points nowhere near its cause.
+Worth writing down because the symptom pointed nowhere near the cause, and it
+cost more time than the journeys it held up.
 
-On Windows, a run started soon after a process tree has been force-killed can
-die before the tests start with:
+A process left holding one of the harness's ports - 8021 for the API, 5183 for
+the app - makes a run fail in a way that mentions none of that:
 
-    AssignProcessToJobObject: (87) The parameter is incorrect.
+    AssignProcessToJobObject: (87) The parameter is incorrect
 
-That is Node failing to spawn the test runner, and it complains about a process
-the runner never asked for. It follows the runner's own teardown, which has to
-force-kill the servers as a tree because a plain kill leaves them holding their
-ports. Running it again works. Nothing about the app is involved, and the guard
-described below means the worst outcome is a refused run rather than a
-misleading green one.
+That is Node failing to start a process the runner never asked for, at the point
+after the servers have been started and before the tests have. Nothing about the
+port appears in the message.
 
-The guard, added at the same time: a run refuses to start if either port is
-already answering. Without it a crashed run leaves a server behind, the next
-run's server cannot bind, and the journeys quietly pass against the *old*
-server and its old database.
+Three things came out of chasing it. The run now refuses to start unless it can
+bind both ports, and refuses by name, so the failure says what is wrong instead
+of leaving an unexplained spawn error. The check tries both address families,
+because the holder that started this watched on `::1` while the check watched
+`127.0.0.1` and reported the port free. And the teardown no longer force-kills a
+process tree: on Windows that leaves state that makes the next run's spawn fail,
+and it turned out to be unnecessary - a plain kill stops both servers and
+releases their ports, measured rather than assumed. It had been kept "to be
+safe" from when the servers were started through a shell and the pid belonged to
+the shell.
