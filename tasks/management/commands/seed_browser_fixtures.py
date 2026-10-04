@@ -58,6 +58,10 @@ class Command(BaseCommand):
         for email, role in ACCOUNTS:
             user, _ = User.objects.get_or_create(email=email, defaults={'username': email})
             user.set_password(password)
+            # Named, so anything the app renders from a display name reads as a
+            # person rather than as an email address.
+            user.first_name = 'Browser'
+            user.last_name = role.capitalize()
             user.save()
             Membership.objects.update_or_create(
                 workspace=workspace, user=user, defaults={'role': role}
@@ -84,6 +88,9 @@ class Command(BaseCommand):
         # must start from the same board every time.
         Task.objects.filter(workspace=workspace).delete()
         today = timezone.localdate()
+        # Assigned to the owner deliberately. The daily view shows what is
+        # assigned to you, so an unassigned board would look empty to the person
+        # the journeys sign in as, and there would be nothing on screen to open.
         Task.objects.bulk_create(
             [
                 Task(
@@ -91,6 +98,8 @@ class Command(BaseCommand):
                     title=f'Fixture task {index + 1}',
                     code=f'FIX-{index + 1}',
                     description='Seed row for the browser journeys.',
+                    assignee=owner,
+                    assignee_name=owner.get_full_name() or owner.email,
                     bucket='Backlog',
                     status='todo',
                     due_date=today,
