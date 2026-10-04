@@ -34,6 +34,11 @@ function stampServiceWorkerBuildId() {
   }
 }
 
+// Where the dev and preview servers send /api. Overridable so the browser
+// journeys can run their own Django against a throwaway database without
+// fighting whatever is already on the default port.
+const apiTarget = process.env.WORKSPACE_API_TARGET || 'http://127.0.0.1:8000'
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), stampServiceWorkerBuildId()],
   resolve: {
@@ -43,7 +48,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
+      '/api': apiTarget,
     },
   },
   // The preview server runs the built app, which is the only way to measure what
@@ -52,7 +57,7 @@ export default defineConfig({
   // needs the same API proxy the dev server has, or every call 404s.
   preview: {
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
+      '/api': apiTarget,
     },
   },
   // Component tests run against happy-dom rather than jsdom: jsdom's dependency
