@@ -18,6 +18,7 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
+import { createServer } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,7 +30,8 @@ const apiPort = Number(process.env.JOURNEY_API_PORT || 8021)
 const appPort = Number(process.env.JOURNEY_APP_PORT || 5183)
 const appUrl = `http://localhost:${appPort}`
 const password = randomUUID()
-const email = 'browser-owner@example.invalid'
+// Mirrors the name seed_browser_fixtures gives the workspace the journeys use.
+const workspaceName = 'Browser Fixtures'
 
 const python = process.platform === 'win32' ? 'python' : 'python3'
 const children = []
@@ -49,6 +51,21 @@ const run = (command, args, options = {}) =>
     const child = spawn(command, args, { cwd: root, env, stdio: 'inherit', ...options })
     child.on('error', reject)
     child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`))))
+  })
+
+// Same as run(), but keeps what the command said. The fixture prints its
+// accounts, so the journeys are told who to sign in as rather than repeating
+// the list here and letting the two drift apart.
+const capture = (command, args) =>
+  new Promise((resolve, reject) => {
+    let output = ''
+    const child = spawn(command, args, { cwd: root, env, stdio: ['ignore', 'pipe', 'inherit'] })
+    child.stdout.on('data', (chunk) => {
+      output += chunk
+      process.stdout.write(chunk)
+    })
+    child.on('error', reject)
+    child.on('exit', (code) => (code === 0 ? resolve(output) : reject(new Error(`${command} exited ${code}`))))
   })
 
 // Started without a shell, so the pid is the server itself rather than the
@@ -76,24 +93,24 @@ const waitFor = async (url, { timeoutMs = 60000, label = url } = {}) => {
   }
 }
 
-// Windows needs the tree killed; a plain kill leaves the servers holding their
-// ports. The cost is real and worth knowing about: force-killing a tree leaves
-// job-object state that makes the *next* process spawn fail outright with
-// "AssignProcessToJobObject: (87) The parameter is incorrect". A run
-// immediately after one of these teardowns can therefore die before the tests
-// start, and leaves its own servers behind; running it again works. This is a
-// Windows and Node interaction rather than anything about the app, and it is
-// recorded here because the symptom - an unrelated-sounding spawn error - gives
-// no hint of it.
+// A plain kill, and it is enough: each server is the process that was started,
+// so killing it stops the server and releases the port. Measured, not assumed.
+//
+// This used to force-kill the process tree, and that turned out to be the cause
+// of a much worse problem. On Windows, force-killing a tree leaves job-object
+// state that makes the *next* spawn fail outright:
+//
+//     AssignProcessToJobObject: (87) The parameter is incorrect
+//
+// Node, failing to start a process the runner never asked for. The tree kill
+// was added back when the servers were spawned through a shell, so the pid
+// belonged to the shell and killing it left the server running. The shell went;
+// the workaround stayed; the fault came with it.
 const stopAll = () => {
   for (const child of children) {
     if (child.exitCode !== null || child.signalCode !== null) continue
     try {
-      if (process.platform === 'win32') {
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
-      } else {
-        child.kill()
-      }
+      child.kill()
     } catch {
       // Already gone.
     }
@@ -113,27 +130,37 @@ const removeDatabase = () => {
   }
 }
 
-const isAnswering = async (url) => {
-  try {
-    await fetch(url, { signal: AbortSignal.timeout(1000) })
-    return true
-  } catch {
-    return false
-  }
-}
+// Can this port be bound? Not "is something answering on it" - a half-dead
+// server from a crashed run answers nothing and still holds the port, which is
+// exactly the state that made a run fail here with a spawn error that pointed
+// nowhere near the cause. Asking the question the servers will ask is the only
+// check that catches it.
+const canBindOn = (port, host) =>
+  new Promise((resolve) => {
+    const probe = createServer()
+    probe.once('error', () => resolve(false))
+    probe.once('listening', () => probe.close(() => resolve(true)))
+    probe.listen(port, host)
+  })
 
-// Nothing may be listening before a run starts. Without this check a leftover
-// server from a crashed run answers on the port the new one could not bind, and
-// the journeys quietly pass against the old one and its old database - which is
-// worse than failing.
+// Both address families, because a leftover server may hold either one and the
+// servers started here want both. Checking only IPv4 missed a holder on ::1 and
+// let a run start against a port it could not actually have.
+const canBind = async (port) =>
+  (await canBindOn(port, '127.0.0.1')) && (await canBindOn(port, '::1'))
+
+// Neither port may be taken before a run starts. Without this a leftover server
+// is either tested against instead of this run's - green results describing
+// something else - or it holds the port and the run dies where it cannot
+// explain itself.
 const refuseOccupiedPorts = async () => {
   const occupied = []
-  if (await isAnswering(`http://127.0.0.1:${apiPort}/api/auth/me/`)) occupied.push(apiPort)
-  if (await isAnswering(appUrl)) occupied.push(appPort)
+  if (!(await canBind(apiPort))) occupied.push(apiPort)
+  if (!(await canBind(appPort))) occupied.push(appPort)
   if (occupied.length) {
     throw new Error(
-      `port(s) ${occupied.join(' and ')} are already answering. A previous run left a server ` +
-        'behind; stop it before running the journeys, or the results will describe it rather than this run.',
+      `port(s) ${occupied.join(' and ')} cannot be bound. A previous run left a server behind; ` +
+        'stop it before running the journeys, or the results will describe it rather than this run.',
     )
   }
 }
@@ -146,9 +173,8 @@ const cleanup = async () => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 300))
     removeDatabase()
-    const apiGone = !(await isAnswering(`http://127.0.0.1:${apiPort}/api/auth/me/`))
-    const appGone = !(await isAnswering(appUrl))
-    if (apiGone && appGone && !existsSync(databaseFile)) return
+    const portsFree = (await canBind(apiPort)) && (await canBind(appPort))
+    if (portsFree && !existsSync(databaseFile)) return
   }
   // Still there, and still gitignored. Not worth failing a run over.
 }
@@ -160,7 +186,17 @@ const main = async () => {
 
   console.log('browser journeys: preparing a throwaway database')
   await run(python, ['manage.py', 'migrate', '--no-input', '--verbosity', '0'])
-  await run(python, ['manage.py', 'seed_browser_fixtures', '--password', password])
+  const seedOutput = await capture(python, [
+    'manage.py',
+    'seed_browser_fixtures',
+    '--password',
+    password,
+  ])
+  const accountsLine = seedOutput
+    .split('\n')
+    .find((line) => line.startsWith('fixture_accounts='))
+  if (!accountsLine) throw new Error('the fixture did not report its accounts')
+  const accounts = JSON.parse(accountsLine.slice('fixture_accounts='.length))
 
   console.log(`browser journeys: starting Django on ${apiPort}`)
   start(python, ['manage.py', 'runserver', String(apiPort), '--noreload'])
@@ -189,7 +225,15 @@ const main = async () => {
 
   console.log(`browser journeys: running ${journeyFiles.length} file(s)`)
   await run(process.execPath, ['--test', ...journeyFiles], {
-    env: { ...env, JOURNEY_APP_URL: appUrl, JOURNEY_EMAIL: email, JOURNEY_PASSWORD: password },
+    env: {
+      ...env,
+      JOURNEY_APP_URL: appUrl,
+      JOURNEY_PASSWORD: password,
+      JOURNEY_EMAIL: accounts.owner,
+      JOURNEY_MANAGER_EMAIL: accounts.manager,
+      JOURNEY_MEMBER_EMAIL: accounts.member,
+      JOURNEY_WORKSPACE: workspaceName,
+    },
   })
 }
 
