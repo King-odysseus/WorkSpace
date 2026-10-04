@@ -35,3 +35,6 @@ QWEN.md
 # root on purpose: the icons and help images the app actually ships live under
 # public/ and must stay trackable.
 /*.png
+
+# Playwright MCP writes page snapshots and console logs here while a browser check runs.
+.playwright-mcp/

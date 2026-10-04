@@ -46,6 +46,15 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:8000',
     },
   },
+  // The preview server runs the built app, which is the only way to measure what
+  // a reader actually downloads - the dev server serves the module graph
+  // unbundled, so its request count and timings say nothing about production. It
+  // needs the same API proxy the dev server has, or every call 404s.
+  preview: {
+    proxy: {
+      '/api': 'http://127.0.0.1:8000',
+    },
+  },
   // Component tests run against happy-dom rather than jsdom: jsdom's dependency
   // chain needs `require(esm)`, which Node 20.17 (the current local runtime) does
   // not support. setup-tests.js registers jest-dom matchers and resets the fetch
