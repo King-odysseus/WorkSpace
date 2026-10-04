@@ -80,6 +80,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Placed here so its response pass runs near the end, after the middleware
+    # below it has finished with the body - which is when compressing it is
+    # worth doing. Ours rather than Django's because the notification stream
+    # must not be compressed; see backend/middleware.py.
+    'backend.middleware.SelectiveGZipMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
