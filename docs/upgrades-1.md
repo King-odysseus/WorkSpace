@@ -2,7 +2,7 @@
 
 Prepared: 4 October 2026.
 Source: [Usability audit](usability-audit-2026-10-04.md).
-Status: Phases 1 and 2 (UX-04 to UX-11) delivered, and UX-12 from Phase 3.
+Status: Phases 1 and 2 (UX-04 to UX-11) delivered, and UX-12 to UX-14 from Phase 3.
 See Progress at the end of this file.
 
 ## Objective and scope
@@ -287,7 +287,7 @@ Readings and limits:
 | --- | --- | --- |
 | UX-12 | Lazy load additional heavy routes and inspect stylesheet contribution | Done |
 | UX-13 | Render useful Today content independently of unrelated route data | Done |
-| UX-14 | Load collections on demand and refresh only affected collections | Not started |
+| UX-14 | Load collections on demand and refresh only affected collections | Done |
 | UX-15 | Server-side filtering and pagination for large task lists | Not started |
 
 What shipped:
@@ -397,3 +397,63 @@ Notes and limits:
   nothing is known yet, so a caller that forgets the prop can only ever
   under-claim, never claim the day is clear. A future caller that wants the
   empty state has to say the read answered.
+
+### Phase 3: UX-14 - delivered 4 October 2026
+
+What shipped:
+
+- The pulse endpoint answered with one digest, having already computed a part
+  per collection before folding them together. It now answers with a digest per
+  domain alongside the overall fingerprint, and a domain is named after the
+  client's own collection keys wherever one exists.
+- The client diffs the domains it was handed and refetches only the collections
+  belonging to those that moved, so an arriving message no longer drags the task
+  table, the calendar, the reports summary and the audit log with it. Reports
+  has no table of its own and is refetched with any of tasks, check-ins or
+  shifts, which it is derived from.
+- Reconnecting checks the pulse. A tab that was offline missed every tick in
+  between and used to wait for the next one.
+- No-change polling still refetches nothing: the digest comparison is unchanged
+  and is checked first.
+
+The fallback, which is the part worth reviewing:
+
+- A domain this client has no mapping for, or a response with no domains at all,
+  refetches everything. Guessing the other way would mean never refreshing
+  whatever that domain covers, and a collection nobody refreshes stops updating
+  without ever saying so. Both directions have a test.
+- `tasks/pulse.py`'s `DOMAIN_LABELS` is held to the labels the parts query can
+  actually produce by `PulseDomainTests`, which asserts every label belongs to
+  exactly one domain. That test caught a real bug in this change: the domain
+  digests were being computed from the shared parts only, so the notification,
+  chat and member domains would have ignored the viewer-specific state they
+  exist to track.
+- A partial refresh only speaks for the collections it asked for. A collection
+  that was stale before and was not refetched is still reported stale, and the
+  reports timestamp only moves when the reports collection was in the batch.
+- The client-side test also caught a bug worth naming: `readAllTasks()` was
+  being called while building the request list even when tasks were not wanted,
+  because a ternary evaluates both of its branches. A chat-only refresh was
+  fetching every page of the task table.
+
+Verification:
+
+- Frontend suite: 76 files, 624 passed, 10 skipped
+  (`npx vitest run --maxWorkers=2`), against 621 before.
+- Backend: `tasks.test_pulse` (4 tests), `tasks.tests.WorkspacePulseApiTests`
+  (14) and `tasks.test_chat_collaboration` (28) all pass; Django check clean;
+  production build passed.
+- Both directions of `App.selective-refresh.test.jsx` were confirmed to fail
+  against the behaviour they replace: always refetching everything fails the
+  selective test, and ignoring an unknown domain fails the fallback test.
+
+Limits:
+
+- The claim "no-change polling causes no collection reload" is covered by the
+  digest check being unchanged and first, not by a test that runs the fifteen
+  second timer. Testing it would mean driving the interval under fake timers
+  through a chain of real promises, which costs more than it protects.
+- Task templates and the audit log have no domain, because the pulse's parts
+  query does not include those tables. They are therefore only refetched on a
+  load or a fallback refresh, which is what they did before this change - the
+  selective path has not made it worse, but it has not fixed it either.
