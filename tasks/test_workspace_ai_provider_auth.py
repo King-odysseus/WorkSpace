@@ -1,3 +1,4 @@
+import io
 import json
 from unittest import mock
 from urllib.error import HTTPError
@@ -109,7 +110,13 @@ class WorkspaceAiProviderAuthTests(TestCase):
         # A lower-ceiling model rejects the call outright instead of shortening
         # the answer, so the cap is dropped rather than losing the turn to it.
         url = 'https://api.deepseek.com/chat/completions'
-        refused = HTTPError(url, 400, 'Bad Request', {}, None)
+        # The provider has to say why, because the cap is only dropped for a
+        # refusal that names the size of the answer. A bare 400 is left to the
+        # retry that handles whatever else went wrong.
+        refusal = json.dumps(
+            {'error': {'message': 'max_tokens is too large for this model'}},
+        ).encode()
+        refused = HTTPError(url, 400, 'Bad Request', {}, io.BytesIO(refusal))
         body = {'choices': [{'message': {'content': 'Hello.'}}]}
 
         with mock.patch(

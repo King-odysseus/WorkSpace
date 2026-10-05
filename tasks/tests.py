@@ -26,7 +26,12 @@ from .models import ActivityEvent, AiAction, AuditLog, CalendarEvent, ChannelRea
 from . import cloud_storage
 from .auth_views import AVATAR_DEFAULT_SIZE
 from .automation import run_workspace_automation
-from .ai_actions import MAX_ACTION_BATCH, PrivacyBoundaryError, PrivacyRegistry
+from .ai_actions import (
+    MAX_ACTION_BATCH,
+    MAX_SNAPSHOT_TASKS,
+    PrivacyBoundaryError,
+    PrivacyRegistry,
+)
 from .document_text import DOCUMENT_MAX_CHARS, extract_document_text
 from .views import create_notification, display_date, notification_deep_link
 from .webhooks import drain_webhook_deliveries, notify_workspace_webhooks
@@ -4123,17 +4128,74 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.client.force_login(self.owner)
         self._enable_ai()
         captured = {}
-        response = self._chat({'message': 'Add all 22 tasks.'}, captured, answer=json.dumps({
+        # Derived from the cap rather than written out, so raising the cap does
+        # not quietly turn this into a test of nothing.
+        over = MAX_ACTION_BATCH + 2
+        response = self._chat({'message': f'Add all {over} tasks.'}, captured, answer=json.dumps({
             'answer': 'Here are the tasks.',
             'actions': [
                 {'kind': 'task.create', 'arguments': {'title': f'Task {index}'}}
-                for index in range(22)
+                for index in range(over)
             ],
         }))
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(len(body['pending_actions']), MAX_ACTION_BATCH)
         self.assertIn('Import data', body['answer'])
+
+    def test_a_month_of_daily_tasks_fits_in_one_reply(self):
+        # A Monday-to-Friday October is about 22 tasks, which the old cap of 20
+        # pushed to Import data with nothing to spare. The cap has to leave room
+        # for a schedule that size.
+        self.assertGreaterEqual(MAX_ACTION_BATCH, 40)
+
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        scheduled = 22
+        response = self._chat({'message': 'Add a weekday task for each of October.'}, captured, answer=json.dumps({
+            'answer': 'I prepared the month for your confirmation.',
+            'actions': [
+                {'kind': 'task.create', 'arguments': {'title': f'Daily stand-up {index}'}}
+                for index in range(scheduled)
+            ],
+        }))
+        self.assertEqual(response.status_code, 200)
+        # Every one is proposed rather than truncated and rerouted.
+        self.assertEqual(len(response.json()['pending_actions']), scheduled)
+
+    def test_the_snapshot_offers_a_read_window_and_never_a_capacity(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'What can you see?'}, captured)
+        self.assertEqual(response.status_code, 200)
+
+        prompt = captured['body']['messages'][0]['content']
+        self.assertIn('"read_window"', prompt)
+        # The old key was the whole problem: under "limits" the model read the
+        # snapshot width as the workspace's capacity and told a user with 68
+        # tasks that only 12 more would fit. There is no such cap.
+        self.assertNotIn('"limits"', prompt)
+        self.assertNotIn('"limits":', prompt)
+
+        snapshot = json.loads(prompt.split('Workspace snapshot: ', 1)[1])
+        window = snapshot['read_window']
+        self.assertEqual(window['tasks_limit'], MAX_SNAPSHOT_TASKS)
+        self.assertEqual(window['tasks_included'], snapshot['task_count'])
+        # The note is what stops the number reading as a ceiling.
+        self.assertIn('not a capacity', window['note'])
+
+    def test_the_prompt_forbids_claiming_the_workspace_is_full(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        self._chat({'message': 'Add ten tasks.'}, captured)
+
+        prompt = captured['body']['messages'][0]['content']
+        self.assertIn('no ceiling on how many tasks', prompt)
+        self.assertIn('never tell the user the workspace is full', prompt)
+        self.assertIn('never refuse a create on those grounds', prompt)
 
     def test_one_bad_entry_does_not_discard_the_rest_of_the_list(self):
         self.client.force_login(self.owner)

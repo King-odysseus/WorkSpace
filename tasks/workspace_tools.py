@@ -37,6 +37,7 @@ from .ai_actions import (
     create_action_proposal,
     execute_action,
     parse_provider_response,
+    refused_over_answer_length,
 )
 
 logger = logging.getLogger(__name__)
@@ -483,15 +484,17 @@ def workspace_ai_chat(request, workspace_id):
         context in total. Losing the turn to a number we chose is worse than
         letting that provider apply its own limit.
 
-        The retry is offered on any 4xx rather than only the ones that name the
-        cap: each provider words that refusal differently, and a request that
-        failed for some other reason fails again the same way, one call later,
-        with the real error still surfacing to the caller.
+        Only a refusal that names the answer's size is treated as one. Taking
+        every 4xx for a cap refusal swallowed the image fallback below: the
+        retry dropped the cap, still carried the picture, succeeded, and the
+        user was never told their image had not been read.
         """
         try:
             return send(turn)
         except HTTPError as exc:
             if provider == 'claude' or not (400 <= exc.code < 500):
+                raise
+            if not refused_over_answer_length(exc):
                 raise
             logger.info(
                 'Provider %s refused the capped request (%s); retrying without the cap.',

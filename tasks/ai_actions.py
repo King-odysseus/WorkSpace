@@ -11,12 +11,43 @@ from .views import task_detail, task_list, project_detail, project_list
 
 
 ACTION_TTL = timedelta(minutes=20)
-MAX_SNAPSHOT_TASKS = 80
+# How many rows of each kind the snapshot carries. This is a read window, not a
+# ceiling on the workspace: there is no cap on how many tasks a workspace may
+# hold, and the snapshot says so in as many words (see read_window below) because
+# at 80 Zuri read the number as a capacity and told a user with 68 tasks that
+# only 12 more would fit. The window is still bounded - it rides in every
+# request - and a task row is roughly 220 bytes of JSON, so 300 is about 17k
+# tokens per turn against about 5k at 80. Raising it to a thousand would cost
+# 50-70k tokens a turn and does not fit the 8k context of the Kimi default.
+MAX_SNAPSHOT_TASKS = 300
 MAX_SNAPSHOT_PROJECTS = 50
-# A conversation can carry a short list - a week of tasks, say - but a whole
+# A conversation can carry a list - a week or a month of tasks, say - but a whole
 # plan belongs in the spreadsheet importer, which previews every row before it
 # writes anything. This is the point where Zuri stops proposing and points there.
-MAX_ACTION_BATCH = 20
+MAX_ACTION_BATCH = 50
+
+# Wording a provider uses when it refuses a request over the size of the answer
+# rather than the content of it. The fallback that drops the cap is offered only
+# on these, so a 4xx about something else - an image the model will not take,
+# above all - still reaches the retry written for it instead.
+CAP_REFUSAL_MARKERS = (
+    'max_tokens',
+    'max tokens',
+    'maximum context length',
+    'output tokens',
+    'reduce the length',
+)
+
+
+def refused_over_answer_length(exc):
+    """Whether a provider's error is it refusing the size of the answer."""
+    try:
+        body = exc.read().decode('utf-8', 'replace').lower()
+    except (AttributeError, OSError, ValueError):
+        # No body on the error, which is what the tests build and what some
+        # proxies return. Not knowing is not a reason to drop the cap.
+        return False
+    return any(marker in body for marker in CAP_REFUSAL_MARKERS)
 
 ACTION_FIELDS = {
     'task.create': {
@@ -264,13 +295,29 @@ def build_workspace_snapshot(workspace_id, actor, registry):
         'members': registry.members,
         'tasks': task_rows,
         'projects': project_rows,
-        'limits': {'tasks': MAX_SNAPSHOT_TASKS, 'projects': MAX_SNAPSHOT_PROJECTS},
+        # Named for what it is. Under the key "limits" the model read these as
+        # the workspace's capacity and refused work that would have fitted.
+        'read_window': {
+            'tasks_included': len(task_rows),
+            'tasks_limit': MAX_SNAPSHOT_TASKS,
+            'projects_limit': MAX_SNAPSHOT_PROJECTS,
+            'note': (
+                'How many rows this snapshot carries. It is a read window, not a '
+                'capacity: no workspace is limited to this many tasks or projects, '
+                'and nothing about a full window prevents creating more.'
+            ),
+        },
     }
 
 
 def action_instructions(snapshot):
     return (
         'You can help with workspace tasks and projects. Reads are answered directly from the snapshot. '
+        'A workspace has no ceiling on how many tasks or projects it may hold. The snapshot\'s '
+        '"read_window" says how many rows the snapshot carries, not what the workspace allows: never '
+        'tell the user the workspace is full, nearly full, or caps at any number, and never refuse a '
+        'create on those grounds. When the snapshot lists fewer tasks than "task_count", say you are '
+        'seeing the most recently updated ones, never that the rest are missing or that there is no room. '
         'The snapshot\'s "today" is the current date in this workspace, with its weekday beside it: use them for every "today", "this week", "overdue" or "how long until" question, and work out any date the user implies from them. '
         'Never tell the user you cannot see today\'s date, and never ask them what it is. '
         'A task is overdue only when its due date is before "today"; state the date you are comparing against when you report one. '
