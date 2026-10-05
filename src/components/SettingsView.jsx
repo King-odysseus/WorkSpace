@@ -35,7 +35,9 @@ import {
 import { Button } from "./ui/button.jsx";
 import { Alert } from "./ui/alert.jsx";
 import { Card } from "./ui/card.jsx";
+import { CollapsibleSection } from "./ui/collapsible-section.jsx";
 import { Skeleton, SkeletonGroup } from "./ui/skeleton.jsx";
+import { cn } from "../lib/utils.js";
 import Avatar from "./Avatar.jsx";
 const AISettingsPanel = lazy(() =>
   import("./WorkspaceTools.jsx").then((module) => ({
@@ -98,6 +100,12 @@ const INVITATION_STATUS_RANK = {
   declined: 3,
   cancelled: 4,
 };
+
+
+// How many past invitations the panel shows before it pages. Five is enough to
+// see what is outstanding and short enough that the member list above stays in
+// view.
+const INVITATIONS_PER_PAGE = 5;
 
 const LIFECYCLE_ACTION_COPY = {
   archive: {
@@ -409,6 +417,15 @@ function SettingsView({
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [permissionsSavingId, setPermissionsSavingId] = useState(null);
   const [memberActionError, setMemberActionError] = useState(null);
+  const [invitationPage, setInvitationPage] = useState(1);
+  // A manager's permissions are edited as a whole and written once, so the
+  // ticks a reader makes are held here until they save. Ticking used to write
+  // immediately, which meant a mis-click was a change nobody could see and
+  // nobody had confirmed.
+  const [permissionDrafts, setPermissionDrafts] = useState({});
+  // "saved" is per manager and cleared when the draft changes again, so the
+  // confirmation belongs to the save that produced it.
+  const [permissionSaveState, setPermissionSaveState] = useState({});
   const [memberRemovalBusyId, setMemberRemovalBusyId] = useState(null);
   const [removedMemberIds, setRemovedMemberIds] = useState([]);
   const [invitationActionError, setInvitationActionError] = useState(null);
@@ -436,6 +453,23 @@ function SettingsView({
           (INVITATION_STATUS_RANK[right.status] ?? 99) ||
         String(right.created_at || "").localeCompare(String(left.created_at || "")),
     );
+  // A workspace keeps every invitation it ever sent, so the list grows without
+  // bound. Five at a time keeps the pending ones - which sort to the top - on
+  // screen without pushing the rest of the panel off it.
+  const invitationPageCount = Math.max(
+    1,
+    Math.ceil(visibleInvitations.length / INVITATIONS_PER_PAGE),
+  );
+  // Revoking an invitation shortens the list under whichever page the reader is
+  // on, which would otherwise leave them looking at an empty panel.
+  useEffect(() => {
+    setInvitationPage((page) => Math.min(page, invitationPageCount));
+  }, [invitationPageCount]);
+  const invitationPageStart = (invitationPage - 1) * INVITATIONS_PER_PAGE;
+  const pagedInvitations = visibleInvitations.slice(
+    invitationPageStart,
+    invitationPageStart + INVITATIONS_PER_PAGE,
+  );
   const lifecycleBusyFor = (action, targetWorkspaceId) =>
     lifecycleBusy?.action === action && lifecycleBusy?.workspaceId === targetWorkspaceId;
   const memberActionFailure = (action, status, message) => {
@@ -489,16 +523,36 @@ function SettingsView({
       retryable: status === 0 || status === 429 || status >= 500,
     };
   };
-  const toggleManagerPermission = async (member, key) => {
-    const current = member.permissions || [];
+  // What the card shows: the draft while one is being edited, the saved set
+  // otherwise.
+  const permissionDraftFor = (manager) =>
+    permissionDrafts[manager.id] ?? manager.permissions ?? [];
+
+  const hasPermissionChanges = (manager) => {
+    const draft = permissionDrafts[manager.id];
+    if (draft === undefined) return false;
+    const saved = [...(manager.permissions || [])].sort();
+    return [...draft].sort().join("|") !== saved.join("|");
+  };
+
+  const toggleManagerPermissionDraft = (manager, key) => {
+    const current = permissionDraftFor(manager);
     const next = current.includes(key)
       ? current.filter((value) => value !== key)
       : [...current, key];
-    setPermissionsSavingId(member.id);
+    setPermissionDrafts((drafts) => ({ ...drafts, [manager.id]: next }));
+    // The confirmation belonged to the previous save, not to this change.
+    setPermissionSaveState((states) => ({ ...states, [manager.id]: null }));
+  };
+
+  const saveManagerPermissions = async (manager) => {
+    const next = permissionDraftFor(manager);
+    setPermissionsSavingId(manager.id);
     setMemberActionError(null);
+    setPermissionSaveState((states) => ({ ...states, [manager.id]: null }));
     try {
       const response = await fetch(
-        `/api/workspaces/${workspaceId}/members/${member.id}/`,
+        `/api/workspaces/${workspaceId}/members/${manager.id}/`,
         {
           method: "PATCH",
           credentials: "include",
@@ -520,11 +574,19 @@ function SettingsView({
         setMemberActionError({
           ...failure,
           retry: failure.retryable
-            ? () => toggleManagerPermission(member, key)
+            ? () => saveManagerPermissions(manager)
             : undefined,
         });
         return;
       }
+      // Saved, so the draft has nothing left to hold and the card goes back to
+      // showing what the server now has.
+      setPermissionDrafts((drafts) => {
+        const rest = { ...drafts };
+        delete rest[manager.id];
+        return rest;
+      });
+      setPermissionSaveState((states) => ({ ...states, [manager.id]: "saved" }));
       // The member list lives in the parent (localData.members) - refresh it
       // so this panel and every other view reading `members` sees the change.
       onRefresh?.();
@@ -532,12 +594,13 @@ function SettingsView({
       const failure = memberActionFailure("permission", 0, error.message);
       setMemberActionError({
         ...failure,
-        retry: () => toggleManagerPermission(member, key),
+        retry: () => saveManagerPermissions(manager),
       });
     } finally {
       setPermissionsSavingId(null);
     }
   };
+
   const changeMemberRole = async (member, role) => {
     setPermissionsSavingId(member.id);
     setMemberActionError(null);
@@ -3607,9 +3670,16 @@ function SettingsView({
                     Sent invitations retain their outcome and expiry history.
                   </span>
                 </div>
+                {/* The heading counts the whole history; the list shows a page
+                    of it, so it says which slice this is. Without that, "8" in
+                    the heading above five rows reads as a mistake. */}
                 <span>
-                  {visibleInvitations.length} invitation
-                  {visibleInvitations.length === 1 ? "" : "s"}
+                  {visibleInvitations.length
+                    ? `${invitationPageStart + 1}-${Math.min(
+                        invitationPageStart + INVITATIONS_PER_PAGE,
+                        visibleInvitations.length,
+                      )} of ${visibleInvitations.length}`
+                    : "None sent"}
                 </span>
               </div>
               <div
@@ -3627,7 +3697,7 @@ function SettingsView({
                   </SettingsAlert>
                 )}
                 {visibleInvitations.length ? (
-                  visibleInvitations.map((invitation) => {
+                  pagedInvitations.map((invitation) => {
                     const status = invitation.status || "pending";
                     const canAct =
                       status === "pending" || status === "expired";
@@ -3712,6 +3782,40 @@ function SettingsView({
                   </div>
                 )}
               </div>
+              {invitationPageCount > 1 && (
+                <nav
+                  className="activity-pagination settings-invitation-pagination"
+                  aria-label="Invitation pages"
+                >
+                  <span>
+                    Page {invitationPage} of {invitationPageCount}
+                  </span>
+                  <div>
+                    <button
+                      type="button"
+                      disabled={invitationPage === 1}
+                      onClick={() =>
+                        setInvitationPage((current) => Math.max(1, current - 1))
+                      }
+                      aria-label="Previous invitation page"
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={invitationPage === invitationPageCount}
+                      onClick={() =>
+                        setInvitationPage((current) =>
+                          Math.min(invitationPageCount, current + 1),
+                        )
+                      }
+                      aria-label="Next invitation page"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                </nav>
+              )}
               <div className="settings-section-heading settings-working-hours-heading">
                 <div>
                   <strong>Working hours</strong>
@@ -3786,41 +3890,78 @@ function SettingsView({
                     </div>
                     {visibleMembers
                       .filter((member) => member.role === "manager")
-                      .map((manager) => (
-                        <div
-                          key={manager.id}
-                          className="settings-manager-card"
-                        >
-                          <strong className="block text-sm">
-                            {[manager.first_name, manager.last_name]
-                              .filter(Boolean)
-                              .join(" ") || manager.email}
-                          </strong>
-                          <span className="mt-1 block text-xs text-text-muted">
-                            {manager.email}
-                          </span>
-                          <div className="settings-permission-grid">
-                            {PERMISSION_LABELS.map(([key, label]) => (
-                              <label
-                                key={key}
-                                className="flex items-center gap-2 text-xs"
+                      .map((manager) => {
+                        const draft = permissionDraftFor(manager);
+                        const changed = hasPermissionChanges(manager);
+                        const saving = permissionsSavingId === manager.id;
+                        const saved = permissionSaveState[manager.id] === "saved";
+                        const name =
+                          [manager.first_name, manager.last_name]
+                            .filter(Boolean)
+                            .join(" ") || manager.email;
+                        return (
+                          // Collapsed by default: this panel is a list of people,
+                          // and thirteen checkboxes each is a wall nobody reads.
+                          // The heading carries the count, so the state is
+                          // legible without opening anything.
+                          <CollapsibleSection
+                            key={manager.id}
+                            className="settings-manager-card"
+                            title={name}
+                            hint={`${draft.length} of ${PERMISSION_LABELS.length} granted`}
+                            contentClassName="settings-permission-body"
+                          >
+                            <span className="block text-xs text-text-muted">
+                              {manager.email}
+                            </span>
+                            <div className="settings-permission-grid">
+                              {PERMISSION_LABELS.map(([key, label]) => (
+                                <label
+                                  key={key}
+                                  className="flex items-center gap-2 text-xs"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={draft.includes(key)}
+                                    disabled={saving}
+                                    onChange={() =>
+                                      toggleManagerPermissionDraft(manager, key)
+                                    }
+                                  />
+                                  {label}
+                                </label>
+                              ))}
+                            </div>
+                            <div className="settings-permission-actions">
+                              {/* Feedback first, so the sentence the reader
+                                  needs is beside the button that produced it. */}
+                              <span
+                                className={cn(
+                                  "text-xs",
+                                  saved ? "text-success" : "text-text-muted",
+                                )}
+                                role="status"
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={(manager.permissions || []).includes(
-                                    key,
-                                  )}
-                                  disabled={permissionsSavingId === manager.id}
-                                  onChange={() =>
-                                    toggleManagerPermission(manager, key)
-                                  }
-                                />
-                                {label}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                                {saving
+                                  ? "Saving..."
+                                  : saved
+                                    ? "Permissions saved."
+                                    : changed
+                                      ? "Unsaved changes."
+                                      : ""}
+                              </span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={saving || !changed}
+                                onClick={() => saveManagerPermissions(manager)}
+                              >
+                                {saving ? "Saving..." : "Save permissions"}
+                              </Button>
+                            </div>
+                          </CollapsibleSection>
+                        );
+                      })}
                   </div>
                 )}
               {isOwner && (

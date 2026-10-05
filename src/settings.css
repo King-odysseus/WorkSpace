@@ -407,11 +407,16 @@
 
 /* The workspace logo control. It reuses .avatar-upload-trigger for the camera
    badge, so only the frame and the fallback initial are defined here. */
+/* The panel itself carries no padding, so every block inside it supplies its
+   own. This one did not, which left the logo frame hard against the card edge
+   while the heading, the stats and the member list beside it were inset. The
+   value is the one those use, at both widths. */
 .settings-view .settings-workspace-logo {
   display: flex;
   align-items: center;
   gap: 16px;
   margin: 4px 0 20px;
+  padding: 0 32px;
 }
 
 .settings-view .settings-workspace-logo-frame {
@@ -1919,8 +1924,11 @@
   line-height: 17px;
 }
 
-.settings-view .settings-manager-panel span,
-.settings-view .settings-danger-panel span {
+/* Scoped to the panels' own intro copy. It used to match every span inside
+   them, which now includes the disclosure heading's hint and the save
+   sentence - both of which it would have stacked and shrunk. */
+.settings-view .settings-manager-panel > div > span,
+.settings-view .settings-danger-panel > div > span {
   display: block;
   margin-top: 3px;
   color: var(--pencil-text-muted);
@@ -1938,21 +1946,36 @@
   color: var(--pencil-danger);
 }
 
+/* Each manager is a disclosure, so the card no longer draws its own box: the
+   primitive renders the trigger, and the body below it carries the surface.
+   Drawing one here as well would put a frame inside a frame. */
 .settings-view .settings-manager-card {
-  padding: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-view .settings-permission-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
   border: 1px solid var(--pencil-border);
-  border-radius: 10px;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
   background: var(--pencil-surface);
 }
 
-.settings-view .settings-manager-card > strong {
-  color: var(--pencil-text);
-  font-size: 13px;
+.settings-view .settings-permission-body > span {
+  color: var(--pencil-text-muted);
 }
 
-.settings-view .settings-manager-card > span {
-  margin-bottom: 12px;
-  color: var(--pencil-text-muted);
+/* The sentence and the button that produced it belong together. */
+.settings-view .settings-permission-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .settings-view .settings-permission-grid {
@@ -2503,6 +2526,10 @@
   .settings-view .settings-webhook-list,
   .settings-view .settings-working-hours-list {
     padding: 0 18px 18px;
+  }
+
+  .settings-view .settings-workspace-logo {
+    padding: 0 18px;
   }
 
   .settings-view .settings-access-limited {

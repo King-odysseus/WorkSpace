@@ -4361,6 +4361,12 @@ function App() {
                 setPendingProjectNotification={setPendingProjectNotification}
                 pendingWorkstreamNotification={pendingWorkstreamNotification}
                 setPendingWorkstreamNotification={setPendingWorkstreamNotification}
+                // The invite composer belongs to the shell, not to a view: it
+                // is rendered once, above everything, so every surface that can
+                // invite reaches the same one. WorkspaceView has an
+                // openComposer of its own for the record modal, and asking that
+                // one for an invite opened a modal Settings never renders.
+                onInviteMember={() => openComposer("invite")}
               />
               </Suspense>
             )}
@@ -4827,6 +4833,7 @@ function WorkspaceView({
   onActionError,
   onRefresh,
   onConfirm,
+  onInviteMember,
   screenShareNotificationId,
   pendingActivity,
   onPendingActivityHandled,
@@ -7803,7 +7810,11 @@ function WorkspaceView({
         invitations={localData.invitations || []}
         onRefresh={onRefresh}
         onConfirm={onConfirm}
-        onInvite={() => openComposer("invite")}
+        // The shell's invite composer, not this view's record composer: the
+        // record modal is only rendered inside the calendar, check-ins,
+        // projects, follow-up and team branches, so on Settings it opened
+        // nothing at all.
+        onInvite={onInviteMember}
         onNavigate={onNavigate}
         onSignOut={onSignOut}
       />
