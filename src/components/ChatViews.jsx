@@ -15,6 +15,7 @@ import FilePreview from './FilePreview.jsx'
 import { DateField, DateTimeField, SelectField, WorkspaceViewHeading } from './workspace-ui.jsx'
 import { PRESENCE_LABEL, effectivePresence, formatDate, formatDay, formatRelativeActivityTime, getCsrfToken, isImageFileName, toDateKey } from '../lib/workspace-format.js'
 import { requestChatThread, takePendingChatThread, takePendingDirectMessage } from '../lib/chat-navigation.js'
+import { previewSrc } from '../lib/file-preview.js'
 import { announceNotificationChange } from '../lib/notification-events.js'
 
 const EMOJI_CATEGORIES = [
@@ -41,6 +42,17 @@ const MESSAGE_REACTIONS = [
 const CHAT_COMPOSER_MAX_HEIGHT = 140
 const CHAT_HISTORY_PAGE_SIZE = 10
 const CHAT_JUMP_THRESHOLD = 320
+// One message carries at most this many attachments, counting documents and
+// files together. The picker trims a larger selection rather than failing it.
+const MAX_CHAT_ATTACHMENTS = 5
+
+function formatAttachmentSize(bytes) {
+  const size = Number(bytes)
+  if (!Number.isFinite(size) || size <= 0) return ''
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
 
 function renderMessageText(text) {
   return <LinkedText text={text} />
@@ -1190,22 +1202,57 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     </div>
   }
 
-  const uploadChatFile = async event => {
-    const file = event.target.files?.[0]
+  const attachmentCount = sharedDocumentIds.length + sharedFileIds.length
+
+  // A pending attachment shows what it actually is: image files get their real
+  // thumbnail, everything else gets a type tile. The generic paperclip for every
+  // kind was what made a .docx and a screenshot look identical.
+  const renderAttachmentChip = ({ key, name, size, src, kind, onRemove, removeLabel }) => <span key={key} className="chat-pending-attachment">
+    {src
+      ? <img className="chat-pending-thumb" src={src} alt="" />
+      : <span className={`chat-pending-thumb chat-pending-thumb-${kind}`} aria-hidden="true">{kind === 'document' ? <FileText size={15} /> : <Paperclip size={15} />}</span>}
+    <span className="chat-pending-meta">
+      <span className="chat-pending-name" title={name}>{name}</span>
+      {size && <small className="chat-pending-size">{size}</small>}
+    </span>
+    <button type="button" onClick={onRemove} aria-label={removeLabel}><X size={12} /></button>
+  </span>
+
+  const uploadChatFiles = async event => {
+    const selected = Array.from(event.target.files || [])
     event.target.value = ''
-    if (!file || uploadingFile) return
+    if (!selected.length || uploadingFile) return
+    const room = MAX_CHAT_ATTACHMENTS - sharedDocumentIds.length - sharedFileIds.length
+    if (room <= 0) {
+      setError(`A message can carry up to ${MAX_CHAT_ATTACHMENTS} attachments. Remove one to add another.`)
+      return
+    }
+    // Trim rather than reject: a reader who drops eight files gets the first five
+    // and a notice, instead of an error and nothing attached.
+    const queue = selected.slice(0, room)
+    const skipped = selected.length - queue.length
     setUploadingFile(true)
     setError('')
     try {
-      const body = new FormData()
-      body.append('file', file)
-      const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'File could not be uploaded.')
-      setWorkspaceFiles(current => [payload.file, ...current.filter(item => item.id !== payload.file.id)])
-      setSharedFileIds(current => [...new Set([...current, Number(payload.file.id)])])
+      const uploaded = []
+      for (const file of queue) {
+        const body = new FormData()
+        body.append('file', file)
+        const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || `${file.name} could not be uploaded.`)
+        uploaded.push(payload.file)
+      }
+      const uploadedIds = new Set(uploaded.map(item => Number(item.id)))
+      setWorkspaceFiles(current => [...uploaded, ...current.filter(item => !uploadedIds.has(Number(item.id)))])
+      setSharedFileIds(current => [...new Set([...current, ...uploadedIds])])
       setShareOpen(false)
-      window.dispatchEvent(new CustomEvent('workspace:notice', { detail: `${file.name} uploaded and attached.` }))
+      const attachedLabel = `${queue.length} file${queue.length === 1 ? '' : 's'} attached.`
+      window.dispatchEvent(new CustomEvent('workspace:notice', {
+        detail: skipped > 0
+          ? `${attachedLabel} A message holds up to ${MAX_CHAT_ATTACHMENTS} attachments, so ${skipped} ${skipped === 1 ? 'file was' : 'files were'} left out.`
+          : attachedLabel,
+      }))
     } catch (uploadError) {
       setError(uploadError.message)
     } finally {
@@ -1239,14 +1286,14 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         {activePane === 'posts' && (mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={editingMessageId !== null ? saveEdit : mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
           {editingMessageId !== null && <div className="reply-context"><span>Editing message</span><button type="button" disabled={savingEdit} onClick={cancelEditing}>Cancel</button></div>}
           {editingMessageId === null && replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
-          {editingMessageId === null && (sharedDocumentIds.length > 0 || sharedFileIds.length > 0) && <div className="chat-pending-attachments" aria-label="Files attached to this message">{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); return <span key={`pending-document-${id}`}><FileText size={14} />{document?.title || 'Document'}<button type="button" onClick={() => setSharedDocumentIds(current => current.filter(value => value !== id))} aria-label={`Remove ${document?.title || 'document'}`}><X size={12} /></button></span> })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); return <span key={`pending-file-${id}`}><Paperclip size={14} />{file?.original_name || 'File'}<button type="button" onClick={() => setSharedFileIds(current => current.filter(value => value !== id))} aria-label={`Remove ${file?.original_name || 'file'}`}><X size={12} /></button></span> })}</div>}
+          {editingMessageId === null && attachmentCount > 0 && <div className="chat-pending-attachments" aria-label={`Attachments on this message: ${attachmentCount} of ${MAX_CHAT_ATTACHMENTS}`}>{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); const name = document?.title || 'Document'; return renderAttachmentChip({ key: `pending-document-${id}`, name, kind: 'document', onRemove: () => setSharedDocumentIds(current => current.filter(value => value !== id)), removeLabel: `Remove ${name}` }) })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); const name = file?.original_name || 'File'; return renderAttachmentChip({ key: `pending-file-${id}`, name, size: formatAttachmentSize(file?.size), src: isImageFileName(name) ? previewSrc(file?.url) : '', kind: 'file', onRemove: () => setSharedFileIds(current => current.filter(value => value !== id)), removeLabel: `Remove ${name}` }) })}</div>}
           <div className="chat-compose-surface">
             <div className="chat-compose-input">
               <textarea ref={messageInputRef} rows={1} value={composerDraft} readOnly={savingEdit} onChange={event => { const nextDraft = event.target.value; setComposerDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Escape' && editingMessageId !== null && !savingEdit) { event.preventDefault(); cancelEditing(); return } if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : selectedConversation?.is_self ? 'Message yourself' : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label={editingMessageId !== null ? 'Edit message' : 'Message'} />
               <div className="chat-compose-actions">
                 <Popover.Root open={mentionOpen} onOpenChange={nextOpen => { setMentionOpen(nextOpen); setMentionQuery(''); if (nextOpen) { setEmojiOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-mention-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Mention a workspace member"><MentionPicker members={mentionMembers} getMemberName={memberName} onSelect={insertMention} /><Popover.Arrow className="chat-mention-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
                 <Popover.Root open={emojiOpen} onOpenChange={nextOpen => { setEmojiOpen(nextOpen); if (nextOpen) { setMentionOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-emoji-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Choose an emoji"><EmojiPicker onSelect={insertEmoji} /><Popover.Arrow className="chat-emoji-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
-                {editingMessageId === null && <label className="chat-upload-button" title={uploadingFile ? 'Uploading file' : 'Attach file'}><Paperclip size={17} /><input type="file" aria-label={uploadingFile ? 'Uploading file' : 'Upload and attach a file'} onChange={uploadChatFile} disabled={uploadingFile} /></label>}
+                {editingMessageId === null && <label className={`chat-upload-button${attachmentCount >= MAX_CHAT_ATTACHMENTS ? ' at-limit' : ''}`} title={uploadingFile ? 'Uploading files' : attachmentCount >= MAX_CHAT_ATTACHMENTS ? `Up to ${MAX_CHAT_ATTACHMENTS} attachments per message` : `Attach files (up to ${MAX_CHAT_ATTACHMENTS})`}><Paperclip size={17} /><input type="file" multiple aria-label={uploadingFile ? 'Uploading files' : `Upload and attach up to ${MAX_CHAT_ATTACHMENTS} files`} onChange={uploadChatFiles} disabled={uploadingFile || attachmentCount >= MAX_CHAT_ATTACHMENTS} /></label>}
                 <button type="submit" className="primary-button" aria-label={editingMessageId !== null ? 'Save changes' : 'Send'} disabled={editingMessageId !== null ? savingEdit || !editDraft.trim() : submitting || uploadingFile || (!draft.trim() && !sharedDocumentIds.length && !sharedFileIds.length)}>{editingMessageId !== null ? savingEdit ? 'Saving...' : 'Save' : submitting ? 'Sending…' : 'Send'}</button>
               </div>
             </div>

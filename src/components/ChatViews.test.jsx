@@ -510,9 +510,60 @@ it('keeps the composer controls inside one compact message row', async () => {
   expect(composeRow).not.toBeNull()
   expect(within(composeRow).getByRole('button', { name: 'Mention a teammate' })).toBeInTheDocument()
   expect(within(composeRow).getByRole('button', { name: 'Add emoji' })).toBeInTheDocument()
-  expect(within(composeRow).getByLabelText('Upload and attach a file')).toHaveAttribute('type', 'file')
+  expect(within(composeRow).getByLabelText('Upload and attach up to 5 files')).toHaveAttribute('type', 'file')
   expect(within(composeRow).getByRole('button', { name: 'Send' })).toBeInTheDocument()
   expect(composeRow.querySelector('.chat-compose-toolbar')).toBeNull()
+})
+
+it('attaches up to five files at once, thumbnails images, and drops the overflow', async () => {
+  const base = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  // Each upload has to come back as a distinct row, so this route answers with a
+  // new id per call instead of the one static payload mockApi serves.
+  const passThrough = base.getMockImplementation()
+  let nextId = 0
+  base.mockImplementation(async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url
+    if (url.includes(`/workspaces/${workspaceId}/files/`) && init.method === 'POST') {
+      nextId += 1
+      const name = init.body.get('file').name
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ file: { id: nextId, original_name: name, size: 2048, url: `/api/workspace-files/${nextId}/download/` } }),
+      }
+    }
+    return passThrough(input, init)
+  })
+
+  renderChat(dataFor())
+  await openConversation()
+
+  const input = screen.getByLabelText('Upload and attach up to 5 files')
+  expect(input).toHaveAttribute('multiple')
+  fireEvent.change(input, {
+    target: {
+      files: [new File(['x'], 'shot.png', { type: 'image/png' }), ...[1, 2, 3, 4, 5, 6].map(index => new File(['x'], `note-${index}.txt`, { type: 'text/plain' }))],
+    },
+  })
+
+  const chips = await waitFor(() => {
+    const found = document.querySelectorAll('.chat-pending-attachments > span')
+    expect(found).toHaveLength(5)
+    return found
+  })
+  const uploads = base.mock.calls.filter(([url, init = {}]) => String(url).includes(`/workspaces/${workspaceId}/files/`) && init.method === 'POST')
+  expect(uploads).toHaveLength(5)
+  // An image shows the file itself; a text file falls back to a type tile.
+  expect(document.querySelector('img.chat-pending-thumb')).toHaveAttribute('src', '/api/workspace-files/1/download/')
+  expect(chips[1].querySelector('img.chat-pending-thumb')).toBeNull()
+  expect(chips[1].querySelector('.chat-pending-thumb-file')).not.toBeNull()
+  expect(input).toBeDisabled()
 })
 
 it('opens the full mention picker immediately and filters as the user types', async () => {

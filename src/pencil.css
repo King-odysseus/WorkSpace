@@ -3243,42 +3243,64 @@ mark.chat-mention {
   cursor: not-allowed;
   opacity: .5;
 }
+/* Pending attachments wrap instead of scrolling horizontally. A hidden
+   scrollbar on a single row made a third or fourth attachment invisible, which
+   is why the composer read as capping at two. */
 .chat-workspace-view .chat-pending-attachments {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   padding: 1px 0;
-  scrollbar-width: none;
-}
-.chat-workspace-view .chat-pending-attachments::-webkit-scrollbar {
-  display: none;
 }
 .chat-workspace-view .chat-pending-attachments > span {
   display: inline-flex;
-  max-width: min(260px, 78vw);
+  max-width: min(240px, 78vw);
   min-width: 0;
-  height: 30px;
-  flex: 0 0 auto;
   align-items: center;
-  gap: 7px;
-  padding: 0 5px 0 10px;
+  gap: 8px;
+  padding: 5px 6px 5px 5px;
   border: 1px solid var(--pencil-border);
-  border-radius: 999px;
+  border-radius: 10px;
   background: var(--pencil-surface);
   color: var(--pencil-text-secondary);
   font-size: 11px;
   line-height: 14px;
 }
-.chat-workspace-view .chat-pending-attachments > span > svg {
-  flex: 0 0 auto;
+.chat-workspace-view .chat-pending-thumb {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--pencil-border);
+  border-radius: 7px;
+  background: var(--pencil-surface-muted);
+  object-fit: cover;
   color: var(--pencil-bronze-text);
 }
-.chat-workspace-view .chat-pending-attachments > span > :not(svg) {
+.chat-workspace-view img.chat-pending-thumb {
+  display: block;
+}
+.chat-workspace-view .chat-pending-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+.chat-workspace-view .chat-pending-name {
   min-width: 0;
   overflow: hidden;
+  color: var(--pencil-text);
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.chat-workspace-view .chat-pending-size {
+  color: var(--pencil-text-muted);
+  font-size: 10px;
+  line-height: 12px;
 }
 .chat-workspace-view .chat-pending-attachments button {
   display: grid;
@@ -3388,6 +3410,16 @@ mark.chat-mention {
 }
 .chat-workspace-view .chat-upload-button:has(input:disabled) svg {
   animation: chat-upload-pulse 900ms ease-in-out infinite alternate;
+}
+/* At the attachment cap the input is disabled too, but nothing is in flight, so
+   it must not borrow the upload spinner's pulse. */
+.chat-workspace-view .chat-upload-button.at-limit,
+.chat-workspace-view .chat-upload-button.at-limit:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: .45;
+}
+.chat-workspace-view .chat-upload-button.at-limit:has(input:disabled) svg {
+  animation: none;
 }
 @keyframes chat-upload-pulse {
   from { opacity: .45; }
