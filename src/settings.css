@@ -1420,6 +1420,36 @@
   margin: 0 0 18px;
 }
 
+/* The count and the revoked toggle sit together on the right of the heading, so
+   they stack rather than sharing a line with the heading text. */
+.settings-view .settings-invitations-meta {
+  display: grid;
+  flex: none;
+  gap: 4px;
+  justify-items: end;
+}
+
+.settings-view .settings-invitation-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pencil-blue);
+  font: inherit;
+  font-size: 11px;
+  line-height: 15px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.settings-view .settings-invitation-toggle:hover {
+  color: var(--pencil-blue-hover);
+}
+
+.settings-view .settings-invitation-toggle:focus-visible {
+  outline: 2px solid var(--pencil-blue);
+  outline-offset: 2px;
+}
+
 .settings-view .settings-invitation-row {
   display: grid;
   min-height: 72px;

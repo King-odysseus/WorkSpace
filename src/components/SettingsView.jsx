@@ -5,6 +5,7 @@ import { AppSelect } from "./ui/select.jsx";
 // subscribe link).
 
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import {
   Bell,
   Building2,
@@ -431,6 +432,8 @@ function SettingsView({
   const [invitationActionError, setInvitationActionError] = useState(null);
   const [invitationActionBusy, setInvitationActionBusy] = useState(null);
   const [invitationOverrides, setInvitationOverrides] = useState({});
+  // Revoked invitations are history, so they are listed only when asked for.
+  const [showRevokedInvitations, setShowRevokedInvitations] = useState(false);
   const [workingHoursSavingId, setWorkingHoursSavingId] = useState(null);
   const [workingHoursError, setWorkingHoursError] = useState("");
   const [notificationPrefsReloadKey, setNotificationPrefsReloadKey] = useState(0);
@@ -442,7 +445,7 @@ function SettingsView({
   const visibleMembers = members.filter(
     (member) => !removedMemberIds.includes(member.id),
   );
-  const visibleInvitations = invitations
+  const allInvitations = invitations
     .map((invitation) => ({
       ...invitation,
       ...(invitationOverrides[invitation.id] || {}),
@@ -453,12 +456,25 @@ function SettingsView({
           (INVITATION_STATUS_RANK[right.status] ?? 99) ||
         String(right.created_at || "").localeCompare(String(left.created_at || "")),
     );
+  // A revoked invitation is kept as history - the workspace keeps every
+  // invitation it ever sent - but it is not what anyone opens this list to see,
+  // so it waits behind a toggle. Hiding it is also what makes a revoke visible:
+  // the row leaves the list and the count drops with it. Left in the list it
+  // only sorted to the bottom, which on a workspace with more invitations than
+  // fit one page put it on a page the reader was not looking at, and the panel
+  // read as though the revoke had not happened.
+  const revokedInvitations = allInvitations.filter(
+    (invitation) => invitation.status === "cancelled",
+  );
+  const listedInvitations = showRevokedInvitations
+    ? allInvitations
+    : allInvitations.filter((invitation) => invitation.status !== "cancelled");
   // A workspace keeps every invitation it ever sent, so the list grows without
   // bound. Five at a time keeps the pending ones - which sort to the top - on
   // screen without pushing the rest of the panel off it.
   const invitationPageCount = Math.max(
     1,
-    Math.ceil(visibleInvitations.length / INVITATIONS_PER_PAGE),
+    Math.ceil(listedInvitations.length / INVITATIONS_PER_PAGE),
   );
   // Revoking an invitation shortens the list under whichever page the reader is
   // on, which would otherwise leave them looking at an empty panel.
@@ -466,7 +482,7 @@ function SettingsView({
     setInvitationPage((page) => Math.min(page, invitationPageCount));
   }, [invitationPageCount]);
   const invitationPageStart = (invitationPage - 1) * INVITATIONS_PER_PAGE;
-  const pagedInvitations = visibleInvitations.slice(
+  const pagedInvitations = listedInvitations.slice(
     invitationPageStart,
     invitationPageStart + INVITATIONS_PER_PAGE,
   );
@@ -629,6 +645,9 @@ function SettingsView({
         });
         return;
       }
+      // The select shows the new role, but nothing else on the page moves, so
+      // a role change is easy to walk away from without knowing it saved.
+      toast.success(`${memberDisplayName(member)} is now a ${role}.`);
       onRefresh?.();
     } catch (error) {
       const failure = memberActionFailure("role", 0, error.message);
@@ -687,6 +706,7 @@ function SettingsView({
       setRemovedMemberIds((current) =>
         current.includes(member.id) ? current : [...current, member.id],
       );
+      toast.success(`${memberDisplayName(member)} was removed from the workspace.`);
       onRefresh?.();
     } catch (error) {
       const failure = memberActionFailure("remove", 0, error.message);
@@ -795,6 +815,19 @@ function SettingsView({
         ...current,
         [invitation.id]: updatedInvitation,
       }));
+      if (action === "revoke") {
+        // The row leaves the list, so the reader needs to be told it happened
+        // and where the record went. Without this the panel just reflows.
+        toast.success(
+          showRevokedInvitations
+            ? `Invitation for ${invitation.email} revoked.`
+            : `Invitation for ${invitation.email} revoked. Show revoked to review it.`,
+        );
+      } else {
+        // A resend only changes the expiry date, which is easy to miss in the
+        // row and impossible to see at all if the row is on another page.
+        toast.success(`Invitation sent again to ${invitation.email}.`);
+      }
       onRefresh?.();
     } catch (error) {
       const failure = invitationFailure(action, 0, error.message);
@@ -840,6 +873,9 @@ function SettingsView({
       if (!response.ok) {
         throw new Error(data.error || "Working hours could not be updated.");
       }
+      // The inputs already hold the new numbers, so nothing on screen changes
+      // when the save lands.
+      toast.success(`Working hours saved for ${memberDisplayName(member)}.`);
       onRefresh?.();
     } catch (error) {
       setWorkingHoursError(error.message || "Working hours could not be updated.");
@@ -3673,13 +3709,29 @@ function SettingsView({
                 {/* The heading counts the whole history; the list shows a page
                     of it, so it says which slice this is. Without that, "8" in
                     the heading above five rows reads as a mistake. */}
-                <span>
-                  {visibleInvitations.length
-                    ? `${invitationPageStart + 1}-${Math.min(
-                        invitationPageStart + INVITATIONS_PER_PAGE,
-                        visibleInvitations.length,
-                      )} of ${visibleInvitations.length}`
-                    : "None sent"}
+                <span className="settings-invitations-meta">
+                  <span>
+                    {listedInvitations.length
+                      ? `${invitationPageStart + 1}-${Math.min(
+                          invitationPageStart + INVITATIONS_PER_PAGE,
+                          listedInvitations.length,
+                        )} of ${listedInvitations.length}`
+                      : "None sent"}
+                  </span>
+                  {revokedInvitations.length > 0 && (
+                    <button
+                      type="button"
+                      className="settings-invitation-toggle"
+                      aria-expanded={showRevokedInvitations}
+                      onClick={() =>
+                        setShowRevokedInvitations((current) => !current)
+                      }
+                    >
+                      {showRevokedInvitations
+                        ? "Hide revoked"
+                        : `Show revoked (${revokedInvitations.length})`}
+                    </button>
+                  )}
                 </span>
               </div>
               <div
@@ -3696,7 +3748,7 @@ function SettingsView({
                     {invitationActionError.message}
                   </SettingsAlert>
                 )}
-                {visibleInvitations.length ? (
+                {listedInvitations.length ? (
                   pagedInvitations.map((invitation) => {
                     const status = invitation.status || "pending";
                     const canAct =
@@ -3773,10 +3825,15 @@ function SettingsView({
                   <div className="settings-invitation-empty" role="status">
                     <UserRound size={18} aria-hidden="true" />
                     <div>
-                      <strong>No invitation history yet</strong>
+                      <strong>
+                        {allInvitations.length
+                          ? "No active invitations"
+                          : "No invitation history yet"}
+                      </strong>
                       <p>
-                        Invite a teammate to start building the workspace access
-                        record.
+                        {allInvitations.length
+                          ? "Every invitation this workspace sent has been revoked. Show revoked to review them."
+                          : "Invite a teammate to start building the workspace access record."}
                       </p>
                     </div>
                   </div>

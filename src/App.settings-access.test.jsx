@@ -42,7 +42,13 @@ const invitation = (index, status = 'accepted') => ({
   expires_at: null,
 })
 
-const INVITATIONS = Array.from({ length: 8 }, (_, index) => invitation(index))
+const INVITATIONS = [
+  // One live invitation to revoke, one already revoked so the history toggle
+  // has something behind it, and six accepted to fill the pages.
+  invitation(0, 'pending'),
+  invitation(1, 'cancelled'),
+  ...Array.from({ length: 6 }, (_, index) => invitation(index + 2)),
+]
 
 const routes = {
   '/api/auth/me/': session,
@@ -51,6 +57,10 @@ const routes = {
   '/api/workspaces/1/invitations/': { invitations: INVITATIONS },
   // One route answers both the create and the permission edit.
   '/api/workspaces/1/members/12/': { member: { ...manager, permissions: ['create_tasks', 'use_ai', 'view_reports'] } },
+  // Revoking, which the app sends as a DELETE on the invitation itself.
+  '/api/workspaces/1/invitations/100/': {
+    invitation: { ...invitation(0, 'pending'), status: 'cancelled' },
+  },
 }
 
 let fetchMock
@@ -131,16 +141,59 @@ it('shows five invitations and pages the rest', async () => {
   const list = document.querySelector('.settings-invitation-list')
   const rows = () => list.querySelectorAll('.settings-invitation-row').length
 
+  // Eight invitations were sent and one was revoked, so the list counts seven:
+  // a revoked invitation is history, not something to page through.
   expect(rows()).toBe(5)
-  // The heading counts the history and the list says which slice it is, so the
-  // two numbers cannot read as a disagreement.
-  expect(screen.getByText('1-5 of 8')).toBeInTheDocument()
+  expect(screen.getByText('Show revoked (1)')).toBeInTheDocument()
+  // The heading counts what is listed and the list says which slice it is, so
+  // the two numbers cannot read as a disagreement.
+  expect(screen.getByText('1-5 of 7')).toBeInTheDocument()
 
   const pages = screen.getByRole('navigation', { name: 'Invitation pages' })
   expect(within(pages).getByText('Page 1 of 2')).toBeInTheDocument()
 
   fireEvent.click(within(pages).getByRole('button', { name: 'Next invitation page' }))
 
-  await waitFor(() => expect(rows()).toBe(3))
-  expect(screen.getByText('6-8 of 8')).toBeInTheDocument()
+  await waitFor(() => expect(rows()).toBe(2))
+  expect(screen.getByText('6-7 of 7')).toBeInTheDocument()
+}, 90000)
+
+// Last, because the app mounts once for the whole file (see the note at the top)
+// and this test revokes an invitation the others count.
+it('takes a revoked invitation out of the list and keeps it behind the toggle', async () => {
+  await openWorkspaceAccess()
+
+  const list = document.querySelector('.settings-invitation-list')
+  const rows = () => [...list.querySelectorAll('.settings-invitation-row')]
+  const hasRow = (email) => rows().some((row) => row.textContent.includes(email))
+
+  // The paging test above leaves the reader on page 2 of a list the whole file
+  // shares, so step back to the first page before asserting on it.
+  const back = screen.queryByRole('button', { name: 'Previous invitation page' })
+  if (back && !back.disabled) fireEvent.click(back)
+
+  expect(hasRow('invite0@example.test')).toBe(true)
+  expect(hasRow('invite1@example.test')).toBe(false)
+
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Revoke invitation for invite0@example.test' }),
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Revoke invitation' }))
+
+  await waitFor(() => expect(hasRow('invite0@example.test')).toBe(false))
+  expectRequest(fetchMock, '/api/workspaces/1/invitations/100/', 'DELETE')
+  // The count drops with the row, which is the part that used to stay put and
+  // make the revoke look like it had not happened.
+  expect(screen.getByText('1-5 of 6')).toBeInTheDocument()
+
+  // And the record is not lost, only moved out of the way: the toggle counts
+  // both revoked invitations and puts them back in the list, which grows to
+  // eight again. They sort last, so the newest is on the final page.
+  fireEvent.click(screen.getByRole('button', { name: 'Show revoked (2)' }))
+  await waitFor(() => expect(screen.getByText('1-5 of 8')).toBeInTheDocument())
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Next invitation page' }),
+  )
+  await waitFor(() => expect(hasRow('invite0@example.test')).toBe(true))
+  expect(hasRow('invite1@example.test')).toBe(true)
 }, 90000)

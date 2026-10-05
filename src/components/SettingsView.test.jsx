@@ -1,8 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
+import toast from 'react-hot-toast'
 import SettingsView from './SettingsView.jsx'
 import { mockApi, expectRequest } from '../test/setup-tests.js'
+
+// This file renders the panel on its own, so there is no Toaster to receive
+// what the panel reports. The store is spied on instead, which is what the
+// assertions are actually about: whether the action said anything at all.
+vi.mock('react-hot-toast', () => ({
+  default: { success: vi.fn(), error: vi.fn() },
+}))
 
 const originalWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker')
 afterEach(() => {
@@ -1649,13 +1657,30 @@ it('presents invitation outcomes and supports resend and revoke recovery', async
 
   const pendingRow = screen.getByText('pending@example.test').closest('.settings-invitation-row')
   await user.click(within(pendingRow).getByRole('button', { name: 'Revoke invitation for pending@example.test' }))
-  await waitFor(() => expect(within(pendingRow).getByText('Revoked')).toBeInTheDocument())
+  // Revoking takes the row out of the list rather than relabelling it where it
+  // stood. Left in, it only sorted to the bottom, which on a workspace with
+  // more invitations than fit one page moved it somewhere the reader was not
+  // looking and the revoke read as though it had not happened.
+  await waitFor(() => expect(screen.queryByText('pending@example.test')).not.toBeInTheDocument())
   expectRequest(api, '/api/workspaces/1/invitations/2/', 'DELETE')
+  expect(toast.success).toHaveBeenCalledWith(
+    'Invitation for pending@example.test revoked. Show revoked to review it.',
+  )
+
+  // The record is kept, one click away.
+  await user.click(screen.getByRole('button', { name: 'Show revoked (1)' }))
+  expect(screen.getByText('pending@example.test')).toBeInTheDocument()
+  expect(screen.getByText('Revoked')).toBeInTheDocument()
 
   const expiredRow = screen.getByText('expired@example.test').closest('.settings-invitation-row')
   await user.click(within(expiredRow).getByRole('button', { name: 'Resend invitation for expired@example.test' }))
   await waitFor(() => expect(within(expiredRow).getByText('Pending')).toBeInTheDocument())
   expectRequest(api, '/api/workspaces/1/invitations/3/resend/', 'POST')
+  // A resend moves a date and nothing else, so the toast is the only thing that
+  // tells the reader it went.
+  expect(toast.success).toHaveBeenCalledWith(
+    'Invitation sent again to expired@example.test.',
+  )
   expect(onRefresh).toHaveBeenCalledTimes(2)
 })
 
