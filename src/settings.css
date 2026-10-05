@@ -1408,6 +1408,14 @@
   padding: 0 32px 24px;
 }
 
+/* The pager is the shared one from the Activity page, where the surrounding
+   container insets it. Here it is a child of a panel that carries no padding of
+   its own, so it kept the 2px it was written with and read as flush against the
+   card edge while the rows above it were inset by 32. */
+.settings-view .settings-invitation-pagination {
+  padding: 10px 32px 0;
+}
+
 .settings-view .settings-invitation-alert {
   margin: 0 0 18px;
 }
@@ -2530,6 +2538,10 @@
 
   .settings-view .settings-workspace-logo {
     padding: 0 18px;
+  }
+
+  .settings-view .settings-invitation-pagination {
+    padding: 10px 18px 0;
   }
 
   .settings-view .settings-access-limited {
