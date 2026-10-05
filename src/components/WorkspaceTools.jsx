@@ -987,6 +987,20 @@ export function isImageAttachment(name) {
   return IMAGE_ATTACHMENT_PATTERN.test(String(name || ''))
 }
 
+// A delete is permanent, so its card says so and its button names what it does.
+const isDeleteAction = entry => /\.delete$/.test(String(entry?.kind || ''))
+
+// What a sent message shows for its file. An image gets its thumbnail; anything
+// else - a PDF, a spreadsheet, an image whose preview will not load - gets a
+// named chip, so the reader can always tell a file went with the message.
+function SentAttachment({ attachment }) {
+  const [broken, setBroken] = useState(false)
+  if (attachment.url && isImageAttachment(attachment.name) && !broken) {
+    return <img className="ai-chat-thumb" src={attachment.url} alt={attachment.name} onError={() => setBroken(true)} />
+  }
+  return <span className="ai-chat-sent-file" title={attachment.name}><FileText size={14} aria-hidden="true" /><span>{attachment.name}</span></span>
+}
+
 // What happened to an attached file is a fact about the request, not something to
 // hope the model volunteers, so the server reports it and the composer says it.
 export function describeDocument(info) {
@@ -1194,9 +1208,7 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
             {turn.role === 'assistant'
               ? <div className="ai-chat-bubble is-rich" dangerouslySetInnerHTML={{ __html: cleanHtml(renderAssistantMarkdown(turn.content)) }} />
               : <div className="ai-chat-bubble">
-                {turn.attachment?.url && isImageAttachment(turn.attachment.name) && (
-                  <img className="ai-chat-thumb" src={turn.attachment.url} alt={turn.attachment.name} />
-                )}
+                {turn.attachment && <SentAttachment attachment={turn.attachment} />}
                 {turn.content}
               </div>}
           </div>
@@ -1204,14 +1216,16 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
       ))}
       {pendingActions.length > 0 && (
         <div
-          className="ai-action-card"
+          className={`ai-action-card${pendingActions.some(isDeleteAction) ? ' is-destructive' : ''}`}
           role="group"
           aria-label={pendingActions.length === 1 ? 'Proposed workspace action' : 'Proposed workspace actions'}
         >
           <div className="ai-action-copy">
             <span>
-              <Sparkles size={15} />
-              {pendingActions.length === 1 ? 'Proposed action' : `${pendingActions.length} proposed actions`}
+              {pendingActions.some(isDeleteAction) ? <Trash2 size={15} /> : <Sparkles size={15} />}
+              {pendingActions.some(isDeleteAction)
+                ? 'Permanent delete - please confirm'
+                : pendingActions.length === 1 ? 'Proposed action' : `${pendingActions.length} proposed actions`}
             </span>
             {pendingActions.length === 1
               ? <strong>{pendingActions[0].summary}</strong>
@@ -1219,7 +1233,7 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
           </div>
           <div className="ai-action-buttons">
             <button type="button" className="secondary-button" onClick={() => resolvePendingActions('cancel')} disabled={busy}>{pendingActions.length === 1 ? 'Cancel' : 'Cancel all'}</button>
-            <button type="button" className="primary-button" onClick={() => resolvePendingActions('confirm')} disabled={busy}><Check size={15} /> {pendingActions.length === 1 ? 'Confirm' : 'Confirm all'}</button>
+            <button type="button" className={`primary-button${pendingActions.some(isDeleteAction) ? ' is-destructive' : ''}`} onClick={() => resolvePendingActions('confirm')} disabled={busy}>{pendingActions.some(isDeleteAction) ? <Trash2 size={15} /> : <Check size={15} />} {pendingActions.some(isDeleteAction) ? (pendingActions.length === 1 ? 'Delete permanently' : 'Delete all permanently') : pendingActions.length === 1 ? 'Confirm' : 'Confirm all'}</button>
           </div>
         </div>
       )}

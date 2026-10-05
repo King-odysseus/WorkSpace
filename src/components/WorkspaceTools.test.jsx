@@ -310,6 +310,34 @@ it('leaves a document attachment described the way it always was', async () => {
   fireEvent.submit(input.closest('form'))
 
   expect(await screen.findByText('Read contacts.txt. 1 piece of personal data replaced with placeholders.')).toBeInTheDocument()
+  // The sent message still shows that a file went with it, as a named chip.
+  const turn = (await screen.findByText('Summarise contacts.txt')).closest('.ai-chat-turn')
+  expect(turn.querySelector('.ai-chat-sent-file')).toHaveTextContent('contacts.txt')
+})
+
+it('warns on a delete proposal and names the button for what it does', async () => {
+  const fetchMock = mockApi({
+    '/api/workspaces/4/ai/settings/': {
+      settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] },
+      providers: { openai: true },
+    },
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'This removes the task for good.',
+      pending_actions: [{ id: 31, kind: 'task.delete', summary: 'Permanently delete task "Old". This cannot be undone.', status: 'pending' }],
+    },
+    '/api/workspaces/4/ai/actions/31/': { action: { id: 31, kind: 'task.delete', summary: 'Permanently delete task "Old".', status: 'executed' } },
+  })
+
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  const input = await screen.findByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'Delete Old' } })
+  fireEvent.submit(input.closest('form'))
+
+  expect(await screen.findByText('Permanent delete - please confirm')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /^Confirm$/ })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Delete permanently/ }))
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/4/ai/actions/31/', 'POST'))
 })
 
 it('sends an attached file with the question and reports what Zuri made of it', async () => {
@@ -350,7 +378,7 @@ it('sends an attached file with the question and reports what Zuri made of it', 
   const [, init] = expectRequest(fetchMock, '/api/workspaces/4/ai/chat/', 'POST')
   expect(JSON.parse(init.body)).toMatchObject({ message: 'Summarise quarterly.pdf', file_id: 9 })
   // Cleared once the turn succeeds, so the next question is not about the file.
-  expect(screen.queryByText('quarterly.pdf')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Remove quarterly.pdf' })).not.toBeInTheDocument()
 })
 
 it('keeps the attachment when the turn fails so it can be retried', async () => {
@@ -373,7 +401,7 @@ it('keeps the attachment when the turn fails so it can be retried', async () => 
   fireEvent.submit(input.closest('form'))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Zuri is unavailable.')
-  expect(screen.getByText('quarterly.pdf')).toBeInTheDocument()
+  expect(screen.getAllByText('quarterly.pdf').length).toBeGreaterThan(0)
 })
 
 it('confirms a proposed list in one step and accounts for every entry', async () => {

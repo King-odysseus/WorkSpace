@@ -6803,6 +6803,12 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .ai-action-list li::marker { color: var(--pencil-text-muted); }
 .ai-action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .ai-action-buttons .secondary-button, .ai-action-buttons .primary-button { width: auto; min-height: 34px; padding: 0 12px; font-size: 11px; }
+.ai-action-card.is-destructive { border-color: var(--pencil-alert-danger-stroke); background: var(--pencil-alert-danger-fill); }
+.ai-action-card.is-destructive .ai-action-copy > span { color: var(--pencil-alert-danger-text); }
+.ai-action-buttons .primary-button.is-destructive { background: var(--pencil-danger); border-color: var(--pencil-danger); color: #fff; }
+.ai-chat-sent-file { display: inline-flex; max-width: 100%; align-items: center; gap: 6px; margin: 0 0 7px; padding: 5px 9px; border: 1px solid var(--pencil-border); border-radius: 9px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); font-size: 11px; vertical-align: top; }
+.ai-chat-sent-file svg { flex: 0 0 auto; }
+.ai-chat-sent-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ai-chat-doc-note, .ai-chat-error { padding: 10px 12px; border-radius: 11px; font-size: 11px; line-height: 16px; }
 .ai-chat-doc-note { border: 1px solid var(--pencil-border); background: var(--pencil-surface); color: var(--pencil-text-secondary); }
