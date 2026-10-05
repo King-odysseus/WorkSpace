@@ -963,6 +963,62 @@ function writeAiPendingActions(workspaceId, actions) {
   }
 }
 
+// Past chats. The conversation on screen keeps the keys above; starting a new
+// one files it here, under a folder if the reader gave it one. Same browser-only
+// storage as the transcript, so it is bounded: a long list of old transcripts
+// must not crowd out the quota the live conversation needs.
+const AI_ARCHIVE_LIMIT = 40
+const AI_FOLDER_LIMIT = 20
+const AI_FOLDER_NAME_LIMIT = 40
+const aiArchiveKey = workspaceId => `workspace-ai-archive:${workspaceId}`
+const aiFoldersKey = workspaceId => `workspace-ai-folders:${workspaceId}`
+const aiCurrentFolderKey = workspaceId => `workspace-ai-folder:${workspaceId}`
+
+function readStored(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw == null ? fallback : JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+}
+
+function writeStored(key, value) {
+  try {
+    if (value == null || (Array.isArray(value) && !value.length) || value === '') window.localStorage.removeItem(key)
+    else window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Storage full or blocked: the in-memory copy still works for this session.
+  }
+}
+
+function readAiArchive(workspaceId) {
+  const stored = readStored(aiArchiveKey(workspaceId), [])
+  if (!Array.isArray(stored)) return []
+  return stored
+    .filter(chat => chat && typeof chat.id === 'string' && Array.isArray(chat.turns) && chat.turns.length)
+    .map(chat => ({ id: chat.id, title: String(chat.title || 'Untitled chat'), folder: typeof chat.folder === 'string' ? chat.folder : '', updatedAt: chat.updatedAt || '', turns: chat.turns }))
+    .slice(0, AI_ARCHIVE_LIMIT)
+}
+
+function readAiFolders(workspaceId) {
+  const stored = readStored(aiFoldersKey(workspaceId), [])
+  return Array.isArray(stored) ? stored.filter(name => typeof name === 'string' && name.trim()).slice(0, AI_FOLDER_LIMIT) : []
+}
+
+function readAiCurrentFolder(workspaceId) {
+  const folder = readStored(aiCurrentFolderKey(workspaceId), '')
+  return typeof folder === 'string' ? folder : ''
+}
+
+// A chat is named for its first question, since that is what the reader will
+// remember it by.
+function aiChatTitle(turns) {
+  const first = turns.find(turn => turn.role === 'user')?.content || 'Untitled chat'
+  const text = first.replace(/\s+/g, ' ').trim()
+  return text.length > 60 ? `${text.slice(0, 57)}...` : text
+}
+
 // What the reader is told once a confirmation has been answered. One action
 // keeps the single-line wording the transcript has always used; a list is listed,
 // because "Done. 9 actions" alone would not say which nine. Nothing becomes a
@@ -1027,6 +1083,13 @@ function useAssistantConversation(workspaceId, transcriptRef) {
   const [clearConfirm, setClearConfirm] = useState(null)
   useEffect(() => { setTurns(readAiHistory(workspaceId)) }, [workspaceId])
   useEffect(() => { setPendingActions(readAiPendingActions(workspaceId)) }, [workspaceId])
+  const [archive, setArchive] = useState(() => readAiArchive(workspaceId))
+  const [folders, setFolders] = useState(() => readAiFolders(workspaceId))
+  const [currentFolder, setCurrentFolderState] = useState(() => readAiCurrentFolder(workspaceId))
+  const [historyOpen, setHistoryOpen] = useState(false)
+  useEffect(() => {
+    setArchive(readAiArchive(workspaceId)); setFolders(readAiFolders(workspaceId)); setCurrentFolderState(readAiCurrentFolder(workspaceId)); setHistoryOpen(false)
+  }, [workspaceId])
   useLayoutEffect(() => {
     const transcript = transcriptRef.current
     if (!transcript) return
@@ -1173,18 +1236,140 @@ function useAssistantConversation(workspaceId, transcriptRef) {
       setError('')
     })
   }
+  const saveArchive = next => { const bounded = next.slice(0, AI_ARCHIVE_LIMIT); setArchive(bounded); writeStored(aiArchiveKey(workspaceId), bounded) }
+  const saveFolders = next => { setFolders(next); writeStored(aiFoldersKey(workspaceId), next) }
+  const setCurrentFolder = folder => { setCurrentFolderState(folder); writeStored(aiCurrentFolderKey(workspaceId), folder) }
+  // The chat on screen, filed as a past chat. Empty ones are not worth keeping.
+  const filedCurrent = () => (turns.length
+    ? [{ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, title: aiChatTitle(turns), folder: currentFolder, updatedAt: new Date().toISOString(), turns }]
+    : [])
+  const resetCurrent = (nextTurns, nextFolder) => {
+    setTurns(nextTurns); writeAiHistory(workspaceId, nextTurns)
+    setPendingActions([]); writeAiPendingActions(workspaceId, [])
+    setCurrentFolder(nextFolder)
+    setMessage(''); setAttachment(null); setDocumentNote(''); setError('')
+  }
+  // A new chat keeps the old one: it is filed, not discarded. Any proposal still
+  // waiting is left to expire server-side, as clearing does.
+  const newChat = () => {
+    if (busy) return
+    saveArchive([...filedCurrent(), ...archive])
+    resetCurrent([], '')
+    setHistoryOpen(false)
+  }
+  const openChat = id => {
+    if (busy) return
+    const chat = archive.find(entry => entry.id === id)
+    if (!chat) return
+    saveArchive([...filedCurrent(), ...archive.filter(entry => entry.id !== id)])
+    resetCurrent(chat.turns, chat.folder)
+    setHistoryOpen(false)
+  }
+  const deleteChat = id => {
+    const chat = archive.find(entry => entry.id === id)
+    if (!chat) return
+    new Promise(resolve => setClearConfirm({
+      title: 'Delete chat',
+      message: `This removes "${chat.title}" from this browser. It cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      resolve,
+    })).then(confirmed => { if (confirmed) saveArchive(archive.filter(entry => entry.id !== id)) })
+  }
+  const moveChat = (id, folder) => saveArchive(archive.map(entry => (entry.id === id ? { ...entry, folder } : entry)))
+  const createFolder = name => {
+    const clean = String(name || '').replace(/\s+/g, ' ').trim().slice(0, AI_FOLDER_NAME_LIMIT)
+    if (!clean) return ''
+    const existing = folders.find(folder => folder.toLowerCase() === clean.toLowerCase())
+    if (existing) return existing
+    if (folders.length >= AI_FOLDER_LIMIT) { setError(`You can keep up to ${AI_FOLDER_LIMIT} folders.`); return '' }
+    saveFolders([...folders, clean])
+    return clean
+  }
+  // Deleting a folder never deletes a chat: what was in it goes back to Unfiled.
+  const deleteFolder = name => {
+    saveFolders(folders.filter(folder => folder !== name))
+    saveArchive(archive.map(entry => (entry.folder === name ? { ...entry, folder: '' } : entry)))
+    if (currentFolder === name) setCurrentFolder('')
+  }
   return {
     turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote,
     attachFile, ask, resolvePendingActions, clearConversation, clearConfirm, setClearConfirm,
     canClear: !busy && (turns.length > 0 || pendingActions.length > 0),
+    archive, folders, currentFolder, setCurrentFolder, historyOpen, setHistoryOpen,
+    newChat, openChat, deleteChat, moveChat, createFolder, deleteFolder,
+    canStartNew: !busy && (turns.length > 0 || pendingActions.length > 0),
   }
 }
 
 // The transcript, the action card and the composer, shared by the dock and the
 // page. Only the dock has a heading of its own - the page wears the standard
 // page header - so it arrives as a slot.
+// Past chats, grouped by the folder the reader filed them in. A folder is just a
+// name - a project, a client, a topic - and filing is optional: whatever has no
+// folder sits under Unfiled.
+function AssistantHistory({ conversation }) {
+  const { archive, folders, currentFolder, setCurrentFolder, setHistoryOpen, openChat, deleteChat, moveChat, createFolder, deleteFolder, turns, error } = conversation
+  const [filter, setFilter] = useState('all')
+  const [newFolder, setNewFolder] = useState('')
+  const visible = archive.filter(chat => filter === 'all' || (filter === 'unfiled' ? !chat.folder : chat.folder === filter))
+  const addFolder = event => {
+    event.preventDefault()
+    const name = createFolder(newFolder)
+    if (name) { setNewFolder(''); setFilter(name) }
+  }
+  const folderSelect = (value, onChange, label) => (
+    <select className="ai-history-select" value={value} onChange={event => onChange(event.target.value)} aria-label={label}>
+      <option value="">Unfiled</option>
+      {folders.map(folder => <option key={folder} value={folder}>{folder}</option>)}
+    </select>
+  )
+  return <div className="ai-history" aria-label="Chat history">
+    <div className="ai-history-top">
+      <button type="button" className="secondary-button" onClick={() => setHistoryOpen(false)}><ChevronLeft size={15} /> Back to chat</button>
+      <strong>Chat history</strong>
+    </div>
+    {error && <p className="ai-history-error" role="alert">{error}</p>}
+    {turns.length > 0 && <label className="ai-history-current">
+      <span>This chat's folder</span>
+      {folderSelect(currentFolder, setCurrentFolder, "This chat's folder")}
+    </label>}
+    <div className="ai-history-folders" role="group" aria-label="Folders">
+      {[['all', 'All'], ['unfiled', 'Unfiled'], ...folders.map(folder => [folder, folder])].map(([value, label]) => (
+        <span className="ai-history-chip" key={value}>
+          <button type="button" className={filter === value ? 'is-active' : ''} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>
+          {!['all', 'unfiled'].includes(value) && <button type="button" className="ai-history-chip-remove" onClick={() => { deleteFolder(value); if (filter === value) setFilter('all') }} aria-label={`Delete folder ${label}`} title="Delete folder (its chats become Unfiled)"><X size={12} /></button>}
+        </span>
+      ))}
+    </div>
+    <form className="ai-history-new-folder" onSubmit={addFolder}>
+      <input value={newFolder} onChange={event => setNewFolder(event.target.value)} maxLength={40} placeholder="New folder or project name" aria-label="New folder name" />
+      <button type="submit" className="secondary-button" disabled={!newFolder.trim()}><Plus size={14} /> Add folder</button>
+    </form>
+    {visible.length === 0
+      ? <p className="ai-history-empty">{archive.length ? 'No chats in this folder.' : 'Past chats appear here when you start a new chat.'}</p>
+      : <ul className="ai-history-list">
+        {visible.map(chat => <li key={chat.id}>
+          <button type="button" className="ai-history-open" onClick={() => openChat(chat.id)}>
+            <strong>{chat.title}</strong>
+            <small>{chat.updatedAt ? formatDateTime(chat.updatedAt) : ''} · {chat.turns.length} {chat.turns.length === 1 ? 'message' : 'messages'}</small>
+          </button>
+          {folderSelect(chat.folder, folder => moveChat(chat.id, folder), `Folder for ${chat.title}`)}
+          <button type="button" className="ai-history-delete" onClick={() => deleteChat(chat.id)} aria-label={`Delete chat ${chat.title}`} title="Delete chat"><Trash2 size={14} /></button>
+        </li>)}
+      </ul>}
+  </div>
+}
+
 function AssistantChatBody({ conversation, transcriptRef, heading }) {
-  const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, ask, resolvePendingActions, clearConfirm, setClearConfirm } = conversation
+  const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, ask, resolvePendingActions, clearConfirm, setClearConfirm, historyOpen } = conversation
+  if (historyOpen) {
+    return <>
+      {heading}
+      <AssistantHistory conversation={conversation} />
+      <ConfirmDialog state={clearConfirm} onClose={() => setClearConfirm(null)} />
+    </>
+  }
   return <>
     {heading}
     <div ref={transcriptRef} className="ai-chat-messages" role="log" aria-live="polite" aria-label="Zuri conversation">
@@ -1298,6 +1483,8 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize, onExpand }) 
             </div>
           </div>
           <div className="ai-chat-actions">
+            <button type="button" className="ai-chat-action-button" onClick={conversation.newChat} disabled={!conversation.canStartNew} aria-label="New chat" title="New chat - the current one is kept in history"><Plus size={18} /></button>
+            <button type="button" className="ai-chat-action-button" onClick={() => conversation.setHistoryOpen(open => !open)} aria-label="Chat history" aria-pressed={conversation.historyOpen} title="Chat history"><History size={17} /></button>
             <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={!canClear} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={17} /></button>
             {onExpand && <button type="button" className="ai-chat-action-button" onClick={onExpand} aria-label="Expand Zuri" title="Open Zuri as a full page"><Maximize2 size={17} /></button>}
             {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={18} /></button>}
@@ -1321,7 +1508,11 @@ export function AssistantPage({ workspaceId }) {
         eyebrow="Assistant"
         title="Zuri"
         subtitle="Ask about work in this workspace, or attach a file for Zuri to read."
-        actions={<button type="button" className="secondary-button" onClick={conversation.clearConversation} disabled={!conversation.canClear}><Trash2 size={16} /> Clear conversation</button>}
+        actions={<>
+          <button type="button" className="secondary-button" onClick={conversation.newChat} disabled={!conversation.canStartNew}><Plus size={16} /> New chat</button>
+          <button type="button" className="secondary-button" onClick={() => conversation.setHistoryOpen(open => !open)} aria-pressed={conversation.historyOpen}><History size={16} /> History</button>
+          <button type="button" className="secondary-button" onClick={conversation.clearConversation} disabled={!conversation.canClear}><Trash2 size={16} /> Clear conversation</button>
+        </>}
       />
       <AssistantChatBody conversation={conversation} transcriptRef={transcriptRef} />
     </div>

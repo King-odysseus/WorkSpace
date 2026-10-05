@@ -716,3 +716,51 @@ it('returns to the app from a document, not only to the file list', async () => 
 
   expect(onExit).toHaveBeenCalledTimes(1)
 })
+
+const settingsOnly = { '/api/workspaces/4/ai/settings/': { settings: { ai_default_provider: 'openai', ai_enabled_providers: ['openai'] }, providers: { openai: true } } }
+
+it('starts a new chat and keeps the old one in history', async () => {
+  window.localStorage.setItem('workspace-ai-chat:4', JSON.stringify([
+    { role: 'user', content: 'What is due Friday?' },
+    { role: 'assistant', content: 'Two tasks.' },
+  ]))
+  mockApi(settingsOnly)
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  expect(await screen.findByText('What is due Friday?')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
+  expect(screen.queryByText('What is due Friday?')).not.toBeInTheDocument()
+  expect(screen.getByText('Start a conversation')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Chat history' }))
+  fireEvent.click(await screen.findByRole('button', { name: /^What is due Friday\?/ }))
+  expect(await screen.findByText('Two tasks.')).toBeInTheDocument()
+})
+
+it('files past chats into folders and lists them by folder', async () => {
+  window.localStorage.setItem('workspace-ai-chat:4', JSON.stringify([{ role: 'user', content: 'Plan the launch' }, { role: 'assistant', content: 'Here it is.' }]))
+  mockApi(settingsOnly)
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  await screen.findByText('Plan the launch')
+  fireEvent.click(screen.getByRole('button', { name: 'Chat history' }))
+  fireEvent.change(screen.getByLabelText('New folder name'), { target: { value: 'Website project' } })
+  fireEvent.click(screen.getByRole('button', { name: /Add folder/ }))
+  // The chat on screen is filed under the folder, then a new chat archives it there.
+  fireEvent.change(screen.getByLabelText("This chat's folder"), { target: { value: 'Website project' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Back to chat' }))
+  fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Chat history' }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Unfiled' }))
+  expect(screen.getByText('No chats in this folder.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Website project' }))
+  expect(screen.getByText('Plan the launch')).toBeInTheDocument()
+  expect(JSON.parse(window.localStorage.getItem('workspace-ai-archive:4'))[0].folder).toBe('Website project')
+
+  // Deleting the folder keeps the chat, which goes back to Unfiled.
+  fireEvent.click(screen.getByRole('button', { name: 'Delete folder Website project' }))
+  fireEvent.click(screen.getByRole('button', { name: 'All' }))
+  expect(screen.getByText('Plan the launch')).toBeInTheDocument()
+  expect(JSON.parse(window.localStorage.getItem('workspace-ai-archive:4'))[0].folder).toBe('')
+})

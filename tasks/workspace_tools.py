@@ -520,7 +520,27 @@ def workspace_ai_chat(request, workspace_id):
                 'reason': 'That model could not read the image, so Zuri answered without it.',
             }
             result = send_or_drop_cap(_user_turn(message, provider))
-        answer = (result.get('content', [{}])[0].get('text', '') if provider == 'claude' else result.get('choices', [{}])[0].get('message', {}).get('content', '')).strip()
+        def read_answer(body):
+            if provider == 'claude':
+                return str((body.get('content') or [{}])[0].get('text') or '').strip()
+            return str(((body.get('choices') or [{}])[0].get('message') or {}).get('content') or '').strip()
+
+        answer = read_answer(result)
+        if not answer:
+            # A model can return a successful call with no text - a reasoning model
+            # that spends its whole token allowance thinking, or a refusal that
+            # carries no body. Say why in the log, then ask once more without the
+            # cap before telling the user it came back empty.
+            choice = (result.get('choices') or [{}])[0] if provider != 'claude' else {}
+            logger.warning(
+                'Provider %s returned no text (finish_reason=%s, stop_reason=%s, usage=%s); retrying once.',
+                provider, choice.get('finish_reason'), result.get('stop_reason'), result.get('usage'),
+            )
+            try:
+                result = send(_user_turn(message, provider, document_image), with_cap=False)
+                answer = read_answer(result)
+            except HTTPError:
+                answer = ''
         parsed = parse_provider_response(answer, privacy)
         pending_actions = []
         rejected = []

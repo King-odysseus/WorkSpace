@@ -4213,6 +4213,42 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertEqual([entry['summary'] for entry in body['pending_actions']], ['Create task "Keep this one"'])
         self.assertIn('not supported', body['action_error'])
 
+    def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        bodies = []
+
+        class _Reply:
+            def __init__(self, content):
+                self.content = content
+
+            def read(self):
+                return json.dumps({'choices': [{'message': {'content': self.content}, 'finish_reason': 'length'}]}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        replies = iter([_Reply(None), _Reply(json.dumps({'answer': 'Yes, as the owner I can propose deletes.', 'actions': None}))])
+
+        def fake_urlopen(request, timeout=None):
+            bodies.append(json.loads(request.data.decode()))
+            return next(replies)
+
+        with mock.patch('tasks.workspace_tools.urlrequest.urlopen', fake_urlopen):
+            with mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test-key'}):
+                response = self.client.post(
+                    reverse('workspace-ai-chat', args=[self.workspace.id]),
+                    data=json.dumps({'message': 'Can you delete tasks?'}), content_type='application/json',
+                )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('propose deletes', response.json()['answer'])
+        # The retry is the one without the output cap, which a reasoning model can burn through.
+        self.assertIn('max_tokens', bodies[0])
+        self.assertNotIn('max_tokens', bodies[1])
+
     def _delete_proposal(self, actor, actions):
         self.client.force_login(actor)
         setting = self._enable_ai()
