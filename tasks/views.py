@@ -1120,7 +1120,17 @@ def task_list(request, workspace_id=None):
     bucket = str(payload.get('bucket', 'Backlog')).strip()
     if not bucket or len(bucket) > 80:
         return JsonResponse({'error': 'Bucket must be between 1 and 80 characters.'}, status=400)
-    plan_bucket = PlanBucket.objects.filter(workspace_id=workspace_id, name=bucket, is_active=True).first()
+    named_buckets = PlanBucket.objects.filter(workspace_id=workspace_id, name=bucket, is_active=True)
+    # The same name can exist in several scopes, so prefer the one in the scope
+    # the task names; the first of them is only the fallback for an unscoped task.
+    plan_bucket = None
+    requested_workstream = payload.get('workstream_id')
+    if isinstance(requested_workstream, int) and not isinstance(requested_workstream, bool):
+        plan_bucket = named_buckets.filter(workstream_id=requested_workstream).first()
+    if plan_bucket is None and project_ref is not None:
+        plan_bucket = named_buckets.filter(project_id=project_ref.id).first()
+    if plan_bucket is None:
+        plan_bucket = named_buckets.first()
     if plan_bucket is None:
         # The lane this task names is missing or archived, and a task naming no
         # live lane renders in no planner column at all. Put the lane back rather

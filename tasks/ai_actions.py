@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.test import RequestFactory
 from django.utils import timezone
 
-from .models import AiAction, Membership, Project, Task
+from .models import AiAction, LookupValue, Membership, PlanBucket, Project, Task
 from .views import task_detail, task_list, project_detail, project_list
 
 
@@ -52,16 +52,24 @@ def refused_over_answer_length(exc):
 ACTION_FIELDS = {
     'task.create': {
         'title', 'description', 'status', 'priority', 'due_date', 'start_date',
-        'project_id', 'assignee_ref', 'bucket', 'labels', 'progress_percent',
+        'project_id', 'workstream_id', 'assignee_ref', 'bucket', 'labels', 'progress_percent',
     },
     'task.update': {
         'task_id', 'title', 'description', 'status', 'priority', 'due_date',
-        'start_date', 'project_id', 'assignee_ref', 'bucket', 'labels',
+        'start_date', 'project_id', 'workstream_id', 'assignee_ref', 'bucket', 'labels',
         'progress_percent', 'blocker_details',
     },
+    'task.delete': {'task_id'},
     'project.create': {'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.update': {'project_id', 'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
+    'project.delete': {'project_id'},
 }
+
+# Deletes are permanent, so they are held to a stricter rule than every other
+# action: only the workspace owner may ask Zuri for one, and the owner still has
+# to press Confirm on a card that says what will be lost.
+DELETE_KINDS = {'task.delete', 'project.delete'}
+DELETE_OWNER_ONLY_MESSAGE = 'Only the workspace owner can ask Zuri to delete. Ask the owner to do it.'
 
 TASK_STATUSES = {'todo', 'in_progress', 'blocked', 'review', 'on_hold', 'cancelled', 'done'}
 TASK_PRIORITIES = {'urgent', 'high', 'normal', 'low'}
@@ -250,7 +258,7 @@ def build_workspace_snapshot(workspace_id, actor, registry):
         Task.objects
         .filter(workspace_id=workspace_id)
         .exclude(state='archived')
-        .select_related('assignee', 'project_ref')
+        .select_related('assignee', 'project_ref', 'workstream_ref')
         .order_by('-updated_at')[:MAX_SNAPSHOT_TASKS]
     )
     task_rows = []
@@ -264,6 +272,8 @@ def build_workspace_snapshot(workspace_id, actor, registry):
             'due_date': task.due_date.isoformat() if task.due_date else None,
             'project_id': task.project_ref_id,
             'project': registry.protect(task.project_ref.name if task.project_ref else task.project),
+            'workstream_id': task.workstream_ref_id,
+            'workstream': registry.protect(task.workstream_ref.name) if task.workstream_ref else None,
             'assignee_ref': registry.user_id_to_placeholder.get(task.assignee_id) if task.assignee_id else None,
             'progress_percent': task.progress_percent,
             'bucket': registry.protect(task.bucket),
@@ -282,6 +292,24 @@ def build_workspace_snapshot(workspace_id, actor, registry):
             'end_date': project.end_date.isoformat() if project.end_date else None,
         })
 
+    # Where work lives. A task joins a workstream (daily operations and the like)
+    # through the bucket it sits in, and a bucket's name alone does not say which
+    # scope it belongs to, so without these Zuri filed everything unscoped.
+    workstreams = LookupValue.objects.filter(workspace_id=workspace_id, kind='workstream', is_active=True).order_by('position', 'name')
+    workstream_rows = [
+        {'id': item.id, 'name': registry.protect(item.name), 'project_id': item.project_id}
+        for item in workstreams[:MAX_SNAPSHOT_PROJECTS]
+    ]
+    buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True).order_by('position', 'id')
+    bucket_rows = [
+        {
+            'name': registry.protect(item.name),
+            'project_id': item.project_id,
+            'workstream_id': item.workstream_id,
+        }
+        for item in buckets[:MAX_SNAPSHOT_PROJECTS * 4]
+    ]
+
     # The date the provider is answering on. Without it the assistant told users
     # it could not see today's date, and any "what is overdue" or "push these to
     # next week" answer was guesswork against dates it had no anchor for.
@@ -295,6 +323,9 @@ def build_workspace_snapshot(workspace_id, actor, registry):
         'members': registry.members,
         'tasks': task_rows,
         'projects': project_rows,
+        'workstreams': workstream_rows,
+        'buckets': bucket_rows,
+        'actor_is_owner': Membership.objects.filter(workspace_id=workspace_id, user=actor, role='owner').exists(),
         # Named for what it is. Under the key "limits" the model read these as
         # the workspace's capacity and refused work that would have fitted.
         'read_window': {
@@ -328,7 +359,16 @@ def action_instructions(snapshot):
         'One entry per change: a request covering several tasks returns one entry each, and the user confirms them all in a single step, so never spread a list of tasks across several replies or ask the user to confirm them one at a time. '
         f'Propose at most {MAX_ACTION_BATCH} changes in one reply. '
         'When a request needs more than that, or arrives as a whole plan, a schedule, or a spreadsheet, set "actions" to null and say in "answer" that a set this size belongs in Import data, which previews every row before anything is written. '
-        'Allowed action kinds are task.create, task.update, project.create, and project.update. '
+        'Allowed action kinds are task.create, task.update, task.delete, project.create, project.update, and project.delete. '
+        'Work lives in a project or in an operations workstream such as Daily operations, never both. The snapshot lists "workstreams" and "buckets"; '
+        'a bucket with a workstream_id belongs to that workstream and one with a project_id belongs to that project, and each task shows its "workstream". '
+        'When a task belongs in a workstream, set workstream_id to that workstream\'s id and bucket to one of its buckets; when the user names a workstream or one of its buckets, '
+        'never leave the task unscoped, and never invent a workstream or bucket that the snapshot does not list. '
+        'task.delete uses task_id and project.delete uses project_id. A delete is permanent and only the workspace owner may ask for one: '
+        'the snapshot\'s "actor_is_owner" says whether the current user is the owner. When it is false, never propose a delete: say the owner has to do it. '
+        'When it is true, propose one task.delete per task, and say in "answer" what will be deleted and that it cannot be undone and needs the owner\'s confirmation. '
+        'To delete the tasks in a bucket, propose a task.delete for each task the snapshot shows in that bucket and workstream or project. '
+        'Never delete anything the user did not clearly ask to delete. '
         'Never claim an action has happened: it only becomes a proposal that the user must confirm. '
         'Never use external personal data. Real names never leave the workspace: people appear as placeholders such as [MEMBER_2], '
         'listed in the snapshot "members" roster with their workspace role and whether they are the current user. '
@@ -336,9 +376,9 @@ def action_instructions(snapshot):
         'Never invent a ref that is not in the roster. '
         'In "answer", always name things the way the user reads them: a task by its title, a project by its name, a person by their ref. '
         'Never show a task or project id, code or number in "answer"; ids belong only inside action fields. '
-        'The action fields are: task.create uses title, description, status, priority, due_date, start_date, project_id, assignee_ref, bucket, labels, progress_percent; '
+        'The action fields are: task.create uses title, description, status, priority, due_date, start_date, project_id, workstream_id, assignee_ref, bucket, labels, progress_percent; '
         'task.update uses task_id plus any of those fields; project.create uses name, description, status, due_date, start_date, end_date; '
-        'project.update uses project_id plus any project field. Do not propose deletes, comments, documents, invitations, budgets, expenses, or personal data. '
+        'project.update uses project_id plus any project field. Do not propose comments, documents, invitations, budgets, expenses, or personal data. '
         f'Workspace snapshot: {json.dumps(snapshot, separators=(",", ":"))}'
     )
 
@@ -436,7 +476,7 @@ def _validate_action(action, registry, workspace_id, actor):
 
     cleaned = {}
     for field, value in arguments.items():
-        if field == 'task_id' or field == 'project_id':
+        if field in {'task_id', 'project_id', 'workstream_id'}:
             if value in ('', None):
                 cleaned[field] = None
             elif isinstance(value, bool) or not isinstance(value, int):
@@ -497,6 +537,10 @@ def _validate_action(action, registry, workspace_id, actor):
             raise ActionValidationError('Task is required.')
         if not (set(cleaned) - {'task_id'}):
             raise ActionValidationError('Choose at least one task field to update.')
+    if kind == 'task.delete' and not cleaned.get('task_id'):
+        raise ActionValidationError('Task is required.')
+    if kind == 'project.delete' and not cleaned.get('project_id'):
+        raise ActionValidationError('Project is required.')
     if kind == 'project.create' and not cleaned.get('name'):
         raise ActionValidationError('Project name is required.')
     if kind == 'project.update':
@@ -508,6 +552,25 @@ def _validate_action(action, registry, workspace_id, actor):
     membership = Membership.objects.filter(workspace_id=workspace_id, user=actor).first()
     if membership is None:
         raise ActionValidationError('You do not belong to this workspace.')
+    if kind in DELETE_KINDS:
+        if membership.role != 'owner':
+            raise ActionValidationError(DELETE_OWNER_ONLY_MESSAGE)
+        if kind == 'task.delete':
+            if not Task.objects.filter(id=cleaned['task_id'], workspace_id=workspace_id).exists():
+                raise ActionValidationError('Task was not found in this workspace.')
+        elif not Project.objects.filter(id=cleaned['project_id'], workspace_id=workspace_id).exists():
+            raise ActionValidationError('Project was not found in this workspace.')
+        return kind, cleaned
+    if kind in {'task.create', 'task.update'} and cleaned.get('workstream_id'):
+        workstream = LookupValue.objects.filter(
+            id=cleaned['workstream_id'], workspace_id=workspace_id, kind='workstream', is_active=True,
+        ).first()
+        if workstream is None:
+            raise ActionValidationError('Workstream was not found in this workspace.')
+        if not membership.has_permission('edit_team_tasks'):
+            raise ActionValidationError('You do not have permission to set a task workstream.')
+        if cleaned.get('project_id'):
+            raise ActionValidationError('A task belongs to a project or to a workstream, not both.')
     if kind == 'task.create':
         if not membership.has_permission('create_tasks'):
             raise ActionValidationError('You do not have permission to create tasks.')
@@ -551,6 +614,15 @@ def _action_payload(kind, arguments, registry):
 
 
 def _action_summary(kind, payload, registry):
+    if kind == 'task.delete':
+        task = Task.objects.filter(id=payload.get('task_id')).only('title').first()
+        title = registry.expand(task.title if task else 'Unknown task')[:140]
+        return f'Permanently delete task "{title}". Its history and attachments are removed and this cannot be undone.'
+    if kind == 'project.delete':
+        project = Project.objects.filter(id=payload.get('project_id')).only('name').first()
+        name = registry.expand(project.name if project else 'Unknown project')[:120]
+        count = Task.objects.filter(project_ref_id=payload.get('project_id')).count()
+        return f'Permanently delete project "{name}" ({count} {"task" if count == 1 else "tasks"} in it). This cannot be undone.'
     if kind == 'task.create':
         detail = registry.expand(payload.get('title') or 'Untitled task')
         return f'Create task "{detail}"'
@@ -595,6 +667,22 @@ def _call_view(view, request, **kwargs):
 
 def execute_action(action, actor):
     factory = RequestFactory()
+    if action.kind in DELETE_KINDS:
+        # Checked again here, not just when the proposal was made: the role can
+        # change in the 20 minutes a proposal stays open.
+        if not Membership.objects.filter(workspace_id=action.workspace_id, user=actor, role='owner').exists():
+            raise ActionExecutionError(DELETE_OWNER_ONLY_MESSAGE, 403)
+        if action.kind == 'task.delete':
+            task_id = action.payload.get('task_id')
+            if not Task.objects.filter(id=task_id, workspace_id=action.workspace_id).exists():
+                raise ActionExecutionError('Task was not found in this workspace.', 404)
+            request = factory.delete(f'/api/tasks/{task_id}/?permanent=1')
+            request.user = actor
+            return _call_view(task_detail, request, task_id=task_id)
+        project_id = action.payload.get('project_id')
+        request = factory.delete(f'/api/workspaces/{action.workspace_id}/projects/{project_id}/')
+        request.user = actor
+        return _call_view(project_detail, request, workspace_id=action.workspace_id, project_id=project_id)
     if action.kind == 'task.create':
         request = factory.post('/api/tasks/', data=json.dumps(action.payload), content_type='application/json')
         request.user = actor

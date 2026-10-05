@@ -4205,13 +4205,117 @@ class WorkspaceAiSettingsApiTests(TestCase):
             'answer': 'I prepared two tasks.',
             'actions': [
                 {'kind': 'task.create', 'arguments': {'title': 'Keep this one'}},
-                {'kind': 'task.delete', 'arguments': {'task_id': 1}},
+                {'kind': 'comment.create', 'arguments': {'task_id': 1}},
             ],
         }))
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual([entry['summary'] for entry in body['pending_actions']], ['Create task "Keep this one"'])
         self.assertIn('not supported', body['action_error'])
+
+    def _delete_proposal(self, actor, actions):
+        self.client.force_login(actor)
+        setting = self._enable_ai()
+        # A plain member only reaches Zuri when the owner has put them on the allowlist.
+        setting.ai_user_ids = [actor.id]
+        setting.save()
+        return self._chat({'message': 'Delete it.'}, {}, answer=json.dumps({'answer': 'Ready.', 'actions': actions}))
+
+    def _confirm(self, action_id, decision='confirm'):
+        return self.client.post(
+            reverse('workspace-ai-action', args=[self.workspace.id, action_id]),
+            data=json.dumps({'decision': decision}), content_type='application/json',
+        )
+
+    def test_only_the_owner_can_have_zuri_propose_a_delete(self):
+        manager = User.objects.create_user(username='del-manager@example.com', email='del-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        task = Task.objects.create(workspace=self.workspace, title='Keep me')
+        project = Project.objects.create(workspace=self.workspace, name='Keep project')
+        for actor in (manager, self.member):
+            response = self._delete_proposal(actor, [
+                {'kind': 'task.delete', 'arguments': {'task_id': task.id}},
+                {'kind': 'project.delete', 'arguments': {'project_id': project.id}},
+            ])
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['pending_actions'], [])
+            self.assertIn('owner', response.json()['action_error'])
+        self.assertFalse(AiAction.objects.filter(workspace=self.workspace, kind__in=['task.delete', 'project.delete']).exists())
+        self.assertTrue(Task.objects.filter(id=task.id).exists())
+
+    def test_an_owner_delete_waits_for_confirmation_and_warns(self):
+        task = Task.objects.create(workspace=self.workspace, title='Remove me')
+        response = self._delete_proposal(self.owner, [{'kind': 'task.delete', 'arguments': {'task_id': task.id}}])
+        proposal = response.json()['pending_actions'][0]
+        self.assertIn('cannot be undone', proposal['summary'])
+        self.assertTrue(Task.objects.filter(id=task.id).exists())
+
+        cancelled = self._confirm(proposal['id'], 'cancel')
+        self.assertEqual(cancelled.json()['action']['status'], 'cancelled')
+        self.assertTrue(Task.objects.filter(id=task.id).exists())
+
+        again = self._delete_proposal(self.owner, [{'kind': 'task.delete', 'arguments': {'task_id': task.id}}])
+        confirmed = self._confirm(again.json()['pending_actions'][0]['id'])
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertFalse(Task.objects.filter(id=task.id).exists())
+
+    def test_an_owner_can_have_zuri_delete_a_project_after_confirming(self):
+        project = Project.objects.create(workspace=self.workspace, name='Old project')
+        response = self._delete_proposal(self.owner, [{'kind': 'project.delete', 'arguments': {'project_id': project.id}}])
+        proposal = response.json()['pending_actions'][0]
+        self.assertIn('Old project', proposal['summary'])
+        self.assertIn('cannot be undone', proposal['summary'])
+        self.assertTrue(Project.objects.filter(id=project.id).exists())
+        self.assertEqual(self._confirm(proposal['id']).status_code, 200)
+        self.assertFalse(Project.objects.filter(id=project.id).exists())
+
+    def test_a_delete_is_refused_at_confirm_time_if_the_owner_was_demoted(self):
+        task = Task.objects.create(workspace=self.workspace, title='Still here')
+        co_owner = User.objects.create_user(username='co-owner@example.com', email='co-owner@example.com', password='secure-pass-123')
+        membership = Membership.objects.create(workspace=self.workspace, user=co_owner, role='owner')
+        response = self._delete_proposal(co_owner, [{'kind': 'task.delete', 'arguments': {'task_id': task.id}}])
+        proposal = response.json()['pending_actions'][0]
+        membership.role = 'manager'
+        membership.save()
+        refused = self._confirm(proposal['id'])
+        self.assertEqual(refused.status_code, 403)
+        self.assertTrue(Task.objects.filter(id=task.id).exists())
+
+    def test_a_delete_cannot_reach_another_workspaces_task(self):
+        other = Workspace.objects.create(name='Other', slug='other-ws')
+        foreign = Task.objects.create(workspace=other, title='Not yours')
+        response = self._delete_proposal(self.owner, [{'kind': 'task.delete', 'arguments': {'task_id': foreign.id}}])
+        self.assertEqual(response.json()['pending_actions'], [])
+        self.assertTrue(Task.objects.filter(id=foreign.id).exists())
+
+    def test_the_snapshot_shows_workstreams_and_buckets_and_a_task_lands_in_its_workstream(self):
+        from .models import LookupValue, PlanBucket
+
+        daily = LookupValue.objects.create(workspace=self.workspace, kind='workstream', name='Daily operations', slug='daily-operations')
+        other = LookupValue.objects.create(workspace=self.workspace, kind='workstream', name='Support', slug='support')
+        PlanBucket.objects.create(workspace=self.workspace, workstream=other, name='Not done')
+        PlanBucket.objects.create(workspace=self.workspace, workstream=daily, name='Not done')
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'Add a task to Daily operations.'}, captured, answer=json.dumps({
+            'answer': 'Prepared.',
+            'actions': [{'kind': 'task.create', 'arguments': {'title': 'Open the shop', 'workstream_id': daily.id, 'bucket': 'Not done'}}],
+        }))
+        snapshot = json.loads(captured['body']['messages'][0]['content'].split('Workspace snapshot: ', 1)[1])
+        self.assertEqual({item['name'] for item in snapshot['workstreams']}, {'Daily operations', 'Support'})
+        self.assertIn({'name': 'Not done', 'project_id': None, 'workstream_id': daily.id}, snapshot['buckets'])
+        self.assertTrue(snapshot['actor_is_owner'])
+
+        confirmed = self._confirm(response.json()['pending_actions'][0]['id'])
+        self.assertEqual(confirmed.status_code, 200)
+        created = Task.objects.get(title='Open the shop')
+        self.assertEqual(created.workstream_ref_id, daily.id)
+
+    def test_an_unknown_workstream_is_rejected_when_proposed(self):
+        response = self._delete_proposal(self.owner, [{'kind': 'task.create', 'arguments': {'title': 'Lost', 'workstream_id': 99999}}])
+        self.assertEqual(response.json()['pending_actions'], [])
+        self.assertIn('Workstream', response.json()['action_error'])
 
     def test_action_proposal_is_rejected_when_the_member_lacks_permission(self):
         manager = User.objects.create_user(username='limited-manager@example.com', email='limited-manager@example.com', password='secure-pass-123')
@@ -5453,7 +5557,7 @@ class DocumentNotificationTests(TestCase):
         Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
         Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
         Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
-        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief', created_by=self.owner)
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief')
 
     def _login(self, user):
         self.client.login(username=user.email, password='secure-pass-123')
@@ -5725,7 +5829,7 @@ class DocumentCommentResolutionTests(TestCase):
         self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
         self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
         Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
-        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief', created_by=self.owner)
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief')
         self.comment = WorkspaceDocumentComment.objects.create(document=self.document, author=self.owner, body='Please check this.')
         self.client.login(username=self.owner.email, password='secure-pass-123')
         self.url = reverse('workspace-document-comment-detail', args=[self.workspace.id, self.document.id, self.comment.id])
