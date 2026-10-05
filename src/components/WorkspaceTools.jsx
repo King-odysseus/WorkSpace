@@ -1483,12 +1483,12 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize, onExpand }) 
             </div>
           </div>
           <div className="ai-chat-actions">
-            <button type="button" className="ai-chat-action-button" onClick={conversation.newChat} disabled={!conversation.canStartNew} aria-label="New chat" title="New chat - the current one is kept in history"><Plus size={18} /></button>
-            <button type="button" className="ai-chat-action-button" onClick={() => conversation.setHistoryOpen(open => !open)} aria-label="Chat history" aria-pressed={conversation.historyOpen} title="Chat history"><History size={17} /></button>
-            <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={!canClear} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={17} /></button>
-            {onExpand && <button type="button" className="ai-chat-action-button" onClick={onExpand} aria-label="Expand Zuri" title="Open Zuri as a full page"><Maximize2 size={17} /></button>}
-            {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={18} /></button>}
-            <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={19} /></button>
+            <button type="button" className="ai-chat-action-button" onClick={conversation.newChat} disabled={!conversation.canStartNew} aria-label="New chat" title="New chat - the current one is kept in history"><Plus size={14} /></button>
+            <button type="button" className="ai-chat-action-button" onClick={() => conversation.setHistoryOpen(open => !open)} aria-label="Chat history" aria-pressed={conversation.historyOpen} title="Chat history"><History size={14} /></button>
+            <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={!canClear} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={14} /></button>
+            {onExpand && <button type="button" className="ai-chat-action-button" onClick={onExpand} aria-label="Expand Zuri" title="Open Zuri as a full page"><Maximize2 size={14} /></button>}
+            {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={14} /></button>}
+            <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={14} /></button>
           </div>
         </div>}
       />
@@ -1508,11 +1508,11 @@ export function AssistantPage({ workspaceId }) {
         eyebrow="Assistant"
         title="Zuri"
         subtitle="Ask about work in this workspace, or attach a file for Zuri to read."
-        actions={<>
-          <button type="button" className="secondary-button" onClick={conversation.newChat} disabled={!conversation.canStartNew}><Plus size={16} /> New chat</button>
-          <button type="button" className="secondary-button" onClick={() => conversation.setHistoryOpen(open => !open)} aria-pressed={conversation.historyOpen}><History size={16} /> History</button>
-          <button type="button" className="secondary-button" onClick={conversation.clearConversation} disabled={!conversation.canClear}><Trash2 size={16} /> Clear conversation</button>
-        </>}
+        actions={<div className="ai-page-actions">
+          <button type="button" className="secondary-button ai-page-icon-button" onClick={conversation.newChat} disabled={!conversation.canStartNew} aria-label="New chat" title="New chat - the current one is kept in history"><Plus size={15} /></button>
+          <button type="button" className="secondary-button ai-page-icon-button" onClick={() => conversation.setHistoryOpen(open => !open)} aria-label="Chat history" aria-pressed={conversation.historyOpen} title="Chat history"><History size={15} /></button>
+          <button type="button" className="secondary-button ai-page-icon-button" onClick={conversation.clearConversation} disabled={!conversation.canClear} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={15} /></button>
+        </div>}
       />
       <AssistantChatBody conversation={conversation} transcriptRef={transcriptRef} />
     </div>

@@ -6611,16 +6611,16 @@ html[data-theme='dark'] .personal-planner-item-actions > button:hover {
   color: var(--pencil-bronze-muted);
 }
 
-.ai-chat-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
+.ai-chat-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
 
 .ai-chat-actions .ai-chat-action-button {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   padding: 0;
   border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgb(255 255 255 / 8%);
   color: #fff;
   box-shadow: none;
@@ -6808,6 +6808,10 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .ai-action-buttons .primary-button.is-destructive { background: var(--pencil-danger); border-color: var(--pencil-danger); color: #fff; }
 .ai-chat-sent-file { display: inline-flex; max-width: 100%; align-items: center; gap: 6px; margin: 0 0 7px; padding: 5px 9px; border: 1px solid var(--pencil-border); border-radius: 9px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); font-size: 11px; vertical-align: top; }
 .ai-chat-sent-file svg { flex: 0 0 auto; }
+.ai-chat-actions .ai-chat-action-button svg { width: 14px; height: 14px; }
+.ai-page-actions { display: inline-flex; gap: 6px; }
+.ai-page-actions .ai-page-icon-button { display: grid; width: 32px; height: 32px; min-height: 32px; place-items: center; padding: 0; }
+.ai-page-actions .ai-page-icon-button svg { width: 15px; height: 15px; }
 .ai-history { display: grid; align-content: start; gap: 12px; min-height: 0; flex: 1 1 auto; overflow-y: auto; padding: 14px 16px; }
 .ai-history-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ai-history-top .secondary-button { width: auto; min-height: 32px; padding: 0 10px; font-size: 11px; }
