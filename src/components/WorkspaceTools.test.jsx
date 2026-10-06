@@ -831,3 +831,27 @@ it('offers to undo a confirmed delete', async () => {
   const undoCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/ai/actions/31/') && String(init.body || '').includes('undo'))
   expect(undoCall).toBeTruthy()
 })
+
+it('attaches a screenshot pasted into the Zuri message box so it is sent as a picture', async () => {
+  const fetchMock = mockApi({
+    ...settingsOnly,
+    '/api/workspaces/4/files/': { file: { id: 9, original_name: 'Screenshot 2026-10-06 15.30.12.png', url: '/api/workspace-files/9/download/' } },
+  })
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+  const box = await screen.findByLabelText('Message to Zuri')
+
+  // Text on the clipboard is left to the browser.
+  const textPaste = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(textPaste, 'clipboardData', { value: { files: [] } })
+  box.dispatchEvent(textPaste)
+  expect(textPaste.defaultPrevented).toBe(false)
+
+  const imagePaste = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(imagePaste, 'clipboardData', { value: { files: [new File(['x'], 'image.png', { type: 'image/png' })] } })
+  box.dispatchEvent(imagePaste)
+  expect(imagePaste.defaultPrevented).toBe(true)
+
+  expect(await screen.findByText(/sent to the AI provider as a picture, and is not redacted/)).toBeInTheDocument()
+  const [, init] = expectRequest(fetchMock, '/api/workspaces/4/files/', 'POST')
+  expect(init.body.get('file').name).toMatch(/^Screenshot \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}\.png$/)
+})

@@ -1142,9 +1142,25 @@ function useAssistantConversation(workspaceId, transcriptRef) {
     transcript.scrollTop = transcript.scrollHeight
   }, [turns, busy, pendingActions, documentNote, error])
   useEffect(() => { fetch(`/api/workspaces/${workspaceId}/ai/settings/`, { credentials: 'include', headers: headers(workspaceId) }).then(r => r.json()).then(result => { if (result.settings) setProvider(result.settings.ai_default_provider || 'openai'); else setError(result.error || 'Zuri is unavailable.') }).catch(() => setError('Zuri is unavailable.')) }, [workspaceId])
-  const attachFile = async event => {
+  const attachFile = event => {
     const chosen = event.target.files?.[0]
     event.target.value = ''
+    return attachChosenFile(chosen)
+  }
+  // A screenshot pasted into the message box is attached the way a chosen file is,
+  // and goes to the model as a picture it can read. Text pastes are left alone.
+  const pasteFile = event => {
+    const pasted = Array.from(event.clipboardData?.files || [])[0]
+    if (!pasted) return
+    event.preventDefault()
+    // Clipboard images are all called "image.png"; say when this one was taken.
+    const stamp = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '').replace(/:/g, '.')
+    const named = pasted.type.startsWith('image/') && /^image\.\w+$/i.test(pasted.name || 'image.png')
+      ? new File([pasted], `Screenshot ${stamp}.${(pasted.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: pasted.type })
+      : pasted
+    return attachChosenFile(named)
+  }
+  const attachChosenFile = async chosen => {
     if (!chosen || attaching) return
     setAttaching(true)
     setError('')
@@ -1383,7 +1399,7 @@ function useAssistantConversation(workspaceId, transcriptRef) {
   }
   return {
     turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote,
-    attachFile, ask, resolvePendingActions, clearConversation, clearConfirm, setClearConfirm,
+    attachFile, pasteFile, ask, resolvePendingActions, clearConversation, clearConfirm, setClearConfirm,
     canClear: !busy && (turns.length > 0 || pendingActions.length > 0),
     archive, folders, currentFolder, setCurrentFolder, historyOpen, setHistoryOpen, undoable, undoDeletes,
     newChat, openChat, deleteChat, moveChat, createFolder, deleteFolder,
@@ -1456,7 +1472,7 @@ function AssistantHistory({ conversation }) {
 }
 
 function AssistantChatBody({ conversation, transcriptRef, heading }) {
-  const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, ask, resolvePendingActions, clearConfirm, setClearConfirm, historyOpen, undoable, undoDeletes } = conversation
+  const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, pasteFile, ask, resolvePendingActions, clearConfirm, setClearConfirm, historyOpen, undoable, undoDeletes } = conversation
   if (historyOpen) {
     return <>
       {heading}
@@ -1546,7 +1562,7 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
             <Paperclip size={19} />
             <input type="file" onChange={attachFile} disabled={attaching || busy} accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.log,.yaml,.yml,.xlsx,.xlsm,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp" aria-label="Attach a document for Zuri to read" />
           </label>
-          <textarea value={message} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
+          <textarea value={message} onChange={event => setMessage(event.target.value)} onPaste={pasteFile} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
         </div>
         <button className="ai-chat-send" disabled={busy || (!message.trim() && !attachment)} aria-label="Send message"><Send size={20} /></button>
       </div>
