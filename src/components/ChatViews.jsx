@@ -1218,9 +1218,33 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     <button type="button" onClick={onRemove} aria-label={removeLabel}><X size={12} /></button>
   </span>
 
-  const uploadChatFiles = async event => {
+  // The file picker and a pasted screenshot both end up here.
+  const uploadChatFiles = event => {
     const selected = Array.from(event.target.files || [])
     event.target.value = ''
+    return attachChatFiles(selected)
+  }
+
+  // Ctrl+V with an image on the clipboard - a screenshot, or an image copied from
+  // a page - attaches it like a chosen file. Text pastes are left alone, and so is
+  // a paste while editing a sent message, which cannot take attachments.
+  const pasteChatFiles = event => {
+    if (editingMessageId !== null) return
+    const files = Array.from(event.clipboardData?.files || [])
+    if (!files.length) return
+    event.preventDefault()
+    const stamp = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '').replace(/:/g, '.')
+    // A clipboard image arrives named "image.png", so a second paste would look like
+    // the first. Give each one the time it was pasted.
+    const named = files.map((file, index) => (
+      file.type.startsWith('image/') && /^image\.\w+$/i.test(file.name || 'image.png')
+        ? new File([file], `Screenshot ${stamp}${files.length > 1 ? ` (${index + 1})` : ''}.${(file.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: file.type })
+        : file
+    ))
+    return attachChatFiles(named)
+  }
+
+  const attachChatFiles = async selected => {
     if (!selected.length || uploadingFile) return
     const room = MAX_CHAT_ATTACHMENTS - sharedDocumentIds.length - sharedFileIds.length
     if (room <= 0) {
@@ -1289,7 +1313,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {editingMessageId === null && attachmentCount > 0 && <div className="chat-pending-attachments" aria-label={`Attachments on this message: ${attachmentCount} of ${MAX_CHAT_ATTACHMENTS}`}>{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); const name = document?.title || 'Document'; return renderAttachmentChip({ key: `pending-document-${id}`, name, kind: 'document', onRemove: () => setSharedDocumentIds(current => current.filter(value => value !== id)), removeLabel: `Remove ${name}` }) })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); const name = file?.original_name || 'File'; return renderAttachmentChip({ key: `pending-file-${id}`, name, size: formatAttachmentSize(file?.size), src: isImageFileName(name) ? previewSrc(file?.url) : '', kind: 'file', onRemove: () => setSharedFileIds(current => current.filter(value => value !== id)), removeLabel: `Remove ${name}` }) })}</div>}
           <div className="chat-compose-surface">
             <div className="chat-compose-input">
-              <textarea ref={messageInputRef} rows={1} value={composerDraft} readOnly={savingEdit} onChange={event => { const nextDraft = event.target.value; setComposerDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Escape' && editingMessageId !== null && !savingEdit) { event.preventDefault(); cancelEditing(); return } if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : selectedConversation?.is_self ? 'Message yourself' : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label={editingMessageId !== null ? 'Edit message' : 'Message'} />
+              <textarea ref={messageInputRef} rows={1} value={composerDraft} readOnly={savingEdit} onPaste={pasteChatFiles} onChange={event => { const nextDraft = event.target.value; setComposerDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Escape' && editingMessageId !== null && !savingEdit) { event.preventDefault(); cancelEditing(); return } if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : selectedConversation?.is_self ? 'Message yourself' : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label={editingMessageId !== null ? 'Edit message' : 'Message'} />
               <div className="chat-compose-actions">
                 <Popover.Root open={mentionOpen} onOpenChange={nextOpen => { setMentionOpen(nextOpen); setMentionQuery(''); if (nextOpen) { setEmojiOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={mentionOpen ? 'chat-emoji-trigger active' : 'chat-emoji-trigger'} aria-label="Mention a teammate" aria-expanded={mentionOpen}>@</button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-mention-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Mention a workspace member"><MentionPicker members={mentionMembers} getMemberName={memberName} onSelect={insertMention} /><Popover.Arrow className="chat-mention-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>
                 <Popover.Root open={emojiOpen} onOpenChange={nextOpen => { setEmojiOpen(nextOpen); if (nextOpen) { setMentionOpen(false); setShareOpen(false) } }}><Popover.Trigger asChild><button type="button" className={`chat-emoji-trigger ${emojiOpen ? 'active' : ''}`} aria-label="Add emoji" aria-expanded={emojiOpen}><Smile size={18} /></button></Popover.Trigger><Popover.Portal><Popover.Content className="chat-emoji-popup" side="top" align="start" sideOffset={8} collisionPadding={12} aria-label="Choose an emoji"><EmojiPicker onSelect={insertEmoji} /><Popover.Arrow className="chat-emoji-popup-arrow" /></Popover.Content></Popover.Portal></Popover.Root>

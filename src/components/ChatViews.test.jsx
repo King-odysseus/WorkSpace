@@ -566,6 +566,51 @@ it('attaches up to five files at once, thumbnails images, and drops the overflow
   expect(input).toBeDisabled()
 })
 
+it('attaches a screenshot pasted into the message box, and leaves a text paste alone', async () => {
+  const base = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const passThrough = base.getMockImplementation()
+  base.mockImplementation(async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url
+    if (url.includes(`/workspaces/${workspaceId}/files/`) && init.method === 'POST') {
+      const name = init.body.get('file').name
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ file: { id: 1, original_name: name, size: 2048, url: '/api/workspace-files/1/download/' } }),
+      }
+    }
+    return passThrough(input, init)
+  })
+
+  renderChat(dataFor())
+  await openConversation()
+  const box = screen.getByRole('textbox', { name: /message/i })
+
+  // Plain text on the clipboard is not intercepted: the browser pastes it as usual.
+  const textPaste = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(textPaste, 'clipboardData', { value: { files: [], getData: () => 'hello' } })
+  box.dispatchEvent(textPaste)
+  expect(textPaste.defaultPrevented).toBe(false)
+  expect(document.querySelectorAll('.chat-pending-attachments > span')).toHaveLength(0)
+
+  // An image on the clipboard is attached, under a name that says when it was pasted.
+  const imagePaste = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(imagePaste, 'clipboardData', { value: { files: [new File(['x'], 'image.png', { type: 'image/png' })] } })
+  box.dispatchEvent(imagePaste)
+  expect(imagePaste.defaultPrevented).toBe(true)
+
+  await waitFor(() => expect(document.querySelectorAll('.chat-pending-attachments > span')).toHaveLength(1))
+  const uploads = base.mock.calls.filter(([url, init = {}]) => String(url).includes(`/workspaces/${workspaceId}/files/`) && init.method === 'POST')
+  expect(uploads).toHaveLength(1)
+  expect(uploads[0][1].body.get('file').name).toMatch(/^Screenshot \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}\.png$/)
+})
+
 it('opens the full mention picker immediately and filters as the user types', async () => {
   const data = {
     ...dataFor(),
