@@ -1109,3 +1109,31 @@ it('drops the selection when selection mode is turned off', async () => {
   await user.click(screen.getByRole('button', { name: 'Done selecting' }))
   expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument()
 })
+
+const peopleLookup = [{ id: 9, kind: 'workstream', name: 'Daily operations', is_active: true, project_id: null, member_ids: [2, 3] }]
+const peopleMembers = [
+  { id: 2, first_name: 'Ada', last_name: 'Okafor', email: 'ada@example.test' },
+  { id: 3, first_name: 'Ben', last_name: 'Eze', email: 'ben@example.test' },
+  { id: 4, first_name: 'Cy', last_name: 'Ngu', email: 'cy@example.test' },
+]
+
+it('tells a leader to choose a workstream before managing its people', () => {
+  renderPlanner({ workspaceId: 4, scopeMode: 'operations', projectFilter: 'operations', lookupValues: peopleLookup, members: peopleMembers, canManageBuckets: true })
+  expect(screen.getByText(/Choose a workstream to see and manage who is on it/)).toBeInTheDocument()
+})
+
+it('shows the people on the chosen workstream as round avatars and lets a leader add more', () => {
+  renderPlanner({ workspaceId: 4, scopeMode: 'operations', projectFilter: 'operations', initialWorkstream: 'Daily operations', lookupValues: peopleLookup, members: peopleMembers, canManageBuckets: true })
+  const group = screen.getByRole('group', { name: 'People on Daily operations' })
+  expect(within(group).getByRole('list', { name: '2 people on Daily operations' })).toBeInTheDocument()
+  expect(within(group).getAllByRole('listitem')).toHaveLength(2)
+  fireEvent.click(within(group).getByRole('button', { name: 'Add or remove people on Daily operations' }))
+  expect(screen.getByText('People on Daily operations')).toBeInTheDocument()
+})
+
+it('shows a member the avatars without a way to change them', () => {
+  renderPlanner({ workspaceId: 4, scopeMode: 'operations', projectFilter: 'operations', initialWorkstream: 'Daily operations', lookupValues: peopleLookup, members: peopleMembers, canManageBuckets: false })
+  const group = screen.getByRole('group', { name: 'People on Daily operations' })
+  expect(within(group).getAllByRole('listitem')).toHaveLength(2)
+  expect(within(group).queryByRole('button')).not.toBeInTheDocument()
+})

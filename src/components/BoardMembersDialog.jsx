@@ -8,7 +8,7 @@ import { getCsrfToken, readJsonResponse } from '../lib/workspace-format.js'
 // Who is on one board. A board - a project or an operations workstream - belongs
 // to the people added to it: they see its tasks and may edit them. Owners and
 // managers see every board and are the ones who choose the people.
-export default function BoardMembersDialog({ workspaceId, kind, board, members = [], onClose }) {
+export default function BoardMembersDialog({ workspaceId, kind, board, members = [], onClose, onSaved }) {
   const [selected, setSelected] = useState(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -46,6 +46,7 @@ export default function BoardMembersDialog({ workspaceId, kind, board, members =
       })
       const data = await readJsonResponse(response, 'The board members could not be saved.')
       if (!response.ok) throw new Error(data.error || 'The board members could not be saved.')
+      onSaved?.(data.member_ids || [...selected])
       onClose(true)
     } catch (saveError) {
       setError(saveError.message)

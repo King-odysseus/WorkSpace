@@ -6840,6 +6840,14 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .board-members-copy strong { overflow: hidden; color: var(--pencil-text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .board-members-copy small { color: var(--pencil-text-muted); font-size: 11px; }
 .board-members-loading { margin: 8px 0; color: var(--pencil-text-muted); font-size: 12px; }
+.board-people { display: inline-flex; align-items: center; gap: 10px; }
+.board-people-stack { display: flex; align-items: center; margin: 0; padding: 0; list-style: none; }
+.board-people-stack li { margin-left: -8px; }
+.board-people-stack li:first-child { margin-left: 0; }
+.board-people-avatar { box-shadow: 0 0 0 2px var(--pencil-surface); }
+.board-people-more { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 999px; background: var(--pencil-surface-muted); box-shadow: 0 0 0 2px var(--pencil-surface); color: var(--pencil-text-secondary); font-size: 11px; font-weight: 700; }
+.board-people-empty, .board-people-hint { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--pencil-text-muted); font-size: 12px; }
+.board-people-add { min-height: 36px; padding: 0 12px; font-size: 12px; }
 .ai-history-new-folder { display: flex; gap: 6px; }
 .ai-history-new-folder input { min-width: 0; flex: 1 1 auto; min-height: 34px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 12px; }
 .ai-history-new-folder .secondary-button { width: auto; min-height: 34px; padding: 0 10px; font-size: 11px; }

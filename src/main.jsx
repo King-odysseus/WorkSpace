@@ -5871,6 +5871,13 @@ function WorkspaceView({
     }
   };
 
+  // A board's people changed in the People dialog: keep the copy the boards were
+  // drawn from in step, so the avatars update without a reload.
+  const updateBoardMembers = (kind, boardId, memberIds) => {
+    setLocalData((data) => (kind === "project"
+      ? { ...data, projects: (data.projects || []).map((item) => (String(item.id) === String(boardId) ? { ...item, member_ids: memberIds } : item)) }
+      : { ...data, lookupValues: (data.lookupValues || []).map((item) => (String(item.id) === String(boardId) ? { ...item, member_ids: memberIds } : item)) }));
+  };
   const createWorkstream = async (event) => {
     event.preventDefault();
     if (workstreamSubmitting) return;
@@ -6614,6 +6621,7 @@ function WorkspaceView({
           workstreamSubmitting={workstreamSubmitting}
           workstreamError={workstreamError}
           onCreateWorkstream={createWorkstream}
+          onBoardMembersChanged={updateBoardMembers}
           onArchiveWorkstream={archiveWorkstream}
           onArchiveBucket={archiveBucket}
           onRenameBucket={renameBucket}
@@ -6656,6 +6664,7 @@ function WorkspaceView({
           lookupValues={localData.lookupValues || []}
           projectFilter={plannerProjectFilter}
           scopeMode="projects"
+          onBoardMembersChanged={updateBoardMembers}
           onProjectFilterChange={setPlannerProjectFilter}
           onSearchChange={onSearchChange}
           members={availableMembers}
