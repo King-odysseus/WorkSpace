@@ -307,6 +307,12 @@ class Project(models.Model):
     configuration = models.JSONField(default=dict, blank=True)
     budget_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     budget_currency = models.CharField(max_length=8, choices=CURRENCY_CHOICES, default='USD')
+    # Who may see and edit this board. A board belongs to the people an owner or
+    # manager add to it; owners and managers see every board that is not private.
+    members = models.ManyToManyField(User, blank=True, related_name='member_projects')
+    # A private board is seen only by the person who made it - not by the owner.
+    is_private = models.BooleanField(default=False)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -331,6 +337,8 @@ class Project(models.Model):
             'configuration': self.configuration or {},
             'budget_amount': str(self.budget_amount) if self.budget_amount is not None else None,
             'budget_currency': self.budget_currency,
+            'member_ids': list(self.members.values_list('id', flat=True)),
+            'is_private': self.is_private,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
         }
@@ -448,6 +456,12 @@ class LookupValue(models.Model):
     slug = models.SlugField(max_length=140)
     position = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    # Who may see and edit this board. A board belongs to the people an owner or
+    # manager add to it; owners and managers see every board that is not private.
+    members = models.ManyToManyField(User, blank=True, related_name='member_workstreams')
+    # A private board is seen only by the person who made it - not by the owner.
+    is_private = models.BooleanField(default=False)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -462,7 +476,7 @@ class LookupValue(models.Model):
             raise ValidationError({'project': 'Project must belong to the same workspace.'})
 
     def as_dict(self):
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'kind': self.kind, 'name': self.name, 'slug': self.slug, 'position': self.position, 'is_active': self.is_active}
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'project_id': self.project_id, 'kind': self.kind, 'name': self.name, 'slug': self.slug, 'position': self.position, 'is_active': self.is_active, 'member_ids': list(self.members.values_list('id', flat=True)), 'is_private': self.is_private}
 
 
 

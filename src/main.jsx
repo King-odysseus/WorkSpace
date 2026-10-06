@@ -6576,6 +6576,7 @@ function WorkspaceView({
     return (
       <section className="workspace-view planner-view-wrapper">
         <PlannerBoard
+          workspaceId={currentWorkspace?.id}
           buckets={buckets}
           tasks={tasks}
           projects={localData.projects}
@@ -6648,6 +6649,7 @@ function WorkspaceView({
     return (
       <section className="workspace-view planner-view-wrapper">
         <PlannerBoard
+          workspaceId={currentWorkspace?.id}
           buckets={buckets}
           tasks={tasks}
           projects={localData.projects}

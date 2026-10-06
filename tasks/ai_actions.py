@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.test import RequestFactory
 from django.utils import timezone
 
+from .board_access import is_board_member, visible_buckets, visible_projects, visible_tasks, visible_workstreams
 from .models import AiAction, LookupValue, Membership, PlanBucket, Project, Task, TaskComment, WorkspaceDocument
 from .views import task_detail, task_list, project_detail, project_list
 
@@ -269,6 +270,17 @@ class PrivacyRegistry:
         return text
 
 
+def _seen_tasks(workspace_id, actor):
+    """The tasks this person may see - what Zuri may read or act on for them."""
+    membership = Membership.objects.filter(workspace_id=workspace_id, user=actor).first()
+    return visible_tasks(Task.objects.filter(workspace_id=workspace_id), workspace_id, actor, membership)
+
+
+def _seen_projects(workspace_id, actor):
+    membership = Membership.objects.filter(workspace_id=workspace_id, user=actor).first()
+    return visible_projects(workspace_id, actor, membership)
+
+
 def _document_plain_text(value):
     """Every string inside a document's stored content, tags stripped."""
     parts = []
@@ -301,8 +313,7 @@ def build_workspace_snapshot(workspace_id, actor, registry, query=''):
     """Build the small, non-identifying workspace view sent to the provider."""
 
     live_tasks = (
-        Task.objects
-        .filter(workspace_id=workspace_id)
+        _seen_tasks(workspace_id, actor)
         .exclude(state='archived')
         .select_related('assignee', 'project_ref', 'workstream_ref')
     )
@@ -344,7 +355,7 @@ def build_workspace_snapshot(workspace_id, actor, registry, query=''):
             'labels': [registry.protect(label) for label in (task.labels or [])],
         })
 
-    projects = Project.objects.filter(workspace_id=workspace_id).order_by('name')[:MAX_SNAPSHOT_PROJECTS]
+    projects = _seen_projects(workspace_id, actor).order_by('name')[:MAX_SNAPSHOT_PROJECTS]
     project_rows = []
     for project in projects:
         project_rows.append({
@@ -367,7 +378,7 @@ def build_workspace_snapshot(workspace_id, actor, registry, query=''):
             comment_match |= Q(body__icontains=word)
         comments = (
             TaskComment.objects
-            .filter(task__workspace_id=workspace_id)
+            .filter(task_id__in=_seen_tasks(workspace_id, actor).values('id'))
             .exclude(task__state='archived')
             .filter(comment_match)
             .select_related('task')
@@ -400,12 +411,13 @@ def build_workspace_snapshot(workspace_id, actor, registry, query=''):
     # Where work lives. A task joins a workstream (daily operations and the like)
     # through the bucket it sits in, and a bucket's name alone does not say which
     # scope it belongs to, so without these Zuri filed everything unscoped.
-    workstreams = LookupValue.objects.filter(workspace_id=workspace_id, kind='workstream', is_active=True).order_by('position', 'name')
+    seen_membership = Membership.objects.filter(workspace_id=workspace_id, user=actor).first()
+    workstreams = visible_workstreams(workspace_id, actor, seen_membership).filter(is_active=True).order_by('position', 'name')
     workstream_rows = [
         {'id': item.id, 'name': registry.protect(item.name), 'project_id': item.project_id}
         for item in workstreams[:MAX_SNAPSHOT_PROJECTS]
     ]
-    buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True).order_by('position', 'id')
+    buckets = visible_buckets(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=True), workspace_id, actor, seen_membership).order_by('position', 'id')
     bucket_rows = [
         {
             'name': registry.protect(item.name),
@@ -423,8 +435,8 @@ def build_workspace_snapshot(workspace_id, actor, registry, query=''):
         'actor_ref': registry.actor_ref,
         'today': today.isoformat(),
         'today_weekday': today.strftime('%A'),
-        'task_count': Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').count(),
-        'project_count': Project.objects.filter(workspace_id=workspace_id).count(),
+        'task_count': _seen_tasks(workspace_id, actor).exclude(state='archived').count(),
+        'project_count': _seen_projects(workspace_id, actor).count(),
         'members': registry.members,
         'tasks': task_rows,
         'projects': project_rows,
@@ -737,9 +749,9 @@ def _validate_action(action, registry, workspace_id, actor):
         if membership.role != 'owner':
             raise ActionValidationError(DELETE_OWNER_ONLY_MESSAGE)
         if kind == 'task.delete':
-            if not Task.objects.filter(id=cleaned['task_id'], workspace_id=workspace_id).exists():
+            if not _seen_tasks(workspace_id, actor).filter(id=cleaned['task_id']).exists():
                 raise ActionValidationError('Task was not found in this workspace.')
-        elif not Project.objects.filter(id=cleaned['project_id'], workspace_id=workspace_id).exists():
+        elif not _seen_projects(workspace_id, actor).filter(id=cleaned['project_id']).exists():
             raise ActionValidationError('Project was not found in this workspace.')
         return kind, cleaned
     if kind == 'task.archive':
@@ -747,7 +759,7 @@ def _validate_action(action, registry, workspace_id, actor):
         # comes before the confirm card and not after it.
         if membership.role not in {'owner', 'manager'}:
             raise ActionValidationError('Only owners and managers can archive tasks.')
-        if not Task.objects.filter(id=cleaned['task_id'], workspace_id=workspace_id).exclude(state='archived').exists():
+        if not _seen_tasks(workspace_id, actor).filter(id=cleaned['task_id']).exclude(state='archived').exists():
             raise ActionValidationError('Task was not found in this workspace.')
         return kind, cleaned
     if kind in {'task.create', 'task.update'} and cleaned.get('workstream_id'):
@@ -756,20 +768,20 @@ def _validate_action(action, registry, workspace_id, actor):
         ).first()
         if workstream is None:
             raise ActionValidationError('Workstream was not found in this workspace.')
-        if not membership.has_permission('edit_team_tasks'):
+        if not membership.has_permission('edit_team_tasks') and not is_board_member(actor, None, workstream):
             raise ActionValidationError('You do not have permission to set a task workstream.')
         if cleaned.get('project_id'):
             raise ActionValidationError('A task belongs to a project or to a workstream, not both.')
     if kind == 'task.create':
         if not membership.has_permission('create_tasks'):
             raise ActionValidationError('You do not have permission to create tasks.')
-        if 'project_id' in cleaned and not membership.has_permission('edit_team_tasks'):
+        if cleaned.get('project_id') and not membership.has_permission('edit_team_tasks') and not is_board_member(actor, Project.objects.filter(id=cleaned['project_id'], workspace_id=workspace_id).first()):
             raise ActionValidationError('You do not have permission to set a task project.')
         if 'assignee_ref' in cleaned and not membership.has_permission('assign_tasks'):
             raise ActionValidationError('You do not have permission to assign tasks.')
     elif kind == 'task.update':
         task_id = cleaned.get('task_id')
-        task = Task.objects.filter(id=task_id, workspace_id=workspace_id).first() if task_id else None
+        task = _seen_tasks(workspace_id, actor).filter(id=task_id).first() if task_id else None
         if task is None:
             raise ActionValidationError('Task was not found in this workspace.')
         if not membership.has_permission('edit_team_tasks'):
@@ -785,7 +797,7 @@ def _validate_action(action, registry, workspace_id, actor):
         if not membership.has_permission('manage_projects'):
             raise ActionValidationError('You do not have permission to update projects.')
         project_id = cleaned.get('project_id')
-        if not project_id or not Project.objects.filter(id=project_id, workspace_id=workspace_id).exists():
+        if not project_id or not _seen_projects(workspace_id, actor).filter(id=project_id).exists():
             raise ActionValidationError('Project was not found in this workspace.')
     return kind, cleaned
 

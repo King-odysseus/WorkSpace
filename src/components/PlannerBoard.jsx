@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Archive, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { Archive, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
@@ -7,6 +7,7 @@ import { Button } from './ui/button.jsx'
 import { SearchInput } from './ui/search-input.jsx'
 import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import Avatar from './Avatar.jsx'
+import BoardMembersDialog from './BoardMembersDialog.jsx'
 import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
@@ -109,8 +110,9 @@ function taskHasAssignee(task) {
   return Boolean((task.assignee_ids || []).length || task.assignee_id || task.assignee?.id || task.member)
 }
 
-export default function PlannerBoard({ buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all', onBulkArchive, onBulkDelete, onBulkMove }) {
+export default function PlannerBoard({ workspaceId, buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all', onBulkArchive, onBulkDelete, onBulkMove }) {
   const [status, setStatus] = useState('all')
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const [priority, setPriority] = useState('all')
   const [assignee, setAssignee] = useState('all')
   const [supporter, setSupporter] = useState('all')
@@ -198,6 +200,12 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
   const today = toDateKey(new Date())
   const isOperations = scopeMode === 'operations' || (scopeMode === 'switch' && projectFilter === 'operations')
   const selectedWorkstream = lookupValues.find(value => value.kind === 'workstream' && !value.project_id && value.name === workstream)
+  // The board the toolbar is looking at: the chosen workstream on the operations
+  // page, the chosen project on the projects page. With none chosen there is no
+  // single board to put people on.
+  const boardTarget = isOperations
+    ? (selectedWorkstream ? { kind: 'workstream', board: selectedWorkstream } : null)
+    : (projectFilter !== 'all' && projectFilter !== 'operations' ? (() => { const board = projects.find(project => String(project.id) === String(projectFilter)); return board ? { kind: 'project', board } : null })() : null)
   const bucketScope = isOperations ? (selectedWorkstream ? { workstream_id: selectedWorkstream.id } : null) : (projectFilter !== 'all' ? { project_id: projectFilter } : null)
   // Every lane the workspace holds, before this view narrows the list below.
   const workspaceBuckets = buckets
@@ -716,6 +724,8 @@ export default function PlannerBoard({ buckets, tasks, members, projects = [], l
         <option value="all">{isOperations ? 'All workstreams' : 'All workstreams'}</option>
         {workstreams.map(value => <option key={value} value={value}>{value}</option>)}
       </AppSelect>
+      {canManageBuckets && boardTarget && workspaceId && <Button type="button" variant="outline" className="planner-desktop-control planner-people-button gap-2" onClick={() => setPeopleOpen(true)} aria-label={`People on ${boardTarget.board.name}`} title="Choose who is on this board"><Users size={18} aria-hidden="true" /> People</Button>}
+      {peopleOpen && boardTarget && <BoardMembersDialog workspaceId={workspaceId} kind={boardTarget.kind} board={boardTarget.board} members={members} onClose={() => setPeopleOpen(false)} />}
       {canManageBuckets && <Button type="button" variant="outline" className={`planner-desktop-control planner-archive-button gap-2.5 ${bucketArchiveOpen ? 'border-navy' : ''}`} onClick={onToggleBucketArchive} aria-pressed={bucketArchiveOpen}>
         <Archive size={20} aria-hidden="true" /> Archived
       </Button>}

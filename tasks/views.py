@@ -22,6 +22,10 @@ from django.utils.text import slugify
 
 from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
+from .board_access import (
+    is_board_member, is_leader, task_board_member, task_is_visible, visible_buckets, visible_projects,
+    visible_tasks, visible_workstreams,
+)
 from . import cloud_storage
 from .cloud_downloads import cloud_download_redirect
 from .file_responses import stored_file_response
@@ -732,11 +736,23 @@ def task_has_assignee(task, user_id):
     return task.assignee_links.filter(user_id=user_id).exists()
 
 
+def membership_for(user, workspace_id):
+    return Membership.objects.filter(workspace_id=workspace_id, user=user).first()
+
+
+def visible_task_or_none(user, task_id):
+    """The task, if it exists in one of the person's workspaces and sits on a board they may see."""
+    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(user)).first()
+    if task is not None and not task_is_visible(task, user):
+        return None
+    return task
+
+
 def require_task_editor(request, task):
     membership, error = require_workspace_member(request, task.workspace_id)
     if error:
         return error
-    if not membership.has_permission('edit_team_tasks') and not task_has_assignee(task, request.user.id):
+    if not membership.has_permission('edit_team_tasks') and not task_board_member(task, request.user) and not task_has_assignee(task, request.user.id):
         return JsonResponse({'error': 'You can only edit subtasks on tasks assigned to you.'}, status=403)
     return None
 
@@ -761,7 +777,7 @@ def health(request):
 
 @require_http_methods(['GET'])
 def workspace_search(request, workspace_id):
-    _, error = require_workspace_member(request, workspace_id)
+    search_membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     query = request.GET.get('q', '').strip()
@@ -772,7 +788,7 @@ def workspace_search(request, workspace_id):
     limit_per_kind = 8
     results = []
 
-    tasks = Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').filter(
+    tasks = visible_tasks(Task.objects.filter(workspace_id=workspace_id), workspace_id, request.user, search_membership).exclude(state='archived').filter(
         Q(title__icontains=query) | Q(description__icontains=query) | Q(code__icontains=query)
     ).order_by('-updated_at')[:limit_per_kind]
     for task in tasks:
@@ -813,10 +829,10 @@ def workspace_search(request, workspace_id):
 
 @require_http_methods(['GET'])
 def report_summary(request, workspace_id):
-    _, error = require_permission(request, workspace_id, 'view_reports')
+    report_membership, error = require_permission(request, workspace_id, 'view_reports')
     if error:
         return error
-    tasks = Task.objects.filter(workspace_id=workspace_id).exclude(state='archived')
+    tasks = visible_tasks(Task.objects.filter(workspace_id=workspace_id), workspace_id, request.user, report_membership).exclude(state='archived')
     report_range = request.GET.get('range', 'all')
     shift_user_id = request.GET.get('shift_user_id')
     try:
@@ -937,6 +953,7 @@ def task_list(request, workspace_id=None):
 
     if request.method == 'GET':
         tasks = Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref').prefetch_related('supporters', 'assignee_links', 'blocked_by', 'blocks')
+        tasks = visible_tasks(tasks, workspace_id, request.user, membership_for(request.user, workspace_id))
         today = timezone.localdate()
         scope = request.GET.get('scope', 'all')
         project_filter = request.GET.get('project') or request.GET.get('project_id')
@@ -1164,6 +1181,10 @@ def task_list(request, workspace_id=None):
 
     max_position = Task.objects.filter(workspace_id=workspace_id, bucket=bucket).aggregate(max_position=Max('position'))['max_position']
     restricted = {'assignee_id', 'assignee_ids', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
+    if is_board_member(request.user, project_ref, workstream_ref):
+        restricted = {'state', 'phase_id'}
+    elif (project_ref is not None or workstream_ref is not None) and not is_leader(membership):
+        return JsonResponse({'error': 'You can only add tasks to boards you belong to.'}, status=403)
     if not membership.has_permission('edit_team_tasks') and restricted & set(payload):
         return JsonResponse({'error': 'You do not have permission to set ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
     if ('assignee_id' in payload or 'assignee_ids' in payload) and not membership.has_permission('assign_tasks'):
@@ -1246,7 +1267,7 @@ def task_reorder(request, workspace_id):
     columns = payload.get('columns')
     if not isinstance(columns, list) or not columns:
         return JsonResponse({'error': 'columns must be a non-empty list.'}, status=400)
-    tasks = {task.id: task for task in Task.objects.filter(workspace_id=workspace_id).exclude(state='archived').prefetch_related('supporters', 'assignee_links', 'blocked_by', 'blocks')}
+    tasks = {task.id: task for task in visible_tasks(Task.objects.filter(workspace_id=workspace_id), workspace_id, request.user, membership_for(request.user, workspace_id)).exclude(state='archived').prefetch_related('supporters', 'assignee_links', 'blocked_by', 'blocks')}
     supplied_ids = []
     updates = []
     reorder_history = []
@@ -1308,7 +1329,7 @@ def plan_bucket_list(request, workspace_id):
         except ValueError:
             return JsonResponse({'error': 'Project and workstream filters must be integers.'}, status=400)
         archived_only = request.GET.get('archived') == '1'
-        buckets = PlanBucket.objects.filter(workspace_id=workspace_id, is_active=not archived_only)
+        buckets = visible_buckets(PlanBucket.objects.filter(workspace_id=workspace_id, is_active=not archived_only), workspace_id, request.user, membership_for(request.user, workspace_id))
         if scope_project_id:
             buckets = buckets.filter(project_id=scope_project_id, workstream__isnull=True)
         elif scope_workstream_id:
@@ -2129,6 +2150,8 @@ def task_detail(request, task_id):
     membership = Membership.objects.filter(workspace_id=task.workspace_id, user=request.user).first()
     if membership is None:
         return JsonResponse({'error': 'You do not belong to this workspace.'}, status=403)
+    if not task_is_visible(task, request.user, membership):
+        return JsonResponse({'error': 'Task was not found.'}, status=404)
 
     if request.method == 'GET':
         return JsonResponse({'task': task.as_dict()})
@@ -2159,7 +2182,9 @@ def task_detail(request, task_id):
         notify_managers(task.workspace_id, request.user, 'archived task', task.title, target_type='task', target_id=task.id, immediate=True, dedup_key=f'archived_task:{task.id}')
         return JsonResponse({'deleted': task_id, 'archived': True, 'task': task.as_dict()})
 
-    if not membership.has_permission('edit_team_tasks'):
+    # Someone added to the board the task sits on may edit it, whatever their role.
+    board_editor = task_board_member(task, request.user)
+    if not membership.has_permission('edit_team_tasks') and not board_editor:
         if not task_has_assignee(task, request.user.id):
             return JsonResponse({'error': 'You can only update tasks assigned to you.'}, status=403)
         if not membership.has_permission('edit_own_tasks'):
@@ -2175,6 +2200,9 @@ def task_detail(request, task_id):
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported fields: {", ".join(sorted(unknown_fields))}.'}, status=400)
     leader_fields = {'assignee_id', 'assignee_ids', 'assignee_name', 'project_id', 'project', 'supporter_ids', 'workstream_id', 'phase_id', 'state'}
+    if board_editor:
+        # Board members change the work itself; moving it to another board or archiving it stays with leaders.
+        leader_fields = {'project_id', 'project', 'workstream_id', 'phase_id', 'state'}
     if not membership.has_permission('edit_team_tasks') and leader_fields & set(payload):
         return JsonResponse({'error': 'You do not have permission to change ownership, project, lookup, supporter, or lifecycle fields.'}, status=403)
     if ('assignee_id' in payload or 'assignee_ids' in payload) and not membership.has_permission('assign_tasks'):
@@ -2406,7 +2434,7 @@ def task_comment_list(request, task_id):
     auth_error = require_authenticated(request)
     if auth_error:
         return auth_error
-    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    task = visible_task_or_none(request.user, task_id)
     if task is None:
         return JsonResponse({'error': 'Task was not found.'}, status=404)
     if request.method == 'GET':
@@ -2432,7 +2460,7 @@ def task_subtask_list(request, task_id):
     auth_error = require_authenticated(request)
     if auth_error:
         return auth_error
-    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    task = visible_task_or_none(request.user, task_id)
     if task is None:
         return JsonResponse({'error': 'Task was not found.'}, status=404)
     if request.method == 'POST':
@@ -2502,7 +2530,7 @@ def task_attachment_list(request, task_id):
     auth_error = require_authenticated(request)
     if auth_error:
         return auth_error
-    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first()
+    task = visible_task_or_none(request.user, task_id)
     if task is None:
         return JsonResponse({'error': 'Task was not found.'}, status=404)
     if request.method == 'GET':
@@ -3419,7 +3447,7 @@ def project_list(request, workspace_id):
     if error:
         return error
     if request.method == 'GET':
-        projects = Project.objects.filter(workspace_id=workspace_id)
+        projects = visible_projects(workspace_id, request.user, membership_for(request.user, workspace_id))
         page, pagination = paginate_response(request, projects)
         if page is None:
             return pagination
@@ -3476,15 +3504,17 @@ def project_list(request, workspace_id):
     if budget_currency not in dict(Project.CURRENCY_CHOICES):
         return JsonResponse({'error': 'Invalid budget currency.'}, status=400)
     try:
-        project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip(), timezone=project_timezone, due_soon_days=due_soon_days, configuration=configuration, budget_amount=budget_amount, budget_currency=budget_currency, **dates)
+        project = Project.objects.create(workspace_id=workspace_id, name=name, description=str(payload.get('description', '')).strip(), timezone=project_timezone, due_soon_days=due_soon_days, configuration=configuration, budget_amount=budget_amount, budget_currency=budget_currency, created_by=request.user, is_private=payload.get('is_private') is True, **dates)
     except IntegrityError:
         return JsonResponse({'error': 'A project with this name already exists in the workspace.'}, status=409)
+    project.members.add(request.user)
     record_activity(workspace_id, request.user, 'project_created', f'{request.user.get_full_name() or request.user.email} created project {project.name}.')
     actor_name = request.user.get_full_name() or request.user.email
-    notify_workspace_members(
-        workspace_id, request.user, f'{actor_name} created project: {project.name}',
-        target_type='project', target_id=project.id,
-    )
+    if not project.is_private:
+        notify_workspace_members(
+            workspace_id, request.user, f'{actor_name} created project: {project.name}',
+            target_type='project', target_id=project.id,
+        )
     return JsonResponse({'project': project.as_dict()}, status=201)
 
 
@@ -3582,6 +3612,8 @@ def lookup_value_list(request, workspace_id):
         return error
     values = LookupValue.objects.filter(workspace_id=workspace_id)
     if request.method == 'GET':
+        # Phases are shared; workstreams follow the boards the person may see.
+        values = values.filter(Q(kind='phase') | Q(id__in=visible_workstreams(workspace_id, request.user, membership_for(request.user, workspace_id)).values('id')))
         if request.GET.get('kind'):
             values = values.filter(kind=request.GET['kind'])
         if request.GET.get('project_id'):
@@ -3618,7 +3650,8 @@ def lookup_value_list(request, workspace_id):
         position = max(int(payload.get('position', 0)), 0)
     except (TypeError, ValueError):
         return JsonResponse({'error': 'position must be a non-negative integer.'}, status=400)
-    value = LookupValue.objects.create(workspace_id=workspace_id, project=project, kind=kind, name=name, slug=value_slug, position=position)
+    value = LookupValue.objects.create(workspace_id=workspace_id, project=project, kind=kind, name=name, slug=value_slug, position=position, created_by=request.user, is_private=payload.get('is_private') is True and kind == 'workstream')
+    value.members.add(request.user)
     record_activity(
         workspace_id, request.user, 'lookup_value_created',
         f'{request.user.get_full_name() or request.user.email} created {kind} {value.name}.',
@@ -3682,7 +3715,7 @@ def lookup_value_detail(request, workspace_id, value_id):
 
 @require_http_methods(['GET'])
 def task_history_list(request, task_id):
-    task = Task.objects.filter(id=task_id, workspace_id__in=user_workspace_ids(request.user)).first() if request.user.is_authenticated else None
+    task = visible_task_or_none(request.user, task_id) if request.user.is_authenticated else None
     if task is None:
         return JsonResponse({'error': 'Task was not found.'}, status=404 if request.user.is_authenticated else 401)
     history = task.change_history.select_related('actor')
