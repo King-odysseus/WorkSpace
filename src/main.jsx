@@ -4867,6 +4867,7 @@ function WorkspaceView({
     () => localStorage.getItem("workspace-calendar-upcoming-open") !== "false",
   );
   const [checkInRange, setCheckInRange] = useState("today");
+  const [checkInPage, setCheckInPage] = useState(1);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
@@ -8912,6 +8913,13 @@ function WorkspaceView({
       checkInRange,
       today,
     );
+    // Ten cards to a page under whichever range is chosen. The range counts and the
+    // summary cards beside the list keep reading the whole range, not the page.
+    const CHECK_INS_PER_PAGE = 10;
+    const checkInPages = Math.max(1, Math.ceil(visibleCheckIns.length / CHECK_INS_PER_PAGE));
+    const currentCheckInPage = Math.min(checkInPage, checkInPages);
+    const checkInRangeStart = (currentCheckInPage - 1) * CHECK_INS_PER_PAGE;
+    const pagedCheckIns = visibleCheckIns.slice(checkInRangeStart, checkInRangeStart + CHECK_INS_PER_PAGE);
     const activeRangeLabel =
       CHECK_IN_RANGES.find((range) => range.value === checkInRange)?.label ||
       "Today";
@@ -8943,7 +8951,7 @@ function WorkspaceView({
                 aria-pressed={checkInRange === range.value}
                 aria-label={`${range.label}: ${checkInRangeCounts[range.value]} check-ins`}
                 className={checkInRange === range.value ? "active" : ""}
-                onClick={() => setCheckInRange(range.value)}
+                onClick={() => { setCheckInRange(range.value); setCheckInPage(1); }}
               >
                 <span className="checkin-range-label">{range.label}</span>
                 <span className="checkin-range-count">
@@ -8981,7 +8989,7 @@ function WorkspaceView({
         <div className="pencil-checkin-layout">
         <div className="checkin-grid">
           {visibleCheckIns.length ? (
-            visibleCheckIns.map((checkIn) => (
+            pagedCheckIns.map((checkIn) => (
               <Card
                 className="checkin-summary-card"
                 key={checkIn.id}
@@ -9062,6 +9070,34 @@ function WorkspaceView({
             <EmptyState
               text={`No check-ins in ${activeRangeLabel.toLowerCase()}. Start the first update.`}
             />
+          )}
+          {visibleCheckIns.length > CHECK_INS_PER_PAGE && (
+            <div className="planner-pagination checkin-pagination">
+              <span>
+                {checkInRangeStart + 1}-{checkInRangeStart + pagedCheckIns.length} of {visibleCheckIns.length}
+              </span>
+              <div>
+                <button
+                  type="button"
+                  disabled={currentCheckInPage <= 1}
+                  onClick={() => setCheckInPage(currentCheckInPage - 1)}
+                  aria-label="Previous check-in page"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <span>
+                  Page {currentCheckInPage} of {checkInPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={currentCheckInPage >= checkInPages}
+                  onClick={() => setCheckInPage(currentCheckInPage + 1)}
+                  aria-label="Next check-in page"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+            </div>
           )}
         </div>
         <aside className="pencil-checkin-side">
