@@ -6825,6 +6825,13 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .ai-history-chip button.is-active { background: var(--pencil-navy); color: #fff; }
 .ai-history-chip .ai-history-chip-remove { display: grid; width: 24px; padding: 0; place-items: center; color: var(--pencil-text-muted); }
 .ai-history-search { min-width: 0; min-height: 34px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 12px; }
+.ai-settings-usage { display: grid; gap: 12px; padding-top: 20px; border-top: 1px solid var(--pencil-border); }
+.ai-usage-limit { display: grid; gap: 6px; max-width: 320px; color: var(--pencil-text-secondary); font-size: 12px; }
+.ai-usage-limit input { min-height: 38px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 13px; }
+.ai-usage-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ai-usage-table th, .ai-usage-table td { padding: 8px 10px; border-bottom: 1px solid var(--pencil-border); text-align: left; }
+.ai-usage-table thead th { color: var(--pencil-text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.ai-usage-table tbody th { color: var(--pencil-text); font-weight: 600; }
 .ai-history-new-folder { display: flex; gap: 6px; }
 .ai-history-new-folder input { min-width: 0; flex: 1 1 auto; min-height: 34px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 12px; }
 .ai-history-new-folder .secondary-button { width: auto; min-height: 34px; padding: 0 10px; font-size: 11px; }

@@ -1383,6 +1383,8 @@ class WorkspaceSetting(models.Model):
     ai_default_provider = models.CharField(max_length=30, default='openai')
     ai_enabled_providers = models.JSONField(default=list, blank=True)
     ai_provider_config = models.JSONField(default=dict, blank=True)
+    # Messages one person may send Zuri in a day; 0 is no limit. Owners are never held to it.
+    ai_daily_limit = models.PositiveIntegerField(default=0)
     screen_sharing_enabled = models.BooleanField(default=False)
     screen_capture_interval_seconds = models.PositiveSmallIntegerField(default=60)
     screen_capture_retention_days = models.PositiveSmallIntegerField(default=7)
@@ -1402,6 +1404,7 @@ class WorkspaceSetting(models.Model):
             'ai_model': self.ai_model,
             'ai_default_provider': self.ai_default_provider,
             'ai_enabled_providers': self.ai_enabled_providers or [],
+            'ai_daily_limit': self.ai_daily_limit,
             'screen_sharing_enabled': self.screen_sharing_enabled,
             'screen_capture_interval_seconds': self.screen_capture_interval_seconds,
             'screen_capture_retention_days': self.screen_capture_retention_days,
@@ -1459,6 +1462,21 @@ class AiAction(models.Model):
             'expires_at': self.expires_at.isoformat(),
             'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
         }
+
+
+class AiUsage(models.Model):
+    """What one person sent Zuri on one day, counted for the daily limit and the owner's usage view."""
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='ai_usage')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_usage')
+    day = models.DateField()
+    messages = models.PositiveIntegerField(default=0)
+    prompt_tokens = models.PositiveBigIntegerField(default=0)
+    completion_tokens = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'user', 'day'], name='unique_ai_usage_per_user_day')]
+        indexes = [models.Index(fields=['workspace', 'day'], name='ai_usage_ws_day_idx')]
 
 
 class AiChatLibrary(models.Model):

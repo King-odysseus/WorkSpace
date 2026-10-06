@@ -12,7 +12,10 @@ from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings as django_settings
+from datetime import timedelta
+
 from django.db import transaction
+from django.db.models import F
 from django.http import JsonResponse
 from django.http import HttpResponse, HttpResponseRedirect
 from openpyxl import Workbook, load_workbook
@@ -21,7 +24,7 @@ from django.views.decorators.http import require_http_methods
 
 from . import cloud_storage
 from .cloud_downloads import cloud_download_redirect
-from .models import AiAction, AiChatLibrary, Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
+from .models import AiAction, AiChatLibrary, AiUsage, Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
 from .document_text import clip_text, extract_document_text, read_image_for_vision
 from .file_responses import stored_file_response
 from .sanitize import sanitize_document_content
@@ -190,6 +193,16 @@ def workspace_ai_settings(request, workspace_id):
         return JsonResponse({'error': 'You do not have permission to manage Zuri member access.'}, status=403)
     if 'ai_enabled' in payload and not can_manage_access:
         return JsonResponse({'error': 'You do not have permission to manage Zuri member access.'}, status=403)
+    new_daily_limit = setting.ai_daily_limit
+    if 'ai_daily_limit' in payload:
+        try:
+            new_daily_limit = int(payload['ai_daily_limit'] or 0)
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'The daily limit must be a whole number.'}, status=400)
+        if not 0 <= new_daily_limit <= 10000:
+            return JsonResponse({'error': 'The daily limit must be between 0 and 10,000 messages.'}, status=400)
+        if new_daily_limit != setting.ai_daily_limit and not can_manage_access:
+            return JsonResponse({'error': 'You do not have permission to manage Zuri member access.'}, status=403)
     new_ai_enabled = bool(payload.get('ai_enabled', setting.ai_enabled))
     new_ai_user_ids = selected if 'ai_user_ids' in payload else setting.ai_user_ids
 
@@ -239,11 +252,12 @@ def workspace_ai_settings(request, workspace_id):
     # All validation passed - apply every field together and save once.
     setting.ai_enabled = new_ai_enabled
     setting.ai_user_ids = new_ai_user_ids
+    setting.ai_daily_limit = new_daily_limit
     setting.ai_model = new_ai_model
     setting.ai_default_provider = new_ai_default_provider
     setting.ai_provider_config = stored_config
     setting.ai_enabled_providers = new_ai_enabled_providers
-    setting.save(update_fields=['ai_enabled', 'ai_user_ids', 'ai_model', 'ai_default_provider', 'ai_enabled_providers', 'ai_provider_config', 'updated_at'])
+    setting.save(update_fields=['ai_enabled', 'ai_user_ids', 'ai_daily_limit', 'ai_model', 'ai_default_provider', 'ai_enabled_providers', 'ai_provider_config', 'updated_at'])
     provider_config = _safe_provider_config(setting)
     providers = {provider: values['has_api_key'] for provider, values in provider_config.items()}
     return JsonResponse({'settings': setting.as_dict(), 'can_manage': can_manage_access or can_manage_providers, 'providers': providers, 'provider_config': provider_config})
@@ -422,6 +436,13 @@ def workspace_ai_chat(request, workspace_id):
         return JsonResponse({'error': 'You do not have permission to use Zuri.'}, status=403)
     if not setting.ai_enabled or (membership.role == 'member' and request.user.id not in (setting.ai_user_ids or [])):
         return JsonResponse({'error': 'Zuri has not been enabled for your account.'}, status=403)
+    if setting.ai_daily_limit and membership.role != 'owner':
+        used = AiUsage.objects.filter(workspace_id=workspace_id, user=request.user, day=timezone.localdate()).values_list('messages', flat=True).first() or 0
+        if used >= setting.ai_daily_limit:
+            return JsonResponse({
+                'error': f'You have reached your daily limit of {setting.ai_daily_limit} Zuri messages. It resets tomorrow, or ask the workspace owner to raise it.',
+                'code': 'ai_daily_limit',
+            }, status=429)
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -591,6 +612,7 @@ def workspace_ai_chat(request, workspace_id):
                 f"{reply}\n\nOnly the first {MAX_ACTION_BATCH} changes were prepared; "
                 f"{parsed['dropped']} more were left out. Confirm these, then reply \"continue\" for the next batch."
             )
+        _record_usage(workspace_id, request.user, result)
         payload = {
             'answer': reply,
             'pending_actions': [proposal.as_dict() for proposal in pending_actions],
@@ -1151,3 +1173,51 @@ def workspace_ai_library(request, workspace_id):
         workspace_id=workspace_id, user=request.user, defaults={'chats': chats, 'folders': folders},
     )
     return JsonResponse({'chats': library.chats, 'folders': library.folders, 'updated_at': library.updated_at.isoformat()})
+
+
+def _record_usage(workspace_id, user, result):
+    """Count one answered message, with the tokens the provider says it used."""
+    usage = result.get('usage') if isinstance(result, dict) else None
+    usage = usage if isinstance(usage, dict) else {}
+
+    def tokens(*keys):
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                return value
+        return 0
+
+    row, _ = AiUsage.objects.get_or_create(workspace_id=workspace_id, user=user, day=timezone.localdate())
+    AiUsage.objects.filter(pk=row.pk).update(
+        messages=F('messages') + 1,
+        prompt_tokens=F('prompt_tokens') + tokens('prompt_tokens', 'input_tokens'),
+        completion_tokens=F('completion_tokens') + tokens('completion_tokens', 'output_tokens'),
+    )
+
+
+@require_http_methods(['GET'])
+def workspace_ai_usage(request, workspace_id):
+    """Who has used Zuri, for the people who manage who may. Today and the last seven days."""
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if not membership.has_permission('manage_ai_access'):
+        return JsonResponse({'error': 'You do not have permission to see Zuri usage.'}, status=403)
+    today = timezone.localdate()
+    since = today - timedelta(days=6)
+    rows = {}
+    for entry in AiUsage.objects.filter(workspace_id=workspace_id, day__gte=since).select_related('user'):
+        row = rows.setdefault(entry.user_id, {
+            'user_id': entry.user_id,
+            'name': entry.user.get_full_name() or entry.user.email,
+            'today': 0, 'week': 0, 'prompt_tokens': 0, 'completion_tokens': 0,
+        })
+        row['week'] += entry.messages
+        row['prompt_tokens'] += entry.prompt_tokens
+        row['completion_tokens'] += entry.completion_tokens
+        if entry.day == today:
+            row['today'] += entry.messages
+    return JsonResponse({
+        'limit': _setting(workspace_id).ai_daily_limit,
+        'users': sorted(rows.values(), key=lambda row: (-row['week'], row['name'])),
+    })

@@ -4418,6 +4418,70 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertEqual(snapshot['comments_matching_the_question'], [])
         self.assertEqual(snapshot['documents_matching_the_question'], [])
 
+    def _chat_as(self, user):
+        self.client.force_login(user)
+        setting = self._enable_ai()
+        setting.ai_user_ids = [self.member.id]
+        setting.save()
+        return self._chat({'message': 'Hello there'}, {})
+
+    def test_the_daily_limit_stops_a_member_but_never_the_owner(self):
+        setting = self._enable_ai()
+        setting.ai_daily_limit = 2
+        setting.save()
+        self.assertEqual(self._chat_as(self.member).status_code, 200)
+        self.assertEqual(self._chat_as(self.member).status_code, 200)
+        blocked = self._chat_as(self.member)
+        self.assertEqual(blocked.status_code, 429)
+        self.assertEqual(blocked.json()['code'], 'ai_daily_limit')
+        for _ in range(3):
+            self.assertEqual(self._chat_as(self.owner).status_code, 200)
+
+    def test_only_an_answered_message_is_counted_with_its_tokens(self):
+        from .models import AiUsage
+
+        self.client.force_login(self.owner)
+        self._enable_ai()
+
+        class _Reply:
+            def read(self):
+                return json.dumps({'choices': [{'message': {'content': 'Hi.'}}], 'usage': {'prompt_tokens': 120, 'completion_tokens': 30}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with mock.patch('tasks.workspace_tools.urlrequest.urlopen', lambda request, timeout=None: _Reply()):
+            with mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test-key'}):
+                self.client.post(reverse('workspace-ai-chat', args=[self.workspace.id]), data=json.dumps({'message': 'Hello'}), content_type='application/json')
+        row = AiUsage.objects.get(workspace=self.workspace, user=self.owner)
+        self.assertEqual((row.messages, row.prompt_tokens, row.completion_tokens), (1, 120, 30))
+
+    def test_usage_is_shown_only_to_people_who_manage_access_and_the_limit_is_theirs_to_set(self):
+        self._chat_as(self.owner)
+        usage = self.client.get(reverse('workspace-ai-usage', args=[self.workspace.id]))
+        self.assertEqual(usage.status_code, 200)
+        self.assertEqual(usage.json()['users'][0]['today'], 1)
+
+        environment = mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test-key'})
+        environment.start()
+        self.addCleanup(environment.stop)
+        saved = self.patch({'ai_daily_limit': 25})
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()['settings']['ai_daily_limit'], 25)
+        self.assertEqual(self.patch({'ai_daily_limit': 'many'}).status_code, 400)
+        self.assertEqual(self.patch({'ai_daily_limit': 99999}).status_code, 400)
+
+        manager = User.objects.create_user(username='use-manager@example.com', email='use-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager', permissions=['use_ai', 'manage_ai_providers'])
+        self.client.force_login(manager)
+        self.assertEqual(self.client.get(reverse('workspace-ai-usage', args=[self.workspace.id])).status_code, 403)
+        self.assertEqual(self.patch({'ai_daily_limit': 5}).status_code, 403)
+        # Sending back the value it already holds is not a change.
+        self.assertEqual(self.patch({'ai_daily_limit': 25}).status_code, 200)
+
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)
         self._enable_ai()

@@ -1757,6 +1757,47 @@ it('renders the P4 AI panel and saves provider and member access changes togethe
   expect(body.provider_config.openai.api_key).toBe('')
 })
 
+it('sets the daily Zuri limit and lists who has used Zuri', async () => {
+  const api = mockApi({
+    '/api/workspaces/1/ai/settings/': {
+      can_manage: true,
+      settings: { ai_enabled: true, ai_user_ids: [], ai_enabled_providers: ['openai'], ai_default_provider: 'openai', ai_daily_limit: 0 },
+      providers: { openai: true, claude: false, kimi: false, deepseek: false },
+      provider_config: {
+        openai: { base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini', has_api_key: true, key_hint: '••••1234' },
+        claude: { base_url: '', model: '', has_api_key: false, key_hint: '' },
+        kimi: { base_url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', has_api_key: false, key_hint: '' },
+        deepseek: { base_url: 'https://api.deepseek.com', model: 'deepseek-v4-flash', has_api_key: false, key_hint: '' },
+      },
+    },
+    '/api/workspaces/1/ai/usage/': {
+      limit: 0,
+      users: [{ user_id: 2, name: 'Amara Okafor', today: 3, week: 11, prompt_tokens: 12000, completion_tokens: 3400 }],
+    },
+  })
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role: 'owner' }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      members={[]}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'AI settings' }))
+  expect(await screen.findByRole('cell', { name: '11' })).toBeInTheDocument()
+  expect(screen.getByRole('rowheader', { name: 'Amara Okafor' })).toBeInTheDocument()
+
+  fireEvent.change(screen.getByLabelText('Daily Zuri messages per person'), { target: { value: '25' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH'))
+  const [, request] = expectRequest(api, '/api/workspaces/1/ai/settings/', 'PATCH')
+  expect(JSON.parse(request.body).ai_daily_limit).toBe(25)
+})
+
 it('cancels unsaved AI provider and member access changes', async () => {
   mockApi({
     '/api/workspaces/1/ai/settings/': {

@@ -1579,6 +1579,33 @@ export function AssistantPage({ workspaceId }) {
   </section>
 }
 
+// Who has used Zuri today and over the last week, for whoever manages access.
+function AiUsageList({ workspaceId, reloadKey }) {
+  const [usage, setUsage] = useState(null)
+  useEffect(() => {
+    let active = true
+    fetch(`/api/workspaces/${workspaceId}/ai/usage/`, { credentials: 'include', headers: headers(workspaceId) })
+      .then(response => (response.ok ? response.json() : null))
+      .then(result => { if (active) setUsage(result) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [workspaceId, reloadKey])
+  if (!usage) return null
+  if (!usage.users.length) return <p className="ai-members-empty">No Zuri messages in the last 7 days.</p>
+  return <table className="ai-usage-table">
+    <caption className="visually-hidden">Zuri messages per person</caption>
+    <thead><tr><th scope="col">Person</th><th scope="col">Today</th><th scope="col">7 days</th><th scope="col">Tokens (in / out)</th></tr></thead>
+    <tbody>
+      {usage.users.map(row => <tr key={row.user_id}>
+        <th scope="row">{row.name}</th>
+        <td>{row.today}</td>
+        <td>{row.week}</td>
+        <td>{row.prompt_tokens.toLocaleString()} / {row.completion_tokens.toLocaleString()}</td>
+      </tr>)}
+    </tbody>
+  </table>
+}
+
 export function AISettingsPanel({ workspaceId, members = [], canManageMembers }) {
   const [data, setData] = useState(null)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -2075,6 +2102,27 @@ export function AISettingsPanel({ workspaceId, members = [], canManageMembers })
           </div>
         })}
       </div>
+    </section>
+
+    <section className="ai-settings-usage" aria-labelledby="ai-usage-heading">
+      <div className="ai-settings-members-heading">
+        <h3 id="ai-usage-heading">Usage and limits</h3>
+        <p>Cap how many messages each person can send Zuri in a day. Owners are never held to it.</p>
+      </div>
+      <label className="ai-usage-limit">
+        <span>Daily messages per person (0 for no limit)</span>
+        <input
+          type="number"
+          min="0"
+          max="10000"
+          inputMode="numeric"
+          value={settings.ai_daily_limit ?? 0}
+          disabled={!mayManage}
+          onChange={event => updateSettings({ ai_daily_limit: Math.max(0, Math.min(10000, parseInt(event.target.value, 10) || 0)) })}
+          aria-label="Daily Zuri messages per person"
+        />
+      </label>
+      {mayManage && <AiUsageList workspaceId={workspaceId} reloadKey={reloadKey} />}
     </section>
 
     <section className="ai-settings-members" aria-labelledby="ai-members-heading">

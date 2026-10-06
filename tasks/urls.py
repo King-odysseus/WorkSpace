@@ -8,7 +8,7 @@ from .screen_sharing import screen_capture_detail, screen_capture_list, screen_s
 from .quality_views import import_commit, import_preview, project_health_report, workspace_automation_run, workspace_integrity, workspace_report
 from .import_templates import import_template
 from .workspace_logo import workspace_logo
-from .workspace_tools import workspace_ai_library, workspace_ai_action, workspace_ai_chat, workspace_ai_settings, workspace_check_in_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
+from .workspace_tools import workspace_ai_usage, workspace_ai_library, workspace_ai_action, workspace_ai_chat, workspace_ai_settings, workspace_check_in_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
 from .personal_views import personal_planner_detail, personal_planner_list, personal_task_detail, personal_task_list
 
 urlpatterns = [
@@ -38,6 +38,7 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/check-in-settings/', workspace_check_in_settings, name='workspace-check-in-settings'),
     path('workspaces/<int:workspace_id>/ai/chat/', workspace_ai_chat, name='workspace-ai-chat'),
     path('workspaces/<int:workspace_id>/ai/library/', workspace_ai_library, name='workspace-ai-library'),
+    path('workspaces/<int:workspace_id>/ai/usage/', workspace_ai_usage, name='workspace-ai-usage'),
     path('workspaces/<int:workspace_id>/ai/actions/<int:action_id>/', workspace_ai_action, name='workspace-ai-action'),
     path('workspaces/<int:workspace_id>/documents/', workspace_document_list, name='workspace-document-list'),
     path('workspaces/<int:workspace_id>/documents/<int:document_id>/', workspace_document_detail, name='workspace-document-detail'),
