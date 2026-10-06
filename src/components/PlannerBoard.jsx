@@ -232,6 +232,21 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       scopedBuckets.push({ id: `scope-lane:${bucketScope.project_id}:${name}`, name, project_id: bucketScope.project_id, workstream_id: null })
     }
   }
+  // The same for a workstream. Tasks are put in a workstream by the workstream they
+  // carry, not by the lane they sit in, so a workstream with a single lane of its own
+  // ("Not done") can hold work that sits in the shared Backlog or in a lane that has
+  // since been deleted. Without a column for them the workstream's own board draws a
+  // fraction of its tasks and the rest vanish - which is what a manager's batch of
+  // tasks looked like from the owner's side.
+  if (bucketScope && bucketScope.workstream_id) {
+    const drawn = new Set(scopedBuckets.map(bucket => bucket.name))
+    for (const task of tasks) {
+      const name = String(task.bucket || 'Backlog')
+      if (drawn.has(name) || String(task.workstream_id || '') !== String(bucketScope.workstream_id)) continue
+      drawn.add(name)
+      scopedBuckets.push({ id: `scope-lane:ws${bucketScope.workstream_id}:${name}`, name, project_id: null, workstream_id: bucketScope.workstream_id })
+    }
+  }
   // Bucket names only have to be unique within their scope and a task names its lane
   // by name alone, so a name shared by two scopes would draw the same column twice.
   buckets = [...new Map(scopedBuckets.map(bucket => [bucket.name, bucket])).values()]

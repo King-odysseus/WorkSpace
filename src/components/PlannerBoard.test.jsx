@@ -1137,3 +1137,20 @@ it('shows a member the avatars without a way to change them', () => {
   expect(within(group).getAllByRole('listitem')).toHaveLength(2)
   expect(within(group).queryByRole('button')).not.toBeInTheDocument()
 })
+
+it('draws a lane for tasks that belong to a workstream but sit outside its own lanes', () => {
+  const stream = { id: 9, kind: 'workstream', name: 'Tijha Consult', is_active: true, project_id: null, member_ids: [] }
+  const task = (id, title, bucket, workstreamId) => ({ id, title, bucket, status: 'todo', priority: 'normal', workstream: workstreamId === 9 ? 'Tijha Consult' : 'Other stream', workstream_id: workstreamId || '', project_id: '' })
+  const { container } = renderPlanner({
+    scopeMode: 'operations',
+    projectFilter: 'operations',
+    initialWorkstream: 'Tijha Consult',
+    lookupValues: [stream],
+    buckets: [{ id: 1, name: 'Backlog', project_id: null, workstream_id: null }, { id: 2, name: 'Not done', project_id: null, workstream_id: 9 }],
+    tasks: [task(1, 'In its own lane', 'Not done', 9), task(2, 'Sitting in the shared Backlog', 'Backlog', 9), task(3, 'Another workstream', 'Backlog', 4)],
+  })
+  expect(columnNames(container)).toEqual(['Not done', 'Backlog'])
+  expect(screen.getByText('Sitting in the shared Backlog')).toBeInTheDocument()
+  expect(screen.getByText('In its own lane')).toBeInTheDocument()
+  expect(screen.queryByText('Another workstream')).not.toBeInTheDocument()
+})
