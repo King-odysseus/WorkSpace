@@ -1090,6 +1090,49 @@ function useAssistantConversation(workspaceId, transcriptRef) {
   useEffect(() => {
     setArchive(readAiArchive(workspaceId)); setFolders(readAiFolders(workspaceId)); setCurrentFolderState(readAiCurrentFolder(workspaceId)); setHistoryOpen(false)
   }, [workspaceId])
+  // Saved chats follow the person across devices, so the server holds the copy
+  // that counts. The browser copy is the cache the window opens with and the
+  // fallback when the server cannot be reached. The first time a browser syncs,
+  // its own chats are folded in so nothing saved before this existed is lost;
+  // after that the server wins, which is what lets a delete on one device stick.
+  const syncedKey = `workspace-ai-synced:${workspaceId}`
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/workspaces/${workspaceId}/ai/library/`, { credentials: 'include', headers: headers(workspaceId) })
+      .then(response => (response.ok ? response.json() : null))
+      .then(async remote => {
+        if (cancelled || !remote || !Array.isArray(remote.chats)) return
+        const localChats = readAiArchive(workspaceId)
+        const localFolders = readAiFolders(workspaceId)
+        const firstSync = !readStored(syncedKey, false)
+        const remoteIds = new Set(remote.chats.map(chat => chat.id))
+        const chats = firstSync ? [...remote.chats, ...localChats.filter(chat => !remoteIds.has(chat.id))].slice(0, AI_ARCHIVE_LIMIT) : remote.chats
+        const names = firstSync
+          ? [...(remote.folders || []), ...localFolders.filter(name => !(remote.folders || []).some(other => other.toLowerCase() === name.toLowerCase()))].slice(0, AI_FOLDER_LIMIT)
+          : (remote.folders || [])
+        setArchive(chats); setFolders(names)
+        writeStored(aiArchiveKey(workspaceId), chats); writeStored(aiFoldersKey(workspaceId), names)
+        if (firstSync) {
+          writeStored(syncedKey, true)
+          if (chats.length !== remote.chats.length || names.length !== (remote.folders || []).length) pushLibrary(chats, names)
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId])
+  const pushLibrary = async (chats, names) => {
+    try {
+      await fetch(`/api/workspaces/${workspaceId}/ai/library/`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ chats, folders: names }),
+      })
+    } catch {
+      // Offline or refused: the browser copy still has it, and the next change pushes again.
+    }
+  }
   useLayoutEffect(() => {
     const transcript = transcriptRef.current
     if (!transcript) return
@@ -1242,8 +1285,15 @@ function useAssistantConversation(workspaceId, transcriptRef) {
       setError('')
     })
   }
-  const saveArchive = next => { const bounded = next.slice(0, AI_ARCHIVE_LIMIT); setArchive(bounded); writeStored(aiArchiveKey(workspaceId), bounded) }
-  const saveFolders = next => { setFolders(next); writeStored(aiFoldersKey(workspaceId), next) }
+  // One write for both lists, so a change to one cannot push a stale copy of the other.
+  const persist = (nextArchive, nextFolders) => {
+    const bounded = nextArchive.slice(0, AI_ARCHIVE_LIMIT)
+    setArchive(bounded); setFolders(nextFolders)
+    writeStored(aiArchiveKey(workspaceId), bounded); writeStored(aiFoldersKey(workspaceId), nextFolders)
+    pushLibrary(bounded, nextFolders)
+  }
+  const saveArchive = next => persist(next, folders)
+  const saveFolders = next => persist(archive, next)
   const setCurrentFolder = folder => { setCurrentFolderState(folder); writeStored(aiCurrentFolderKey(workspaceId), folder) }
   // The chat on screen, filed as a past chat. Empty ones are not worth keeping.
   const filedCurrent = () => (turns.length
@@ -1294,8 +1344,7 @@ function useAssistantConversation(workspaceId, transcriptRef) {
   }
   // Deleting a folder never deletes a chat: what was in it goes back to Unfiled.
   const deleteFolder = name => {
-    saveFolders(folders.filter(folder => folder !== name))
-    saveArchive(archive.map(entry => (entry.folder === name ? { ...entry, folder: '' } : entry)))
+    persist(archive.map(entry => (entry.folder === name ? { ...entry, folder: '' } : entry)), folders.filter(folder => folder !== name))
     if (currentFolder === name) setCurrentFolder('')
   }
   return {
@@ -1318,7 +1367,11 @@ function AssistantHistory({ conversation }) {
   const { archive, folders, currentFolder, setCurrentFolder, setHistoryOpen, openChat, deleteChat, moveChat, createFolder, deleteFolder, turns, error } = conversation
   const [filter, setFilter] = useState('all')
   const [newFolder, setNewFolder] = useState('')
-  const visible = archive.filter(chat => filter === 'all' || (filter === 'unfiled' ? !chat.folder : chat.folder === filter))
+  const [search, setSearch] = useState('')
+  const needle = search.trim().toLowerCase()
+  const visible = archive
+    .filter(chat => filter === 'all' || (filter === 'unfiled' ? !chat.folder : chat.folder === filter))
+    .filter(chat => !needle || chat.title.toLowerCase().includes(needle) || chat.turns.some(turn => turn.content.toLowerCase().includes(needle)))
   const addFolder = event => {
     event.preventDefault()
     const name = createFolder(newFolder)
@@ -1340,6 +1393,7 @@ function AssistantHistory({ conversation }) {
       <span>This chat's folder</span>
       {folderSelect(currentFolder, setCurrentFolder, "This chat's folder")}
     </label>}
+    <input className="ai-history-search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search past chats" aria-label="Search past chats" />
     <div className="ai-history-folders" role="group" aria-label="Folders">
       {[['all', 'All'], ['unfiled', 'Unfiled'], ...folders.map(folder => [folder, folder])].map(([value, label]) => (
         <span className="ai-history-chip" key={value}>
@@ -1353,7 +1407,7 @@ function AssistantHistory({ conversation }) {
       <button type="submit" className="secondary-button" disabled={!newFolder.trim()}><Plus size={14} /> Add folder</button>
     </form>
     {visible.length === 0
-      ? <p className="ai-history-empty">{archive.length ? 'No chats in this folder.' : 'Past chats appear here when you start a new chat.'}</p>
+      ? <p className="ai-history-empty">{archive.length ? (needle ? 'No chats match that search.' : 'No chats in this folder.') : 'Past chats appear here when you start a new chat.'}</p>
       : <ul className="ai-history-list">
         {visible.map(chat => <li key={chat.id}>
           <button type="button" className="ai-history-open" onClick={() => openChat(chat.id)}>

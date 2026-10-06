@@ -6824,6 +6824,7 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .ai-history-chip button { min-height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--pencil-text-secondary); font-size: 11px; }
 .ai-history-chip button.is-active { background: var(--pencil-navy); color: #fff; }
 .ai-history-chip .ai-history-chip-remove { display: grid; width: 24px; padding: 0; place-items: center; color: var(--pencil-text-muted); }
+.ai-history-search { min-width: 0; min-height: 34px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 12px; }
 .ai-history-new-folder { display: flex; gap: 6px; }
 .ai-history-new-folder input { min-width: 0; flex: 1 1 auto; min-height: 34px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 12px; }
 .ai-history-new-folder .secondary-button { width: auto; min-height: 34px; padding: 0 10px; font-size: 11px; }

@@ -783,3 +783,28 @@ it('keeps the file attached for the next batch when Zuri offers one', async () =
   expect(screen.getByRole('button', { name: 'Remove plan.docx' })).toBeInTheDocument()
   expectRequest(fetchMock, '/api/workspaces/4/ai/chat/', 'POST')
 })
+
+it('merges this browser\'s chats into the server copy once, then lets the server win', async () => {
+  window.localStorage.setItem('workspace-ai-archive:4', JSON.stringify([
+    { id: 'local1', title: 'Old local chat', folder: '', updatedAt: '', turns: [{ role: 'user', content: 'from this browser' }] },
+  ]))
+  const fetchMock = mockApi({
+    ...settingsOnly,
+    '/api/workspaces/4/ai/library/': {
+      chats: [{ id: 'srv1', title: 'Saved on another device', folder: '', updatedAt: '', turns: [{ role: 'user', content: 'from the server' }] }],
+      folders: ['Website'],
+    },
+  })
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Chat history' }))
+  expect(await screen.findByText('Saved on another device')).toBeInTheDocument()
+  expect(screen.getByText('Old local chat')).toBeInTheDocument()
+  // The merged set is written back, and the browser remembers it has synced.
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/4/ai/library/', 'PUT'))
+  expect(window.localStorage.getItem('workspace-ai-synced:4')).toBe('true')
+
+  fireEvent.change(screen.getByLabelText('Search past chats'), { target: { value: 'from the server' } })
+  expect(screen.getByText('Saved on another device')).toBeInTheDocument()
+  expect(screen.queryByText('Old local chat')).not.toBeInTheDocument()
+})
