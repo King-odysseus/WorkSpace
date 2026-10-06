@@ -442,7 +442,7 @@ def workspace_ai_chat(request, workspace_id):
             {**turn, 'content': privacy.protect(turn['content'])}
             for turn in history
         ]
-        snapshot = build_workspace_snapshot(workspace_id, request.user, privacy)
+        snapshot = build_workspace_snapshot(workspace_id, request.user, privacy, query=message)
         document_section, document_meta, document_image = _attached_document(
             payload, workspace_id, privacy, vision=model_reads_images(provider, model),
         )

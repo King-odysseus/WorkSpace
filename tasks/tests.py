@@ -4245,6 +4245,41 @@ class WorkspaceAiSettingsApiTests(TestCase):
             ['Create task "Stand-up"', 'Create task "Review"'],
         )
 
+    def test_a_task_the_question_names_is_seen_even_outside_the_recent_window(self):
+        old = Task.objects.create(workspace=self.workspace, title='Quarterly invoice audit')
+        for index in range(3):
+            Task.objects.create(workspace=self.workspace, title=f'Recent chore {index}')
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        with mock.patch('tasks.ai_actions.MAX_SNAPSHOT_TASKS', 2):
+            self._chat({'message': 'What is the state of the invoice audit?'}, captured)
+        snapshot = json.loads(captured['body']['messages'][0]['content'].split('Workspace snapshot: ', 1)[1])
+        titles = {row['title'] for row in snapshot['tasks']}
+        self.assertIn('Quarterly invoice audit', titles)
+        self.assertEqual(snapshot['read_window']['tasks_matching_the_question'], 1)
+        self.assertEqual(len(titles), 3)
+        self.assertTrue(Task.objects.filter(id=old.id).exists())
+
+    def test_a_manager_can_have_zuri_archive_a_task_after_confirming(self):
+        manager = User.objects.create_user(username='arch-manager@example.com', email='arch-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        task = Task.objects.create(workspace=self.workspace, title='Park this')
+        response = self._delete_proposal(manager, [{'kind': 'task.archive', 'arguments': {'task_id': task.id}}])
+        proposal = response.json()['pending_actions'][0]
+        self.assertIn('can be restored', proposal['summary'])
+        task.refresh_from_db()
+        self.assertNotEqual(task.state, 'archived')
+        self.assertEqual(self._confirm(proposal['id']).status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.state, 'archived')
+
+    def test_a_member_cannot_have_zuri_archive_a_task(self):
+        task = Task.objects.create(workspace=self.workspace, title='Not yours to park')
+        response = self._delete_proposal(self.member, [{'kind': 'task.archive', 'arguments': {'task_id': task.id}}])
+        self.assertEqual(response.json()['pending_actions'], [])
+        self.assertIn('owners and managers', response.json()['action_error'])
+
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)
         self._enable_ai()

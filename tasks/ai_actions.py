@@ -3,6 +3,7 @@ import re
 from datetime import date, timedelta
 
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.test import RequestFactory
 from django.utils import timezone
 
@@ -21,6 +22,15 @@ ACTION_TTL = timedelta(minutes=20)
 # 50-70k tokens a turn and does not fit the 8k context of the Kimi default.
 MAX_SNAPSHOT_TASKS = 300
 MAX_SNAPSHOT_PROJECTS = 50
+# Tasks the question itself points at, added to the recent window. The window
+# is the most recently updated tasks, so an older task the user asks about by
+# name would otherwise be invisible to Zuri however plainly they named it.
+MAX_SNAPSHOT_MATCHES = 100
+SNAPSHOT_STOPWORDS = {
+    'about', 'after', 'again', 'all', 'also', 'always', 'and', 'any', 'are', 'can', 'could', 'delete', 'does', 'from', 'have',
+    'into', 'just', 'make', 'move', 'need', 'please', 'show', 'task', 'tasks', 'that', 'the', 'them', 'then', 'there', 'these',
+    'they', 'this', 'what', 'when', 'where', 'which', 'will', 'with', 'would', 'your', 'zuri',
+}
 # A conversation can carry a list - a week or a month of tasks, say - but a whole
 # plan belongs in the spreadsheet importer, which previews every row before it
 # writes anything. This is the point where Zuri stops proposing and points there.
@@ -60,6 +70,7 @@ ACTION_FIELDS = {
         'progress_percent', 'blocker_details',
     },
     'task.delete': {'task_id'},
+    'task.archive': {'task_id'},
     'project.create': {'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.update': {'project_id', 'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.delete': {'project_id'},
@@ -251,16 +262,34 @@ class PrivacyRegistry:
         return text
 
 
-def build_workspace_snapshot(workspace_id, actor, registry):
+def build_workspace_snapshot(workspace_id, actor, registry, query=''):
     """Build the small, non-identifying workspace view sent to the provider."""
 
-    tasks = (
+    live_tasks = (
         Task.objects
         .filter(workspace_id=workspace_id)
         .exclude(state='archived')
         .select_related('assignee', 'project_ref', 'workstream_ref')
-        .order_by('-updated_at')[:MAX_SNAPSHOT_TASKS]
     )
+    tasks = list(live_tasks.order_by('-updated_at')[:MAX_SNAPSHOT_TASKS])
+    # Words from the question, matched against titles, buckets, projects and
+    # workstreams, so a task older than the recent window can still be named.
+    words = [
+        word for word in dict.fromkeys(re.findall(r"[a-z0-9][a-z0-9'-]{2,}", str(query or '').lower()))
+        if word not in SNAPSHOT_STOPWORDS
+    ][:8]
+    matched = 0
+    if words:
+        match = Q()
+        for word in words:
+            match |= (
+                Q(title__icontains=word) | Q(bucket__icontains=word) | Q(code__iexact=word)
+                | Q(project_ref__name__icontains=word) | Q(workstream_ref__name__icontains=word)
+            )
+        seen = {task.id for task in tasks}
+        extra = [task for task in live_tasks.filter(match).exclude(id__in=seen).order_by('-updated_at')[:MAX_SNAPSHOT_MATCHES]]
+        matched = len(extra)
+        tasks += extra
     task_rows = []
     for task in tasks:
         task_rows.append({
@@ -330,6 +359,7 @@ def build_workspace_snapshot(workspace_id, actor, registry):
         # the workspace's capacity and refused work that would have fitted.
         'read_window': {
             'tasks_included': len(task_rows),
+            'tasks_matching_the_question': matched,
             'tasks_limit': MAX_SNAPSHOT_TASKS,
             'projects_limit': MAX_SNAPSHOT_PROJECTS,
             'note': (
@@ -361,7 +391,9 @@ def action_instructions(snapshot):
         'When a request needs more than that, propose the first batch as actions, then say in "answer" how many are left and that the user can reply "continue" for the next batch. '
         'On "continue", skip every task whose title already appears in the snapshot or in your earlier replies and propose the next batch; never propose the same task twice. '
         'A spreadsheet to load in bulk with its own columns belongs in Import data, which previews every row before anything is written. '
-        'Allowed action kinds are task.create, task.update, task.delete, project.create, project.update, and project.delete. '
+        'Allowed action kinds are task.create, task.update, task.archive, task.delete, project.create, project.update, and project.delete. '
+        'task.archive uses task_id: it takes a task off the board but keeps it, and an owner or manager may ask for it. '
+        'Prefer task.archive when the user says archive, clear, or take something off; use task.delete only when they ask to delete or remove it for good. '
         'Work lives in a project or in an operations workstream such as Daily operations, never both. The snapshot lists "workstreams" and "buckets"; '
         'a bucket with a workstream_id belongs to that workstream and one with a project_id belongs to that project, and each task shows its "workstream". '
         'When a task belongs in a workstream, set workstream_id to that workstream\'s id and bucket to one of its buckets; when the user names a workstream or one of its buckets, '
@@ -606,7 +638,7 @@ def _validate_action(action, registry, workspace_id, actor):
             raise ActionValidationError('Task is required.')
         if not (set(cleaned) - {'task_id'}):
             raise ActionValidationError('Choose at least one task field to update.')
-    if kind == 'task.delete' and not cleaned.get('task_id'):
+    if kind in {'task.delete', 'task.archive'} and not cleaned.get('task_id'):
         raise ActionValidationError('Task is required.')
     if kind == 'project.delete' and not cleaned.get('project_id'):
         raise ActionValidationError('Project is required.')
@@ -629,6 +661,14 @@ def _validate_action(action, registry, workspace_id, actor):
                 raise ActionValidationError('Task was not found in this workspace.')
         elif not Project.objects.filter(id=cleaned['project_id'], workspace_id=workspace_id).exists():
             raise ActionValidationError('Project was not found in this workspace.')
+        return kind, cleaned
+    if kind == 'task.archive':
+        # The same rule the archive endpoint applies, said here so a refusal
+        # comes before the confirm card and not after it.
+        if membership.role not in {'owner', 'manager'}:
+            raise ActionValidationError('Only owners and managers can archive tasks.')
+        if not Task.objects.filter(id=cleaned['task_id'], workspace_id=workspace_id).exclude(state='archived').exists():
+            raise ActionValidationError('Task was not found in this workspace.')
         return kind, cleaned
     if kind in {'task.create', 'task.update'} and cleaned.get('workstream_id'):
         workstream = LookupValue.objects.filter(
@@ -683,6 +723,10 @@ def _action_payload(kind, arguments, registry):
 
 
 def _action_summary(kind, payload, registry):
+    if kind == 'task.archive':
+        task = Task.objects.filter(id=payload.get('task_id')).only('title').first()
+        title = registry.expand(task.title if task else 'Unknown task')[:140]
+        return f'Archive task "{title}". It leaves the board and can be restored.'
     if kind == 'task.delete':
         task = Task.objects.filter(id=payload.get('task_id')).only('title').first()
         title = registry.expand(task.title if task else 'Unknown task')[:140]
@@ -736,6 +780,11 @@ def _call_view(view, request, **kwargs):
 
 def execute_action(action, actor):
     factory = RequestFactory()
+    if action.kind == 'task.archive':
+        task_id = action.payload.get('task_id')
+        request = factory.delete(f'/api/tasks/{task_id}/')
+        request.user = actor
+        return _call_view(task_detail, request, task_id=task_id)
     if action.kind in DELETE_KINDS:
         # Checked again here, not just when the proposal was made: the role can
         # change in the 20 minutes a proposal stays open.
