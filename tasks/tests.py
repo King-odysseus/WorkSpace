@@ -4384,6 +4384,40 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('empty response', response.json()['answer'])
 
+    def test_comments_and_documents_the_question_names_reach_zuri_redacted(self):
+        from .models import TaskComment, WorkspaceDocument
+
+        task = Task.objects.create(workspace=self.workspace, title='Venue booking')
+        TaskComment.objects.create(task=task, author=self.member, body='Agreed the marquee deposit is due Friday, call 08012345678 to confirm.')
+        TaskComment.objects.create(task=task, author=self.member, body='Unrelated chatter about lunch.')
+        WorkspaceDocument.objects.create(workspace=self.workspace, title='Event notes', content={'html': '<p>The marquee supplier wants a <b>signed contract</b>.</p>'}, created_by=self.owner)
+        WorkspaceDocument.objects.create(workspace=self.workspace, title='Other', content={'html': '<p>Nothing relevant.</p>'}, created_by=self.owner)
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        response = self._chat({'message': 'What did we decide about the marquee?'}, captured)
+        self.assertEqual(response.status_code, 200)
+        prompt = captured['body']['messages'][0]['content']
+        snapshot = json.loads(prompt.split('Workspace snapshot: ', 1)[1])
+        comments = snapshot['comments_matching_the_question']
+        self.assertEqual(len(comments), 1)
+        self.assertIn('marquee deposit', comments[0]['text'])
+        self.assertNotIn('08012345678', comments[0]['text'])
+        self.assertEqual(comments[0]['task'], 'Venue booking')
+        documents = snapshot['documents_matching_the_question']
+        self.assertEqual([item['title'] for item in documents], ['Event notes'])
+        self.assertIn('signed contract', documents[0]['excerpt'])
+        self.assertNotIn('<b>', documents[0]['excerpt'])
+
+    def test_a_question_that_names_nothing_carries_no_comments_or_documents(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        captured = {}
+        self._chat({'message': 'Hi'}, captured)
+        snapshot = json.loads(captured['body']['messages'][0]['content'].split('Workspace snapshot: ', 1)[1])
+        self.assertEqual(snapshot['comments_matching_the_question'], [])
+        self.assertEqual(snapshot['documents_matching_the_question'], [])
+
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)
         self._enable_ai()

@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.test import RequestFactory
 from django.utils import timezone
 
-from .models import AiAction, LookupValue, Membership, PlanBucket, Project, Task
+from .models import AiAction, LookupValue, Membership, PlanBucket, Project, Task, TaskComment, WorkspaceDocument
 from .views import task_detail, task_list, project_detail, project_list
 
 
@@ -26,6 +26,13 @@ MAX_SNAPSHOT_PROJECTS = 50
 # is the most recently updated tasks, so an older task the user asks about by
 # name would otherwise be invisible to Zuri however plainly they named it.
 MAX_SNAPSHOT_MATCHES = 100
+# What the question pulls in from comments and documents. Both are read only when
+# the question's own words appear in them, and clipped, so they add a few
+# thousand tokens at most to a turn and nothing at all to one that names neither.
+MAX_SNAPSHOT_COMMENTS = 20
+MAX_SNAPSHOT_DOCUMENTS = 5
+SNAPSHOT_SNIPPET_CHARS = 400
+MAX_DOCUMENTS_SCANNED = 200
 SNAPSHOT_STOPWORDS = {
     'about', 'after', 'again', 'all', 'also', 'always', 'and', 'any', 'are', 'can', 'could', 'delete', 'does', 'from', 'have',
     'into', 'just', 'make', 'move', 'need', 'please', 'show', 'task', 'tasks', 'that', 'the', 'them', 'then', 'there', 'these',
@@ -262,6 +269,34 @@ class PrivacyRegistry:
         return text
 
 
+def _document_plain_text(value):
+    """Every string inside a document's stored content, tags stripped."""
+    parts = []
+
+    def walk(node):
+        if isinstance(node, str):
+            parts.append(node)
+        elif isinstance(node, dict):
+            for child in node.values():
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(value)
+    return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', ' '.join(parts))).strip()
+
+
+def _snippet_around(text, words):
+    """A short stretch of `text` around the first of `words` that appears in it."""
+    lowered = text.lower()
+    hits = [lowered.find(word) for word in words if word in lowered]
+    if not hits:
+        return None
+    start = max(0, min(hits) - SNAPSHOT_SNIPPET_CHARS // 4)
+    return text[start:start + SNAPSHOT_SNIPPET_CHARS]
+
+
 def build_workspace_snapshot(workspace_id, actor, registry, query=''):
     """Build the small, non-identifying workspace view sent to the provider."""
 
@@ -321,6 +356,47 @@ def build_workspace_snapshot(workspace_id, actor, registry, query=''):
             'end_date': project.end_date.isoformat() if project.end_date else None,
         })
 
+    # Comments and documents the question's words appear in. The text is redacted
+    # rather than protected: protect() refuses personal data outright, and a stray
+    # phone number in someone's comment must not stop Zuri answering about it.
+    comment_rows = []
+    document_rows = []
+    if words:
+        comment_match = Q()
+        for word in words:
+            comment_match |= Q(body__icontains=word)
+        comments = (
+            TaskComment.objects
+            .filter(task__workspace_id=workspace_id)
+            .exclude(task__state='archived')
+            .filter(comment_match)
+            .select_related('task')
+            .order_by('-created_at')[:MAX_SNAPSHOT_COMMENTS]
+        )
+        for comment in comments:
+            text, _ = registry.redact(comment.body)
+            comment_rows.append({
+                'task_id': comment.task_id,
+                'task': registry.protect(comment.task.title),
+                'by': registry.user_id_to_placeholder.get(comment.author_id),
+                'on': comment.created_at.date().isoformat(),
+                'text': text[:SNAPSHOT_SNIPPET_CHARS],
+            })
+        for document in WorkspaceDocument.objects.filter(workspace_id=workspace_id).order_by('-updated_at')[:MAX_DOCUMENTS_SCANNED]:
+            if len(document_rows) >= MAX_SNAPSHOT_DOCUMENTS:
+                break
+            body = _document_plain_text(document.content)
+            snippet = _snippet_around(f'{document.title}. {body}', words)
+            if snippet is None:
+                continue
+            text, _ = registry.redact(snippet)
+            document_rows.append({
+                'title': registry.protect(document.title),
+                'kind': document.kind,
+                'updated': document.updated_at.date().isoformat(),
+                'excerpt': text,
+            })
+
     # Where work lives. A task joins a workstream (daily operations and the like)
     # through the bucket it sits in, and a bucket's name alone does not say which
     # scope it belongs to, so without these Zuri filed everything unscoped.
@@ -353,6 +429,8 @@ def build_workspace_snapshot(workspace_id, actor, registry, query=''):
         'tasks': task_rows,
         'projects': project_rows,
         'workstreams': workstream_rows,
+        'comments_matching_the_question': comment_rows,
+        'documents_matching_the_question': document_rows,
         'buckets': bucket_rows,
         'actor_is_owner': Membership.objects.filter(workspace_id=workspace_id, user=actor, role='owner').exists(),
         # Named for what it is. Under the key "limits" the model read these as
@@ -401,6 +479,8 @@ def action_instructions(snapshot):
         'task.delete uses task_id and project.delete uses project_id. A delete is permanent and only the workspace owner may ask for one: '
         'the snapshot\'s "actor_is_owner" says whether the current user is the owner. When it is false, never propose a delete: say the owner has to do it. '
         'When it is true, propose one task.delete per task, and say in "answer" what will be deleted and that it cannot be undone and needs the owner\'s confirmation. '
+        'The snapshot also carries "comments_matching_the_question" and "documents_matching_the_question": the comments and document excerpts whose text contains words from the question. '
+        'Use them to answer what people wrote or decided, say which task or document each comes from, and say plainly when nothing in them answers it instead of guessing. '
         'To delete the tasks in a bucket, propose a task.delete for each task the snapshot shows in that bucket and workstream or project. '
         'Never delete anything the user did not clearly ask to delete. '
         'Never claim an action has happened: it only becomes a proposal that the user must confirm. '
