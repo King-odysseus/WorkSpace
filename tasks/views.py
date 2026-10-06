@@ -22,6 +22,7 @@ from django.utils.text import slugify
 
 from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
+from .shifts import close_abandoned_shifts
 from .board_access import (
     is_board_member, is_leader, task_board_member, task_is_visible, visible_buckets, visible_projects,
     visible_tasks, visible_workstreams,
@@ -879,9 +880,11 @@ def report_summary(request, workspace_id):
     }})
 
 
-def time_clock_summary(workspace_id, report_range, today, user_id=None, page=1, page_size=20):
+def time_clock_summary(workspace_id, report_range, today, user_id=None, page=1, page_size=10):
     """Aggregate work shifts for the Reports page over the same window the task report uses."""
     from .reporting import named_period_start
+    # A forgotten clock-out would otherwise be counted up to this very moment.
+    close_abandoned_shifts(workspace_id)
     shifts = WorkShift.objects.filter(workspace_id=workspace_id).select_related('user')
     period_start = named_period_start(report_range, today)
     if period_start is not None:
@@ -2978,6 +2981,7 @@ def member_list(request, workspace_id):
     # clock-in time); members still see everyone's presence and last-seen but
     # not each other's shift history.
     if actor is not None and actor.role in {'owner', 'manager'}:
+        close_abandoned_shifts(workspace_id)
         user_ids = [member.user_id for member in page.object_list]
         open_shifts = WorkShift.objects.filter(workspace_id=workspace_id, user_id__in=user_ids, ended_at__isnull=True)
         shift_by_user = {shift.user_id: shift for shift in open_shifts}
@@ -5116,6 +5120,9 @@ def work_shift_list(request, workspace_id):
     _, error = require_workspace_member(request, workspace_id)
     if error:
         return error
+    # Someone who forgot to clock out yesterday is clocked in again by a fresh start,
+    # not told they are already clocked in.
+    close_abandoned_shifts(workspace_id)
 
     if request.method == 'GET':
         requested_date = request.GET.get('date')

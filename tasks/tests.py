@@ -2864,10 +2864,10 @@ class WorkShiftApiTests(TestCase):
                 ended_at=timezone.now() - timedelta(days=index),
             )
         summary = self.client.get(reverse('report-summary', args=[self.workspace.id])).json()['summary']['time_clock']
-        self.assertEqual(len(summary['recent']), 20)
-        self.assertEqual(summary['recent_pagination']['page_size'], 20)
+        self.assertEqual(len(summary['recent']), 10)
+        self.assertEqual(summary['recent_pagination']['page_size'], 10)
         self.assertEqual(summary['recent_pagination']['total_count'], 25)
-        self.assertEqual(summary['recent_pagination']['total_pages'], 2)
+        self.assertEqual(summary['recent_pagination']['total_pages'], 3)
 
 
 class TaskDependencyApiTests(TestCase):

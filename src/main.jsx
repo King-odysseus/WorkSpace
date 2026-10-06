@@ -7442,6 +7442,8 @@ function WorkspaceView({
           ) : (
             <EmptyState text="No time has been clocked in this period." />
           )}
+        </Card>
+        <Card className="report-panel time-clock-panel time-clock-log-panel">
           <div className="time-clock-log">
             <div className="drawer-section-heading">
               <h3>Recent entries</h3>
