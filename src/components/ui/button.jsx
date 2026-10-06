@@ -55,7 +55,7 @@ function buttonVariants({ variant = 'default', size = 'default', className } = {
 
   const skin = {
     default: 'border border-navy bg-navy text-text-on-navy',
-    secondary: 'bg-surface-hover text-text-primary',
+    secondary: 'border border-border bg-surface-hover text-text-primary',
     outline: 'border border-border bg-transparent text-text-primary',
     ghost: 'bg-transparent text-text-primary',
     destructive: 'bg-danger text-white',

@@ -2881,7 +2881,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .direct-row-actions { position: absolute; z-index: 2; top: 50%; right: 8px; display: flex; gap: 2px; opacity: 0; transform: translateY(-50%); }
 .chat-workspace-view .direct-row-wrap:hover .direct-row-actions, .chat-workspace-view .direct-row-actions:focus-within { opacity: 1; }
 .chat-workspace-view .direct-row-wrap:hover .badge { opacity: 0; }
-.chat-workspace-view .direct-row-actions button { display: grid; width: 24px; height: 24px; place-items: center; padding: 0; border: 0; border-radius: 6px; background: var(--pencil-surface); color: var(--pencil-text-muted); }
+.chat-workspace-view .direct-row-actions button { display: grid; width: 24px; height: 24px; place-items: center; padding: 0; border: 1px solid var(--pencil-border); border-radius: 6px; background: var(--pencil-surface); color: var(--pencil-text-muted); }
 .chat-workspace-view .direct-row-actions button:hover { background: var(--pencil-surface-muted); color: var(--pencil-text); }
 .chat-workspace-view .chat-sidebar-empty { margin: 12px 4px; color: var(--pencil-text-muted); font-size: 12px; line-height: 18px; }
 .chat-workspace-view .chat-feed { display: flex; min-width: 0; height: calc(100dvh - 64px); flex-direction: column; overflow: hidden; background: var(--pencil-canvas); }
