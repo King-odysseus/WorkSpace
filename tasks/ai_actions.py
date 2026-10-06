@@ -358,7 +358,9 @@ def action_instructions(snapshot):
         'Put every action field inside "arguments", including title or name. '
         'One entry per change: a request covering several tasks returns one entry each, and the user confirms them all in a single step, so never spread a list of tasks across several replies or ask the user to confirm them one at a time. '
         f'Propose at most {MAX_ACTION_BATCH} changes in one reply. '
-        'When a request needs more than that, or arrives as a whole plan, a schedule, or a spreadsheet, set "actions" to null and say in "answer" that a set this size belongs in Import data, which previews every row before anything is written. '
+        'When a request needs more than that, propose the first batch as actions, then say in "answer" how many are left and that the user can reply "continue" for the next batch. '
+        'On "continue", skip every task whose title already appears in the snapshot or in your earlier replies and propose the next batch; never propose the same task twice. '
+        'A spreadsheet to load in bulk with its own columns belongs in Import data, which previews every row before anything is written. '
         'Allowed action kinds are task.create, task.update, task.delete, project.create, project.update, and project.delete. '
         'Work lives in a project or in an operations workstream such as Daily operations, never both. The snapshot lists "workstreams" and "buckets"; '
         'a bucket with a workstream_id belongs to that workstream and one with a project_id belongs to that project, and each task shows its "workstream". '
@@ -421,6 +423,28 @@ def _salvage_answer(text):
         return body
 
 
+def _salvage_actions(text):
+    """The complete action objects at the front of an "actions" array that was cut off."""
+    match = re.search(r'"actions?"\s*:\s*\[', text)
+    if not match:
+        return []
+    decoder = json.JSONDecoder()
+    found = []
+    index = match.end()
+    while index < len(text):
+        while index < len(text) and (text[index].isspace() or text[index] == ','):
+            index += 1
+        if index >= len(text) or text[index] != '{':
+            break
+        try:
+            entry, index = decoder.raw_decode(text, index)
+        except json.JSONDecodeError:
+            break
+        if isinstance(entry, dict):
+            found.append(entry)
+    return found
+
+
 def parse_provider_response(content, registry):
     """Accept plain text for compatibility and resolve any structured actions.
 
@@ -442,12 +466,19 @@ def parse_provider_response(content, registry):
     except json.JSONDecodeError:
         start = candidate.find('{')
         end = candidate.rfind('}')
-        if start < 0 or end <= start:
-            return {**empty, 'answer': registry.expand(_salvage_answer(candidate) or candidate)}
-        try:
-            parsed = json.loads(candidate[start:end + 1])
-        except json.JSONDecodeError:
-            return {**empty, 'answer': registry.expand(_salvage_answer(candidate) or candidate)}
+        parsed = None
+        if start >= 0 and end > start:
+            try:
+                parsed = json.loads(candidate[start:end + 1])
+            except json.JSONDecodeError:
+                parsed = None
+        if parsed is None:
+            answer_text = _salvage_answer(candidate)
+            if answer_text is None:
+                return {**empty, 'answer': registry.expand(candidate)}
+            # Whole actions that arrived before the reply was cut off are still
+            # good: each one is complete JSON of its own and is validated like any other.
+            parsed = {'answer': answer_text, 'actions': _salvage_actions(candidate)}
     if not isinstance(parsed, dict):
         return {**empty, 'answer': registry.expand(candidate)}
     answer = str(parsed.get('answer') or '').strip() or 'I prepared a workspace action for your confirmation.'

@@ -764,3 +764,22 @@ it('files past chats into folders and lists them by folder', async () => {
   expect(screen.getByText('Plan the launch')).toBeInTheDocument()
   expect(JSON.parse(window.localStorage.getItem('workspace-ai-archive:4'))[0].folder).toBe('')
 })
+
+it('keeps the file attached for the next batch when Zuri offers one', async () => {
+  const fetchMock = mockApi({
+    ...settingsOnly,
+    '/api/workspaces/4/files/': { file: { id: 9, original_name: 'plan.docx', url: '' } },
+    '/api/workspaces/4/ai/chat/': { answer: 'Here are the first 50. 7 are left; reply "continue" for the next batch.', pending_actions: [], dropped: 0 },
+  })
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  fireEvent.change(await screen.findByLabelText('Attach a document for Zuri to read'), { target: { files: [new File(['x'], 'plan.docx')] } })
+  expect(await screen.findByRole('button', { name: 'Remove plan.docx' })).toBeInTheDocument()
+  const input = screen.getByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'Pull all tasks' } })
+  fireEvent.submit(input.closest('form'))
+
+  await waitFor(() => expect(screen.getByLabelText('Message to Zuri')).toHaveValue('continue'))
+  expect(screen.getByRole('button', { name: 'Remove plan.docx' })).toBeInTheDocument()
+  expectRequest(fetchMock, '/api/workspaces/4/ai/chat/', 'POST')
+})

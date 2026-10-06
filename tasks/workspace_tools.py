@@ -290,7 +290,9 @@ AI_HISTORY_MAX_CHARS = 24000
 # the lists and tables that cost more tokens per word than prose does. It only
 # bounds a reply, so it costs nothing on the short ones that are the common case.
 # 1,200 was low enough that a plan or a long explanation stopped mid-sentence.
-AI_MAX_RESPONSE_TOKENS = 5000
+# Raised to 7,000 because a full batch of fifty proposals is itself about 4,000
+# tokens of JSON before the answer text, and a batch cut off mid-array loses work.
+AI_MAX_RESPONSE_TOKENS = 7000
 
 
 def _ai_history(raw):
@@ -554,13 +556,16 @@ def workspace_ai_chat(request, workspace_id):
         reply = parsed['answer'] or 'The assistant returned an empty response.'
         if parsed['dropped']:
             reply = (
-                f"{reply}\n\nOnly the first {MAX_ACTION_BATCH} changes were prepared. "
-                'A plan this size belongs in Import data, which previews every row before anything is written.'
+                f"{reply}\n\nOnly the first {MAX_ACTION_BATCH} changes were prepared; "
+                f"{parsed['dropped']} more were left out. Confirm these, then reply \"continue\" for the next batch."
             )
         payload = {
             'answer': reply,
             'pending_actions': [proposal.as_dict() for proposal in pending_actions],
             'document': document_meta,
+            # How many proposals the batch cap left out, so the composer can keep
+            # the attached file for the "continue" that fetches the next batch.
+            'dropped': parsed['dropped'],
         }
         if rejected:
             payload['action_error'] = ' '.join(rejected)

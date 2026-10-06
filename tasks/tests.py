@@ -4141,7 +4141,8 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(len(body['pending_actions']), MAX_ACTION_BATCH)
-        self.assertIn('Import data', body['answer'])
+        self.assertIn('continue', body['answer'])
+        self.assertEqual(body['dropped'], 2)
 
     def test_a_month_of_daily_tasks_fits_in_one_reply(self):
         # A Monday-to-Friday October is about 22 tasks, which the old cap of 20
@@ -4225,6 +4226,24 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertNotIn('{"answer"', answer)
         self.assertNotIn('\\n', answer)
         self.assertIn('Found **57 tasks**.\n\n1. Stand-up — P0\n2. Review "weekly" — P1', answer)
+
+    def test_whole_actions_survive_a_reply_cut_off_inside_the_array(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        cut_off = (
+            '{"answer":"Prepared the first tasks.","actions":['
+            '{"kind":"task.create","arguments":{"title":"Stand-up"}},'
+            '{"kind":"task.create","arguments":{"title":"Review"}},'
+            '{"kind":"task.create","arguments":{"title":"Half writt'
+        )
+        response = self._chat({'message': 'Add them.'}, {}, answer=cut_off)
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['answer'], 'Prepared the first tasks.')
+        self.assertEqual(
+            [entry['summary'] for entry in body['pending_actions']],
+            ['Create task "Stand-up"', 'Create task "Review"'],
+        )
 
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)

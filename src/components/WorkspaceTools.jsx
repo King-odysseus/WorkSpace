@@ -1145,7 +1145,13 @@ function useAssistantConversation(workspaceId, transcriptRef) {
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Zuri is unavailable.')
       // Held until the turn succeeds, so a failed request can simply be retried.
-      setAttachment(null)
+      // It is also held when the batch cap left proposals out: the file is what the
+      // next batch is read from, so "continue" needs it attached again.
+      // Zuri offers the next batch in words when it stopped short on its own, so
+      // the answer is read for that as well as the server's count.
+      const moreToCome = result.dropped > 0 || /\breply\s+["“]?continue\b/i.test(result.answer || '')
+      if (moreToCome && attachment) setMessage('continue')
+      else setAttachment(null)
       setDocumentNote(describeDocument(result.document))
       const answered = [...withQuestion, { role: 'assistant', content: result.answer }]
       setTurns(answered)
