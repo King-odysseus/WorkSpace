@@ -4324,6 +4324,66 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.client.force_login(limited)
         self.assertEqual(self._library().status_code, 403)
 
+    def _deepseek_chat(self, replies):
+        """Chat through DeepSeek with each outbound body recorded; `replies` are returned or raised in turn."""
+        from urllib.error import HTTPError
+
+        setting = self._enable_ai()
+        setting.ai_default_provider = 'deepseek'
+        setting.ai_enabled_providers = ['deepseek']
+        setting.save()
+        bodies = []
+        queue = iter(replies)
+
+        class _Ok:
+            def __init__(self, text):
+                self.text = text
+
+            def read(self):
+                return json.dumps({'choices': [{'message': {'content': self.text}}]}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            bodies.append(json.loads(request.data.decode()))
+            nxt = next(queue)
+            if isinstance(nxt, str):
+                return _Ok(nxt)
+            raise nxt
+
+        self.client.force_login(self.owner)
+        with mock.patch('tasks.workspace_tools.urlrequest.urlopen', fake_urlopen):
+            with mock.patch.dict('os.environ', {'DEEPSEEK_API_KEY': 'sk-test-key'}):
+                response = self.client.post(
+                    reverse('workspace-ai-chat', args=[self.workspace.id]),
+                    data=json.dumps({'message': 'Hello'}), content_type='application/json',
+                )
+        return response, bodies, HTTPError
+
+    def test_deepseek_is_asked_not_to_spend_its_answer_allowance_thinking(self):
+        response, bodies, _ = self._deepseek_chat([json.dumps({'answer': 'Hi.', 'actions': None})])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(bodies[0]['thinking'], {'type': 'disabled'})
+
+    def test_a_model_that_refuses_the_thinking_switch_is_asked_again_without_it(self):
+        import io
+        from urllib.error import HTTPError
+
+        refusal = HTTPError('http://x', 400, 'Bad Request', {}, io.BytesIO(b'{"error":{"message":"Unknown parameter: thinking"}}'))
+        response, bodies, _ = self._deepseek_chat([refusal, json.dumps({'answer': 'Hi.', 'actions': None})])
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('thinking', bodies[0])
+        self.assertNotIn('thinking', bodies[1])
+
+    def test_a_timeout_on_the_second_try_reports_an_empty_reply_not_an_outage(self):
+        response, _, _ = self._deepseek_chat(['', TimeoutError('timed out')])
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('empty response', response.json()['answer'])
+
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)
         self._enable_ai()
