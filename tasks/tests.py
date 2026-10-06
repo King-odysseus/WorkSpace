@@ -4482,6 +4482,39 @@ class WorkspaceAiSettingsApiTests(TestCase):
         # Sending back the value it already holds is not a change.
         self.assertEqual(self.patch({'ai_daily_limit': 25}).status_code, 200)
 
+    def _deleted_task_action(self):
+        task = Task.objects.create(workspace=self.workspace, title='Bring me back', description='Details', priority='high', bucket='Backlog', labels=['x'])
+        response = self._delete_proposal(self.owner, [{'kind': 'task.delete', 'arguments': {'task_id': task.id}}])
+        action_id = response.json()['pending_actions'][0]['id']
+        self.assertEqual(self._confirm(action_id).status_code, 200)
+        self.assertFalse(Task.objects.filter(id=task.id).exists())
+        return action_id
+
+    def test_a_confirmed_task_delete_can_be_undone_once_by_the_owner(self):
+        action_id = self._deleted_task_action()
+        undone = self._confirm(action_id, 'undo')
+        self.assertEqual(undone.status_code, 200)
+        back = Task.objects.get(workspace=self.workspace, title='Bring me back')
+        self.assertEqual((back.description, back.priority, back.labels), ('Details', 'high', ['x']))
+        self.assertEqual(self._confirm(action_id, 'undo').status_code, 409)
+
+    def test_a_delete_cannot_be_undone_after_a_day(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        action_id = self._deleted_task_action()
+        AiAction.objects.filter(id=action_id).update(resolved_at=timezone.now() - timedelta(hours=25))
+        self.assertEqual(self._confirm(action_id, 'undo').status_code, 409)
+        self.assertFalse(Task.objects.filter(title='Bring me back').exists())
+
+    def test_only_a_delete_can_be_undone(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        response = self._chat({'message': 'Add one.'}, {}, answer=json.dumps({'answer': 'Ok', 'actions': [{'kind': 'task.create', 'arguments': {'title': 'Plain'}}]}))
+        action_id = response.json()['pending_actions'][0]['id']
+        self._confirm(action_id)
+        self.assertEqual(self._confirm(action_id, 'undo').status_code, 409)
+
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)
         self._enable_ai()
@@ -4552,7 +4585,7 @@ class WorkspaceAiSettingsApiTests(TestCase):
         task = Task.objects.create(workspace=self.workspace, title='Remove me')
         response = self._delete_proposal(self.owner, [{'kind': 'task.delete', 'arguments': {'task_id': task.id}}])
         proposal = response.json()['pending_actions'][0]
-        self.assertIn('cannot be undone', proposal['summary'])
+        self.assertIn('removed for good', proposal['summary'])
         self.assertTrue(Task.objects.filter(id=task.id).exists())
 
         cancelled = self._confirm(proposal['id'], 'cancel')
@@ -4938,6 +4971,52 @@ class ZuriDocumentChatTests(TestCase):
         self.assertIn('Quarterly report', system)
         self.assertEqual(response.json()['document']['name'], 'report.pdf')
         self.assertTrue(response.json()['document']['ok'])
+
+    def test_a_task_list_in_a_spreadsheet_reaches_the_prompt_row_by_row(self):
+        import io as _io
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Tasks'
+        sheet.append(['Task', 'Owner', 'Priority'])
+        sheet.append(['Publish Academy calendar', 'Training lead', 'P0'])
+        sheet.append(['Prepare Lagos prospect list', 'Marketing lead', 'P0'])
+        buffer = _io.BytesIO()
+        workbook.save(buffer)
+        self._enable_ai()
+        item = self._attach('plan.xlsx', buffer.getvalue())
+        captured = {}
+        response = self._chat({'message': 'Pull the tasks.', 'file_id': item.id}, captured)
+
+        self.assertEqual(response.status_code, 200)
+        system = captured['body']['messages'][0]['content']
+        self.assertIn('Publish Academy calendar', system)
+        self.assertIn('Prepare Lagos prospect list', system)
+        self.assertTrue(response.json()['document']['ok'])
+
+    def test_a_task_list_in_a_word_document_reaches_the_prompt(self):
+        import io as _io
+        from docx import Document
+
+        document = Document()
+        document.add_heading('Weekly recurring', level=1)
+        document.add_paragraph('Weekly Revenue and Priorities Review - founder - P0')
+        table = document.add_table(rows=2, cols=2)
+        table.rows[0].cells[0].text = 'Task'
+        table.rows[0].cells[1].text = 'Role'
+        table.rows[1].cells[0].text = 'Case study capture'
+        table.rows[1].cells[1].text = 'marketing'
+        buffer = _io.BytesIO()
+        document.save(buffer)
+        self._enable_ai()
+        item = self._attach('plan.docx', buffer.getvalue())
+        captured = {}
+        response = self._chat({'message': 'Pull the tasks.', 'file_id': item.id}, captured)
+
+        system = captured['body']['messages'][0]['content']
+        self.assertIn('Weekly Revenue and Priorities Review', system)
+        self.assertIn('Case study capture', system)
 
     def test_personal_data_in_a_document_is_replaced_before_it_leaves(self):
         self._enable_ai()
@@ -5862,7 +5941,7 @@ class DocumentNotificationTests(TestCase):
         Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
         Membership.objects.create(workspace=self.workspace, user=self.member, role='member')
         Membership.objects.create(workspace=self.workspace, user=self.other, role='member')
-        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief')
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief', created_by=self.owner)
 
     def _login(self, user):
         self.client.login(username=user.email, password='secure-pass-123')
@@ -6134,7 +6213,7 @@ class DocumentCommentResolutionTests(TestCase):
         self.owner = User.objects.create_user(username='owner@example.com', email='owner@example.com', password='secure-pass-123')
         self.workspace = Workspace.objects.create(name='Northstar', slug='northstar')
         Membership.objects.create(workspace=self.workspace, user=self.owner, role='owner')
-        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief')
+        self.document = WorkspaceDocument.objects.create(workspace=self.workspace, title='Launch Brief', created_by=self.owner)
         self.comment = WorkspaceDocumentComment.objects.create(document=self.document, author=self.owner, body='Please check this.')
         self.client.login(username=self.owner.email, password='secure-pass-123')
         self.url = reverse('workspace-document-comment-detail', args=[self.workspace.id, self.document.id, self.comment.id])

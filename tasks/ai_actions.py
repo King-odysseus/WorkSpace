@@ -810,7 +810,7 @@ def _action_summary(kind, payload, registry):
     if kind == 'task.delete':
         task = Task.objects.filter(id=payload.get('task_id')).only('title').first()
         title = registry.expand(task.title if task else 'Unknown task')[:140]
-        return f'Permanently delete task "{title}". Its history and attachments are removed and this cannot be undone.'
+        return f'Permanently delete task "{title}". Its comments, history and attachments are removed for good; the task itself can be put back for 24 hours.'
     if kind == 'project.delete':
         project = Project.objects.filter(id=payload.get('project_id')).only('name').first()
         name = registry.expand(project.name if project else 'Unknown project')[:120]
@@ -858,6 +858,45 @@ def _call_view(view, request, **kwargs):
     return body
 
 
+UNDO_WINDOW = timedelta(hours=24)
+
+
+def _task_restore_fields(task):
+    """The fields needed to recreate a task that is about to be permanently deleted."""
+    return {
+        'title': task.title,
+        'description': task.description,
+        'status': task.status,
+        'priority': task.priority,
+        'due_date': task.due_date.isoformat() if task.due_date else None,
+        'start_date': task.start_date.isoformat() if task.start_date else None,
+        'progress_percent': task.progress_percent,
+        'labels': list(task.labels or []),
+        'bucket': task.bucket,
+        'project_id': task.project_ref_id,
+        'workstream_id': task.workstream_ref_id,
+        'assignee_id': task.assignee_id,
+    }
+
+
+def undo_action(action, actor):
+    """Recreate the task a confirmed Zuri delete removed, within a day of it."""
+    restore = (action.result or {}).get('restore')
+    if action.kind != 'task.delete' or action.status != 'executed' or not isinstance(restore, dict):
+        raise ActionExecutionError('That action cannot be undone.', 409)
+    if (action.result or {}).get('restored_task'):
+        raise ActionExecutionError('That task was already restored.', 409)
+    if not Membership.objects.filter(workspace_id=action.workspace_id, user=actor, role='owner').exists():
+        raise ActionExecutionError(DELETE_OWNER_ONLY_MESSAGE, 403)
+    if action.resolved_at and timezone.now() - action.resolved_at > UNDO_WINDOW:
+        raise ActionExecutionError('It is too late to undo that delete.', 409)
+    payload = {key: value for key, value in restore.items() if value not in (None, '')}
+    request = RequestFactory().post('/api/tasks/', data=json.dumps(payload), content_type='application/json')
+    request.user = actor
+    created = _call_view(task_list, request, workspace_id=action.workspace_id)
+    return {**(action.result or {}), 'restored_task': (created.get('task') or {}).get('id') or True}
+
+
 def execute_action(action, actor):
     factory = RequestFactory()
     if action.kind == 'task.archive':
@@ -874,9 +913,14 @@ def execute_action(action, actor):
             task_id = action.payload.get('task_id')
             if not Task.objects.filter(id=task_id, workspace_id=action.workspace_id).exists():
                 raise ActionExecutionError('Task was not found in this workspace.', 404)
+            task = Task.objects.filter(id=task_id, workspace_id=action.workspace_id).first()
+            restore = _task_restore_fields(task)
             request = factory.delete(f'/api/tasks/{task_id}/?permanent=1')
             request.user = actor
-            return _call_view(task_detail, request, task_id=task_id)
+            result = _call_view(task_detail, request, task_id=task_id)
+            # Kept so an undo can put the task back. Comments, history and
+            # attachments go with the task and are not part of what comes back.
+            return {**result, 'restore': restore}
         project_id = action.payload.get('project_id')
         request = factory.delete(f'/api/workspaces/{action.workspace_id}/projects/{project_id}/')
         request.user = actor

@@ -808,3 +808,26 @@ it('merges this browser\'s chats into the server copy once, then lets the server
   expect(screen.getByText('Saved on another device')).toBeInTheDocument()
   expect(screen.queryByText('Old local chat')).not.toBeInTheDocument()
 })
+
+it('offers to undo a confirmed delete', async () => {
+  const fetchMock = mockApi({
+    ...settingsOnly,
+    '/api/workspaces/4/ai/chat/': {
+      answer: 'Removing it.',
+      pending_actions: [{ id: 31, kind: 'task.delete', summary: 'Permanently delete task "Old".', status: 'pending' }],
+    },
+    '/api/workspaces/4/ai/actions/31/': { action: { id: 31, kind: 'task.delete', summary: 'Permanently delete task "Old".', status: 'executed', result: { restore: { title: 'Old' } } } },
+  })
+  render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
+
+  const input = await screen.findByLabelText('Message to Zuri')
+  fireEvent.change(input, { target: { value: 'Delete Old' } })
+  fireEvent.submit(input.closest('form'))
+  fireEvent.click(await screen.findByRole('button', { name: /Delete permanently/ }))
+
+  expect(await screen.findByText(/Deleted "Old"/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(await screen.findByText(/Restored 1 task/)).toBeInTheDocument()
+  const undoCall = fetchMock.mock.calls.find(([url, init = {}]) => String(url).includes('/ai/actions/31/') && String(init.body || '').includes('undo'))
+  expect(undoCall).toBeTruthy()
+})

@@ -41,6 +41,7 @@ from .ai_actions import (
     execute_action,
     parse_provider_response,
     refused_over_answer_length,
+    undo_action,
 )
 
 logger = logging.getLogger(__name__)
@@ -650,8 +651,8 @@ def workspace_ai_action(request, workspace_id, action_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
     decision = str(payload.get('decision') or '').strip().lower()
-    if decision not in {'confirm', 'cancel'}:
-        return JsonResponse({'error': 'Decision must be confirm or cancel.'}, status=400)
+    if decision not in {'confirm', 'cancel', 'undo'}:
+        return JsonResponse({'error': 'Decision must be confirm, cancel or undo.'}, status=400)
     with transaction.atomic():
         action = (
             AiAction.objects
@@ -661,6 +662,13 @@ def workspace_ai_action(request, workspace_id, action_id):
         )
         if action is None:
             return JsonResponse({'error': 'Pending Zuri action was not found.'}, status=404)
+        if decision == 'undo':
+            try:
+                action.result = undo_action(action, request.user)
+            except (ActionExecutionError, ValueError) as exc:
+                return JsonResponse({'error': str(exc), 'action': action.as_dict()}, status=getattr(exc, 'status', 400))
+            action.save(update_fields=['result'])
+            return JsonResponse({'action': action.as_dict()})
         if action.status != 'pending':
             return JsonResponse({'action': action.as_dict()})
         if timezone.now() >= action.expires_at:

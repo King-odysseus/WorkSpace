@@ -1087,6 +1087,9 @@ function useAssistantConversation(workspaceId, transcriptRef) {
   const [folders, setFolders] = useState(() => readAiFolders(workspaceId))
   const [currentFolder, setCurrentFolderState] = useState(() => readAiCurrentFolder(workspaceId))
   const [historyOpen, setHistoryOpen] = useState(false)
+  // Deleted tasks that can still be put back. In memory only: the window is a day
+  // on the server, but the prompt to undo belongs to the moment it happened.
+  const [undoable, setUndoable] = useState([])
   useEffect(() => {
     setArchive(readAiArchive(workspaceId)); setFolders(readAiFolders(workspaceId)); setCurrentFolderState(readAiCurrentFolder(workspaceId)); setHistoryOpen(false)
   }, [workspaceId])
@@ -1230,6 +1233,9 @@ function useAssistantConversation(workspaceId, transcriptRef) {
         })
         const result = await response.json()
         const action = result.action
+        if (decision === 'confirm' && response.ok && action?.kind === 'task.delete' && action.result?.restore) {
+          setUndoable(current => [...current, { id: action.id, title: action.result.restore.title }])
+        }
         outcomes.push({
           summary: action?.summary || entry.summary,
           ok: response.ok,
@@ -1292,6 +1298,34 @@ function useAssistantConversation(workspaceId, transcriptRef) {
     writeStored(aiArchiveKey(workspaceId), bounded); writeStored(aiFoldersKey(workspaceId), nextFolders)
     pushLibrary(bounded, nextFolders)
   }
+  const undoDeletes = async () => {
+    if (!undoable.length || busy) return
+    setBusy(true)
+    setError('')
+    const failed = []
+    for (const entry of undoable) {
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/ai/actions/${entry.id}/`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: await csrf({ ...headers(workspaceId), 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ decision: 'undo' }),
+        })
+        if (!response.ok) failed.push({ ...entry, reason: (await response.json()).error })
+      } catch (requestError) {
+        failed.push({ ...entry, reason: requestError.message })
+      }
+    }
+    const restored = undoable.length - failed.length
+    setUndoable([])
+    if (restored) {
+      const answered = [...turns, { role: 'assistant', content: `Restored ${restored} ${restored === 1 ? 'task' : 'tasks'}. Comments, history and attachments are not restored.` }]
+      setTurns(answered)
+      writeAiHistory(workspaceId, answered)
+    }
+    if (failed.length) setError(failed[0].reason || 'A deleted task could not be restored.')
+    setBusy(false)
+  }
   const saveArchive = next => persist(next, folders)
   const saveFolders = next => persist(archive, next)
   const setCurrentFolder = folder => { setCurrentFolderState(folder); writeStored(aiCurrentFolderKey(workspaceId), folder) }
@@ -1351,7 +1385,7 @@ function useAssistantConversation(workspaceId, transcriptRef) {
     turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote,
     attachFile, ask, resolvePendingActions, clearConversation, clearConfirm, setClearConfirm,
     canClear: !busy && (turns.length > 0 || pendingActions.length > 0),
-    archive, folders, currentFolder, setCurrentFolder, historyOpen, setHistoryOpen,
+    archive, folders, currentFolder, setCurrentFolder, historyOpen, setHistoryOpen, undoable, undoDeletes,
     newChat, openChat, deleteChat, moveChat, createFolder, deleteFolder,
     canStartNew: !busy && (turns.length > 0 || pendingActions.length > 0),
   }
@@ -1422,7 +1456,7 @@ function AssistantHistory({ conversation }) {
 }
 
 function AssistantChatBody({ conversation, transcriptRef, heading }) {
-  const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, ask, resolvePendingActions, clearConfirm, setClearConfirm, historyOpen } = conversation
+  const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, ask, resolvePendingActions, clearConfirm, setClearConfirm, historyOpen, undoable, undoDeletes } = conversation
   if (historyOpen) {
     return <>
       {heading}
@@ -1480,6 +1514,12 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
             <button type="button" className="secondary-button" onClick={() => resolvePendingActions('cancel')} disabled={busy}>{pendingActions.length === 1 ? 'Cancel' : 'Cancel all'}</button>
             <button type="button" className={`primary-button${pendingActions.some(isDeleteAction) ? ' is-destructive' : ''}`} onClick={() => resolvePendingActions('confirm')} disabled={busy}>{pendingActions.some(isDeleteAction) ? <Trash2 size={15} /> : <Check size={15} />} {pendingActions.some(isDeleteAction) ? (pendingActions.length === 1 ? 'Delete permanently' : 'Delete all permanently') : pendingActions.length === 1 ? 'Confirm' : 'Confirm all'}</button>
           </div>
+        </div>
+      )}
+      {undoable.length > 0 && !pendingActions.length && (
+        <div className="ai-undo-card" role="status">
+          <span>{undoable.length === 1 ? `Deleted "${undoable[0].title}".` : `Deleted ${undoable.length} tasks.`} They can be put back for 24 hours, without comments or attachments.</span>
+          <button type="button" className="secondary-button" onClick={undoDeletes} disabled={busy}>Undo</button>
         </div>
       )}
       {busy && <div className="ai-chat-row is-assistant"><span className="ai-chat-avatar" aria-hidden="true"><Sparkles size={13} /></span><div className="ai-chat-turn"><span className="ai-chat-sender">Zuri</span><div className="ai-chat-bubble is-thinking" role="status">Thinking...</div></div></div>}
