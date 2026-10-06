@@ -138,6 +138,23 @@ class BoardAccessTests(TestCase):
         self.assertEqual(refused.status_code, 404)
         self.assertEqual(self.client.put(self._members_url('project', self.p1), data=json.dumps({'member_ids': 'all'}), content_type='application/json').status_code, 400)
 
+    def test_someone_who_left_is_not_offered_back_and_does_not_block_saving(self):
+        gone = User.objects.create_user(username='gone@example.com', email='gone@example.com', password='secure-pass-123')
+        self.p1.members.add(gone)
+        self.client.force_login(self.owner)
+        read = self.client.get(self._members_url('project', self.p1)).json()
+        self.assertNotIn(gone.id, read['member_ids'])
+        saved = self.client.put(self._members_url('project', self.p1), data=json.dumps({'member_ids': read['member_ids'] + [self.owner.id]}), content_type='application/json')
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(set(saved.json()['member_ids']), {self.ada.id, self.owner.id})
+        self.assertFalse(self.p1.members.filter(id=gone.id).exists())
+
+    def test_the_owner_can_put_themselves_on_a_board(self):
+        self.client.force_login(self.owner)
+        saved = self.client.put(self._members_url('workstream', self.daily), data=json.dumps({'member_ids': [self.ben.id, self.owner.id]}), content_type='application/json')
+        self.assertEqual(saved.status_code, 200)
+        self.assertIn(self.owner.id, saved.json()['member_ids'])
+
     # --- private boards ------------------------------------------------------------------
 
     def test_a_private_board_is_seen_by_its_maker_alone_not_even_the_owner(self):

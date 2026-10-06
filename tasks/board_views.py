@@ -25,6 +25,17 @@ def _people(workspace_id, ids):
     ]
 
 
+def _current_member_ids(workspace_id, board):
+    """The board's people who are still in the workspace.
+
+    A board can keep someone who has since left (or was never in this workspace's
+    member list), and offering that id back for saving would be refused as a
+    person who does not belong here.
+    """
+    on_board = board.members.values_list('id', flat=True)
+    return list(Membership.objects.filter(workspace_id=workspace_id, user_id__in=on_board).values_list('user_id', flat=True))
+
+
 @require_http_methods(['GET', 'PUT'])
 def board_members(request, workspace_id, kind, board_id):
     """The people on one board. Anyone who can see the board may read the list;
@@ -42,7 +53,7 @@ def board_members(request, workspace_id, kind, board_id):
         return JsonResponse({'error': 'Board was not found.'}, status=404)
 
     if request.method == 'GET':
-        ids = list(board.members.values_list('id', flat=True))
+        ids = _current_member_ids(workspace_id, board)
         return JsonResponse({'member_ids': ids, 'members': _people(workspace_id, ids), 'is_private': board.is_private})
 
     if not is_leader(membership):
@@ -64,7 +75,7 @@ def board_members(request, workspace_id, kind, board_id):
     if len(people) != len(requested):
         return JsonResponse({'error': 'Every board member must belong to this workspace.'}, status=404)
 
-    previous = set(board.members.values_list('id', flat=True))
+    previous = set(_current_member_ids(workspace_id, board))
     board.members.set(User.objects.filter(id__in=requested))
     added = set(requested) - previous
     removed = previous - set(requested)
@@ -75,5 +86,5 @@ def board_members(request, workspace_id, kind, board_id):
             f'{actor} changed who is on {board.name}: {len(added)} added, {len(removed)} removed.',
             target_type='project' if kind == 'project' else 'workstream', target_id=board.id,
         )
-    ids = list(board.members.values_list('id', flat=True))
+    ids = _current_member_ids(workspace_id, board)
     return JsonResponse({'member_ids': ids, 'members': _people(workspace_id, ids), 'is_private': board.is_private})

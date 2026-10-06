@@ -99,6 +99,8 @@ import {
 // Today, so each is fetched when its destination is opened rather than shipped
 // in the entry bundle. The Suspense boundary around the workspace view below is
 // what lets them suspend.
+import BoardMembersDialog from "./components/BoardMembersDialog.jsx";
+import BoardPeople from "./components/BoardPeople.jsx";
 const PlannerBoard = lazyRoute("PlannerBoard", () => import("./components/PlannerBoard.jsx"));
 const ProjectKanbanBoard = lazyRoute("ProjectKanbanBoard", () => import("./components/ProjectKanbanBoard.jsx"));
 const ProjectTaskTable = lazyRoute("ProjectTaskTable", () => import("./components/ProjectTaskTable.jsx"));
@@ -4948,6 +4950,7 @@ function WorkspaceView({
   const [selectedProjectWorkspace, setSelectedProjectWorkspace] =
     useState(null);
   const [projectOperation, setProjectOperation] = useState("");
+  const [projectPeopleOpen, setProjectPeopleOpen] = useState(false);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [selectedCheckInDetail, setSelectedCheckInDetail] = useState(null);
   const [followUpFilter, setFollowUpFilter] = useState("all");
@@ -9264,8 +9267,26 @@ function WorkspaceView({
             <span>{selectedProjectWorkspace.owner_name || "Unassigned · Core squad"}</span>
             <CalendarDays size={16} />
             <span>{selectedProjectWorkspace.due_date ? projectDeadline : "No deadline set"}</span>
-            <Users size={16} />
-            <span>{selectedProjectWorkspace.member_count || 0} members assigned</span>
+            <BoardPeople
+              target={{ kind: "project", board: selectedProjectWorkspace }}
+              members={(localData.members || []).filter((member) => member.id)}
+              canManage={Boolean(canManageMembers)}
+              scopeNoun="project"
+              onOpen={() => setProjectPeopleOpen(true)}
+            />
+            {projectPeopleOpen && (
+              <BoardMembersDialog
+                workspaceId={workspaceId}
+                kind="project"
+                board={selectedProjectWorkspace}
+                members={(localData.members || []).filter((member) => member.id)}
+                onSaved={(ids) => {
+                  updateBoardMembers("project", selectedProjectWorkspace.id, ids);
+                  setSelectedProjectWorkspace((current) => (current ? { ...current, member_ids: ids } : current));
+                }}
+                onClose={() => setProjectPeopleOpen(false)}
+              />
+            )}
             <span className="project-detail-header-updated">Updated {formatRelativeActivityTime(selectedProjectWorkspace.updated_at)}</span>
           </div>
           <div className="project-detail-divider" />
