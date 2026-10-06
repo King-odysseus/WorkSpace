@@ -6806,7 +6806,7 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .ai-action-card.is-destructive { border-color: var(--pencil-alert-danger-stroke); background: var(--pencil-alert-danger-fill); }
 .ai-action-card.is-destructive .ai-action-copy > span { color: var(--pencil-alert-danger-text); }
 .ai-action-buttons .primary-button.is-destructive { background: var(--pencil-danger); border-color: var(--pencil-danger); color: #fff; }
-.ai-chat-sent-file { display: inline-flex; max-width: 100%; align-items: center; gap: 6px; margin: 0 0 7px; padding: 5px 9px; border: 1px solid var(--pencil-border); border-radius: 9px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); font-size: 11px; vertical-align: top; }
+.ai-chat-sent-file { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 6px; margin: 0 0 8px; padding: 5px 9px; border: 1px solid var(--pencil-border); border-radius: 9px; background: var(--pencil-surface-muted); color: var(--pencil-text-secondary); font-size: 11px; vertical-align: top; }
 .ai-chat-sent-file svg { flex: 0 0 auto; }
 .ai-chat-actions .ai-chat-action-button svg { width: 14px; height: 14px; }
 .ai-page-actions { display: inline-flex; gap: 6px; }
