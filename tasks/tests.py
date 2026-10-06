@@ -4280,6 +4280,50 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertEqual(response.json()['pending_actions'], [])
         self.assertIn('owners and managers', response.json()['action_error'])
 
+    def _library(self, method='get', payload=None):
+        url = reverse('workspace-ai-library', args=[self.workspace.id])
+        if method == 'put':
+            return self.client.put(url, data=json.dumps(payload), content_type='application/json')
+        return self.client.get(url)
+
+    def test_saved_chats_round_trip_and_stay_with_the_person_who_saved_them(self):
+        chat = {'id': 'abc1', 'title': 'Plan', 'folder': 'Website', 'updatedAt': '2026-10-06T09:00:00Z',
+                'turns': [{'role': 'user', 'content': 'Hi', 'attachment': {'name': 'a.docx', 'url': ''}}, {'role': 'assistant', 'content': 'Hello'}]}
+        self.client.force_login(self.owner)
+        saved = self._library('put', {'chats': [chat], 'folders': ['Website']})
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(self._library().json()['chats'][0]['turns'][0]['attachment']['name'], 'a.docx')
+        self.assertEqual(self._library().json()['folders'], ['Website'])
+
+        manager = User.objects.create_user(username='lib-manager@example.com', email='lib-manager@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        self.client.force_login(manager)
+        self.assertEqual(self._library().json()['chats'], [])
+
+    def test_a_saved_chat_library_is_cleaned_and_bounded(self):
+        self.client.force_login(self.owner)
+        chats = [{'id': f'c{index}', 'title': 'T' * 500, 'folder': 'Nope', 'turns': [{'role': 'user', 'content': 'x' * 30000}] * 20} for index in range(60)]
+        chats.append({'id': 'empty', 'turns': []})
+        saved = self._library('put', {'chats': chats, 'folders': ['A', 'a', ' ', 'B']})
+        self.assertEqual(saved.status_code, 400)  # 40 chats of twenty 20,000-character turns is over the size cap
+
+        small = [{'id': f'c{index}', 'title': 'T' * 500, 'folder': 'Nope', 'turns': [{'role': 'user', 'content': 'x' * 100}, {'role': 'system', 'content': 'bad'}]} for index in range(60)]
+        saved = self._library('put', {'chats': small, 'folders': ['A', 'a', ' ', 'B']}).json()
+        self.assertEqual(len(saved['chats']), 40)
+        self.assertEqual(saved['folders'], ['A', 'B'])
+        self.assertEqual(len(saved['chats'][0]['title']), 120)
+        self.assertEqual(saved['chats'][0]['folder'], '')
+        self.assertEqual(len(saved['chats'][0]['turns']), 1)
+
+    def test_saved_chats_need_use_ai_and_a_workspace_membership(self):
+        outsider = User.objects.create_user(username='lib-outsider@example.com', email='lib-outsider@example.com', password='secure-pass-123')
+        self.client.force_login(outsider)
+        self.assertIn(self._library().status_code, (403, 404))
+        limited = User.objects.create_user(username='lib-limited@example.com', email='lib-limited@example.com', password='secure-pass-123')
+        Membership.objects.create(workspace=self.workspace, user=limited, role='manager', permissions=[])
+        self.client.force_login(limited)
+        self.assertEqual(self._library().status_code, 403)
+
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)
         self._enable_ai()

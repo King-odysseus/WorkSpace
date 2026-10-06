@@ -21,7 +21,7 @@ from django.views.decorators.http import require_http_methods
 
 from . import cloud_storage
 from .cloud_downloads import cloud_download_redirect
-from .models import AiAction, Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
+from .models import AiAction, AiChatLibrary, Membership, WorkspaceDocument, WorkspaceDocumentComment, WorkspaceDocumentRevision, WorkspaceDocumentShare, WorkspaceFile, WorkspaceSetting
 from .document_text import clip_text, extract_document_text, read_image_for_vision
 from .file_responses import stored_file_response
 from .sanitize import sanitize_document_content
@@ -1036,3 +1036,86 @@ def workspace_file_detail(request, workspace_id, file_id):
             logger.warning('Stored file could not be removed for workspace file %s', item.id, exc_info=True)
     item.delete()
     return JsonResponse({'status': 'deleted'})
+
+
+# Saved Zuri chats. Bounded on every axis because the body is whatever a client
+# sends: how many chats and folders, how long each turn, and the whole payload.
+AI_LIBRARY_MAX_CHATS = 40
+AI_LIBRARY_MAX_FOLDERS = 20
+AI_LIBRARY_MAX_TURNS = 20
+AI_LIBRARY_MAX_TURN_CHARS = 20000
+AI_LIBRARY_MAX_BYTES = 1_500_000
+
+
+def _clean_library(payload):
+    """Validate a saved-chat library body, or raise ValueError saying what is wrong."""
+    folders_in = payload.get('folders', [])
+    chats_in = payload.get('chats', [])
+    if not isinstance(folders_in, list) or not isinstance(chats_in, list):
+        raise ValueError('Chats and folders must be lists.')
+    folders = []
+    for name in folders_in[:AI_LIBRARY_MAX_FOLDERS]:
+        clean = ' '.join(str(name or '').split())[:40]
+        if clean and clean.lower() not in {folder.lower() for folder in folders}:
+            folders.append(clean)
+    chats = []
+    seen = set()
+    for chat in chats_in[:AI_LIBRARY_MAX_CHATS]:
+        if not isinstance(chat, dict) or not isinstance(chat.get('turns'), list):
+            continue
+        chat_id = str(chat.get('id') or '')[:40]
+        if not chat_id or chat_id in seen:
+            continue
+        turns = []
+        for turn in chat['turns'][-AI_LIBRARY_MAX_TURNS:]:
+            if not isinstance(turn, dict) or turn.get('role') not in ('user', 'assistant') or not isinstance(turn.get('content'), str):
+                continue
+            entry = {'role': turn['role'], 'content': turn['content'][:AI_LIBRARY_MAX_TURN_CHARS]}
+            attachment = turn.get('attachment')
+            if isinstance(attachment, dict) and isinstance(attachment.get('name'), str):
+                entry['attachment'] = {'name': attachment['name'][:200], 'url': str(attachment.get('url') or '')[:500]}
+            turns.append(entry)
+        if not turns:
+            continue
+        seen.add(chat_id)
+        folder = ' '.join(str(chat.get('folder') or '').split())[:40]
+        chats.append({
+            'id': chat_id,
+            'title': str(chat.get('title') or 'Untitled chat')[:120],
+            'folder': folder if folder.lower() in {name.lower() for name in folders} else '',
+            'updatedAt': str(chat.get('updatedAt') or '')[:40],
+            'turns': turns,
+        })
+    if len(json.dumps(chats)) > AI_LIBRARY_MAX_BYTES:
+        raise ValueError('Saved chats are too large. Delete some and try again.')
+    return chats, folders
+
+
+@require_http_methods(['GET', 'PUT'])
+def workspace_ai_library(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if not membership.has_permission('use_ai'):
+        return JsonResponse({'error': 'You do not have permission to use Zuri.'}, status=403)
+    library = AiChatLibrary.objects.filter(workspace_id=workspace_id, user=request.user).first()
+    if request.method == 'GET':
+        return JsonResponse({
+            'chats': library.chats if library else [],
+            'folders': library.folders if library else [],
+            'updated_at': library.updated_at.isoformat() if library else None,
+        })
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Request body must be a JSON object.'}, status=400)
+    try:
+        chats, folders = _clean_library(payload)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    library, _ = AiChatLibrary.objects.update_or_create(
+        workspace_id=workspace_id, user=request.user, defaults={'chats': chats, 'folders': folders},
+    )
+    return JsonResponse({'chats': library.chats, 'folders': library.folders, 'updated_at': library.updated_at.isoformat()})

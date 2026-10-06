@@ -1461,6 +1461,25 @@ class AiAction(models.Model):
         }
 
 
+class AiChatLibrary(models.Model):
+    """One person's saved Zuri chats and the folders they filed them in.
+
+    Held per person and per workspace, and only ever read back to that person: a
+    chat can contain anything they asked about their work. The conversation on
+    screen stays in the browser; only chats that were set aside by starting a new
+    one are saved here, so they follow the person to another device.
+    """
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='ai_chat_libraries')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_chat_libraries')
+    chats = models.JSONField(default=list, blank=True)
+    folders = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'user'], name='unique_ai_chat_library_per_user')]
+
+
 class ScreenShareSession(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending consent'),
