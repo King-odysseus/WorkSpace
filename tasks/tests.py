@@ -4213,6 +4213,19 @@ class WorkspaceAiSettingsApiTests(TestCase):
         self.assertEqual([entry['summary'] for entry in body['pending_actions']], ['Create task "Keep this one"'])
         self.assertIn('not supported', body['action_error'])
 
+    def test_a_reply_cut_off_mid_json_still_reads_as_formatted_text(self):
+        self.client.force_login(self.owner)
+        self._enable_ai()
+        # What a long answer looks like when the token cap stops it inside the
+        # object: no closing quote, no closing brace, escapes still in place.
+        cut_off = '{"answer":"Found **57 tasks**.\\n\\n1. Stand-up \\u2014 P0\\n2. Review \\"weekly\\" \\u2014 P1\\n3. Sca'
+        response = self._chat({'message': 'Pull the tasks.'}, {}, answer=cut_off)
+        self.assertEqual(response.status_code, 200)
+        answer = response.json()['answer']
+        self.assertNotIn('{"answer"', answer)
+        self.assertNotIn('\\n', answer)
+        self.assertIn('Found **57 tasks**.\n\n1. Stand-up — P0\n2. Review "weekly" — P1', answer)
+
     def test_an_empty_provider_reply_is_asked_for_again_before_giving_up(self):
         self.client.force_login(self.owner)
         self._enable_ai()

@@ -383,6 +383,44 @@ def action_instructions(snapshot):
     )
 
 
+BACKSLASH = chr(92)
+
+
+def _salvage_answer(text):
+    """Pull the "answer" string out of JSON that does not parse.
+
+    A long reply can be cut off at the token cap, or carry a stray unescaped
+    character, and the whole object then fails to load. The reader was shown the
+    raw braces and backslash-n sequences. The answer is still in there, so read
+    it out and decode its escapes; the actions after it are lost with the rest.
+    Returns None when the text is not shaped like an answer object at all.
+    """
+    match = re.search(r'"answer"\s*:\s*"', text)
+    if not match or not text.lstrip().startswith('{'):
+        return None
+    chars = []
+    index = match.end()
+    while index < len(text):
+        char = text[index]
+        if char == BACKSLASH and index + 1 < len(text):
+            chars.append(text[index:index + 2])
+            index += 2
+            continue
+        if char == '"':
+            break
+        chars.append(char)
+        index += 1
+    body = ''.join(chars)
+    try:
+        return json.loads('"' + body + '"')
+    except json.JSONDecodeError:
+        # A cut-off escape at the very end, or a raw control character: keep what reads.
+        body = body.rstrip(BACKSLASH)
+        for escaped, plain in ((BACKSLASH + 'n', '\n'), (BACKSLASH + 't', '\t'), (BACKSLASH + '"', '"')):
+            body = body.replace(escaped, plain)
+        return body
+
+
 def parse_provider_response(content, registry):
     """Accept plain text for compatibility and resolve any structured actions.
 
@@ -405,11 +443,11 @@ def parse_provider_response(content, registry):
         start = candidate.find('{')
         end = candidate.rfind('}')
         if start < 0 or end <= start:
-            return {**empty, 'answer': registry.expand(candidate)}
+            return {**empty, 'answer': registry.expand(_salvage_answer(candidate) or candidate)}
         try:
             parsed = json.loads(candidate[start:end + 1])
         except json.JSONDecodeError:
-            return {**empty, 'answer': registry.expand(candidate)}
+            return {**empty, 'answer': registry.expand(_salvage_answer(candidate) or candidate)}
     if not isinstance(parsed, dict):
         return {**empty, 'answer': registry.expand(candidate)}
     answer = str(parsed.get('answer') or '').strip() or 'I prepared a workspace action for your confirmation.'
