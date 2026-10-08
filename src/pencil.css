@@ -2366,10 +2366,13 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 @media (max-width: 760px) {
   .planner-view { margin-top: 24px !important; padding-bottom: 0 !important; }
   .planner-header { display: none !important; }
-  .planner-commandbar { display: grid !important; height: 40px; min-height: 40px; grid-template-columns: minmax(0, 246px) minmax(0, 1fr); gap: 8px !important; margin-top: 0 !important; }
+  .planner-commandbar { display: grid !important; height: auto; min-height: 40px; grid-template-columns: minmax(0, 246px) minmax(0, 1fr); gap: 8px !important; margin-top: 0 !important; }
   .planner-commandbar > * { min-height: 40px !important; }
   .planner-commandbar .planner-search { width: 100%; max-width: none; height: 40px !important; flex: none; margin-right: 0; }
   .planner-commandbar .planner-desktop-control { display: none !important; }
+  .planner-commandbar > .board-people,
+  .planner-commandbar > .board-people-hint { grid-column: 1 / -1; min-height: 0 !important; flex-wrap: wrap; }
+  .planner-commandbar > .board-people { display: flex; justify-content: space-between; }
   .planner-mobile-filter-button { display: flex; width: 100%; height: 40px; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid var(--pencil-border-strong); border-radius: 12px; background: var(--pencil-surface); color: var(--pencil-navy); font-size: 13px; font-weight: 600; }
   .planner-mobile-filter-button.is-active { background: var(--pencil-surface-hover); }
   .planner-mobile-filter-panel { display: grid; gap: 12px; margin-top: 8px; padding: 14px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); }
@@ -6844,7 +6847,7 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
 .board-people-stack { display: flex; align-items: center; margin: 0; padding: 0; list-style: none; }
 .board-people-stack li { margin-left: -8px; }
 .board-people-stack li:first-child { margin-left: 0; }
-.board-people-avatar { box-shadow: 0 0 0 2px var(--pencil-surface); }
+.board-people-avatar { width: 32px; height: 32px; flex-basis: 32px; font-size: 11px; box-shadow: 0 0 0 2px var(--pencil-surface); }
 .board-people-more { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 999px; background: var(--pencil-surface-muted); box-shadow: 0 0 0 2px var(--pencil-surface); color: var(--pencil-text-secondary); font-size: 11px; font-weight: 700; }
 .board-people-empty, .board-people-hint { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--pencil-text-muted); font-size: 12px; }
 .board-people-add { min-height: 36px; padding: 0 12px; font-size: 12px; }

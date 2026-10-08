@@ -784,6 +784,15 @@ const cardPlanner = (props = {}) => renderPlanner({
   ...props,
 })
 
+it('shows the assignee photo on a planner card by looking the member up from the task assignee id', () => {
+  const { container } = cardPlanner({
+    members: [{ id: 5, first_name: 'Ada', last_name: 'Lovelace', avatar_url: '/api/users/5/avatar/' }],
+    tasks: [{ ...cardTask, member: 'Ada Lovelace', assignee_id: 5, assignee_ids: [5] }],
+  })
+
+  expect(container.querySelector('.planner-task-card-avatar img')).toHaveAttribute('src', '/api/users/5/avatar/')
+})
+
 it('routes each planner card action to its own handler', async () => {
   const onOpenTask = vi.fn()
   const onDeleteTask = vi.fn()

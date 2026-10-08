@@ -18,10 +18,12 @@ const STALE_DAYS = 14
 // The design's compact lane card: a completion checkbox and title lead, then
 // owner, workstream/estimate, and status. Status moves between lanes by dragging
 // the card; the overflow menu carries the moves a drag cannot express.
-function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onMoveWithinBucket, canMoveUp = false, canMoveDown = false, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect }) {
+function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onMoveWithinBucket, canMoveUp = false, canMoveDown = false, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect, members = [] }) {
   const isDone = task.status === 'done'
   const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
-  const assignee = task.assignee || {}
+  // API tasks carry assignee ids, not an assignee object; the photo lives on the member.
+  const primaryAssigneeId = (task.assignee_ids || [])[0] ?? task.assignee_id
+  const assignee = task.assignee || members.find(member => primaryAssigneeId && String(member.id) === String(primaryAssigneeId)) || {}
   const isOverdue = Boolean(task.due_date && task.due_date < (today || toDateKey(new Date())) && !isDone)
   const taskTag = task.tag && task.tag !== 'General' ? task.tag : task.labels?.[0]
   const meta = [taskTag, task.workstream, formatEstimateMinutes(task.estimate_minutes), !isOverdue && task.due_date].filter(Boolean)
@@ -656,6 +658,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       selectMode={selectMode}
       selected={selectedTaskIds.some(id => String(id) === String(task.id))}
       onToggleSelect={toggleTaskSelected}
+      members={members}
     />
   }
   const draggedBucketName = buckets.find(bucket => bucket.id === draggedBucketId)?.name
