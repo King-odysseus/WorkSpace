@@ -94,7 +94,7 @@ def notification_stream(request):
                 yield f"id: {summary['latest_notification_id']}\ndata: {json.dumps(summary)}\n\n"
                 return
             yield ': keep-alive\n\n'
-            time.sleep(5)
+            time.sleep(2)
 
     response = StreamingHttpResponse(events(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'

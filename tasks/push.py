@@ -14,6 +14,9 @@ from pywebpush import WebPushException, webpush
 
 logger = logging.getLogger(__name__)
 
+PUSH_TTL_SECONDS = 24 * 60 * 60
+PUSH_TIMEOUT_SECONDS = 10
+
 
 def normalize_vapid_private_key(value):
     """Return the base64url DER body pywebpush expects.
@@ -58,6 +61,14 @@ def send_push_to_user(user, title, body='', url='/', sound=True, sound_name='chi
                 data=payload,
                 vapid_private_key=normalize_vapid_private_key(settings.VAPID_PRIVATE_KEY),
                 vapid_claims={'sub': f'mailto:{settings.VAPID_CLAIM_EMAIL}'},
+                # pywebpush defaults to ttl=0, which tells the push service to
+                # drop the message unless the browser is reachable right now, so
+                # a closed app or sleeping machine never got the notification.
+                # Hold it for a day and mark it high urgency so it is delivered
+                # promptly instead of being batched.
+                ttl=PUSH_TTL_SECONDS,
+                headers={'Urgency': 'high'},
+                timeout=PUSH_TIMEOUT_SECONDS,
             )
             sent += 1
         except WebPushException as error:
