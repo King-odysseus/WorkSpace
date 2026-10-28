@@ -822,6 +822,14 @@ Nothing else in the plan is outstanding. What is done has tests: 626 component
 tests, 13 browser journeys, 10 rich-text cases in a real browser, and the full
 backend suite, which is the gate to run again before any release claim.
 
+### Implementation update: 28 October 2026
+
+- Navigation now explains the private planner and shared planner in the sidebar, and the mobile Chats tab opens the same Chats page as the sidebar. User walkthroughs are still needed to decide whether labels or grouping should change further.
+- Today offers an optional, user-scoped private plan. It reads the existing personal planner endpoint only after opt in, and the choice is saved per user and workspace. A dismissible getting-started panel links to task capture, the private planner, settings, and manager invitations.
+- Notification settings now offer timezone-aware quiet hours and one-hour or one-day reminder alert snoozing. The in-app record remains unread; push alerts, reminder email, and sounds are muted during the relevant window. External alerts are not replayed afterwards.
+- The new Today panels and notification rules are separate modules so the shell and API views do not grow more workflow-specific code.
+- Pilot navigation and onboarding sessions, notification volume review, and closed-app delivery tests on real devices remain validation work.
+
 ### A refresh dropped mid-flight, 4 October 2026
 
 Worth recording because it was found by a browser journey and no component test

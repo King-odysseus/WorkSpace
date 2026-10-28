@@ -764,6 +764,24 @@ it('groups notification categories and exposes switches with pressed state', asy
   expect(within(soundRow).getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
 })
 
+it('saves a quiet window and snooze from notification settings', async () => {
+  const api = mockApi({
+    '/notification-preferences/': { preferences: { mentions: true, notification_sound: true, notification_sound_name: 'chime', notification_volume: 70, quiet_start: null, quiet_end: null, quiet_timezone: 'UTC', reminders_snoozed_until: null } },
+    '/api/push/public-key/': { configured: false, public_key: '' },
+  })
+  render(<SettingsView currentWorkspace={{ id: 1, name: 'Northstar', role: 'member' }} currentUserName="Test" currentUserEmail="test@example.test" members={[]} notifications={[]} workspaceId={1} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+  await screen.findByRole('button', { name: '1 hour' })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expectRequest(api, '/notification-preferences/', 'PATCH'))
+  const quietPatch = api.mock.calls.find(([url, options]) => String(url).includes('/notification-preferences/') && options?.method === 'PATCH')
+  expect(JSON.parse(quietPatch[1].body)).toMatchObject({ quiet_start: '22:00', quiet_end: '08:00' })
+  fireEvent.click(screen.getByRole('button', { name: '1 hour' }))
+  await waitFor(() => expect(api.mock.calls.filter(([url, options]) => String(url).includes('/notification-preferences/') && options?.method === 'PATCH')).toHaveLength(2))
+  const snoozePatch = api.mock.calls.filter(([url, options]) => String(url).includes('/notification-preferences/') && options?.method === 'PATCH')[1]
+  expect(new Date(JSON.parse(snoozePatch[1].body).reminders_snoozed_until).getTime()).toBeGreaterThan(Date.now())
+})
+
 it('shows explicit guidance when notification sound is disabled', async () => {
   mockApi({
     '/notification-preferences/': {
