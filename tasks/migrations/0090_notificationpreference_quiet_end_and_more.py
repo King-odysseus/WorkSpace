@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tasks', '0088_board_members'),
+        ('tasks', '0089_personaltask_progress_percent'),
     ]
 
     operations = [
