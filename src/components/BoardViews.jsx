@@ -5558,6 +5558,7 @@ function ProjectCostBudgetPanel({
   );
 }
 function TodayDashboard({
+  children,
   today,
   todayLabel,
   currentUserName,
@@ -6027,6 +6028,8 @@ function TodayDashboard({
           </button>
         ))}
       </section>
+
+      {children}
 
       <div className="mt-[18px] grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
         <div className="grid min-w-0 grid-cols-1 content-start gap-[76px]">

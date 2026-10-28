@@ -4371,7 +4371,6 @@ function App() {
               </Suspense>
             )}
             {active === "Today" && (
-              <>
                 <TodayDashboard
                 today={today}
                 todayLabel={todayLabel}
@@ -4426,24 +4425,24 @@ function App() {
                 }}
                 onComplete={completeTask}
                 onStatusChange={changeTaskStatus}
-                />
-                <TodayPrivatePlan
-                  key={`${session.user.id}:${activeWorkspaceId}`}
-                  workspaceId={activeWorkspaceId}
-                  userId={session.user.id}
-                  today={today}
-                  onOpenPlanner={() => setActive("My planner")}
-                />
-                <FirstSessionChecklist
-                  key={`${session.user.id}:${activeWorkspaceId}`}
-                  workspaceId={activeWorkspaceId}
-                  userId={session.user.id}
-                  isManager={canManageMembers}
-                  onNavigate={setActive}
-                  onCreateTask={() => openTaskModal()}
-                  onInvite={() => openComposer("invite")}
-                />
-              </>
+                >
+                  <TodayPrivatePlan
+                    key={`${session.user.id}:${activeWorkspaceId}`}
+                    workspaceId={activeWorkspaceId}
+                    userId={session.user.id}
+                    today={today}
+                    onOpenPlanner={() => setActive("My planner")}
+                  />
+                  <FirstSessionChecklist
+                    key={`${session.user.id}:${activeWorkspaceId}`}
+                    workspaceId={activeWorkspaceId}
+                    userId={session.user.id}
+                    isManager={canManageMembers}
+                    onNavigate={setActive}
+                    onCreateTask={() => openTaskModal()}
+                    onInvite={() => openComposer("invite")}
+                  />
+                </TodayDashboard>
             )}
           </div>
         </main>
