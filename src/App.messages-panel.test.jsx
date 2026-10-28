@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { mockApi } from './test/setup-tests.js'
 
@@ -113,15 +113,9 @@ it('reports real unread totals and opens the messages panel from either end of t
   expect(within(panelUnderHeader).getByRole('button', { name: 'Open Chats (3)' })).toBeTruthy()
   fireEvent.click(messageButton)
 
-  // The TabBar sits at the bottom, so the panel has to rise from the nav. That
-  // only works if it is rendered outside both the header and the nav, since
-  // either one's backdrop-filter would make it the offset's containing block
-  // and drag the panel up to the top of the screen.
+  // The mobile tab uses the same Chats page as the sidebar. The header still
+  // provides the compact messages panel for a quick read.
   fireEvent.click(chatsTab)
-  const panelAboveNav = (await screen.findByRole('button', { name: /^Open Chats/ })).parentElement.parentElement
-  expect(panelAboveNav.className).toContain('bottom-[88px]')
-  expect(panelAboveNav.className).not.toContain('top-16')
-  expect(panelAboveNav.className).not.toContain('sm:top-full')
-  expect(header.contains(panelAboveNav)).toBe(false)
-  expect(mobileNav.contains(panelAboveNav)).toBe(false)
+  await waitFor(() => expect(chatsTab).toHaveAttribute('aria-current', 'page'))
+  expect(screen.queryByRole('button', { name: /^Open Chats/ })).not.toBeInTheDocument()
 }, 30000)

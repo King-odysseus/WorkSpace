@@ -72,3 +72,10 @@ it('falls back to Today for a view name no page recognizes', async () => {
 
   expect(screen.getByRole('heading', { level: 1, name: 'Today' })).toBeInTheDocument()
 }, 60000)
+
+it('uses the same Chats destination on mobile and desktop', async () => {
+  await mountApp()
+  fireEvent.click(within(tabBar()).getByRole('button', { name: 'Chats' }))
+  await waitFor(() => expect(within(tabBar()).getByRole('button', { name: 'Chats' })).toHaveAttribute('aria-current', 'page'))
+  expect(window.localStorage.getItem('workspace-last-page')).toBe('Chats')
+}, 60000)

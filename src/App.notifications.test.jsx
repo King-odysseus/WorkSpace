@@ -148,13 +148,11 @@ it('separates message alerts from workspace activity across the header and mobil
   expect(screen.queryByText('Deployment finished')).not.toBeInTheDocument()
   fireEvent.click(messageButton)
 
-  // The mobile TabBar opens that same panel, so tapping it lists the alerts
-  // instead of dropping straight into the newest unread thread.
+  // The mobile TabBar opens the same Chats page as the sidebar.
   const chatsTab = within(mobileNav).getByRole('button', { name: /Chats/ })
   fireEvent.click(chatsTab)
-  expect(await screen.findByRole('button', { name: 'Open New direct message' })).toBeInTheDocument()
-  fireEvent.click(chatsTab)
-  await waitFor(() => expect(screen.queryByRole('button', { name: 'Open New direct message' })).not.toBeInTheDocument())
+  await waitFor(() => expect(chatsTab).toHaveAttribute('aria-current', 'page'))
+  expect(screen.queryByRole('button', { name: 'Open New direct message' })).not.toBeInTheDocument()
 
   const bellButton = screen.getByRole('button', { name: 'Open workspace activity notifications' })
   expect(within(bellButton).getByLabelText('1 unread workspace notifications')).toBeInTheDocument()
