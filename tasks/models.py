@@ -3,6 +3,7 @@ import logging
 import secrets
 import uuid
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.storage import FileSystemStorage
@@ -1326,10 +1327,25 @@ class NotificationPreference(models.Model):
     # complete, delete, or materially update shared records. Default on so
     # oversight is not silently lost, but each leader can opt out.
     manager_activity = models.BooleanField(default=True)
+    quiet_start = models.TimeField(null=True, blank=True)
+    quiet_end = models.TimeField(null=True, blank=True)
+    quiet_timezone = models.CharField(max_length=64, default='UTC')
+    reminders_snoozed_until = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['workspace', 'user'], name='unique_notification_preference_per_user')]
+
+    def quiet_now(self, now=None):
+        if self.quiet_start is None or self.quiet_end is None or self.quiet_start == self.quiet_end:
+            return False
+        local_time = (now or timezone.now()).astimezone(ZoneInfo(self.quiet_timezone)).time().replace(tzinfo=None)
+        if self.quiet_start < self.quiet_end:
+            return self.quiet_start <= local_time < self.quiet_end
+        return local_time >= self.quiet_start or local_time < self.quiet_end
+
+    def reminder_snoozed(self, now=None):
+        return bool(self.reminders_snoozed_until and self.reminders_snoozed_until > (now or timezone.now()))
 
     def as_dict(self):
         return {
@@ -1342,6 +1358,10 @@ class NotificationPreference(models.Model):
             'notification_sound_name': self.notification_sound_name,
             'notification_volume': self.notification_volume,
             'manager_activity': self.manager_activity,
+            'quiet_start': self.quiet_start.strftime('%H:%M') if self.quiet_start else None,
+            'quiet_end': self.quiet_end.strftime('%H:%M') if self.quiet_end else None,
+            'quiet_timezone': self.quiet_timezone,
+            'reminders_snoozed_until': self.reminders_snoozed_until.isoformat() if self.reminders_snoozed_until else None,
         }
 
 

@@ -8,6 +8,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
 from .models import NotificationPreference, WorkspaceNotification
+from .notification_rules import REMINDER_KINDS
 
 
 def _notification_summary(user, workspace_id=None, activity_only=False):
@@ -32,9 +33,9 @@ def _notification_summary(user, workspace_id=None, activity_only=False):
     # Arrival checks must use the newest row even when it was read before the
     # next poll. A chat view can mark its notifications read immediately, so an
     # unread-only high-water mark misses real arrivals and silences them.
-    latest = notifications.order_by('-id').only('workspace_id').first() if summary['latest_notification_id'] else None
+    latest = notifications.order_by('-id').only('workspace_id', 'kind').first() if summary['latest_notification_id'] else None
     preference = NotificationPreference.objects.filter(workspace_id=latest.workspace_id, user=user).first() if latest else None
-    summary['sound'] = preference.notification_sound if preference else True
+    summary['sound'] = bool(preference.notification_sound and not preference.quiet_now() and not (latest.kind in REMINDER_KINDS and preference.reminder_snoozed())) if preference else True
     summary['sound_name'] = preference.notification_sound_name if preference else 'chime'
     summary['volume'] = preference.notification_volume if preference else 70
     return summary

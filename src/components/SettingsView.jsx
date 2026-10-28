@@ -361,6 +361,7 @@ function SettingsView({
   const [section, setSection] = useState("profile");
   const [mobileSectionOpen, setMobileSectionOpen] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState(null);
+  const [quietDraft, setQuietDraft] = useState({ start: '22:00', end: '08:00' });
   const [notificationVolume, setNotificationVolume] = useState(70);
   const [checkInSettings, setCheckInSettings] = useState(null);
   const [checkInSettingsError, setCheckInSettingsError] = useState("");
@@ -1070,6 +1071,7 @@ function SettingsView({
         if (!isCurrent) return;
         if (!ok) throw new Error(data.error || "Notification preferences could not be loaded.");
         setNotificationPrefs(data.preferences);
+        setQuietDraft({ start: data.preferences.quiet_start || '22:00', end: data.preferences.quiet_end || '08:00' });
         setNotificationVolume(data.preferences.notification_volume ?? 70);
       })
       .catch((error) => {
@@ -1127,8 +1129,9 @@ function SettingsView({
     }
   };
   const updatePreference = async (key, value) => {
+    const patch = typeof key === 'object' ? key : { [key]: value };
     const previous = notificationPrefs;
-    setNotificationPrefs((current) => ({ ...current, [key]: value }));
+    setNotificationPrefs((current) => ({ ...current, ...patch }));
     setPrefsError("");
     setPrefsErrorKind("");
     setPreferenceRetry(null);
@@ -1142,7 +1145,7 @@ function SettingsView({
             "Content-Type": "application/json",
             "X-CSRFToken": await getCsrfToken(),
           },
-          body: JSON.stringify({ [key]: value }),
+          body: JSON.stringify(patch),
         },
       );
       const data = await response.json();
@@ -2540,6 +2543,29 @@ function SettingsView({
                           </button>
                         </div>
                       ))}
+                  </div>
+                  <div className="settings-section-heading"><div><strong>Quiet hours and reminders</strong></div></div>
+                  <div className="settings-group-card">
+                    <div className="settings-row settings-control-row">
+                      <div><strong>Quiet hours</strong><span>Keep updates unread while muting push alerts, email reminders, and sounds.</span></div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input type="time" aria-label="Quiet hours start" value={quietDraft.start} onChange={event => setQuietDraft(current => ({ ...current, start: event.target.value }))} />
+                        <span>to</span>
+                        <input type="time" aria-label="Quiet hours end" value={quietDraft.end} onChange={event => setQuietDraft(current => ({ ...current, end: event.target.value }))} />
+                        <button type="button" className="secondary-button" disabled={!quietDraft.start || !quietDraft.end || quietDraft.start === quietDraft.end} onClick={() => updatePreference({ quiet_start: quietDraft.start, quiet_end: quietDraft.end, quiet_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' })}>Save</button>
+                        {notificationPrefs.quiet_start && <button type="button" className="secondary-button" onClick={() => updatePreference({ quiet_start: null, quiet_end: null })}>Turn off</button>}
+                      </div>
+                    </div>
+                    {notificationPrefs.quiet_start && <p className="settings-note">Quiet from {notificationPrefs.quiet_start} to {notificationPrefs.quiet_end} in {notificationPrefs.quiet_timezone}.</p>}
+                    <div className="settings-row settings-control-row">
+                      <div><strong>Snooze reminder alerts</strong><span>Reminders stay unread here while external alerts are muted.</span></div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" className="secondary-button" onClick={() => updatePreference('reminders_snoozed_until', new Date(Date.now() + 3600000).toISOString())}>1 hour</button>
+                        <button type="button" className="secondary-button" onClick={() => updatePreference('reminders_snoozed_until', new Date(Date.now() + 86400000).toISOString())}>1 day</button>
+                        {notificationPrefs.reminders_snoozed_until && <button type="button" className="secondary-button" onClick={() => updatePreference('reminders_snoozed_until', null)}>Resume</button>}
+                      </div>
+                    </div>
+                    {notificationPrefs.reminders_snoozed_until && new Date(notificationPrefs.reminders_snoozed_until).getTime() > Date.now() && <p className="settings-note">Reminder alerts resume {new Date(notificationPrefs.reminders_snoozed_until).toLocaleString()}.</p>}
                   </div>
                   <div className="settings-section-heading">
                     <div>

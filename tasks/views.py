@@ -32,8 +32,8 @@ from .cloud_downloads import cloud_download_redirect
 from .file_responses import stored_file_response
 from .mailer import send_invitation_email, send_reminder_email
 from .push import send_push_to_user
+from .notification_rules import REMINDER_EMAIL_KINDS, REMINDER_KINDS
 
-REMINDER_EMAIL_KINDS = {'calendar_reminder', 'due_soon_reminder', 'overdue_reminder', 'stale_update_reminder'}
 
 
 def paginate_response(request, queryset):
@@ -260,9 +260,10 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
     notification = WorkspaceNotification.objects.create(workspace_id=workspace_id, recipient=recipient, kind=kind, title=title, body=body, target_type=target_type, target_id=str(target_id) if target_id else '', group_key=group_key)
     if notify_webhooks:
         notify_workspace_webhooks(workspace_id, kind, title, body, target_type=target_type, target_id=target_id)
-    if kind in REMINDER_EMAIL_KINDS:
+    external_muted = bool(preference and (preference.quiet_now() or (kind in REMINDER_KINDS and preference.reminder_snoozed())))
+    if kind in REMINDER_EMAIL_KINDS and not external_muted:
         send_reminder_email(recipient, title, body)
-    if immediate:
+    if immediate and not external_muted:
         send_push_to_user(
             recipient, title, body,
             url=notification_deep_link(notification.id, target_type, target_id, message_id or ''),
@@ -2767,10 +2768,16 @@ def notification_preference_detail(request, workspace_id):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
-    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'notification_sound', 'notification_sound_name', 'notification_volume', 'manager_activity']
+    fields = ['mentions', 'direct_messages', 'channel_messages', 'task_updates', 'calendar_reminders', 'notification_sound', 'notification_sound_name', 'notification_volume', 'manager_activity', 'quiet_start', 'quiet_end', 'quiet_timezone', 'reminders_snoozed_until']
     unknown_fields = sorted(set(payload) - set(fields))
     if unknown_fields:
         return JsonResponse({'error': f'Unsupported preference fields: {", ".join(unknown_fields)}.'}, status=400)
+    quiet_start = payload.get('quiet_start', preference.quiet_start.strftime('%H:%M') if preference.quiet_start else None)
+    quiet_end = payload.get('quiet_end', preference.quiet_end.strftime('%H:%M') if preference.quiet_end else None)
+    if bool(quiet_start) != bool(quiet_end):
+        return JsonResponse({'error': 'Quiet hours need both a start and an end time.'}, status=400)
+    if quiet_start and quiet_start == quiet_end:
+        return JsonResponse({'error': 'Quiet hours start and end must differ.'}, status=400)
     updated_fields = []
     for field in fields:
         if field in payload:
@@ -2782,6 +2789,23 @@ def notification_preference_detail(request, workspace_id):
             elif field == 'notification_volume':
                 if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 100:
                     return JsonResponse({'error': 'notification_volume must be an integer between 0 and 100.'}, status=400)
+            elif field in {'quiet_start', 'quiet_end'}:
+                if value is not None:
+                    if not isinstance(value, str) or not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', value):
+                        return JsonResponse({'error': f'{field} must use HH:MM or null.'}, status=400)
+                    value = datetime.strptime(value, '%H:%M').time()
+            elif field == 'quiet_timezone':
+                if not isinstance(value, str) or len(value) > 64:
+                    return JsonResponse({'error': 'quiet_timezone must be a valid timezone.'}, status=400)
+                try:
+                    ZoneInfo(value)
+                except (ZoneInfoNotFoundError, ValueError):
+                    return JsonResponse({'error': 'quiet_timezone must be a valid timezone.'}, status=400)
+            elif field == 'reminders_snoozed_until':
+                if value is not None:
+                    value = parse_datetime(value) if isinstance(value, str) else None
+                    if value is None or timezone.is_naive(value) or not timezone.now() < value <= timezone.now() + timedelta(days=7):
+                        return JsonResponse({'error': 'Snooze must end within the next 7 days.'}, status=400)
             elif not isinstance(value, bool):
                 return JsonResponse({'error': f'{field} must be true or false.'}, status=400)
             setattr(preference, field, value)

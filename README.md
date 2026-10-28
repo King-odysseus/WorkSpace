@@ -54,6 +54,8 @@ See `.env.example` for the full variable list.
 
 ## Security defaults
 
+Notification settings are per member and workspace. Quiet hours use the member's selected browser timezone and can cross midnight. During quiet hours, in-app notifications remain unread while push, reminder email, and in-app sounds are muted. Reminder alerts can also be snoozed for one hour or one day; reminders created during the snooze remain available in the notification list. These controls do not delay or replay external alerts after the window ends.
+
 - **Login lockout**: repeated failed sign-ins are throttled by django-axes, keyed on IP
   address *and* username together, so one attacker cannot lock every account from a single
   address and a shared office IP does not lock out the whole team. Tune with

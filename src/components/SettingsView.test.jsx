@@ -759,7 +759,7 @@ it('groups notification categories and exposes switches with pressed state', asy
 
   fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
   expect(await screen.findByRole('switch', { name: 'Mentions' })).toHaveAttribute('aria-checked', 'true')
-  expect(document.querySelectorAll('.settings-group-card')).toHaveLength(3)
+  expect(document.querySelectorAll('.settings-group-card')).toHaveLength(4)
   const soundRow = screen.getByText('Notification sound').closest('.settings-row')
   expect(within(soundRow).getByRole('switch', { name: 'Notification sound' })).toHaveAttribute('aria-checked', 'true')
 })
