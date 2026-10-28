@@ -187,6 +187,13 @@ function PersonalPlanner({ workspaceId }) {
     }
   }
 
+  // 100 finishes the item and anything less reopens it, so the bar and the tick
+  // can never disagree about whether it is done.
+  const setProgress = (task, percent) => {
+    if (percent === 100 && !task.is_done) return toggleTask(task)
+    return patchTask(task, task.is_done ? { is_done: false, progress_percent: percent } : { progress_percent: percent }, true)
+  }
+
   const deleteTask = (task) => run(async () => {
     await request(`/tasks/${task.id}/`, 'DELETE')
     setTasks(current => current.filter(item => item.id !== task.id))
@@ -237,7 +244,7 @@ function PersonalPlanner({ workspaceId }) {
             ? <span className="personal-task-flag is-quiet">Done {formatDay(task.completed_at)}</span>
             : <span className={`personal-task-flag${isOverdue(task, today, nowTime) ? ' is-overdue' : ''}`}>{task.due_date ? `Due ${formatDay(task.due_date)}${task.due_time ? ` ${task.due_time}` : ''}` : 'No due date'}</span>}
         </div>
-        <TaskProgressBar className="personal-task-progress" value={taskProgressValue(task)} label={`Progress for ${task.title}`} />
+        <TaskProgressBar className="personal-task-progress" value={taskProgressValue(task)} title={task.title} onChange={percent => setProgress(task, percent)} />
         {openNotesId === task.id && <div className="personal-task-notes-panel" id={`personal-task-editor-${task.id}`}>
           <div className="personal-task-edit-controls">
             <label className="personal-task-date-control">
@@ -272,15 +279,9 @@ function PersonalPlanner({ workspaceId }) {
           <label className="personal-task-planner-control">
             <span>Progress</span>
             <select
-              aria-label={`Percent complete for ${task.title}`}
+              aria-label={`Set percent complete for ${task.title}`}
               value={taskProgressValue(task)}
-              onChange={event => {
-                const percent = Number(event.target.value)
-                // 100 finishes the item and anything less reopens it, so the bar
-                // and the tick can never disagree about whether it is done.
-                if (percent === 100 && !task.is_done) return toggleTask(task)
-                return patchTask(task, task.is_done ? { is_done: false, progress_percent: percent } : { progress_percent: percent }, true)
-              }}
+              onChange={event => setProgress(task, Number(event.target.value))}
             >{progressOptions(taskProgressValue(task)).map(step => <option value={step} key={step}>{step}%</option>)}</select>
           </label>
           {planners.length > 1 && <label className="personal-task-planner-control">

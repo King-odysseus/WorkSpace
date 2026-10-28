@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Archive, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
@@ -9,7 +9,7 @@ import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import Avatar from './Avatar.jsx'
 import BoardMembersDialog from './BoardMembersDialog.jsx'
 import BoardPeople from './BoardPeople.jsx'
-import { TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
+import { TaskProgressActions, TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
@@ -20,6 +20,7 @@ const STALE_DAYS = 14
 // owner, workstream/estimate, and status. Status moves between lanes by dragging
 // the card; the overflow menu carries the moves a drag cannot express.
 function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onMoveWithinBucket, canMoveUp = false, canMoveDown = false, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect, members = [] }) {
+  const saveProgress = useContext(TaskProgressActions)
   const isDone = task.status === 'done'
   const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
   // API tasks carry assignee ids, not an assignee object; the photo lives on the member.
@@ -84,7 +85,7 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-    <TaskProgressBar className="planner-task-card-progress" value={taskProgressValue(task)} label={`Progress for ${task.title}`} />
+    <TaskProgressBar className="planner-task-card-progress" value={taskProgressValue(task)} title={task.title} onChange={onStatusChange && saveProgress ? percent => saveProgress?.(task, percent) : undefined} />
     <div className="planner-task-card-details">
       {taskAssigneeLabel(task) && <Avatar name={taskAssigneeLabel(task)} avatarUrl={assignee.avatar_url} className="planner-task-card-avatar" />}
       <span className={`planner-task-card-meta-copy${isOverdue ? ' is-overdue' : ''}`} title={task.due_date ? `Due ${task.due_date}` : undefined}>

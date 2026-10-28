@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
 import PlannerBoard from './PlannerBoard.jsx'
+import { TaskProgressActions } from './TaskProgressBar.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
 
 const renderPlanner = (props = {}) => render(
@@ -1175,4 +1176,36 @@ it('draws a progress bar on planner cards, empty when not started', () => {
 
   expect(screen.getByRole('progressbar', { name: 'Progress for Not started' })).toHaveAttribute('aria-valuenow', '0')
   expect(screen.getByRole('progressbar', { name: 'Progress for Mostly there' })).toHaveAttribute('aria-valuenow', '80')
+})
+
+it('sets progress from the planner card dropdown', () => {
+  const save = vi.fn()
+  render(
+    <TaskProgressActions.Provider value={save}>
+      <PlannerBoard
+        buckets={[{ id: 1, name: 'Backlog' }]}
+        tasks={[{ id: 1, title: 'Mostly there', bucket: 'Backlog', status: 'in progress', priority: 'normal', progress_percent: 80 }]}
+        members={[]}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onStatusChange={vi.fn()}
+        onOpenTask={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onAddTask={vi.fn()}
+        onTaskMove={vi.fn()}
+        onBucketReorder={vi.fn()}
+        onProjectFilterChange={vi.fn()}
+        onCreateBucket={vi.fn()}
+        onCreateWorkstream={vi.fn()}
+        newBucketName=""
+        setNewBucketName={vi.fn()}
+        newWorkstreamName=""
+        setNewWorkstreamName={vi.fn()}
+      />
+    </TaskProgressActions.Provider>,
+  )
+
+  fireEvent.change(screen.getByRole('combobox', { name: 'Percent complete for Mostly there' }), { target: { value: '90' } })
+
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 90)
 })

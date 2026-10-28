@@ -85,6 +85,7 @@ import {
 } from "./lib/theme.js";
 import { ThemeInit } from "../.flowbite-react/init.jsx";
 import { ThemeProvider } from "flowbite-react";
+import { TaskProgressActions } from "./components/TaskProgressBar.jsx";
 import { flowbiteTheme } from "./lib/flowbite-theme.js";
 import { Button } from "./components/ui/button.jsx";
 import TodayPrivatePlan from "./components/TodayPrivatePlan.jsx";
@@ -2074,6 +2075,64 @@ function App() {
       return false;
     }
   };
+  // Sets a task's percent complete from a board card. 100 is the same act as
+  // finishing it, so it goes through the status path; a finished task given less
+  // than 100 is reopened, and a task not yet started that gains progress moves to
+  // In progress, the same pairing the task drawer applies.
+  const changeTaskProgress = async (task, percent) => {
+    if (percent === 100) return changeTaskStatus(task.id, "done");
+    const status =
+      task.status === "done" || (task.status === "todo" && percent > 0)
+        ? "in progress"
+        : task.status;
+    const previousTask = tasks.find((item) => item.id === task.id);
+    setTasks((current) =>
+      current.map((item) =>
+        item.id === task.id
+          ? { ...item, status, progress_percent: percent, completed_at: "" }
+          : item,
+      ),
+    );
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": await getCsrfToken(),
+          "X-Workspace-Id": String(activeWorkspaceId || ""),
+        },
+        body: JSON.stringify({
+          progress_percent: percent,
+          ...(status !== task.status
+            ? { status: status === "in progress" ? "in_progress" : status }
+            : {}),
+        }),
+      });
+      const responseData = await readJsonResponse(
+        response,
+        `Task update returned ${response.status}`,
+      );
+      if (!response.ok)
+        throw new Error(
+          responseData.error || `Task update returned ${response.status}`,
+        );
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id ? { ...item, ...mapApiTask(responseData.task) } : item,
+        ),
+      );
+      setWorkspaceReload((current) => current + 1);
+      return true;
+    } catch (error) {
+      if (previousTask)
+        setTasks((current) =>
+          current.map((item) => (item.id === task.id ? previousTask : item)),
+        );
+      toast.error(error.message || "Progress could not be saved.");
+      return false;
+    }
+  };
   const changeTaskBucket = async (id, bucket) => {
     if (Array.isArray(id)) return reorderPlannerTasks(id);
     const previousTask = tasks.find((task) => task.id === id);
@@ -3433,6 +3492,7 @@ function App() {
   );
 
   return (
+    <TaskProgressActions.Provider value={changeTaskProgress}>
     <div
       className={cn(
         "workspace-app-shell flex h-dvh overflow-hidden bg-surface-secondary",
@@ -4781,6 +4841,7 @@ function App() {
       )}
       <CookieConsent onOpenLegal={() => setActive("Legal")} />
     </div>
+    </TaskProgressActions.Provider>
   );
 }
 

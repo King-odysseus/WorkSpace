@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
+import { TaskProgressActions } from './TaskProgressBar.jsx'
 import ProjectKanbanBoard, { DEFAULT_PROJECT_KANBAN_COLUMN_ORDER, normalizeProjectKanbanColumnOrder, projectKanbanColumnForTask } from './ProjectKanbanBoard.jsx'
 
 const tasks = [
@@ -488,4 +489,28 @@ it('draws a progress bar on each card, empty when not started', () => {
   expect(screen.getByRole('progressbar', { name: 'Progress for Not started' })).toHaveAttribute('aria-valuenow', '0')
   expect(screen.getByRole('progressbar', { name: 'Progress for Halfway' })).toHaveAttribute('aria-valuenow', '50')
   expect(screen.getByText('50%')).toBeInTheDocument()
+})
+
+it('sets progress from the card dropdown through the app-level action', () => {
+  const save = vi.fn()
+  render(
+    <TaskProgressActions.Provider value={save}>
+      <ProjectKanbanBoard tasks={[{ id: 5, title: 'Halfway', status: 'in_progress', priority: 'normal', progress_percent: 50, can_edit: true }]} onOpenTask={vi.fn()} onStatusChange={vi.fn()} canManageTasks />
+    </TaskProgressActions.Provider>,
+  )
+
+  fireEvent.change(screen.getByRole('combobox', { name: 'Percent complete for Halfway' }), { target: { value: '60' } })
+
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }), 60)
+})
+
+it('leaves progress read-only on a card the person cannot edit', () => {
+  render(
+    <TaskProgressActions.Provider value={vi.fn()}>
+      <ProjectKanbanBoard tasks={[{ id: 6, title: 'Not mine', status: 'in_progress', priority: 'normal', progress_percent: 50 }]} onOpenTask={vi.fn()} onStatusChange={vi.fn()} />
+    </TaskProgressActions.Provider>,
+  )
+
+  expect(screen.queryByRole('combobox', { name: 'Percent complete for Not mine' })).not.toBeInTheDocument()
+  expect(screen.getByRole('progressbar', { name: 'Progress for Not mine' })).toBeInTheDocument()
 })

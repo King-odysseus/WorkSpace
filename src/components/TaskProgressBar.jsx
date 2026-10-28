@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { createContext } from 'react'
 import { cn } from '@/lib/utils'
 
 // Progress is entered in tens, so the control offers 0, 10 ... 100. A value saved
@@ -18,10 +18,33 @@ export function taskProgressValue(task) {
   return Math.max(0, Math.min(100, Number(task.progress_percent) || 0))
 }
 
+// The colour says how far along the work is, so a column can be read at a glance:
+// red just started, amber midway, blue nearly there, green finished. The number
+// stays on screen beside it, so the colour is never the only signal.
+export function progressTone(percent) {
+  if (percent >= 100) return { fill: 'bg-success', text: 'text-success' }
+  if (percent >= 70) return { fill: 'bg-info', text: 'text-info' }
+  if (percent >= 40) return { fill: 'bg-warning-fill', text: 'text-warning' }
+  if (percent > 0) return { fill: 'bg-danger', text: 'text-danger' }
+  return { fill: 'bg-primary', text: 'text-muted-foreground' }
+}
+
+// Supplied once by the app: (task, percent) => Promise. Cards read it instead of
+// taking it as a prop, so the boards need no extra wiring and a card rendered
+// without a provider (a test, a read-only view) just shows the number.
+export const TaskProgressActions = createContext(null)
+
 // A task that has not been started still draws its empty track, so a column of
 // cards reads the same top to bottom instead of bars appearing as work begins.
-export function TaskProgressBar({ value = 0, label = 'Progress', className }) {
+// With onChange the percent becomes a dropdown, so progress can be set on the
+// card itself.
+export function TaskProgressBar({ value = 0, title, className, onChange }) {
   const percent = Math.max(0, Math.min(100, Math.round(Number(value) || 0)))
+  const tone = progressTone(percent)
+  const label = title ? `Progress for ${title}` : 'Progress'
+  // The card around this is draggable and clickable; a press on the dropdown is
+  // neither a drag nor a card click.
+  const keepToSelf = event => event.stopPropagation()
   return (
     <div className={cn('task-progress flex items-center gap-2', className)} data-slot="task-progress">
       <div
@@ -32,9 +55,23 @@ export function TaskProgressBar({ value = 0, label = 'Progress', className }) {
         aria-valuemax={100}
         className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-chip bg-info-soft"
       >
-        <div className="h-full rounded-chip bg-primary transition-[width] duration-300" style={{ width: `${percent}%` }} />
+        <div className={cn('h-full rounded-chip transition-[width,background-color] duration-300', tone.fill)} style={{ width: `${percent}%` }} />
       </div>
-      <span className="shrink-0 text-xs tabular-nums text-muted-foreground" aria-hidden="true">{percent}%</span>
+      {onChange
+        ? <select
+            aria-label={title ? `Percent complete for ${title}` : 'Percent complete'}
+            value={percent}
+            onChange={event => onChange(Number(event.target.value))}
+            onClick={keepToSelf}
+            onMouseDown={keepToSelf}
+            onPointerDown={keepToSelf}
+            onKeyDown={keepToSelf}
+            draggable={false}
+            className={cn('task-progress-select shrink-0 cursor-pointer rounded-chip border border-border bg-card px-1 py-0.5 text-xs font-semibold tabular-nums outline-none focus-visible:border-info focus-visible:ring-[3px] focus-visible:ring-info/20', tone.text)}
+          >
+            {progressOptions(percent).map(step => <option value={step} key={step}>{step}%</option>)}
+          </select>
+        : <span className={cn('shrink-0 text-xs font-semibold tabular-nums', tone.text)} aria-hidden="true">{percent}%</span>}
     </div>
   )
 }

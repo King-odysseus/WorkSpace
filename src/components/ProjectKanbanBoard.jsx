@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, GripVertical, MoveHorizontal, Plus, Search } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
-import { TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
+import { TaskProgressActions, TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { formatDayMonthName, formatEstimateMinutes, toDateKey } from '../lib/workspace-format.js'
 
 const COLUMN_DEFINITIONS = [
@@ -95,6 +95,7 @@ export default function ProjectKanbanBoard({
   onBulkDelete,
   onBulkMove,
 }) {
+  const saveProgress = useContext(TaskProgressActions)
   const [query, setQuery] = useState('')
   const [assigneeFilter, setAssigneeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -562,7 +563,7 @@ export default function ProjectKanbanBoard({
                 <CalendarDays size={13} aria-hidden="true" />
                 <span>{overdue ? 'Overdue' : dueLabel || 'No due date'}</span>
               </div>
-              <TaskProgressBar value={taskProgressValue(task)} label={`Progress for ${task.title}`} />
+              <TaskProgressBar value={taskProgressValue(task)} title={task.title} onChange={editable && saveProgress ? percent => saveProgress?.(task, percent) : undefined} />
               <div className="project-kanban-task-footer">
                 <span className="project-kanban-task-assignee" title={assigneeName}>
                   <Avatar name={assigneeName} avatarUrl={assignee?.avatar_url} small />

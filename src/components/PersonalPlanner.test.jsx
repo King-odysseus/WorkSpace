@@ -384,8 +384,8 @@ it('draws a progress bar on every item, empty for one that has not been started'
   const started = await screen.findByRole('progressbar', { name: 'Progress for Draft handover' })
   expect(started).toHaveAttribute('aria-valuenow', '40')
   expect(screen.getByRole('progressbar', { name: 'Progress for Book the van' })).toHaveAttribute('aria-valuenow', '0')
-  expect(screen.getByText('40%')).toBeInTheDocument()
-  expect(screen.getByText('0%')).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Percent complete for Draft handover' })).toHaveValue('40')
+  expect(screen.getByRole('combobox', { name: 'Percent complete for Book the van' })).toHaveValue('0')
 })
 
 it('saves the percent complete in tens from the item editor', async () => {
@@ -395,7 +395,7 @@ it('saves the percent complete in tens from the item editor', async () => {
 
   render(<PersonalPlanner workspaceId={4} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Edit Draft handover' }))
-  const select = screen.getByRole('combobox', { name: 'Percent complete for Draft handover' })
+  const select = screen.getByRole('combobox', { name: 'Set percent complete for Draft handover' })
   expect(Array.from(select.options).map(option => option.value)).toEqual(['0', '10', '20', '30', '40', '50', '60', '70', '80', '90', '100'])
 
   fireEvent.change(select, { target: { value: '60' } })
@@ -412,7 +412,7 @@ it('finishes the item when the percent is set to 100', async () => {
 
   render(<PersonalPlanner workspaceId={4} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Edit Draft handover' }))
-  fireEvent.change(screen.getByRole('combobox', { name: 'Percent complete for Draft handover' }), { target: { value: '100' } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Set percent complete for Draft handover' }), { target: { value: '100' } })
 
   expect(await screen.findByRole('button', { name: 'Show Done (1 item)' })).toBeInTheDocument()
   const [, init] = expectRequest(fetchMock, '/personal/tasks/7/', 'PATCH')

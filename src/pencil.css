@@ -2295,7 +2295,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-column-body { gap: 8px !important; padding: 4px 12px 12px !important; }
 .planner-column > div:last-child { padding: 0 12px 12px !important; }
 .planner-column > div:last-child button { height: 40px !important; border-radius: 8px !important; font-size: 13px; }
-.planner-task-card { position: relative; display: grid; min-width: 0; height: 96px; min-height: 96px; gap: 6px; overflow: hidden; padding: 10px 12px !important; border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: var(--pencil-surface) !important; box-shadow: 0 1px 2px rgb(0 0 0 / 3%) !important; }
+.planner-task-card { position: relative; display: grid; min-width: 0; height: 110px; min-height: 110px; gap: 6px; overflow: hidden; padding: 10px 12px !important; border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: var(--pencil-surface) !important; box-shadow: 0 1px 2px rgb(0 0 0 / 3%) !important; }
 .planner-task-card:hover { border-color: var(--pencil-border-strong) !important; box-shadow: 0 3px 8px rgb(16 24 40 / 6%) !important; }
 .planner-task-card:focus-within { border-color: var(--pencil-blue) !important; box-shadow: 0 0 0 3px rgb(37 99 235 / 12%) !important; }
 .planner-task-card[draggable='true'] { cursor: grab; }
@@ -2304,6 +2304,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .planner-task-card-grip { display: none; }
 /* The percent bar is pinned to the bottom edge, like the pill and avatar, so the card's fixed rows above it do not move. */
 .planner-task-card-progress { position: absolute; right: 12px; bottom: 10px; left: 12px; }
+/* A native select takes the app's global select padding and size; the percent picker is a small pill inside a card row. */
+.task-progress-select { width: auto !important; height: 22px !important; min-height: 22px !important; padding: 0 20px 0 7px !important; font-size: 11px !important; line-height: 20px !important; background-position: right 5px center !important; background-size: 10px !important; }
 .planner-task-card-title { min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; font-size: 13px; font-weight: 500; line-height: 16px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .planner-task-card-title:hover { color: var(--pencil-navy) !important; }
 .planner-card-check { width: 18px; height: 18px; margin: 0; flex: 0 0 18px; appearance: none; border: 1px solid var(--pencil-border-strong); border-radius: 5px; background: var(--pencil-surface); color: #fff; cursor: pointer; }
@@ -2403,7 +2405,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
   .planner-column-menu { top: 10px !important; right: 10px !important; width: 24px; height: 24px; background: transparent !important; color: var(--pencil-text-secondary) !important; }
   .planner-column-menu svg { width: 20px; height: 20px; }
   .planner-column-body { flex: 0 0 254px !important; min-height: 254px; max-height: 254px; gap: 8px !important; padding: 10px !important; background: var(--pencil-surface-muted); }
-  .planner-task-card { width: 100% !important; height: 112px !important; min-height: 112px; padding: 0 !important; border-radius: 10px !important; }
+  .planner-task-card { width: 100% !important; height: 126px !important; min-height: 126px; padding: 0 !important; border-radius: 10px !important; }
   .planner-task-card-top { position: absolute; z-index: 1; top: 10px; right: 10px; left: 24px; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; align-items: start; }
   .planner-card-check { margin-top: 2px; }
   .planner-task-card-title { font-size: 12px; line-height: 15px; }
