@@ -87,6 +87,8 @@ import { ThemeInit } from "../.flowbite-react/init.jsx";
 import { ThemeProvider } from "flowbite-react";
 import { flowbiteTheme } from "./lib/flowbite-theme.js";
 import { Button } from "./components/ui/button.jsx";
+import TodayPrivatePlan from "./components/TodayPrivatePlan.jsx";
+import FirstSessionChecklist from "./components/FirstSessionChecklist.jsx";
 import { Badge } from "./components/ui/badge.jsx";
 import { Alert } from "./components/ui/alert.jsx";
 import { Card, CardContent, CardHeader } from "./components/ui/card.jsx";
@@ -3070,7 +3072,7 @@ function App() {
       items: [
         { label: "Today", icon: Home },
         { label: "My tasks", icon: ClipboardList },
-        { label: "My planner", icon: List },
+        { label: "My planner", icon: List, description: "Private notes and plans only you can see" },
         { label: "Daily operations", icon: RefreshCw },
         { label: "Team", icon: Users },
         // The assistant's own page, alongside the dock's Assistant button in
@@ -3108,7 +3110,7 @@ function App() {
     {
       heading: "Work",
       items: [
-        { label: "Planner", icon: LayoutGrid },
+        { label: "Planner", icon: LayoutGrid, description: "Shared team work" },
         { label: "Projects", icon: Folder },
         { label: "Calendar", icon: CalendarDays },
         { label: "Import data", icon: Upload },
@@ -3148,11 +3150,7 @@ function App() {
       // wording and the page is "My tasks", and navigating to the label instead
       // lands on a view name no branch handles, which falls through to a
       // generic list of the whole workspace.
-      // Chats opens the chat panel rather than the Chats page, which is what the
-      // bottom bar did before the design; the page is reachable from "More".
-      return label === "Chats"
-        ? { ...item, label, page, onSelect: () => toggleMessages("nav") }
-        : { ...item, label, page };
+      return { ...item, label, page };
     })
     .filter(Boolean);
   const renderMobileTab = ({ label, page, icon: Icon, active: itemActive, onSelect }) => {
@@ -3637,9 +3635,9 @@ function App() {
                 </p>
               )}
               <ul className="space-y-0.5">
-                {group.items.map(({ label, icon: Icon, badge, badgeTone }) => (
+                {group.items.map(({ label, icon: Icon, badge, badgeTone, description }) => (
                   <li key={label}>
-                    <Tooltip content={railCollapsed ? label : undefined} side="right">
+                    <Tooltip content={railCollapsed ? label : description} side="right">
                       <button
                         type="button"
                         onClick={() => {
@@ -4373,7 +4371,8 @@ function App() {
               </Suspense>
             )}
             {active === "Today" && (
-              <TodayDashboard
+              <>
+                <TodayDashboard
                 today={today}
                 todayLabel={todayLabel}
                 currentUserName={currentUserName}
@@ -4427,7 +4426,24 @@ function App() {
                 }}
                 onComplete={completeTask}
                 onStatusChange={changeTaskStatus}
-              />
+                />
+                <TodayPrivatePlan
+                  key={`${session.user.id}:${activeWorkspaceId}`}
+                  workspaceId={activeWorkspaceId}
+                  userId={session.user.id}
+                  today={today}
+                  onOpenPlanner={() => setActive("My planner")}
+                />
+                <FirstSessionChecklist
+                  key={`${session.user.id}:${activeWorkspaceId}`}
+                  workspaceId={activeWorkspaceId}
+                  userId={session.user.id}
+                  isManager={canManageMembers}
+                  onNavigate={setActive}
+                  onCreateTask={() => openTaskModal()}
+                  onInvite={() => openComposer("invite")}
+                />
+              </>
             )}
           </div>
         </main>
