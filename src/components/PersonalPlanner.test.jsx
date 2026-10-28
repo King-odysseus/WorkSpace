@@ -370,3 +370,51 @@ it('renders the loading shell and keeps a server error visible', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your planner.')
   expect(screen.getByText('Create a planner to start planning your day')).toBeInTheDocument()
 })
+
+it('draws a progress bar on every item, empty for one that has not been started', async () => {
+  mockApi({
+    '/personal/planners/': {
+      planners: [planner],
+      tasks: [{ ...tasks[0], progress_percent: 40 }, tasks[1]],
+    },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+
+  const started = await screen.findByRole('progressbar', { name: 'Progress for Draft handover' })
+  expect(started).toHaveAttribute('aria-valuenow', '40')
+  expect(screen.getByRole('progressbar', { name: 'Progress for Book the van' })).toHaveAttribute('aria-valuenow', '0')
+  expect(screen.getByText('40%')).toBeInTheDocument()
+  expect(screen.getByText('0%')).toBeInTheDocument()
+})
+
+it('saves the percent complete in tens from the item editor', async () => {
+  const fetchMock = loadPlanner({
+    '/personal/tasks/7/': { task: { ...tasks[0], progress_percent: 60 } },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Draft handover' }))
+  const select = screen.getByRole('combobox', { name: 'Percent complete for Draft handover' })
+  expect(Array.from(select.options).map(option => option.value)).toEqual(['0', '10', '20', '30', '40', '50', '60', '70', '80', '90', '100'])
+
+  fireEvent.change(select, { target: { value: '60' } })
+
+  await waitFor(() => expect(screen.getByRole('progressbar', { name: 'Progress for Draft handover' })).toHaveAttribute('aria-valuenow', '60'))
+  const [, init] = expectRequest(fetchMock, '/personal/tasks/7/', 'PATCH')
+  expect(JSON.parse(init.body)).toEqual({ progress_percent: 60 })
+})
+
+it('finishes the item when the percent is set to 100', async () => {
+  const fetchMock = loadPlanner({
+    '/personal/tasks/7/': { task: { ...tasks[0], is_done: true, progress_percent: 100, completed_at: '2024-03-09T09:30:00Z' } },
+  })
+
+  render(<PersonalPlanner workspaceId={4} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Draft handover' }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Percent complete for Draft handover' }), { target: { value: '100' } })
+
+  expect(await screen.findByRole('button', { name: 'Show Done (1 item)' })).toBeInTheDocument()
+  const [, init] = expectRequest(fetchMock, '/personal/tasks/7/', 'PATCH')
+  expect(JSON.parse(init.body)).toEqual({ is_done: true })
+})

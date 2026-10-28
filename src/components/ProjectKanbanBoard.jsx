@@ -3,6 +3,7 @@ import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Mov
 import Avatar from './Avatar.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
+import { TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { formatDayMonthName, formatEstimateMinutes, toDateKey } from '../lib/workspace-format.js'
 
 const COLUMN_DEFINITIONS = [
@@ -561,6 +562,7 @@ export default function ProjectKanbanBoard({
                 <CalendarDays size={13} aria-hidden="true" />
                 <span>{overdue ? 'Overdue' : dueLabel || 'No due date'}</span>
               </div>
+              <TaskProgressBar value={taskProgressValue(task)} label={`Progress for ${task.title}`} />
               <div className="project-kanban-task-footer">
                 <span className="project-kanban-task-assignee" title={assigneeName}>
                   <Avatar name={assigneeName} avatarUrl={assignee?.avatar_url} small />

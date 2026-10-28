@@ -10,6 +10,7 @@ import { DateField } from './workspace-ui.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
 import FilePreview from './FilePreview.jsx'
+import { progressOptions } from './TaskProgressBar.jsx'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.jsx'
 import { getCsrfToken, isImageFileName, readJsonResponse, taskDueLabel, toDateKey } from '../lib/workspace-format.js'
 
@@ -98,7 +99,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
   const [comment, setComment] = useState('')
   const [subtask, setSubtask] = useState('')
   const [labelInput, setLabelInput] = useState((task.labels || []).join(', '))
-  const [taskFields, setTaskFields] = useState({ title: task.title, description: task.description || '', status: task.status === 'in progress' ? 'in_progress' : task.status, priority: task.priority || 'normal', due_date: task.due_date || '', recurrence: task.recurrence || 'none', assignee_ids: task.assignee_ids?.length ? [...task.assignee_ids] : (task.assignee_id ? [task.assignee_id] : []), project_id: task.project_id || '', bucket: task.bucket || 'Backlog' })
+  const [taskFields, setTaskFields] = useState({ title: task.title, description: task.description || '', status: task.status === 'in progress' ? 'in_progress' : task.status, priority: task.priority || 'normal', due_date: task.due_date || '', recurrence: task.recurrence || 'none', assignee_ids: task.assignee_ids?.length ? [...task.assignee_ids] : (task.assignee_id ? [task.assignee_id] : []), project_id: task.project_id || '', bucket: task.bucket || 'Backlog', progress_percent: task.status === 'done' ? 100 : Number(task.progress_percent) || 0 })
   const [dependencyTasks, setDependencyTasks] = useState(tasks)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -143,6 +144,24 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
     }).catch(loadError => setError(loadError.message)).finally(() => setLoading(false))
   }, [task.id, workspaceId])
   const updateTaskField = event => setTaskFields(current => ({ ...current, [event.target.name]: event.target.value }))
+  // Status and percent complete describe the same fact, and the server refuses a
+  // finished task below 100, so the two move together here instead of failing on save.
+  const updateStatusField = event => {
+    const status = event.target.value
+    setTaskFields(current => ({
+      ...current,
+      status,
+      progress_percent: status === 'done' ? 100 : current.status === 'done' && current.progress_percent === 100 ? 0 : current.progress_percent,
+    }))
+  }
+  const updateProgressField = event => {
+    const progress = Number(event.target.value)
+    setTaskFields(current => ({
+      ...current,
+      progress_percent: progress,
+      status: progress === 100 ? 'done' : current.status === 'done' ? 'in_progress' : current.status === 'todo' && progress > 0 ? 'in_progress' : current.status,
+    }))
+  }
   const saveTaskFields = async event => {
     event.preventDefault()
     setError('')
@@ -309,7 +328,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
                   <div className="modal-grid task-dialog-grid">
                     <label>
                       Status
-                      <AppSelect name="status" value={taskFields.status} onChange={updateTaskField} disabled={!canEdit}>
+                      <AppSelect name="status" value={taskFields.status} onChange={updateStatusField} disabled={!canEdit}>
                         <option value="todo">To do</option>
                         <option value="in_progress">In progress</option>
                         <option value="review">Review</option>
@@ -326,6 +345,14 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
                         <option value="high">High</option>
                         <option value="normal">Normal</option>
                         <option value="low">Low</option>
+                      </AppSelect>
+                    </label>
+                  </div>
+                  <div className="modal-grid task-dialog-grid">
+                    <label>
+                      Percent complete
+                      <AppSelect name="progress_percent" value={taskFields.progress_percent} onChange={updateProgressField} disabled={!canEdit}>
+                        {progressOptions(taskFields.progress_percent).map(step => <option value={step} key={step}>{step}%</option>)}
                       </AppSelect>
                     </label>
                   </div>

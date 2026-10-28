@@ -9,6 +9,7 @@ import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import Avatar from './Avatar.jsx'
 import BoardMembersDialog from './BoardMembersDialog.jsx'
 import BoardPeople from './BoardPeople.jsx'
+import { TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 
@@ -83,6 +84,7 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+    <TaskProgressBar className="planner-task-card-progress" value={taskProgressValue(task)} label={`Progress for ${task.title}`} />
     <div className="planner-task-card-details">
       {taskAssigneeLabel(task) && <Avatar name={taskAssigneeLabel(task)} avatarUrl={assignee.avatar_url} className="planner-task-card-avatar" />}
       <span className={`planner-task-card-meta-copy${isOverdue ? ' is-overdue' : ''}`} title={task.due_date ? `Due ${task.due_date}` : undefined}>

@@ -1950,6 +1950,9 @@ class PersonalTask(models.Model):
     due_time = models.TimeField(null=True, blank=True)
     is_done = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # Entered by hand, 0-100. A finished item is always 100, set by the view layer
+    # when it is ticked, the same rule Task keeps for team work.
+    progress_percent = models.PositiveSmallIntegerField(default=0)
     position = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1957,6 +1960,9 @@ class PersonalTask(models.Model):
     class Meta:
         ordering = ['position', 'id']
         indexes = [models.Index(fields=['owner', 'is_done', 'due_date'])]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(progress_percent__lte=100), name='personal_task_progress_at_most_100'),
+        ]
 
     def as_dict(self):
         return {
@@ -1970,5 +1976,6 @@ class PersonalTask(models.Model):
             'due_time': self.due_time.strftime('%H:%M') if self.due_time else '',
             'is_done': self.is_done,
             'completed_at': self.completed_at.isoformat() if self.completed_at else '',
+            'progress_percent': self.progress_percent,
             'position': self.position,
         }

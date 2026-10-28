@@ -108,6 +108,21 @@ def _parse_due_time(value):
 
 
 LONE_TIME_ERROR = 'A due time needs a due date.'
+PROGRESS_ERROR = 'Progress must be a whole number between 0 and 100.'
+
+
+def _parse_progress(value):
+    """Accept a whole number from 0 to 100. The client offers tens; the server
+    does not insist, so a value from an older client or import still saves."""
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        return None, JsonResponse({'error': PROGRESS_ERROR}, status=400)
+    try:
+        percent = int(value)
+    except (TypeError, ValueError):
+        return None, JsonResponse({'error': PROGRESS_ERROR}, status=400)
+    if not 0 <= percent <= 100:
+        return None, JsonResponse({'error': PROGRESS_ERROR}, status=400)
+    return percent, None
 
 
 @require_http_methods(['GET', 'POST'])
@@ -213,6 +228,11 @@ def personal_task_list(request, workspace_id):
     if due_time is not None and due_date is None:
         return JsonResponse({'error': LONE_TIME_ERROR}, status=400)
     notes = str(payload.get('notes', ''))[:MAX_NOTES]
+    progress = 0
+    if 'progress_percent' in payload:
+        progress, error = _parse_progress(payload['progress_percent'])
+        if error:
+            return error
 
     task = PersonalTask.objects.create(
         planner=planner,
@@ -221,6 +241,7 @@ def personal_task_list(request, workspace_id):
         notes=notes,
         due_date=due_date,
         due_time=due_time,
+        progress_percent=progress,
         position=_next_position(PersonalTask, planner=planner),
     )
     return JsonResponse({'task': task.as_dict()}, status=201)
@@ -282,12 +303,27 @@ def personal_task_detail(request, workspace_id, task_id):
         if time_sent or task.due_time != due_time:
             task.due_time = due_time
             fields.append('due_time')
+    if 'progress_percent' in payload:
+        task.progress_percent, error = _parse_progress(payload['progress_percent'])
+        if error:
+            return error
+        fields.append('progress_percent')
     if 'is_done' in payload:
+        was_done = task.is_done
         task.is_done = bool(payload['is_done'])
         # Stamped here rather than in the client, so "when was this finished" is
         # the server's answer and cannot be back-dated by a request body.
         task.completed_at = timezone.now() if task.is_done else None
         fields.extend(['is_done', 'completed_at'])
+        # A finished item reads 100. Reopening one that was ticked starts it over
+        # unless the same request names a percentage, as Task does for team work.
+        if task.is_done:
+            task.progress_percent = 100
+            if 'progress_percent' not in fields:
+                fields.append('progress_percent')
+        elif was_done and 'progress_percent' not in payload:
+            task.progress_percent = 0
+            fields.append('progress_percent')
     if 'position' in payload:
         try:
             task.position = max(0, int(payload['position']))

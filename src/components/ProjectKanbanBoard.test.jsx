@@ -476,3 +476,16 @@ it('offers permanent delete on the kanban only to someone who may use it', async
   await user.click(screen.getByText('Design UI').closest('.project-kanban-task'))
   expect(screen.getByRole('button', { name: /Delete/ })).toBeInTheDocument()
 })
+
+it('draws a progress bar on each card, empty when not started', () => {
+  renderBoard({
+    tasks: [
+      { id: 1, title: 'Not started', status: 'todo', priority: 'normal', progress_percent: 0, can_edit: true },
+      { id: 2, title: 'Halfway', status: 'in_progress', priority: 'normal', progress_percent: 50, can_edit: true },
+    ],
+  })
+
+  expect(screen.getByRole('progressbar', { name: 'Progress for Not started' })).toHaveAttribute('aria-valuenow', '0')
+  expect(screen.getByRole('progressbar', { name: 'Progress for Halfway' })).toHaveAttribute('aria-valuenow', '50')
+  expect(screen.getByText('50%')).toBeInTheDocument()
+})

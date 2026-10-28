@@ -6941,6 +6941,44 @@ class PersonalPlannerApiTests(TestCase):
         self.assertEqual(accepted.status_code, 201)
         self.assertEqual(accepted.json()['task']['due_date'], '2026-09-05')
 
+    def _patch_task(self, task_id, body):
+        return self.client.patch(self._task_detail_url(task_id), data=json.dumps(body), content_type='application/json')
+
+    def test_progress_starts_at_zero_and_is_saved_as_entered(self):
+        self._as(self.member)
+        created = self._add_task('Write report')
+        self.assertEqual(created.json()['task']['progress_percent'], 0)
+        task_id = created.json()['task']['id']
+
+        updated = self._patch_task(task_id, {'progress_percent': 40})
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()['task']['progress_percent'], 40)
+        self.assertEqual(PersonalTask.objects.get(id=task_id).progress_percent, 40)
+
+    def test_progress_must_be_a_whole_number_from_0_to_100(self):
+        self._as(self.member)
+        task_id = self._add_task('Write report').json()['task']['id']
+        for bad in (-10, 110, 'half', None, True, 12.5):
+            with self.subTest(value=bad):
+                self.assertEqual(self._patch_task(task_id, {'progress_percent': bad}).status_code, 400)
+        self.assertEqual(PersonalTask.objects.get(id=task_id).progress_percent, 0)
+        self.assertEqual(self._add_task('Too far', progress_percent=101).status_code, 400)
+
+    def test_finishing_a_task_reads_100_and_reopening_starts_it_over(self):
+        self._as(self.member)
+        task_id = self._add_task('Write report').json()['task']['id']
+        self._patch_task(task_id, {'progress_percent': 30})
+
+        done = self._patch_task(task_id, {'is_done': True})
+        self.assertEqual(done.json()['task']['progress_percent'], 100)
+
+        reopened = self._patch_task(task_id, {'is_done': False})
+        self.assertEqual(reopened.json()['task']['progress_percent'], 0)
+
+        self._patch_task(task_id, {'is_done': True})
+        kept = self._patch_task(task_id, {'is_done': False, 'progress_percent': 70})
+        self.assertEqual(kept.json()['task']['progress_percent'], 70)
+
     def test_a_due_time_is_kept_beside_its_date(self):
         self._as(self.member)
         created = self._add_task('Stand-up', due_date='2026-09-05', due_time='09:30')

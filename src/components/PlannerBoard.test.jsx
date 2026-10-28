@@ -1163,3 +1163,16 @@ it('draws a lane for tasks that belong to a workstream but sit outside its own l
   expect(screen.getByText('In its own lane')).toBeInTheDocument()
   expect(screen.queryByText('Another workstream')).not.toBeInTheDocument()
 })
+
+it('draws a progress bar on planner cards, empty when not started', () => {
+  renderPlanner({
+    buckets: [{ id: 1, name: 'Backlog' }],
+    tasks: [
+      { id: 1, title: 'Not started', bucket: 'Backlog', status: 'todo', priority: 'normal', progress_percent: 0 },
+      { id: 2, title: 'Mostly there', bucket: 'Backlog', status: 'in_progress', priority: 'normal', progress_percent: 80 },
+    ],
+  })
+
+  expect(screen.getByRole('progressbar', { name: 'Progress for Not started' })).toHaveAttribute('aria-valuenow', '0')
+  expect(screen.getByRole('progressbar', { name: 'Progress for Mostly there' })).toHaveAttribute('aria-valuenow', '80')
+})
