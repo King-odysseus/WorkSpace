@@ -166,3 +166,23 @@ it('does nothing at all when nothing moved', async () => {
   const asked = requestsSince(mark).filter((url) => !url.includes('/pulse/'))
   expect(asked).toEqual([])
 }, 120000)
+
+// The worker posts NOTIFICATIONS_CHANGED within a second of a message landing.
+// Chat alerts are excluded from the activity summary, so the push-arrival cue is
+// what lets the shell ask the pulse before the fifteen second timer comes round.
+it('checks for changes as soon as a push message arrives', async () => {
+  await settled()
+  pulse = { fingerprint: 'push', domains: { ...FIRST, chat: 'c-push' } }
+  const mark = fetchMock.mock.calls.length
+
+  window.dispatchEvent(
+    new CustomEvent('workspace:notifications-changed', {
+      detail: { source: 'push-arrival' },
+    }),
+  )
+
+  await waitFor(
+    () => expect(requestsSince(mark).some((url) => url.includes('/chat-channels/'))).toBe(true),
+    { timeout: 30000 },
+  )
+}, 120000)

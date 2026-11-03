@@ -69,6 +69,27 @@ it('asks listeners to re-read the notification list when a new one arrives', asy
   window.removeEventListener('workspace:notifications-changed', onChanged)
 })
 
+it('cues the workspace to check for chat when a push message arrives', async () => {
+  // The summary the worker wakes is activity-only, so a channel message changes
+  // nothing in it. Without a separate cue the open page waits for the next poll.
+  const onChanged = vi.fn()
+  window.addEventListener('workspace:notifications-changed', onChanged)
+  try {
+    stop = startNotificationAlerts(() => {}, playSound)
+    await vi.advanceTimersByTimeAsync(0)
+    onChanged.mockClear()
+
+    worker.dispatchEvent(new MessageEvent('message', { data: { type: 'NOTIFICATIONS_CHANGED' } }))
+
+    expect(onChanged).toHaveBeenCalledOnce()
+    expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({
+      detail: expect.objectContaining({ source: 'push-arrival' }),
+    }))
+  } finally {
+    window.removeEventListener('workspace:notifications-changed', onChanged)
+  }
+})
+
 it('applies an authoritative read count without waiting for a summary refresh', async () => {
   stop = startNotificationAlerts(() => {}, playSound, undefined, 20)
   await vi.advanceTimersByTimeAsync(0)

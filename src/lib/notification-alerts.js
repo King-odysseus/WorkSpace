@@ -1,6 +1,6 @@
 import { playNotificationSound, primeNotificationAudio } from './notification-sounds.js'
 import { signalAuthenticationRequired } from './auth-events.js'
-import { announceNotificationChange, startNotificationChangeBridge } from './notification-events.js'
+import { announceNotificationChange, startNotificationChangeBridge, NOTIFICATION_CHANGE_EVENT } from './notification-events.js'
 
 // A separate lightweight poll keeps badges current without loading every workspace
 // collection. Push wakes this poll immediately, including while minimized.
@@ -105,10 +105,16 @@ export function startNotificationAlerts(onSummary = () => {}, playSound = playNo
     }
   }
   const onMessage = event => {
-    if (event.data?.type === 'NOTIFICATIONS_CHANGED') refresh()
+    if (event.data?.type !== 'NOTIFICATIONS_CHANGED') return
+    // Push is the earliest signal that something was created. The summary below
+    // only covers workspace activity, so also cue the shell to check the pulse:
+    // that is what notices a channel or direct message. Kept local to this window
+    // because the worker posts to every open client itself.
+    window.dispatchEvent(new CustomEvent(NOTIFICATION_CHANGE_EVENT, { detail: { source: 'push-arrival' } }))
+    refresh()
   }
   const onNotificationChange = event => {
-    if (event.detail?.source === 'alert-arrival') return
+    if (event.detail?.source === 'alert-arrival' || event.detail?.source === 'push-arrival') return
     const unreadCount = Number(event.detail?.unreadCount)
     // A successful mark-read request is authoritative. Apply its count now so
     // a failed or delayed summary refresh cannot leave a stale title or badge.

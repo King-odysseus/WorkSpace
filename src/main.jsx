@@ -1770,7 +1770,10 @@ function App() {
     // ticks every 15s, so the page used to sit stale under a fresh alert. The
     // arrival is the cue that something moved: check the pulse now.
     const onNotificationArrival = (event) => {
-      if (event.detail?.source === "alert-arrival") refreshIfChanged();
+      const source = event.detail?.source;
+      // alert-arrival covers workspace activity; push-arrival is the worker's
+      // earliest cue and the only one that fires for a channel or direct message.
+      if (source === "alert-arrival" || source === "push-arrival") refreshIfChanged();
     };
     window.addEventListener("workspace:notifications-changed", onNotificationArrival);
 
