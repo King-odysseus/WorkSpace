@@ -451,6 +451,59 @@ it('loads and highlights the channel message a notification names', async () => 
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('around=44') && String(url).includes('limit=10'))).toBe(true)
 })
 
+it('refreshes the open channel when the workspace syncs a new message', async () => {
+  // The workspace poll updates the shared chat snapshot, but an open channel
+  // renders its own channel-scoped fetch. Without re-running that fetch the
+  // reader sits on a stale thread while the badge and snapshot move on.
+  const initialMessages = [{ id: 44, author_id: 9, author_name: 'Dana Reed', message: 'Deployment is ready.', created_at: '2026-09-12T10:00:00Z', channel: 'general' }]
+  const base = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  const passThrough = base.getMockImplementation()
+  let channelMessages = initialMessages
+  base.mockImplementation(async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url
+    if (url.includes('/chat-messages/?channel=general')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ messages: channelMessages }),
+      }
+    }
+    return passThrough(input, init)
+  })
+  const channelData = {
+    ...dataFor(),
+    channels: [{ id: 20, name: 'general', created_by: 9, is_private: false, member_ids: [] }],
+    messages: initialMessages,
+  }
+  const renderView = data => (
+    <ChatWorkspaceView
+      viewType="channels"
+      data={data}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      onRefresh={vi.fn()}
+      onError={vi.fn()}
+      onConfirm={vi.fn()}
+      onNavigate={vi.fn()}
+    />
+  )
+  const { rerender } = render(renderView(channelData))
+
+  fireEvent.click(await screen.findByRole('button', { name: 'general' }))
+  expect(await screen.findByText('Deployment is ready.')).toBeInTheDocument()
+
+  const syncedMessages = [...initialMessages, { id: 45, author_id: 8, author_name: 'Priya Shah', message: 'Merging the slides now.', created_at: '2026-09-12T10:05:00Z', channel: 'general' }]
+  channelMessages = syncedMessages
+  rerender(renderView({ ...channelData, messages: syncedMessages }))
+
+  expect(await screen.findByText('Merging the slides now.')).toBeInTheDocument()
+})
+
 it('keeps Delete available on an archived chat message', async () => {
   const archived = { ...conversation, is_archived: true }
   const fetchMock = mockApi({

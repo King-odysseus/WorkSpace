@@ -321,6 +321,10 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   // newest 100 messages workspace-wide. That is enough for badges, but it can
   // omit a channel's own post and leave a notification pointing at a message
   // the reader cannot see. A named channel is fetched independently.
+  //
+  // The snapshot is still the cue to re-read it: the poll replaces that array
+  // whenever the chat domain moves, and without that dependency the open channel
+  // kept the page it loaded with while the badges and snapshot refreshed.
   useEffect(() => {
     if (mode !== 'channels' || !selectedChannel) return undefined
     let current = true
@@ -351,7 +355,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       .catch(loadError => { replaceWithLatestRef.current = false; if (current) setError(loadError.message) })
       .finally(() => { if (current) setChannelLoading(false) })
     return () => { current = false }
-  }, [mode, selectedChannel, workspaceId, threadRequest, revealMessageId])
+  }, [mode, selectedChannel, workspaceId, threadRequest, revealMessageId, data.messages])
 
   // Which conversation the fetched messages belong to. The workspace refresh
   // hands back directConversations as a fresh array whenever anything in the
