@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { ChatWorkspaceView } from './ChatViews.jsx'
 import { mockApi } from '../test/setup-tests.js'
@@ -642,6 +643,44 @@ it('opens the full mention picker immediately and filters as the user types', as
 
   fireEvent.click(screen.getByRole('option', { name: 'Mention Priya Shah' }))
   expect(input).toHaveValue('@priya ')
+})
+
+it('keeps focus in the message box so a typed mention can be deleted and replaced', async () => {
+  // Typing "@" opens the picker from the textarea, so the textarea has to keep
+  // keyboard focus. When the picker grabbed it, backspace and the rest of the
+  // name went nowhere and the half-typed mention could not be removed.
+  const user = userEvent.setup()
+  window.localStorage.clear()
+  const data = {
+    ...dataFor(),
+    members: [
+      { id: 9, first_name: 'Dana', last_name: 'Reed', email: 'dana@example.com' },
+      { id: 8, first_name: 'Priya', last_name: 'Shah', email: 'priya@example.com' },
+    ],
+  }
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(data)
+  await openConversation()
+
+  const input = screen.getByRole('textbox', { name: 'Message' })
+  await user.click(input)
+  await user.type(input, '@Pr')
+
+  expect(input).toHaveValue('@Pr')
+  expect(input).toHaveFocus()
+  expect(screen.getByRole('option', { name: 'Mention Priya Shah' })).toBeInTheDocument()
+
+  await user.keyboard('{Backspace}{Backspace}{Backspace}')
+  expect(input).toHaveValue('')
+  expect(screen.queryByRole('listbox', { name: 'Mention a workspace member' })).not.toBeInTheDocument()
+
+  await user.type(input, 'Thanks both')
+  expect(input).toHaveValue('Thanks both')
 })
 
 // The ticks are the only sign an author gets that a message landed. Two flags
