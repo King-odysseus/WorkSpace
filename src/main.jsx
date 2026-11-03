@@ -1766,12 +1766,20 @@ function App() {
     // A tab that was offline missed every pulse in between. Reconnecting should
     // not wait for the next tick to find out what it missed.
     window.addEventListener("online", refreshIfChanged);
+    // A notification arrives over the stream within a second, but this poll only
+    // ticks every 15s, so the page used to sit stale under a fresh alert. The
+    // arrival is the cue that something moved: check the pulse now.
+    const onNotificationArrival = (event) => {
+      if (event.detail?.source === "alert-arrival") refreshIfChanged();
+    };
+    window.addEventListener("workspace:notifications-changed", onNotificationArrival);
 
     return () => {
       isCurrent = false;
       window.clearInterval(refreshTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("online", refreshIfChanged);
+      window.removeEventListener("workspace:notifications-changed", onNotificationArrival);
     };
   }, [
     session.user,
