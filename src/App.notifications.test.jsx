@@ -222,6 +222,38 @@ it('separates message alerts from workspace activity across the header and mobil
   await screen.findByText('Everything that needs your attention, newest first.')
 }, 60000)
 
+it('drops the header message count when a thread is opened from the alert panel', async () => {
+  const fetchMock = await mountApp()
+  // The server clears every alert for the thread on the read request, so the
+  // list answers differently from then on, which is what the reload has to see.
+  const passThrough = fetchMock.getMockImplementation()
+  let channelRead = false
+  const json = body => ({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body, text: async () => JSON.stringify(body) })
+  fetchMock.mockImplementation(async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input.url
+    if (init.method === 'PATCH' && url.includes('/api/workspaces/1/notifications/') && JSON.parse(init.body).target_type === 'chat_channel') channelRead = true
+    if (url.includes('/chat-messages/') || url.includes('/files/') || url.includes('/documents/')) return json({ messages: [], files: [], documents: [] })
+    // Both feeds carry the same workspace-wide totals, and the shell reads the
+    // activity feed's first, so each has to report the thread as read.
+    const readCounts = { channel: 0, direct: 1, conversation: 1, activity: 1 }
+    if (channelRead && url.includes('/notifications/?only_conversation=1')) return json({ notifications: [chatNotification], unread_counts: readCounts })
+    if (channelRead && url.includes('/notifications/?exclude_chat=1')) return json({ notifications: [activityNotification], unread_counts: readCounts })
+    return passThrough(input, init)
+  })
+
+  const messageButton = await screen.findByRole('button', { name: 'Open messages' }, { timeout: 20000 })
+  expect(await within(messageButton).findByLabelText('2 unread messages')).toBeInTheDocument()
+
+  fireEvent.click(messageButton)
+  fireEvent.click(await screen.findByRole('button', { name: 'Open New channel message' }, { timeout: 20000 }))
+
+  await waitFor(() => {
+    const header = screen.getByRole('button', { name: 'Open messages' })
+    expect(within(header).getByLabelText('1 unread messages')).toBeInTheDocument()
+    expect(within(header).queryByLabelText('2 unread messages')).not.toBeInTheDocument()
+  }, { timeout: 20000 })
+}, 60000)
+
 it('does not let an older workspace refresh restore notifications after mark all read', async () => {
   const baseFetch = mockApi({
     '/api/auth/me/': session,

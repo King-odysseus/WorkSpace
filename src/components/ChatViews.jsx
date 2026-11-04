@@ -161,7 +161,7 @@ function revealMessageInView(scroller, messageId) {
   return true
 }
 
-function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefresh, onError, onConfirm, onNavigate, threadRequest = 0 }) {
+function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefresh, onThreadRead, onError, onConfirm, onNavigate, threadRequest = 0 }) {
   const mode = viewType
   const [selectedChannel, setSelectedChannel] = useState('general')
   const [selectedConversationId, setSelectedConversationId] = useState(null)
@@ -170,6 +170,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [preview, setPreview] = useState(null)
   const openSharedFile = file => file?.url && setPreview({ url: file.url, name: file.original_name || 'Shared file' })
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
+  const [pageVisible, setPageVisible] = useState(() => typeof document === 'undefined' || document.visibilityState !== 'hidden')
   const [activePane, setActivePane] = useState('posts')
   const [chatFilter, setChatFilter] = useState('all')
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -838,6 +839,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         body: JSON.stringify({ target_type: targetType, target_id: String(targetId) }),
       })
       if (response.ok) {
+        onThreadRead?.(targetType, targetId)
         announceNotificationChange('chat-read')
         onRefresh()
       }
@@ -1049,6 +1051,25 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       markConversationRead('chat_channel', selectedChannel)
     }
   }, [mode, selectedChannel, workspaceId])
+
+  // Reading a thread is what clears it, and that includes a message that lands
+  // while the reader is already looking at it. Marking only on selection left
+  // those alerts unread, so the header and sidebar counted a message the reader
+  // had in front of them. The reader has to actually be able to see the thread:
+  // a hidden tab, the Files or About pane, or the mobile list behind the thread
+  // screen all leave the alert unread. No unread marker is captured here - that
+  // divider belongs to opening a thread, not to a message arriving in it.
+  useEffect(() => {
+    const onVisibilityChange = () => setPageVisible(document.visibilityState !== 'hidden')
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
+  const narrowLayout = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 760px)').matches
+  const threadInView = pageVisible && activePane === 'posts' && (!narrowLayout || mobileDetailOpen) && activeThreadId !== null && activeThreadId !== undefined && activeThreadId !== ''
+  const unreadInViewedThread = threadInView ? unreadCountFor(activeThreadType, activeThreadId) : 0
+  useEffect(() => {
+    if (unreadInViewedThread > 0) markConversationRead(activeThreadType, activeThreadId)
+  }, [unreadInViewedThread, activeThreadType, activeThreadId, workspaceId])
   const renderMessage = message => {
     const parent = message.parent_id ? (mode === 'channels' ? activeChannelMessages : directMessages).find(item => item.id === message.parent_id) : null
     // Only offer the jump when the message being quoted is actually in the feed

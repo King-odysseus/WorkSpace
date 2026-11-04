@@ -2577,6 +2577,46 @@ function App() {
       toast.error(error.message || "Notification could not be marked as read.");
     }
   };
+  // A reader opening a thread, or a message arriving in the one they are
+  // already reading, clears that thread's alerts on the server. This moves the
+  // header and sidebar counts the same instant instead of after the reload that
+  // follows, and bumps the revision so a refresh already in flight cannot write
+  // the old count back. The reload then replaces these figures with the server's.
+  const clearThreadNotifications = (targetType, targetId) => {
+    const bucket =
+      targetType === "chat_channel"
+        ? "channel"
+        : targetType === "direct_conversation"
+          ? "direct"
+          : null;
+    if (!bucket) return;
+    notificationStateRevisionRef.current += 1;
+    const inThread = (notification) =>
+      notification.target_type === targetType &&
+      String(notification.target_id) === String(targetId) &&
+      !notification.read;
+    setWorkspaceData((current) => {
+      const cleared = (current.conversationNotifications || []).filter(inThread).length;
+      if (!cleared) return current;
+      const markRead = (list) =>
+        (list || []).map((notification) =>
+          inThread(notification) ? { ...notification, read: true } : notification,
+        );
+      const counts = current.notificationCounts;
+      return {
+        ...current,
+        notifications: markRead(current.notifications),
+        conversationNotifications: markRead(current.conversationNotifications),
+        notificationCounts: counts
+          ? {
+              ...counts,
+              [bucket]: Math.max(0, (counts[bucket] || 0) - cleared),
+              conversation: Math.max(0, (counts.conversation || 0) - cleared),
+            }
+          : counts,
+      };
+    });
+  };
   // Every entry point that lands on a record - a bell row, a push deep link, a
   // global search hit - funnels through here, so the mapping from a target to the
   // page that can show it lives in exactly one place. This only navigates: the
@@ -4414,6 +4454,7 @@ function App() {
                 onMarkNotificationsRead={markNotificationsRead}
                 onActionError={(message) => toast.error(message)}
                 onRefresh={() => setWorkspaceReload((current) => current + 1)}
+                onThreadRead={clearThreadNotifications}
                 onConfirm={confirmAction}
                 screenShareNotificationId={screenShareNotificationId}
                 pendingActivity={pendingActivity}
@@ -4921,6 +4962,7 @@ function WorkspaceView({
   onMarkNotificationsRead,
   onActionError,
   onRefresh,
+  onThreadRead,
   onConfirm,
   onInviteMember,
   screenShareNotificationId,
@@ -9855,6 +9897,7 @@ function WorkspaceView({
           workspaceId={workspaceId}
           currentUserId={currentUserId}
           onRefresh={onRefresh}
+          onThreadRead={onThreadRead}
           onError={onActionError}
           onConfirm={onConfirm}
           onNavigate={onNavigate}

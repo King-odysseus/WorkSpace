@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChatWorkspaceView } from './ChatViews.jsx'
 import { mockApi } from '../test/setup-tests.js'
 import { requestChatThread, takePendingChatThread } from '../lib/chat-navigation.js'
@@ -449,6 +449,77 @@ it('loads and highlights the channel message a notification names', async () => 
   expect(row).toHaveAttribute('data-message-id', '44')
   expect(row).toHaveClass('chat-message-highlight')
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('around=44') && String(url).includes('limit=10'))).toBe(true)
+})
+
+describe('alerts for the thread being read', () => {
+  const channelAlert = id => ({ id, target_type: 'chat_channel', target_id: 'general', group_key: `message:${id}`, read: false })
+  const setup = () => {
+    const fetchMock = mockApi({
+      '/documents/': { documents: [] },
+      '/files/': { files: [] },
+      '/chat-messages/?channel=general': { messages: [] },
+      '/notifications/': { status: 200, body: {} },
+    })
+    const onThreadRead = vi.fn()
+    const base = { ...dataFor(), channels: [{ id: 20, name: 'general', created_by: 9, is_private: false, member_ids: [] }] }
+    const view = notifications => (
+      <ChatWorkspaceView
+        viewType="channels"
+        data={{ ...base, notifications }}
+        workspaceId={workspaceId}
+        currentUserId={currentUserId}
+        onRefresh={vi.fn()}
+        onThreadRead={onThreadRead}
+        onError={vi.fn()}
+        onConfirm={vi.fn()}
+        onNavigate={vi.fn()}
+      />
+    )
+    const marks = () => fetchMock.mock.calls.filter(([url, init = {}]) => String(url).includes('/notifications/') && init.method === 'PATCH' && JSON.parse(init.body).target_id === 'general').length
+    return { fetchMock, onThreadRead, view, marks }
+  }
+  const setVisibility = value => Object.defineProperty(document, 'visibilityState', { configurable: true, value })
+
+  afterEach(() => { delete document.visibilityState })
+
+  it('marks a message read when it arrives in the thread already open', async () => {
+    const { view, marks, onThreadRead } = setup()
+    const { rerender } = render(view([]))
+    await waitFor(() => expect(marks()).toBe(1))
+    onThreadRead.mockClear()
+
+    rerender(view([channelAlert(45)]))
+
+    await waitFor(() => expect(marks()).toBe(2))
+    expect(onThreadRead).toHaveBeenCalledWith('chat_channel', 'general')
+  })
+
+  it('leaves the alert unread while the page is hidden and clears it when the reader returns', async () => {
+    const { view, marks } = setup()
+    const { rerender } = render(view([]))
+    await waitFor(() => expect(marks()).toBe(1))
+
+    setVisibility('hidden')
+    fireEvent(document, new Event('visibilitychange'))
+    rerender(view([channelAlert(45)]))
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(marks()).toBe(1)
+
+    setVisibility('visible')
+    fireEvent(document, new Event('visibilitychange'))
+    await waitFor(() => expect(marks()).toBe(2))
+  })
+
+  it('leaves the alert unread while the Files pane covers the thread', async () => {
+    const { view, marks } = setup()
+    const { rerender } = render(view([]))
+    await waitFor(() => expect(marks()).toBe(1))
+
+    fireEvent.click(screen.getByRole('tab', { name: /Files/ }))
+    rerender(view([channelAlert(45)]))
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(marks()).toBe(1)
+  })
 })
 
 it('refreshes the open channel when the workspace syncs a new message', async () => {
