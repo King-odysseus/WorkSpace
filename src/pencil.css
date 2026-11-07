@@ -2051,10 +2051,12 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .invitation-review-message { margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--pencil-canvas); font-size: 12px; line-height: 17px; }
 .invitation-review-message.auth-error { border: 1px solid #FECACA; background: var(--pencil-alert-danger-fill); }
 .invitation-review-actions-rule { margin: 20px 0; }
-.invitation-review-actions { display: grid; gap: 8px; }
-.invitation-review-actions button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
-.invitation-review-accept { width: 314px; }
-.invitation-review-decline { width: 100%; }
+.invitation-review-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.invitation-review-actions button { display: inline-flex; width: 100%; min-height: 44px; align-items: center; justify-content: center; padding: 0 16px; font-size: 14px; font-weight: 600; line-height: 20px; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+.invitation-review-actions button:disabled { cursor: not-allowed; opacity: .6; }
+.invitation-review-actions button:focus-visible { outline: 2px solid var(--pencil-navy); outline-offset: 2px; }
+.invitation-review-decline:hover:not(:disabled) { background: var(--pencil-surface-muted) !important; }
+.invitation-review-actions > .invitation-review-accept:only-child { grid-column: 1 / -1; }
 .invitation-review-note { display: flex; min-height: 15px; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; color: var(--pencil-text-muted); font-size: 11px; line-height: 15px; }
 .invitation-review-note button { border: 0; background: transparent; color: var(--pencil-navy); font-size: 11px; line-height: 15px; }
 
@@ -5533,7 +5535,7 @@ mark.chat-mention {
   .invitation-review-screen, .no-workspace-screen { align-items: start; padding: 24px 16px; }
   .invitation-review-panel, .no-workspace-panel, .no-workspace-panel h1, .no-workspace-copy, .pending-invitations-card, .no-workspace-error, .no-workspace-create, .no-workspace-help { width: 100%; }
   .invitation-review-panel { min-height: 0; padding: 24px 20px; }
-  .invitation-review-accept { width: 100%; }
+  .invitation-review-actions { grid-template-columns: 1fr; }
   .invitation-review-note { flex-wrap: wrap; }
   .pending-invitation-row { grid-template-columns: 40px minmax(0, 1fr); padding: 8px 0; }
   .pending-invitation-actions { grid-column: 1 / -1; justify-content: end; }

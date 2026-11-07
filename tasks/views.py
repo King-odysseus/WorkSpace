@@ -275,6 +275,43 @@ def create_notification(workspace_id, recipient, kind, title, body='', target_ty
     return notification
 
 
+def notify_invitee_in_app(invitation, actor):
+    """Put an invitation in the bell of an invitee who already has an account.
+
+    Notifications belong to a workspace the recipient is a member of, and the
+    invitee is not yet a member of the inviting one, so the alert lands in the
+    workspace they open by default. An invitee with no workspace yet is covered
+    by the invitations screen they are routed to, and one with no account yet
+    by the email link. A resend never stacks a second unread alert."""
+    from .models import WorkspaceNotification
+    invitee = User.objects.filter(email__iexact=invitation.email).first()
+    if invitee is None:
+        return None
+    membership = (
+        Membership.objects.filter(user=invitee, workspace__status='active')
+        .select_related('workspace').order_by('id').first()
+    )
+    profile = getattr(invitee, 'profile', None)
+    default_id = getattr(profile, 'default_workspace_id', None)
+    if default_id:
+        preferred = Membership.objects.filter(user=invitee, workspace_id=default_id, workspace__status='active').first()
+        membership = preferred or membership
+    if membership is None:
+        return None
+    if WorkspaceNotification.objects.filter(
+        recipient=invitee, kind='workspace_invitation', target_id=str(invitation.id), read_at__isnull=True,
+    ).exists():
+        return None
+    inviter_name = actor.get_full_name() or actor.email or actor.username
+    return create_notification(
+        membership.workspace_id, invitee, 'workspace_invitation',
+        f'{inviter_name} invited you to join {invitation.workspace.name}',
+        f'Join as a {invitation.role}. Open to review and accept.',
+        target_type='workspace_invitation', target_id=invitation.id,
+        notify_webhooks=False,
+    )
+
+
 def notify_managers(workspace_id, actor, verb, object_label, target_type='', target_id='', immediate=False, dedup_key=''):
     """Notify workspace owners and managers (never the actor) about a teammate's
     action on a shared record. The title is human-readable by construction
@@ -3337,6 +3374,7 @@ def invitation_list(request, workspace_id):
     except IntegrityError:
         return JsonResponse({'error': 'An invitation is already pending for this address.'}, status=409)
     send_invitation_email(invitation, request=request)
+    notify_invitee_in_app(invitation, request.user)
     invitation_message = f'{request.user.get_full_name() or request.user.email} invited {invitation.email} as a {invitation.role}.'
     record_activity(workspace_id, request.user, 'invitation_sent', invitation_message)
     notify_workspace_members(
@@ -3362,6 +3400,7 @@ def invitation_resend(request, workspace_id, invitation_id):
     invitation.last_sent_at = timezone.now()
     invitation.save(update_fields=['token', 'last_sent_at'])
     send_invitation_email(invitation, request=request)
+    notify_invitee_in_app(invitation, request.user)
     invitation_message = f'{request.user.get_full_name() or request.user.email} resent an invitation to {invitation.email}.'
     record_activity(workspace_id, request.user, 'invitation_resent', invitation_message)
     notify_workspace_members(

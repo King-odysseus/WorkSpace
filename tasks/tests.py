@@ -1825,6 +1825,21 @@ class TaskApiTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(FollowUp.objects.count(), 0)
 
+    def test_inviting_an_existing_user_puts_the_invitation_in_their_bell(self):
+        invitee = User.objects.create_user(username='invitee', email='invitee@example.com', password='x')
+        home = Workspace.objects.create(name='Invitee Home', slug='invitee-home')
+        Membership.objects.create(workspace=home, user=invitee, role='member')
+        url = reverse('invitation-list', args=[self.workspace.id])
+        self.client.post(url, data=json.dumps({'email': 'invitee@example.com', 'role': 'member'}), content_type='application/json')
+        invitation = WorkspaceInvitation.objects.get()
+        alert = WorkspaceNotification.objects.get(recipient=invitee, kind='workspace_invitation')
+        self.assertEqual(alert.workspace_id, home.id)
+        self.assertEqual(alert.target_type, 'workspace_invitation')
+        self.assertEqual(alert.target_id, str(invitation.id))
+        # A brand-new address has no account to notify.
+        self.client.post(url, data=json.dumps({'email': 'nobody@example.com', 'role': 'member'}), content_type='application/json')
+        self.assertEqual(WorkspaceNotification.objects.filter(kind='workspace_invitation').count(), 1)
+
     def test_owner_can_create_a_workspace_invitation(self):
         response = self.client.post(
             reverse('invitation-list', args=[self.workspace.id]),

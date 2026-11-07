@@ -398,6 +398,7 @@ const notificationPanelVisual = (notification) => {
       "manager_activity",
       "membership_change",
       "invitation_response",
+      "workspace_invitation",
     ].includes(kind)
   ) {
     return {
@@ -2632,6 +2633,14 @@ function App() {
       projects: workspaceData.projects,
       lookupValues: workspaceData.lookupValues,
     });
+    if (targetType === "workspace_invitation") {
+      const pending = (session.user.pending_invitations || []).find(
+        (invitation) => String(invitation.id) === targetId,
+      );
+      if (pending) reviewInvitation(pending);
+      else toast.error("That invitation is no longer pending.");
+      return;
+    }
     if (targetType === "screen_share_session") {
       setScreenShareNotificationId(resolved.targetId);
       setActive("Screen sharing");
@@ -7990,7 +7999,7 @@ function WorkspaceView({
       const kind = notification.kind || "";
       if (kind === "mention") return { Icon: MessageSquare, tone: "mention" };
       if (["direct_message", "channel_message"].includes(kind)) return { Icon: MessageSquare, tone: "message" };
-      if (["risk_issue_assigned", "manager_activity", "membership_change", "invitation_response"].includes(kind)) {
+      if (["risk_issue_assigned", "manager_activity", "membership_change", "invitation_response", "workspace_invitation"].includes(kind)) {
         return { Icon: kind === "risk_issue_assigned" ? Flag : Users, tone: "risk" };
       }
       if (kind.startsWith("check_in")) return { Icon: CheckCircle2, tone: "complete" };
@@ -8018,6 +8027,7 @@ function WorkspaceView({
         manager_activity: "Manager activity",
         membership_change: "Member update",
         invitation_response: "Invitation",
+        workspace_invitation: "Workspace invitation",
       }[notification.kind];
       const label = typeLabel || (notification.kind || "Workspace update").replaceAll("_", " ");
       return [label, notification.body?.trim()].filter(Boolean).join(" · ");
