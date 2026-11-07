@@ -8733,3 +8733,12 @@ html:not([data-theme='dark']) .settings-view .avatar-initials {
     max-height: calc(var(--workspace-visual-viewport-height) - max(16px, env(safe-area-inset-top)));
   }
 }
+
+.settings-workspace-name { display: grid; gap: 8px; margin-bottom: 20px; }
+.settings-workspace-name > label { color: var(--pencil-text); font-size: 12px; font-weight: 600; line-height: 16px; }
+.settings-workspace-name-row { display: flex; gap: 8px; }
+.settings-workspace-name-row input { min-width: 0; flex: 1; min-height: 40px; padding: 0 12px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); color: var(--pencil-text); font-size: 14px; }
+.settings-workspace-name-row input:focus-visible { outline: 2px solid var(--pencil-navy); outline-offset: 1px; }
+.settings-workspace-name-row .primary-button { min-height: 40px; padding: 0 18px; font-size: 13px; font-weight: 600; }
+.settings-workspace-name-row .primary-button:disabled { opacity: .5; cursor: not-allowed; }
+.settings-workspace-name-hint { margin: 0; color: var(--pencil-text-muted); font-size: 12px; line-height: 17px; }

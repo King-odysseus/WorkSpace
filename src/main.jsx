@@ -3094,6 +3094,18 @@ function App() {
         ),
       },
     }));
+  const updateWorkspaceName = (workspaceId, name) =>
+    setSession((current) => ({
+      ...current,
+      user: {
+        ...current.user,
+        workspaces: (current.user.workspaces || []).map((workspace) =>
+          String(workspace.id) === String(workspaceId)
+            ? { ...workspace, name }
+            : workspace,
+        ),
+      },
+    }));
   const setDefaultWorkspace = async (workspaceId) => {
     try {
       const response = await fetch("/api/auth/me/profile/", {
@@ -4422,6 +4434,9 @@ function App() {
                 onWorkspaceLogoUpdated={(logoUrl) =>
                   updateWorkspaceLogo(currentWorkspace?.id, logoUrl)
                 }
+                onWorkspaceRenamed={(name) =>
+                  updateWorkspaceName(currentWorkspace?.id, name)
+                }
                 onSignOut={logout}
                 canManageMembers={["owner", "manager"].includes(
                   currentWorkspace?.role,
@@ -4937,6 +4952,7 @@ function WorkspaceView({
   onSwitchWorkspace,
   onProfileUpdated,
   onWorkspaceLogoUpdated,
+  onWorkspaceRenamed,
   onSignOut,
   canManageMembers,
   canManageTasks,
@@ -7944,6 +7960,7 @@ function WorkspaceView({
         currentUserJobRole={currentUserJobRole}
         onProfileUpdated={onProfileUpdated}
         onWorkspaceLogoUpdated={onWorkspaceLogoUpdated}
+        onWorkspaceRenamed={onWorkspaceRenamed}
         canManageMembers={canManageMembers}
         members={localData.members}
         membersLoading={workspaceLoading && localData.members.length === 0}

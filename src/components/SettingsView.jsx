@@ -351,6 +351,7 @@ function SettingsView({
   onSignOut,
   whatsNewUnread = false,
   onWorkspaceLogoUpdated,
+  onWorkspaceRenamed,
 }) {
   // Settings opens on Profile for everyone. The P4 frame put administrators on
   // AI settings, but that lands an owner in workspace administration when they
@@ -1615,6 +1616,43 @@ function SettingsView({
       void uploadAvatar(avatarRetry.file);
     } else if (avatarRetry?.type === "remove") {
       void handleAvatarRemove();
+    }
+  };
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState(currentWorkspace?.name || "");
+  const [workspaceNameSaving, setWorkspaceNameSaving] = useState(false);
+  const [workspaceNameError, setWorkspaceNameError] = useState("");
+  useEffect(() => {
+    setWorkspaceNameDraft(currentWorkspace?.name || "");
+  }, [currentWorkspace?.id, currentWorkspace?.name]);
+  const workspaceNameIsPlaceholder =
+    (currentWorkspace?.name || "").trim().toLowerCase() === "my workspace";
+  const saveWorkspaceName = async (event) => {
+    event.preventDefault();
+    const name = workspaceNameDraft.trim();
+    if (!name) {
+      setWorkspaceNameError("Workspace name is required.");
+      return;
+    }
+    setWorkspaceNameSaving(true);
+    setWorkspaceNameError("");
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/rename/`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": await getCsrfToken(),
+        },
+        body: JSON.stringify({ name }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Workspace could not be renamed.");
+      onWorkspaceRenamed?.(data.workspace.name);
+    } catch (error) {
+      setWorkspaceNameError(error.message || "Workspace could not be renamed.");
+    } finally {
+      setWorkspaceNameSaving(false);
     }
   };
   const workspaceLogoUrl = currentWorkspace?.logo_url || "";
@@ -3532,6 +3570,37 @@ function SettingsView({
                 </div>
               ) : (
                 <>
+              <form className="settings-workspace-name" onSubmit={saveWorkspaceName}>
+                <label htmlFor="settings-workspace-name-input">Workspace name</label>
+                <div className="settings-workspace-name-row">
+                  <input
+                    id="settings-workspace-name-input"
+                    type="text"
+                    value={workspaceNameDraft}
+                    maxLength={120}
+                    onChange={(event) => setWorkspaceNameDraft(event.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={
+                      workspaceNameSaving ||
+                      !workspaceNameDraft.trim() ||
+                      workspaceNameDraft.trim() === (currentWorkspace?.name || "")
+                    }
+                  >
+                    {workspaceNameSaving ? "Saving..." : "Rename"}
+                  </button>
+                </div>
+                {workspaceNameIsPlaceholder && (
+                  <p className="settings-workspace-name-hint">
+                    Give your workspace a real name before inviting people. They see it on the invitation.
+                  </p>
+                )}
+                {workspaceNameError && (
+                  <p className="auth-error" role="alert">{workspaceNameError}</p>
+                )}
+              </form>
               <div className="settings-workspace-logo">
                 <span className="settings-workspace-logo-frame">
                   {workspaceLogoUrl ? (

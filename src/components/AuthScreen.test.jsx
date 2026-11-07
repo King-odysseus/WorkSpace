@@ -58,7 +58,7 @@ describe('AuthScreen sign up', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /create an account/i }))
     await userEvent.type(screen.getByLabelText(/first name/i), 'Ada')
-    await userEvent.type(screen.getByLabelText(/workspace name/i), 'Analytical')
+    expect(screen.queryByLabelText(/workspace name/i)).not.toBeInTheDocument()
     await userEvent.type(screen.getByLabelText(/email/i), 'ada@example.com')
     await userEvent.type(screen.getByLabelText(/password/i), 'secure-pass-123')
     await userEvent.click(screen.getByRole('button', { name: /create workspace/i }))

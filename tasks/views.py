@@ -3297,6 +3297,42 @@ def workspace_delete(request, workspace_id):
     return JsonResponse({'deleted': workspace_id, 'workspace_name': workspace_name})
 
 
+PLACEHOLDER_WORKSPACE_NAME = 'My Workspace'
+
+
+def workspace_needs_rename(workspace):
+    """The signup workspace is called "My Workspace". It is fine for one person
+    but means nothing to an invitee, so a workspace still carrying that name
+    cannot invite anyone until a leader gives it a real one."""
+    return ' '.join(workspace.name.split()).lower() == PLACEHOLDER_WORKSPACE_NAME.lower()
+
+
+WORKSPACE_RENAME_REQUIRED_ERROR = 'Rename this workspace before inviting people. Open Settings, give the workspace a name, then send the invitation.'
+
+
+@require_http_methods(['POST', 'PATCH'])
+def workspace_rename(request, workspace_id):
+    membership, error = require_workspace_leader(request, workspace_id)
+    if error:
+        return error
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    name = ' '.join(str(payload.get('name', '')).split())
+    if not name:
+        return JsonResponse({'error': 'Workspace name is required.'}, status=400)
+    if len(name) > 120:
+        return JsonResponse({'error': 'Workspace name must be 120 characters or fewer.'}, status=400)
+    workspace = membership.workspace
+    previous = workspace.name
+    if name != previous:
+        workspace.name = name
+        workspace.save(update_fields=['name'])
+        record_activity(workspace_id, request.user, 'workspace_renamed', f'{request.user.get_full_name() or request.user.email} renamed the workspace from {previous} to {name}.')
+    return JsonResponse({'workspace': {'id': workspace.id, 'name': workspace.name}})
+
+
 INVITATION_ACTOR_DAILY_LIMIT = 30
 INVITATION_WORKSPACE_DAILY_LIMIT = 100
 
@@ -3320,6 +3356,8 @@ def invitation_list(request, workspace_id):
     actor, error = membership_check(request, workspace_id)
     if error:
         return error
+    if request.method == 'POST' and workspace_needs_rename(actor.workspace):
+        return JsonResponse({'error': WORKSPACE_RENAME_REQUIRED_ERROR, 'code': 'workspace_rename_required'}, status=409)
     if request.method == 'POST' and actor.workspace.status != 'active':
         return JsonResponse({'error': 'An archived workspace cannot invite new members.'}, status=409)
     if request.method == 'GET':
@@ -3386,12 +3424,14 @@ def invitation_list(request, workspace_id):
 
 @require_http_methods(['POST'])
 def invitation_resend(request, workspace_id, invitation_id):
-    _, error = require_workspace_leader(request, workspace_id)
+    actor, error = require_workspace_leader(request, workspace_id)
     if error:
         return error
     invitation = WorkspaceInvitation.objects.select_related('workspace').filter(id=invitation_id, workspace_id=workspace_id, status='pending').first()
     if invitation is None:
         return JsonResponse({'error': 'Pending invitation was not found.'}, status=404)
+    if workspace_needs_rename(actor.workspace):
+        return JsonResponse({'error': WORKSPACE_RENAME_REQUIRED_ERROR, 'code': 'workspace_rename_required'}, status=409)
     if not invitation.can_resend():
         return JsonResponse({'error': 'Please wait a few minutes before resending this invitation.', 'retry_at': invitation.resend_available_at().isoformat()}, status=429)
     if _rate_limit_exceeded(f'invite-rate-actor-{request.user.id}', INVITATION_ACTOR_DAILY_LIMIT):

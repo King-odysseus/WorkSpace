@@ -117,7 +117,7 @@ function GoogleSignInButton({ onCredential, theme, mode }) {
 
 function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ email: inviteInfo?.email || '', password: '', first_name: '', workspace_name: '' })
+  const [form, setForm] = useState({ email: inviteInfo?.email || '', password: '', first_name: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -139,7 +139,7 @@ function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken || '' },
-        body: JSON.stringify({ credential, workspace_name: form.workspace_name }),
+        body: JSON.stringify({ credential }),
       })
       const data = await readJsonResponse(response, 'Google sign-in failed.')
       if (!response.ok) throw new Error(data.error || 'Google sign-in failed.')
@@ -206,7 +206,6 @@ function AuthScreen({ onAuthenticated, connectionError, inviteInfo }) {
           <form onSubmit={submit}>
             {mode === 'signup' && <>
               <label>First name<input name="first_name" value={form.first_name} onChange={updateField} placeholder="Your first name" required /></label>
-              {!inviteInfo && <label>Workspace name<input name="workspace_name" value={form.workspace_name} onChange={updateField} placeholder="Your team or company" required /></label>}
             </>}
             <label>Email<input name="email" type="email" value={form.email} onChange={updateField} placeholder="you@company.com" readOnly={Boolean(inviteInfo?.email)} required /></label>
             <div className="auth-password-label">

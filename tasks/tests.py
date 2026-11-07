@@ -1840,6 +1840,34 @@ class TaskApiTests(TestCase):
         self.client.post(url, data=json.dumps({'email': 'nobody@example.com', 'role': 'member'}), content_type='application/json')
         self.assertEqual(WorkspaceNotification.objects.filter(kind='workspace_invitation').count(), 1)
 
+    def test_placeholder_named_workspace_cannot_invite_until_renamed(self):
+        self.workspace.name = 'My Workspace'
+        self.workspace.save()
+        url = reverse('invitation-list', args=[self.workspace.id])
+        blocked = self.client.post(url, data=json.dumps({'email': 'a@example.com', 'role': 'member'}), content_type='application/json')
+        self.assertEqual(blocked.status_code, 409)
+        self.assertEqual(blocked.json()['code'], 'workspace_rename_required')
+        self.assertEqual(WorkspaceInvitation.objects.count(), 0)
+        renamed = self.client.post(reverse('workspace-rename', args=[self.workspace.id]), data=json.dumps({'name': '  Acme   Studio '}), content_type='application/json')
+        self.assertEqual(renamed.status_code, 200)
+        self.assertEqual(renamed.json()['workspace']['name'], 'Acme Studio')
+        allowed = self.client.post(url, data=json.dumps({'email': 'a@example.com', 'role': 'member'}), content_type='application/json')
+        self.assertEqual(allowed.status_code, 201)
+
+    def test_manager_can_rename_but_member_cannot(self):
+        manager = User.objects.create_user(username='mgr', email='mgr@example.com', password='x')
+        member = User.objects.create_user(username='mem', email='mem@example.com', password='x')
+        Membership.objects.create(workspace=self.workspace, user=manager, role='manager')
+        Membership.objects.create(workspace=self.workspace, user=member, role='member')
+        url = reverse('workspace-rename', args=[self.workspace.id])
+        body = json.dumps({'name': 'Renamed'})
+        self.client.force_login(member)
+        self.assertEqual(self.client.post(url, data=body, content_type='application/json').status_code, 403)
+        self.client.force_login(manager)
+        self.assertEqual(self.client.post(url, data=body, content_type='application/json').status_code, 200)
+        self.workspace.refresh_from_db()
+        self.assertEqual(self.workspace.name, 'Renamed')
+
     def test_owner_can_create_a_workspace_invitation(self):
         response = self.client.post(
             reverse('invitation-list', args=[self.workspace.id]),
@@ -2539,7 +2567,7 @@ class AuthenticationApiTests(TestCase):
     def test_signup_rejects_oversized_profile_fields(self):
         response = self.client.post(
             reverse('auth-me'),
-            data=json.dumps({'email': 'new-owner@example.com', 'password': 'secure-pass-123', 'workspace_name': 'x' * 121}),
+            data=json.dumps({'email': 'new-owner@example.com', 'password': 'secure-pass-123', 'first_name': 'x' * 151}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 400)

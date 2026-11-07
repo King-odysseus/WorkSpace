@@ -140,10 +140,10 @@ def auth_me(request):
     # also be handed a throwaway personal workspace - the frontend sets
     # join_only when it has a pending invite preview to hand back to after
     # authentication, and omits/blanks workspace_name in that case.
-    join_only = bool(payload.get('join_only')) and not str(payload.get('workspace_name', '')).strip()
-    workspace_name = str(payload.get('workspace_name', '')).strip() or 'My Workspace'
-    if len(workspace_name) > 120:
-        return JsonResponse({'error': 'Workspace name must be 120 characters or fewer.'}, status=400)
+    join_only = bool(payload.get('join_only'))
+    # Every account's first workspace is "My Workspace". A leader renames it
+    # (Settings) before inviting anyone; see workspace_needs_rename.
+    workspace_name = 'My Workspace'
     first_name = str(payload.get('first_name', '')).strip()
     if len(first_name) > 150:
         return JsonResponse({'error': 'First name must be 150 characters or fewer.'}, status=400)
@@ -390,7 +390,7 @@ def auth_google(request):
     if user is None:
         first_name = str(token_info.get('given_name', '')).strip()[:150]
         last_name = str(token_info.get('family_name', '')).strip()[:150]
-        workspace_name = str(payload.get('workspace_name', '')).strip() or 'My Workspace'
+        workspace_name = 'My Workspace'
         with transaction.atomic():
             user = User.objects.create_user(username=email, email=email, first_name=first_name, last_name=last_name)
             user.set_unusable_password()
