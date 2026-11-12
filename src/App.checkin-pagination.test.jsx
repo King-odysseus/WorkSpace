@@ -42,7 +42,8 @@ it('shows ten check-in cards per page and returns to page one when the range cha
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main.jsx')
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Check-ins' }, { timeout: 30000 }))
+  // The mobile tab bar has a Check-ins button too; this opens the page from the sidebar.
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Check-ins' }, { timeout: 30000 })).find(button => button.closest('aside')))
   fireEvent.click(await screen.findByRole('button', { name: /^All: 23 check-ins/ }, { timeout: 30000 }))
 
   const cards = () => screen.getAllByRole('button', { name: /^View Person \d+'s check-in/ })

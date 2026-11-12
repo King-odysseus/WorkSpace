@@ -58,7 +58,8 @@ beforeEach(() => {
 })
 
 const openCheckInComposer = async () => {
-  fireEvent.click(await screen.findByRole('button', { name: 'Check-ins' }, { timeout: 30000 }))
+  // The mobile tab bar has a Check-ins button too; this opens the page from the sidebar.
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Check-ins' }, { timeout: 30000 })).find(button => button.closest('aside')))
   fireEvent.click(await screen.findByRole('button', { name: 'My check-in' }, { timeout: 30000 }))
   return screen.findByRole('dialog', { name: 'Daily check-in' }, { timeout: 30000 })
 }
