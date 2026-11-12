@@ -2835,8 +2835,8 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
    Channels use a 280px list and Chats use 320px; both reserve 32px at the
    right edge for the feed. The controls that create a conversation stay in
    the list heading, matching the source frames instead of a page header. */
-.page-content:has(> .chat-workspace-view) { min-height: calc(100dvh - 64px); padding: 0; }
-.chat-workspace-view { position: relative; width: 100%; max-width: none; min-height: calc(100dvh - 64px); margin: 0; }
+.page-content:has(> .chat-workspace-view) { min-height: calc(100dvh - var(--shell-header-h, 64px)); padding: 0; }
+.chat-workspace-view { position: relative; width: 100%; max-width: none; min-height: calc(100dvh - var(--shell-header-h, 64px)); margin: 0; }
 .chat-workspace-view > header { display: none; }
 .chat-workspace-view .chat-toolbar { position: absolute; z-index: 3; top: 52px; left: 16px; display: block; width: 248px; height: 36px; margin: 0; }
 .chat-workspace-view.chat-mode-direct .chat-toolbar { width: 288px; }
@@ -2845,9 +2845,9 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .chat-search input::placeholder { color: var(--pencil-text-muted); opacity: 1; }
 .chat-workspace-view .chat-search svg { flex: 0 0 auto; }
 .chat-workspace-view .chat-create-button { display: none; }
-.chat-workspace-view .chat-layout { display: grid; min-height: calc(100dvh - 64px); grid-template-columns: 280px minmax(0, 1fr); padding-right: 32px; }
+.chat-workspace-view .chat-layout { display: grid; min-height: calc(100dvh - var(--shell-header-h, 64px)); grid-template-columns: 280px minmax(0, 1fr); padding-right: 32px; }
 .chat-workspace-view.chat-mode-direct .chat-layout { grid-template-columns: 320px minmax(0, 1fr); }
-.chat-workspace-view .chat-conversation-list { position: relative; order: -1; min-width: 0; height: calc(100dvh - 64px); overflow: hidden; border-right: 1px solid var(--pencil-border); background: var(--pencil-surface); }
+.chat-workspace-view .chat-conversation-list { position: relative; order: -1; min-width: 0; height: calc(100dvh - var(--shell-header-h, 64px)); overflow: hidden; border-right: 1px solid var(--pencil-border); background: var(--pencil-surface); }
 .chat-workspace-view .chat-list-heading { display: flex; height: 52px; align-items: center; justify-content: space-between; padding: 0 16px 0 20px; }
 .chat-workspace-view .chat-list-heading-copy { display: block; min-width: 0; }
 .chat-workspace-view .chat-list-heading h3 { margin: 0; color: var(--pencil-text); font-size: 15px; font-weight: 600; line-height: 18px; }
@@ -2896,7 +2896,7 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .chat-workspace-view .direct-row-actions button { display: grid; width: 24px; height: 24px; place-items: center; padding: 0; border: 1px solid var(--pencil-border); border-radius: 50%; background: var(--pencil-surface); color: var(--pencil-text-muted); }
 .chat-workspace-view .direct-row-actions button:hover { background: var(--pencil-surface-muted); color: var(--pencil-text); }
 .chat-workspace-view .chat-sidebar-empty { margin: 12px 4px; color: var(--pencil-text-muted); font-size: 12px; line-height: 18px; }
-.chat-workspace-view .chat-feed { display: flex; min-width: 0; height: calc(100dvh - 64px); flex-direction: column; overflow: hidden; background: var(--pencil-canvas); }
+.chat-workspace-view .chat-feed { display: flex; min-width: 0; height: calc(100dvh - var(--shell-header-h, 64px)); flex-direction: column; overflow: hidden; background: var(--pencil-canvas); }
 .chat-workspace-view .chat-feed-search-toggle { display: grid; width: 36px; height: 36px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--pencil-text-secondary); }
 .chat-workspace-view .chat-feed-search-toggle:hover { background: var(--pencil-surface-muted); color: var(--pencil-text); }
 .chat-workspace-view .chat-feed-search { display: flex; width: 240px; height: 36px; align-items: center; gap: 8px; padding: 0 8px 0 10px; border: 1px solid var(--pencil-border); border-radius: 8px; background: var(--pencil-surface); color: var(--pencil-text-muted); }
@@ -6825,15 +6825,15 @@ html[data-theme='dark'] .ai-chat-bubble.is-rich a:hover { color: var(--pencil-br
    transcript scrolls inside the page and the composer stays where it is, which
    is how the dock behaves; a growing page would push the composer off-screen.
    The 64px offset is the shell header, as the Chats page also assumes. */
-.page-content:has(> .ai-page) { min-height: calc(100dvh - 64px); padding: 0; }
-.ai-page { display: flex; height: calc(100dvh - 64px); flex-direction: column; margin: 0; }
+.page-content:has(> .ai-page) { min-height: calc(100dvh - var(--shell-header-h, 64px)); padding: 0; }
+.ai-page { display: flex; height: calc(100dvh - var(--shell-header-h, 64px)); flex-direction: column; margin: 0; }
 .ai-page-column { display: flex; width: min(880px, 100%); min-height: 0; flex: 1 1 auto; flex-direction: column; margin: 0 auto; padding: 0 24px; }
 .ai-page .ai-chat-messages { padding: 20px 0 28px; background: transparent; }
 .ai-page .ai-chat-composer.is-stacked { padding: 12px 0 14px; border-top: 1px solid var(--pencil-border) !important; background: transparent; }
 /* The mobile TabBar is fixed over the bottom edge, so the page stops above it
    rather than putting the composer underneath it. */
 @media (max-width: 1023px) {
-  .ai-page { height: calc(100dvh - 64px - 80px); }
+  .ai-page { height: calc(100dvh - var(--shell-header-h, 64px) - 80px); }
   .ai-page-column { padding: 0 16px; }
 }
 
@@ -9174,3 +9174,32 @@ header.shell-header { flex-basis: 84px; height: 84px !important; padding: 0 32px
   .shell-header .shell-header-assistant span { display: none !important; }
   .shell-header-search { flex: 1 1 320px; max-width: 520px; min-width: 240px; }
 }
+
+/* Desktop: the header is 84px tall now, so full-height pages read it from one
+   variable and keep filling the whole area under it. */
+@media (min-width: 1024px) {
+  :root { --shell-header-h: 84px; }
+}
+
+/* Channels and Chats keep their full-height, full-width layout. Only the look
+   changes: no rule lines between the panes (a soft shadow separates them
+   instead), rounded message bubbles, and a pill composer. */
+.chat-workspace-view .chat-conversation-list { border-right: 0 !important; box-shadow: 10px 0 28px -16px rgb(11 11 69 / 18%); z-index: 1; }
+.chat-workspace-view .chat-feed { background: var(--pencil-canvas); }
+.chat-workspace-view .chat-feed > header,
+.chat-workspace-view .chat-feed-heading,
+.chat-workspace-view .chat-pane-header { border-bottom-color: transparent !important; box-shadow: 0 8px 24px -18px rgb(11 11 69 / 25%); }
+.chat-workspace-view.chat-mode-direct .chat-message-bubble { border-color: transparent; border-radius: 20px; box-shadow: var(--shadow-soft); }
+.chat-workspace-view .chat-compose-surface { border-color: var(--soft-edge); border-radius: 28px; box-shadow: var(--shadow-soft); }
+.chat-workspace-view .chat-feed-header { position: relative; z-index: 1; border-bottom-color: transparent !important; box-shadow: 0 10px 24px -20px rgb(11 11 69 / 30%); }
+.chat-workspace-view .chat-inline-composer { border-top-color: transparent !important; box-shadow: 0 -10px 24px -20px rgb(11 11 69 / 30%); }
+/* A toolbar that only holds already-floating pills needs no surface of its own. */
+.pencil-activity-view .activity-toolbar,
+.pencil-checkins-view .checkin-range-filter { border-color: transparent !important; background: transparent !important; box-shadow: none !important; }
+/* Grouped rows read as one list now, so the old gaps between the first rows go. */
+.my-task-group:first-child > .grid > .my-task-row:first-child { margin-bottom: 0; }
+.my-task-group:nth-child(2) > .grid > .my-task-row + .my-task-row { margin-top: 0; }
+
+/* Phone top bar: the same round, shadowed icon buttons as the desktop header. */
+.shell-appbar-controls button:not(.shell-appbar-avatar-button) { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; padding: 0; border-radius: 50%; background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
+.shell-appbar-controls { gap: 8px !important; }
