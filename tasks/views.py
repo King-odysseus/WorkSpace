@@ -20,7 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, ChatMessageStar, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, DirectMessageStar, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .shifts import close_abandoned_shifts
 from .board_access import (
@@ -4377,6 +4377,11 @@ def reaction_summary(reaction_model, message_ids, user):
     return grouped
 
 
+def starred_message_ids(star_model, message_ids, user):
+    """Ids, out of message_ids, that this viewer has starred. One query."""
+    return set(star_model.objects.filter(message_id__in=message_ids, user=user).values_list('message_id', flat=True))
+
+
 def clean_message_text(value):
     text = str(value or '').strip()
     if not text:
@@ -4473,22 +4478,24 @@ def receipt_flags(message, user, context):
 def serialize_chat_messages(messages, user):
     messages = list(messages)
     reactions = reaction_summary(ChatMessageReaction, [message.id for message in messages], user)
+    starred = starred_message_ids(ChatMessageStar, [message.id for message in messages], user)
     receipts = channel_receipt_context(messages, user) if messages else {}
     payload = []
     for message in messages:
         delivered, read = receipt_flags(message, user, receipts.get(message.channel))
-        payload.append({**message.as_dict(), 'reactions': reactions.get(message.id, []), 'delivered': delivered, 'read': read})
+        payload.append({**message.as_dict(), 'reactions': reactions.get(message.id, []), 'starred': message.id in starred, 'delivered': delivered, 'read': read})
     return payload
 
 
 def serialize_direct_messages(messages, user):
     messages = list(messages)
     reactions = reaction_summary(DirectMessageReaction, [message.id for message in messages], user)
+    starred = starred_message_ids(DirectMessageStar, [message.id for message in messages], user)
     context = direct_receipt_context(messages, user) if messages else None
     payload = []
     for message in messages:
         delivered, read = receipt_flags(message, user, context)
-        payload.append({**message.as_dict(), 'reactions': reactions.get(message.id, []), 'delivered': delivered, 'read': read})
+        payload.append({**message.as_dict(), 'reactions': reactions.get(message.id, []), 'starred': message.id in starred, 'delivered': delivered, 'read': read})
     return payload
 
 
@@ -4944,7 +4951,7 @@ def apply_message_edit(request, message, serializer):
     return JsonResponse({'message': serializer([message], request.user)[0]})
 
 
-def apply_message_delete(request, message, serializer, reaction_model):
+def apply_message_delete(request, message, serializer, reaction_model, star_model):
     """Empty a message and leave a tombstone in its place. Author only.
 
     The row survives so the thread keeps its shape and any replies keep their
@@ -4960,8 +4967,11 @@ def apply_message_delete(request, message, serializer, reaction_model):
         message.shared_files = []
         message.edited_at = None
         message.deleted_at = timezone.now()
-        message.save(update_fields=['message', 'shared_documents', 'shared_files', 'edited_at', 'deleted_at'])
+        message.pinned_at = None
+        message.pinned_by = None
+        message.save(update_fields=['message', 'shared_documents', 'shared_files', 'edited_at', 'deleted_at', 'pinned_at', 'pinned_by'])
         reaction_model.objects.filter(message=message).delete()
+        star_model.objects.filter(message=message).delete()
     return JsonResponse({'message': serializer([message], request.user)[0]})
 
 
@@ -4973,7 +4983,7 @@ def chat_message_detail(request, message_id):
     if message is None or not accessible_chat_channels(message.workspace_id, request.user).filter(name=message.channel).exists():
         return JsonResponse({'error': 'Message was not found.'}, status=404)
     if request.method == 'DELETE':
-        return apply_message_delete(request, message, serialize_chat_messages, ChatMessageReaction)
+        return apply_message_delete(request, message, serialize_chat_messages, ChatMessageReaction, ChatMessageStar)
     return apply_message_edit(request, message, serialize_chat_messages)
 
 
@@ -4985,7 +4995,7 @@ def direct_message_detail(request, message_id):
     if message is None:
         return JsonResponse({'error': 'Message was not found.'}, status=404)
     if request.method == 'DELETE':
-        return apply_message_delete(request, message, serialize_direct_messages, DirectMessageReaction)
+        return apply_message_delete(request, message, serialize_direct_messages, DirectMessageReaction, DirectMessageStar)
     return apply_message_edit(request, message, serialize_direct_messages)
 
 
@@ -5024,6 +5034,149 @@ def direct_message_reaction(request, message_id):
     if message is None:
         return JsonResponse({'error': 'Message was not found.'}, status=404)
     return toggle_message_reaction(request, message, DirectMessageReaction, serialize_direct_messages)
+
+
+def visible_chat_message(request, message_id):
+    message = ChatMessage.objects.filter(id=message_id, workspace_id__in=user_workspace_ids(request.user)).select_related('author').first()
+    if message is None or not accessible_chat_channels(message.workspace_id, request.user).filter(name=message.channel).exists():
+        return None
+    return message
+
+
+def visible_direct_message(request, message_id):
+    return DirectMessage.objects.filter(id=message_id, conversation__participants=request.user).select_related('author').first()
+
+
+def apply_message_pin(request, message, serializer):
+    """Pin (POST) or unpin (DELETE) a message for everyone in its conversation.
+
+    Any member who can see the message may pin it, and a thread can hold any
+    number of pins. A deleted message has nothing left to pin. Repeating either
+    call is not an error: it answers with the state the message is already in.
+    """
+    if request.method == 'POST':
+        if message.deleted_at:
+            return JsonResponse({'error': 'A deleted message cannot be pinned.'}, status=400)
+        if message.pinned_at is None:
+            message.pinned_at = timezone.now()
+            message.pinned_by = request.user
+            message.save(update_fields=['pinned_at', 'pinned_by'])
+    elif message.pinned_at is not None:
+        message.pinned_at = None
+        message.pinned_by = None
+        message.save(update_fields=['pinned_at', 'pinned_by'])
+    return JsonResponse({'message': serializer([message], request.user)[0]})
+
+
+def apply_message_star(request, message, serializer, star_model):
+    """Star (POST) or unstar (DELETE) a message for the signed-in member only."""
+    if request.method == 'POST':
+        if message.deleted_at:
+            return JsonResponse({'error': 'A deleted message cannot be starred.'}, status=400)
+        star_model.objects.get_or_create(message=message, user=request.user)
+    else:
+        star_model.objects.filter(message=message, user=request.user).delete()
+    return JsonResponse({'message': serializer([message], request.user)[0]})
+
+
+@require_http_methods(['POST', 'DELETE'])
+def chat_message_pin(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = visible_chat_message(request, message_id)
+    if message is None:
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return apply_message_pin(request, message, serialize_chat_messages)
+
+
+@require_http_methods(['POST', 'DELETE'])
+def direct_message_pin(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = visible_direct_message(request, message_id)
+    if message is None:
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return apply_message_pin(request, message, serialize_direct_messages)
+
+
+@require_http_methods(['POST', 'DELETE'])
+def chat_message_star(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = visible_chat_message(request, message_id)
+    if message is None:
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return apply_message_star(request, message, serialize_chat_messages, ChatMessageStar)
+
+
+@require_http_methods(['POST', 'DELETE'])
+def direct_message_star(request, message_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    message = visible_direct_message(request, message_id)
+    if message is None:
+        return JsonResponse({'error': 'Message was not found.'}, status=404)
+    return apply_message_star(request, message, serialize_direct_messages, DirectMessageStar)
+
+
+@require_http_methods(['GET'])
+def chat_pinned_messages(request, workspace_id):
+    """Every pinned message in one channel, newest pin first.
+
+    The history feed is paged, so the pins bar cannot be built from whatever
+    happens to be loaded; this answers it on its own.
+    """
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    channel = request.GET.get('channel', '').strip()
+    if not channel or not accessible_chat_channels(workspace_id, request.user).filter(name=channel).exists():
+        return JsonResponse({'error': 'Channel was not found.'}, status=404)
+    pinned = ChatMessage.objects.filter(workspace_id=workspace_id, channel=channel, pinned_at__isnull=False, deleted_at__isnull=True).select_related('author').order_by('-pinned_at', '-id')
+    return JsonResponse({'messages': serialize_chat_messages(pinned, request.user)})
+
+
+@require_http_methods(['GET'])
+def direct_pinned_messages(request, conversation_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication is required.'}, status=401)
+    conversation = DirectConversation.objects.filter(id=conversation_id, participants=request.user).first()
+    if conversation is None:
+        return JsonResponse({'error': 'Conversation was not found.'}, status=404)
+    pinned = conversation.messages.filter(pinned_at__isnull=False, deleted_at__isnull=True).select_related('author').order_by('-pinned_at', '-id')
+    return JsonResponse({'messages': serialize_direct_messages(pinned, request.user)})
+
+
+@require_http_methods(['GET'])
+def starred_messages(request, workspace_id):
+    """The signed-in member's starred messages across channels and direct chats."""
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    allowed_channels = set(accessible_chat_channels(workspace_id, request.user).values_list('name', flat=True))
+    channel_rows = list(
+        ChatMessageStar.objects.filter(user=request.user, message__workspace_id=workspace_id, message__channel__in=allowed_channels, message__deleted_at__isnull=True)
+        .select_related('message__author').order_by('-created_at', '-id')[:200]
+    )
+    direct_rows = list(
+        DirectMessageStar.objects.filter(user=request.user, message__conversation__workspace_id=workspace_id, message__conversation__participants=request.user, message__deleted_at__isnull=True)
+        .select_related('message__author', 'message__conversation').order_by('-created_at', '-id')[:200]
+    )
+    channel_payload = {item['id']: item for item in serialize_chat_messages([row.message for row in channel_rows], request.user)} if channel_rows else {}
+    items = [
+        {'kind': 'channel', 'starred_at': row.created_at, 'target_id': row.message.channel, 'message': channel_payload[row.message_id]}
+        for row in channel_rows
+    ]
+    for conversation_id in {row.message.conversation_id for row in direct_rows}:
+        rows = [row for row in direct_rows if row.message.conversation_id == conversation_id]
+        title = rows[0].message.conversation.as_dict(request.user)['title']
+        serialized = {item['id']: item for item in serialize_direct_messages([row.message for row in rows], request.user)}
+        for row in rows:
+            items.append({'kind': 'direct', 'starred_at': row.created_at, 'target_id': conversation_id, 'target_title': title, 'message': serialized[row.message_id]})
+    items.sort(key=lambda item: item['starred_at'], reverse=True)
+    for item in items:
+        item['starred_at'] = item['starred_at'].isoformat()
+    return JsonResponse({'items': items})
 
 
 @require_http_methods(['GET', 'POST'])

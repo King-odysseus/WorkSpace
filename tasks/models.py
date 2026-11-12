@@ -647,6 +647,10 @@ class ChatMessage(models.Model):
     # their parent and the thread keeps its shape; deleting clears `message`,
     # the attachments and the reactions, so nothing of the original survives.
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # Pinning is shared state: one stamp on the message, visible to everyone in
+    # the conversation, so a thread can hold any number of pins.
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    pinned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pinned_chat_messages')
 
     class Meta:
         ordering = ['created_at']
@@ -666,6 +670,8 @@ class ChatMessage(models.Model):
             'created_at': self.created_at.isoformat(),
             'edited_at': self.edited_at.isoformat() if self.edited_at else None,
             'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,
+            'pinned_at': self.pinned_at.isoformat() if self.pinned_at else None,
+            'pinned_by_id': self.pinned_by_id,
         }
 
 
@@ -677,6 +683,17 @@ class ChatMessageReaction(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['message', 'user', 'emoji'], name='unique_chat_message_reaction')]
+
+
+class ChatMessageStar(models.Model):
+    """A private favourite: only the member who starred a message ever sees it."""
+
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='star_rows')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_message_stars')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'user'], name='unique_chat_message_star')]
 
 
 class ChatChannel(models.Model):
@@ -765,6 +782,10 @@ class DirectMessage(models.Model):
     # their parent and the thread keeps its shape; deleting clears `message`,
     # the attachments and the reactions, so nothing of the original survives.
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # Pinning is shared state: one stamp on the message, visible to everyone in
+    # the conversation, so a thread can hold any number of pins.
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    pinned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pinned_direct_messages')
 
     class Meta:
         ordering = ['created_at']
@@ -783,6 +804,8 @@ class DirectMessage(models.Model):
             'created_at': self.created_at.isoformat(),
             'edited_at': self.edited_at.isoformat() if self.edited_at else None,
             'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,
+            'pinned_at': self.pinned_at.isoformat() if self.pinned_at else None,
+            'pinned_by_id': self.pinned_by_id,
         }
 
 
@@ -794,6 +817,15 @@ class DirectMessageReaction(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['message', 'user', 'emoji'], name='unique_direct_message_reaction')]
+
+
+class DirectMessageStar(models.Model):
+    message = models.ForeignKey(DirectMessage, on_delete=models.CASCADE, related_name='star_rows')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_message_stars')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'user'], name='unique_direct_message_star')]
 
 
 class DirectConversationRead(models.Model):
