@@ -8807,3 +8807,161 @@ html:not([data-theme='dark']) .settings-view .avatar-initials {
 .remind-field input { height: 36px; padding: 0 14px; border: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.18)); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 13px; }
 .remind-done { margin: 0; font-size: 13px; }
 .remind-error { margin: 8px 0 0; color: #c70036; font-size: 12px; }
+
+
+/* ==========================================================================
+   Soft surfaces (design proposal, November 2026)
+
+   Depth instead of lines: cards and list rows drop their hairline and float on
+   a soft, navy-tinted shadow, with rounder corners. The border WIDTH is left
+   as it was so nothing shifts; only its colour is softened, which also keeps a
+   faint edge in the dark theme where shadows barely show. Behaviour is
+   untouched - this block only restyles.
+
+   Kept as they were: editors and paper (document, spreadsheet and slide
+   canvases), floating menus and dialogs (they already carry a shadow), fields
+   (see the single-surface pass below) and anything interactive in a row.
+   ========================================================================== */
+:root {
+  --shadow-soft: 0 1px 2px rgb(11 11 69 / 0.04), 0 8px 24px -6px rgb(11 11 69 / 0.10);
+  --shadow-lift: 0 2px 4px rgb(11 11 69 / 0.05), 0 16px 36px -8px rgb(11 11 69 / 0.18);
+  --soft-edge: transparent;
+  --radius-soft-card: 24px;
+  --radius-soft-row: 18px;
+}
+:root[data-theme='dark'], .dark {
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.30), 0 8px 24px -6px rgb(0 0 0 / 0.45);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -8px rgb(0 0 0 / 0.55);
+  --soft-edge: rgb(255 255 255 / 0.07);
+}
+
+.ai-action-card,
+.ai-undo-card,
+.chat-create-modal .chat-member-picker,
+.chat-workspace-view .chat-about-grid > div,
+.chat-workspace-view .chat-about-hero,
+.chat-workspace-view .chat-about-members,
+.chat-workspace-view .chat-browse-channels,
+.chat-workspace-view .chat-pane-intro,
+.document-review-panel,
+.files-table-wrap,
+.help-guide-card,
+.import-dropzone,
+.import-source-card,
+.invitation-review-panel,
+.member-profile-detail,
+.my-task-group > .grid,
+.my-task-sidebar > section,
+.pencil-activity-view .activity-list,
+.pencil-activity-view .activity-pagination,
+.pencil-activity-view .activity-toolbar,
+.pencil-checkin-card,
+.pencil-checkins-view .checkin-grid,
+.pencil-checkins-view .checkin-summary-card,
+.pencil-followup-card,
+.pencil-followup-form,
+.pencil-followup-list,
+.pencil-reports-view .audit-table,
+.pencil-reports-view .report-panel,
+.pencil-reports-view .report-project-table,
+.pencil-reports-view .report-stat,
+.pencil-team-card,
+.pencil-team-table,
+.pending-invitations-card,
+.personal-planner-composer,
+.personal-planner-empty,
+.personal-planner-layout.is-managing .personal-planner-new,
+.personal-planner-layout.is-managing .personal-planner-rename,
+.personal-planner-loading,
+.personal-planner-new,
+.personal-planner-pick,
+.personal-planner-rail,
+.personal-task-shell,
+.planner-task-card,
+.project-activity-list,
+.project-budget-card,
+.project-budget-summary-card,
+.project-detail-card,
+.project-expense-table,
+.project-issue-drawer,
+.project-issue-metrics > div,
+.project-issue-table-card,
+.project-operation-surface,
+.project-resource-actions-card,
+.project-resource-table,
+.project-resources-design-card,
+.project-risk-design-card,
+.project-risk-metrics > div,
+.project-risk-table,
+.project-task-filterbar,
+.project-task-table,
+.projects-view .project-summary > div,
+.screen-capture-grid article,
+.settings-nav,
+.settings-view .settings-danger-panel,
+.settings-view .settings-group-card,
+.settings-view .settings-integration-card,
+.settings-view .settings-integration-empty,
+.settings-view .settings-invitation-empty,
+.settings-view .settings-manager-panel,
+.settings-view .settings-member-empty,
+.settings-view .settings-profile-card,
+.settings-view .settings-sidebar-preview,
+.settings-view .settings-stat-grid > div,
+.settings-view .settings-template-empty,
+.settings-view .settings-template-preview,
+.settings-view .settings-template-section,
+.settings-view .settings-theme-card,
+.settings-view .settings-webhook-form,
+.settings-view .settings-workspace-card,
+.settings-view .settings-workspace-create-tile,
+.task-dialog .attachment-upload,
+.team-task-pagination,
+.workspace-view .card,
+.workspace-view .project-card,
+.workspace-view .project-detail-panel,
+.workspace-view .report-panel,
+[data-metric],
+[data-slot='card'] {
+  border-color: var(--soft-edge);
+  border-radius: var(--radius-soft-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.agenda-event-row,
+.chat-workspace-view .channel-direct-row,
+.chat-workspace-view .channel-row,
+.chat-workspace-view .chat-resource-row,
+.my-task-row,
+.pencil-activity-view .activity-history-row,
+.pencil-followup-row,
+.pencil-reports-view .audit-row:not(.audit-header),
+.pencil-team-row,
+.settings-view .settings-template-row,
+.settings-view .settings-webhook-url-row,
+.team-task-row,
+.workspace-popup-row {
+  border-color: var(--soft-edge);
+  border-radius: var(--radius-soft-row);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Cards written with Tailwind utilities (border border-border + a rounded-* class)
+   rather than a named class. Only block-level elements, so buttons, inputs and
+   selects that share those utilities keep their own shape. */
+:is(div, section, article, li, aside, form, details).border.border-border:is(.rounded-card, .rounded-container, .rounded-control, .rounded-lg, .rounded-xl, .rounded-2xl) {
+  border-color: var(--soft-edge);
+  border-radius: var(--radius-soft-card);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Phones: soften the radius a little, and show the Today / Projects / Reports
+   stat tiles two to a row at a size that matches their text, instead of one
+   very large card per row. */
+@media (max-width: 639px) {
+  :root { --radius-soft-card: 20px; --radius-soft-row: 16px; }
+  section:has(> [data-metric]) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+  [data-metric] { padding: 14px 16px; min-height: 0; }
+  [data-metric] strong { margin-top: 2px; font-size: 24px; line-height: 28px; }
+  [data-metric] > span:last-child { margin-top: 8px; }
+}
