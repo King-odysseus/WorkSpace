@@ -150,6 +150,38 @@ WorkSpace should feel calm, focused, and operational:
   navy WorkSpace shell, not a decorative accent colour.
 - Prefer clear hierarchy, restrained shadows, and dense but breathing room over
   decorative compositions.
+
+## Soft surfaces (November 2026)
+
+This section supersedes the earlier "flat card, 1px border, the only shadow
+allowed" rule. The app now separates surfaces with depth rather than lines.
+
+- **Cards and rows** drop their hairline (`border-color: var(--soft-edge)`) and
+  float on `--shadow-soft`. Cards use `--radius-soft-card` (24px, 20px on a
+  phone); list rows use `--radius-soft-row` (18px). The border width is left
+  alone so layout does not move.
+- **Buttons** are pills and **icon-only buttons are circles**.
+- **Search and filter fields** are one surface: the wrapper owns the fill,
+  shadow and pill shape, and the inner input has no border, so there is never a
+  second line inside the first. The blue focus ring is kept.
+- **Sidebar** items are pills with more vertical room; the active page is a white
+  pill. The collapse control, the icon rail, counts and the account block are
+  unchanged in behaviour.
+- **Today** opens with one navy hero card (the page header) and a bronze
+  New task button. Other pages keep the plain header.
+- **Phones:** stat tiles show two to a row at a size that matches their text.
+
+Kept as they were: document, spreadsheet and slide canvases, floating menus and
+dialogs (they already carry a shadow), fields inside forms, and anything whose
+behaviour depends on a border (focus rings, drag targets).
+
+Where it lives: one commented block at the end of `src/pencil.css`. Because many
+older rules pin their border, radius or shadow with `!important`, that block has
+a second group of `!important` overrides for exactly those surfaces. When a new
+card does not soften, check for an `!important` in its original rule first. A
+rule whose selector list contains one malformed selector is dropped whole by the
+browser, so validate generated selector lists.
+
 - Keep cards for repeated records, panels, dialogs, and framed tools. Do not
   put cards inside cards.
 
@@ -371,7 +403,10 @@ with colour alone; every series needs a label or a legend.
 | `--color-danger-soft` | `#FFF1F2` | `#3D1C23` | Destructive background |
 | `--color-danger-bg` | `#FFF1F2` | `#3A1A1A` | Destructive page background |
 | `--shadow-elevated` | `0 12px 40px -12px rgb(0 0 0 / 0.18)` | `0 12px 40px -12px rgb(0 0 0 / 0.6)` | Raised surface shadow |
-| `--shadow-card` | `0 1 2 0 rgb(0 0 0 / 0.03)` | `0 1 2 0 rgb(0 0 0 / 0.03)` | The only shadow allowed on a surface |
+| `--shadow-card` | `0 1 2 0 rgb(0 0 0 / 0.03)` | `0 1 2 0 rgb(0 0 0 / 0.03)` | Superseded by `--shadow-soft` for cards and rows (see Soft surfaces) |
+| `--shadow-soft` | `0 1px 2px rgb(11 11 69 / .04), 0 8px 24px -6px rgb(11 11 69 / .10)` | `0 1px 2px rgb(0 0 0 / .30), 0 8px 24px -6px rgb(0 0 0 / .45)` | Resting depth of cards, rows, search and filter pills |
+| `--shadow-lift` | `0 2px 4px rgb(11 11 69 / .05), 0 16px 36px -8px rgb(11 11 69 / .18)` | `0 2px 4px rgb(0 0 0 / .35), 0 16px 36px -8px rgb(0 0 0 / .55)` | Hero card, sidebar collapse button, hover lift |
+| `--soft-edge` | `transparent` | `rgb(255 255 255 / .07)` | Border colour of a soft surface; the width is kept so nothing shifts |
 
 The dark theme remaps these tokens through `html[data-theme='dark']`. Components
 should read the token rather than branching on a theme class.
