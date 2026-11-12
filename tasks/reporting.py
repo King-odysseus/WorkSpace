@@ -164,6 +164,30 @@ def named_period_start(period, today):
     return None
 
 
+def previous_period_range(period, today):
+    """The period immediately before a named one, as (label, start, end), or None.
+
+    'week' is the 7 days before the last 7; 'month', 'quarter' and 'year' are the
+    previous full calendar month, quarter and year. 'all' and 'custom' have no
+    natural predecessor.
+    """
+    if period == 'week':
+        end = today - timedelta(days=7)
+        return 'previous week', end - timedelta(days=6), end
+    current_start = named_period_start(period, today)
+    if current_start is None:
+        return None
+    end = current_start - timedelta(days=1)
+    if period == 'month':
+        return 'previous month', end.replace(day=1), end
+    if period == 'quarter':
+        quarter_start_month = (end.month - 1) // 3 * 3 + 1
+        return 'previous quarter', end.replace(month=quarter_start_month, day=1), end
+    if period == 'year':
+        return 'previous year', end.replace(month=1, day=1), end
+    return None
+
+
 def apply_report_period(queryset, period, today=None, start=None, end=None):
     """Constrain a queryset to a reporting period.
 
@@ -346,6 +370,23 @@ def build_report(workspace_id, scope='all', project_id=None, period='all',
 
     workload = _build_workload(applicable, today, stale_cutoff, due_soon_days)
 
+    # The period before this one, for "compared with last month" on the page.
+    previous = None
+    previous_range = previous_period_range(period, today)
+    if previous_range is not None:
+        label, previous_start, previous_end = previous_range
+        previous_tasks = list(apply_report_period(scoped_queryset, 'custom', today, previous_start, previous_end))
+        previous_applicable = [t for t in previous_tasks if t.status not in EXCLUDED_STATUSES and getattr(t, 'state', 'active') != 'archived']
+        previous_completed = [t for t in previous_applicable if t.status == COMPLETED_STATUS]
+        previous = {
+            'label': label,
+            'start': previous_start.isoformat(),
+            'end': previous_end.isoformat(),
+            'total_tasks': len(previous_tasks),
+            'completed_tasks': len(previous_completed),
+            'completion_rate': round(len(previous_completed) * 100 / len(previous_applicable)) if previous_applicable else 0,
+        }
+
     return {
         'scope': {'type': scope, 'project_id': project_id, 'label': _scope_label(scope, project_id)},
         'period': {
@@ -365,6 +406,7 @@ def build_report(workspace_id, scope='all', project_id=None, period='all',
             'completion_rate': round(completed_count * 100 / applicable_count) if applicable_count else 0,
             'average_progress': round(progress_total / applicable_count) if applicable_count else 0,
         },
+        'previous': previous,
         'status_counts': status_counts,
         'completed_by_week': _completed_by_week(completion_tasks, today),
         'top_blockers': _top_blockers(tasks, today),
