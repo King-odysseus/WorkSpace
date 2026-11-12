@@ -57,11 +57,26 @@ it('opens My tasks from the bottom tab of the same name', async () => {
 it('still opens the pages whose tab label already matches', async () => {
   await mountApp()
 
-  fireEvent.click(within(tabBar()).getByRole('button', { name: 'Planner' }))
+  fireEvent.click(within(tabBar()).getByRole('button', { name: 'Channels' }))
   await waitFor(() =>
-    expect(screen.getByRole('heading', { level: 1, name: 'Planner' })).toBeInTheDocument(),
+    expect(within(tabBar()).getByRole('button', { name: 'Channels' })).toHaveAttribute('aria-current', 'page'),
   )
-  expect(within(tabBar()).getByRole('button', { name: 'Planner' })).toHaveAttribute('aria-current', 'page')
+  expect(window.localStorage.getItem('workspace-last-page')).toBe('Channels')
+}, 60000)
+
+it('keeps Planner and Check-ins reachable from the More drawer, not the bar', async () => {
+  await mountApp()
+
+  expect(within(tabBar()).queryByRole('button', { name: 'Planner' })).toBeNull()
+  expect(within(tabBar()).queryByRole('button', { name: 'Check-ins' })).toBeNull()
+  fireEvent.click(within(tabBar()).getByRole('button', { name: 'More' }))
+  const drawer = await waitFor(() => {
+    const element = document.querySelector('.mobile-nav-drawer')
+    expect(element).not.toBeNull()
+    return element
+  })
+  expect(within(drawer).getByRole('button', { name: 'Planner' })).toBeInTheDocument()
+  expect(within(drawer).getByRole('button', { name: 'Check-ins' })).toBeInTheDocument()
 }, 60000)
 
 it('falls back to Today for a view name no page recognizes', async () => {

@@ -26,8 +26,10 @@ import { formatDay, toDateKey } from '../lib/workspace-format.js'
 // old `workspace-view-heading` class: the stylesheet had eleven separate
 // blocks overriding that class's h1 and subtitle, and leaving the class on
 // would have kept every one of them in play.
-function WorkspaceViewHeading({ title, subtitle, eyebrow, action, onAction, actions, icon: ActionIcon = Plus }) {
-  return <PageHeader eyebrow={eyebrow} title={title} description={subtitle} actions={actions}>
+function WorkspaceViewHeading({ title, subtitle, eyebrow, action, onAction, actions, hero = false, icon: ActionIcon = Plus }) {
+  // `hero` turns the header into the page's one navy card (see the soft surfaces
+  // block in pencil.css); the content and the action are unchanged.
+  return <PageHeader eyebrow={eyebrow} title={title} description={subtitle} actions={actions} data-hero={hero ? 'page' : undefined}>
     {action && <Button size="page" onClick={onAction}><ActionIcon size={20} strokeWidth={1.75} /> {action}</Button>}
   </PageHeader>
 }

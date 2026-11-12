@@ -85,26 +85,26 @@ it('renders the workspace shell and opens a task from the today bar', async () =
   await waitFor(() => expect(document.querySelectorAll('button').length).toBeGreaterThan(5), { timeout: 20000 })
   expect(screen.getAllByRole('button', { name: 'Hard refresh WorkSpace' })).toHaveLength(2)
 
-  // The mobile bar is the design's TabBar, widened from five slots to seven:
-  // equal shares along the bottom edge. Six are pages and the last opens the
-  // drawer. Zuri has moved up into
-  // the AppBar, so this bar no longer carries it.
+  // The mobile bar is the design's TabBar: five equal shares along the bottom
+  // edge. Four are pages and the middle one opens the drawer, which is where
+  // Planner and Check-ins now live. Zuri has moved up into the AppBar, so this
+  // bar no longer carries it.
   const nav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   const tabs = [...nav.children]
 
   expect(nav.className).toContain('bottom-4')
   expect(nav.className).toContain('rounded-[32px]')
   expect(nav.className).toContain('bg-navy')
-  expect(tabs).toHaveLength(7)
+  expect(tabs).toHaveLength(5)
   expect(tabs.every(tab => tab.className.includes('flex-1'))).toBe(true)
   expect(tabs[0]).toHaveTextContent('My tasks')
-  expect(tabs[1]).toHaveTextContent('Planner')
-  expect(tabs[2]).toHaveTextContent('Channels')
-  // Today is the centre slot of the seven.
-  expect(tabs[3]).toHaveTextContent('Today')
+  expect(tabs[1]).toHaveTextContent('Today')
+  // More is the centre slot of the five.
+  expect(tabs[2]).toHaveTextContent('More')
+  expect(tabs[3]).toHaveTextContent('Channels')
   expect(tabs[4]).toHaveTextContent('Chats')
-  expect(tabs[5]).toHaveTextContent('Check-ins')
-  expect(tabs[6]).toHaveTextContent('More')
+  expect(within(nav).queryByRole('button', { name: 'Planner' })).toBeNull()
+  expect(within(nav).queryByRole('button', { name: 'Check-ins' })).toBeNull()
   expect(within(nav).queryByRole('button', { name: 'Open Zuri' })).toBeNull()
 
   // The Today page's activity strip is gone, so Activity is reached from the

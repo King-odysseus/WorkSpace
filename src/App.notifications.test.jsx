@@ -118,7 +118,8 @@ it('separates message alerts from workspace activity across the header and mobil
 
   const mobileNav = await screen.findByRole('navigation', { name: 'Primary' }, { timeout: 20000 })
   expect(within(mobileNav).getByRole('button', { name: /Chats/ })).toBeInTheDocument()
-  expect(within(mobileNav).getByRole('button', { name: /Planner/ })).toBeInTheDocument()
+  expect(within(mobileNav).getByRole('button', { name: /Channels/ })).toBeInTheDocument()
+  expect(within(mobileNav).queryByRole('button', { name: /Planner/ })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument()
 
   const darkModeButtons = screen.getAllByRole('button', { name: 'Switch to dark mode' })

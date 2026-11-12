@@ -50,6 +50,7 @@ import {
   Link2,
   List,
   LogOut,
+  Compass,
   Menu,
   Megaphone,
   MessageSquare,
@@ -3269,14 +3270,14 @@ function App() {
   const navItemsByLabel = new Map(
     navGroups.flatMap((group) => group.items).map((item) => [item.label, item]),
   );
+  // Four destinations and More, which takes the middle slot (the one the thumb
+  // reaches most easily) and opens the full navigation. Planner and Check-ins
+  // are no longer tabs; both stay reachable from that drawer.
   const mobileTabItems = [
     ["My tasks", "My tasks"],
-    ["Planner", "Planner"],
-    ["Channels", "Channels"],
-    // Today sits in the middle slot, the one the thumb reaches most easily.
     ["Today", "Today"],
+    ["Channels", "Channels"],
     ["Chats", "Chats"],
-    ["Check-ins", "Check-ins"],
   ]
     .map(([label, page]) => {
       const item = navItemsByLabel.get(page);
@@ -4672,7 +4673,7 @@ function App() {
         )}
         aria-label="Primary"
       >
-        {mobileTabItems.map(renderMobileTab)}
+        {mobileTabItems.slice(0, 2).map(renderMobileTab)}
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
@@ -4680,11 +4681,12 @@ function App() {
           aria-haspopup="menu"
           className="flex h-full min-w-0 max-w-[66px] flex-1 flex-col items-center gap-1 pt-3.5 font-medium text-[#93B4D4] transition-colors hover:text-white"
         >
-          <Menu size={20} className="shrink-0" aria-hidden="true" />
+          <Compass size={20} className="shrink-0" aria-hidden="true" />
           <span className="max-w-full truncate text-[10px] leading-none">
             More
           </span>
         </button>
+        {mobileTabItems.slice(2).map(renderMobileTab)}
       </nav>
 
       {/* The TabBar stands 64px tall, so 72px clears it with a gap. Rendered
@@ -9124,6 +9126,7 @@ function WorkspaceView({
     return (
       <section className="workspace-view pencil-checkins-view">
         <WorkspaceViewHeading
+          hero
           eyebrow="Collaborate"
           title={title}
           subtitle={subtitle}
