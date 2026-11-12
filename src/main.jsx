@@ -655,6 +655,8 @@ function App() {
   // now, which is what a retry needs: the failure may have been the network
   // rather than the request.
   const [globalSearchRetry, setGlobalSearchRetry] = useState(0);
+  // Narrows the search to one kind of result. '' means everything.
+  const [globalSearchScope, setGlobalSearchScope] = useState("");
   const [theme, setTheme] = useState(readWorkspaceTheme);
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () =>
@@ -1290,7 +1292,7 @@ function App() {
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/workspaces/${activeWorkspaceId}/search/?q=${encodeURIComponent(query)}`,
+          `/api/workspaces/${activeWorkspaceId}/search/?q=${encodeURIComponent(query)}${globalSearchScope ? `&kind=${encodeURIComponent(globalSearchScope)}` : ""}`,
           {
             credentials: "include",
             headers: { "X-Workspace-Id": String(activeWorkspaceId) },
@@ -1318,7 +1320,7 @@ function App() {
       isCurrent = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, activeWorkspaceId, globalSearchRetry]);
+  }, [searchQuery, activeWorkspaceId, globalSearchRetry, globalSearchScope]);
 
   // Keep the new-task form on disk while it is open, so a reload or an
   // accidental close cannot take the typing with it. Written on every change
@@ -3320,6 +3322,29 @@ function App() {
       className="absolute left-0 right-0 top-full z-[60] mt-2 max-h-96 overflow-y-auto rounded-xl border border-border bg-surface shadow-elevated"
       onMouseDown={(event) => event.preventDefault()}
     >
+      <div className="flex flex-wrap gap-1.5 border-b border-border-light px-3 py-2" role="group" aria-label="Search in">
+        {[
+          ["", "All"],
+          ["task", "Tasks"],
+          ["chat_message,direct_message", "Messages"],
+          ["check_in", "Check-ins"],
+        ].map(([scope, label]) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={globalSearchScope === scope}
+            onClick={() => setGlobalSearchScope(scope)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              globalSearchScope === scope
+                ? "border-navy bg-navy text-text-on-navy"
+                : "border-border text-text-primary hover:bg-surface-secondary",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {globalSearchLoading && (
         <p className="px-4 py-3 text-xs text-text-muted" role="status">Searching…</p>
       )}
@@ -3362,6 +3387,11 @@ function App() {
           {result.snippet && (
             <span className="truncate text-xs text-text-muted">
               {result.snippet}
+            </span>
+          )}
+          {result.created_at && (
+            <span className="text-[11px] text-text-muted">
+              {result.meta} · {new Date(result.created_at).toLocaleDateString([], { dateStyle: "medium" })}
             </span>
           )}
         </button>
@@ -8043,6 +8073,7 @@ function WorkspaceView({
         calendar_created: "Calendar created",
         calendar_updated: "Calendar updated",
         calendar_reminder: "Calendar reminder",
+        reminder: "Reminder",
         risk_issue_assigned: "Risk assigned",
         manager_activity: "Manager activity",
         membership_change: "Member update",

@@ -208,3 +208,19 @@ it('treats an expired session as a failed search and asks who the reader is', as
   // expired session was indistinguishable from a query with no matches.
   await waitFor(() => expect(sessionRequestCount()).toBeGreaterThan(0))
 }, 60000)
+
+it('narrows a search to one kind of result from the chips', async () => {
+  await searchFor('deck')
+  await screen.findByText('#design', {}, { timeout: 15000 })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Messages' }))
+  await waitFor(() => {
+    const narrowed = fetchMock.mock.calls.find(([url]) => String(url).includes('/search/?q=deck&kind=chat_message%2Cdirect_message'))
+    expect(narrowed).toBeTruthy()
+  }, { timeout: 15000 })
+  expect(screen.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-pressed', 'true')
+
+  // Put the chips back so a later test in this file searches everything.
+  fireEvent.click(screen.getByRole('button', { name: 'All' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true'))
+}, 60000)
