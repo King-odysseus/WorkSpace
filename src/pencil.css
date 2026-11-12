@@ -8965,3 +8965,157 @@ html:not([data-theme='dark']) .settings-view .avatar-initials {
   [data-metric] strong { margin-top: 2px; font-size: 24px; line-height: 28px; }
   [data-metric] > span:last-child { margin-top: 8px; }
 }
+
+/* Single-surface search and filter pills. The wrapper owns the one surface (the
+   inner input is already stripped of its own border above), so it takes the soft
+   shadow and a pill shape instead of a bordered box. The blue focus ring from the
+   earlier rules is kept and now sits alongside the shadow. */
+:is(
+  [data-slot='search-input'],
+  .shell-header-search > div,
+  .projects-view .project-search,
+  .pencil-activity-view .activity-toolbar .activity-search,
+  .pencil-reports-view .report-project-search,
+  .files-search,
+  .help-search-bar,
+  .chat-workspace-view .chat-toolbar .chat-search,
+  .chat-workspace-view .chat-feed-search,
+  .planner-commandbar .planner-search
+) {
+  border-color: var(--soft-edge);
+  border-radius: 999px;
+  background-color: var(--pencil-surface);
+  box-shadow: var(--shadow-soft);
+}
+:is(
+  [data-slot='search-input'],
+  .shell-header-search > div,
+  .projects-view .project-search,
+  .pencil-activity-view .activity-toolbar .activity-search,
+  .pencil-reports-view .report-project-search,
+  .files-search,
+  .help-search-bar,
+  .chat-workspace-view .chat-toolbar .chat-search,
+  .chat-workspace-view .chat-feed-search,
+  .planner-commandbar .planner-search
+):focus-within {
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 18%), var(--shadow-soft);
+}
+:is([data-slot='search-input'], .projects-view .project-search, .files-search, .help-search-bar, .pencil-activity-view .activity-toolbar .activity-search, .pencil-reports-view .report-project-search) {
+  padding-inline: 18px;
+}
+
+/* Filter dropdown triggers and outline buttons share the same floating pill. */
+[data-slot='select-trigger'].app-select-trigger,
+[data-slot='button'].border.border-border {
+  border-color: var(--soft-edge);
+  background-color: var(--pencil-surface);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Sidebar: pill-shaped items with room to breathe. The collapse control, the
+   collapsed icon rail, the Follow-up count and the account block all keep working;
+   this only changes shape and spacing. The active page is a white pill (light
+   theme; the dark theme keeps its own colours from the rules above). */
+aside[class*='bg-navy'] nav { padding-top: 32px !important; }
+aside[class*='bg-navy'] nav > div { margin-bottom: 24px !important; }
+aside[class*='bg-navy'] nav > div > p { height: auto !important; margin-bottom: 14px !important; padding-left: 16px !important; letter-spacing: 0.14em; }
+aside[class*='bg-navy'] nav ul > li + li { margin-top: 4px !important; }
+aside[class*='bg-navy'] nav button { height: 44px !important; padding-left: 16px !important; border-radius: 999px !important; border-left: 0 !important; }
+aside[class*='bg-navy'] nav button[aria-current='page'] { border-left: 0 !important; border-radius: 999px !important; background: #fff !important; color: var(--pencil-navy) !important; box-shadow: var(--shadow-soft); }
+aside[class*='bg-navy'] nav button[aria-current='page'] svg { color: var(--pencil-navy) !important; }
+aside[class*='bg-navy'] > div:first-child [aria-haspopup='true'] { border-radius: 999px !important; }
+aside[class*='bg-navy'] > div:first-child { padding-top: 28px !important; gap: 16px !important; }
+@media (min-width: 1024px) {
+  aside[class*='bg-navy'].is-sidebar-collapsed nav button,
+  aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] { width: 46px; margin-inline: auto; border-radius: 999px !important; }
+}
+.sidebar-expand-flyout { top: 120px; left: calc(100% - 17px); width: 34px; height: 34px; border-radius: 50%; background: var(--pencil-surface); color: var(--pencil-navy); box-shadow: var(--shadow-lift); }
+.sidebar-expand-flyout:hover { background: var(--pencil-surface); color: var(--pencil-navy); transform: translateY(-50%) scale(1.06); }
+
+
+/* The surfaces above whose original rules pin their border, radius or shadow with
+   !important, so the plain rule cannot reach them. Hover and focus rules keep
+   their own (more specific) shadows. */
+[data-slot='card'],
+.workspace-view .card,
+.workspace-view .report-panel,
+.workspace-view .project-card,
+.workspace-view .project-detail-panel,
+.my-task-sidebar > section,
+.my-task-group > .grid,
+.pencil-checkins-view .checkin-summary-card,
+.pencil-reports-view .report-panel,
+.pencil-reports-view .report-stat,
+.project-detail-card,
+.project-operation-surface,
+.project-budget-card,
+.project-budget-summary-card,
+.project-issue-table-card,
+.project-resource-actions-card,
+.project-resources-design-card,
+.project-risk-design-card,
+.pencil-team-card,
+.pencil-checkin-card,
+.pencil-followup-card,
+.help-guide-card,
+.import-source-card {
+  border-color: var(--soft-edge) !important;
+  border-radius: var(--radius-soft-card) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+.my-task-row,
+.planner-task-card {
+  border-color: var(--soft-edge) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+/* Today hero: the page header becomes the one navy card that opens the page.
+   Same elements and the same New task button (now bronze); only the look changes. */
+header[data-hero='today'] {
+  position: relative;
+  align-items: center;
+  gap: 24px;
+  overflow: hidden;
+  padding: 40px 44px;
+  border: 0;
+  border-radius: 32px;
+  background: linear-gradient(135deg, var(--pencil-navy), var(--pencil-navy-hover));
+  box-shadow: var(--shadow-lift);
+}
+header[data-hero='today']::after {
+  content: '';
+  position: absolute;
+  top: -80px;
+  right: -60px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: rgb(196 154 108 / 22%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+header[data-hero='today'] > * { position: relative; z-index: 1; }
+header[data-hero='today'] .text-navy { color: var(--pencil-bronze-soft); }
+header[data-hero='today'] h1 { color: #fff; font-size: 40px; line-height: 44px; }
+header[data-hero='today'] p.text-text-muted { margin-top: 12px; color: rgb(255 255 255 / 76%); font-size: 15px; line-height: 22px; }
+@media (max-width: 639px) {
+  header[data-hero='today'] { padding: 24px 22px; border-radius: 24px; }
+  header[data-hero='today'] h1 { font-size: 30px; line-height: 34px; }
+  header[data-hero='today'] > button { width: 100%; }
+}
+
+/* Rows that sit inside one grouped card stay flat with a faint divider, so a
+   list reads as one card rather than a stack of separate shadows. */
+:root { --soft-divider: rgb(16 24 40 / 6%); }
+:root[data-theme='dark'], .dark { --soft-divider: rgb(255 255 255 / 8%); }
+.my-task-row { border-color: var(--soft-divider) !important; border-radius: 0 !important; box-shadow: none !important; }
+header[data-hero='today'] > button { color: #0B0B45 !important; font-weight: 600; }
+header[data-hero='today'] > button svg { color: #0B0B45 !important; }
+
+/* Dark theme: the collapse button needs its own colours or it vanishes into the sidebar. */
+html[data-theme='dark'] .sidebar-expand-flyout { background: rgb(255 255 255 / 16%); color: #fff; box-shadow: var(--shadow-lift); }
+html[data-theme='dark'] .sidebar-expand-flyout:hover { background: rgb(255 255 255 / 26%); color: #fff; }
+html[data-theme='dark'] header[data-hero='today'] > button { background: #C49A6C !important; color: #0B0B45 !important; opacity: 1; }
+html[data-theme='dark'] header[data-hero='today'] > button svg { color: #0B0B45 !important; }

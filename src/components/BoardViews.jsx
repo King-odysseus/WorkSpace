@@ -6002,13 +6002,13 @@ function TodayDashboard({
   const eyebrow = formatTodayEyebrow(today) || todayLabel;
   return (
     <section className="pb-10">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[17px]">
+      <header data-hero="today" className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[17px]">
         <div className="min-w-0">
           <p className="text-overline uppercase text-navy">{eyebrow}</p>
           <h1 className="mt-1 text-page-heading text-text-primary">Today</h1>
           <p className="mt-1.5 text-body-small text-text-muted">{summaryLine}</p>
         </div>
-        <Button type="button" size="page" onClick={onAddTask}>
+        <Button type="button" size="page" variant="gold" onClick={onAddTask}>
           <Plus size={18} strokeWidth={2} aria-hidden="true" /> New task
         </Button>
       </header>
