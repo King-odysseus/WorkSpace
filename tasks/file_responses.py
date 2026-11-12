@@ -27,4 +27,10 @@ def stored_file_response(request, file_handle, filename):
     response = FileResponse(file_handle, as_attachment=not inline, filename=filename)
     if inline and extension in INLINE_IMAGE_EXTENSIONS:
         response['Content-Security-Policy'] = IMAGE_CSP
+    if inline and extension == '.pdf':
+        # The in-app viewer frames the PDF. Django's clickjacking middleware
+        # defaults to X-Frame-Options: DENY, which blocks even a same-origin
+        # frame and left the viewer blank. SAMEORIGIN lets only this app frame
+        # it, and the middleware leaves a header that is already set alone.
+        response['X-Frame-Options'] = 'SAMEORIGIN'
     return response

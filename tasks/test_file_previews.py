@@ -41,6 +41,16 @@ class FilePreviewTests(TestCase):
         self.assertTrue(response['Content-Disposition'].startswith('inline'))
         self.assertNotIn('Content-Security-Policy', response)
 
+    def test_pdf_can_be_framed_by_the_app_but_images_and_downloads_cannot(self):
+        # Django's clickjacking middleware defaults to DENY, which blanked the
+        # in-app viewer's iframe even though the PDF is same-origin.
+        pdf = self.client.get(f'/api/attachments/{self.attachment("report.pdf").id}/download/')
+        self.assertEqual(pdf['X-Frame-Options'], 'SAMEORIGIN')
+        image = self.client.get(f'/api/attachments/{self.attachment("photo.png").id}/download/')
+        self.assertEqual(image['X-Frame-Options'], 'DENY')
+        download = self.client.get(f'/api/attachments/{self.attachment("report.pdf").id}/download/?download=1')
+        self.assertEqual(download['X-Frame-Options'], 'DENY')
+
     def test_other_types_still_download(self):
         attachment = self.attachment('sheet.xlsx')
         response = self.client.get(f'/api/attachments/{attachment.id}/download/')
