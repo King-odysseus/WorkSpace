@@ -3268,10 +3268,11 @@ function App() {
     navGroups.flatMap((group) => group.items).map((item) => [item.label, item]),
   );
   const mobileTabItems = [
-    ["Today", "Today"],
     ["My tasks", "My tasks"],
     ["Planner", "Planner"],
     ["Channels", "Channels"],
+    // Today sits in the middle slot, the one the thumb reaches most easily.
+    ["Today", "Today"],
     ["Chats", "Chats"],
     ["Check-ins", "Check-ins"],
   ]
