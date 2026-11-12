@@ -7,7 +7,7 @@ import '../chat-mobile.css'
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, ChevronLeft, Compass, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Plus, Search, Smile, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, ChevronDown, ChevronLeft, Compass, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Pin, Plus, Search, Smile, Star, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
 import LinkedText from './LinkedText.jsx'
@@ -208,6 +208,19 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
   const [reactionUpdates, setReactionUpdates] = useState({})
   const [messageEdits, setMessageEdits] = useState({})
   const [messageDeletes, setMessageDeletes] = useState({})
+  // Pins are shared by everyone in the thread, stars belong to this member only.
+  // Both are applied over the loaded message the same way reactions are, so the
+  // button answers at once; the pins bar is fetched on its own because the feed
+  // is paged and an old pin may not be in it.
+  const [pinUpdates, setPinUpdates] = useState({})
+  const [starUpdates, setStarUpdates] = useState({})
+  const [pinnedMessages, setPinnedMessages] = useState([])
+  const [pinIndex, setPinIndex] = useState(0)
+  const [pinsExpanded, setPinsExpanded] = useState(false)
+  const [pinsVersion, setPinsVersion] = useState(0)
+  const [starredOpen, setStarredOpen] = useState(false)
+  const [starredItems, setStarredItems] = useState([])
+  const [starredLoading, setStarredLoading] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState(null)
   const [editDraft, setEditDraft] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -983,6 +996,78 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       setReactionUpdates(current => ({ ...current, [message.id]: payload.message.reactions }))
     } catch (reactionError) { setError(reactionError.message) }
   }
+  const isPinned = message => (pinUpdates[message.id] ? pinUpdates[message.id].pinned_at : message.pinned_at) != null
+  const isStarred = message => (message.id in starUpdates ? starUpdates[message.id] : Boolean(message.starred))
+  const togglePin = async message => {
+    const direct = mode === 'direct'
+    const endpoint = direct ? `/api/direct-messages/${message.id}/pin/` : `/api/chat-messages/${message.id}/pin/`
+    setError('')
+    try {
+      const response = await fetch(endpoint, {
+        method: isPinned(message) ? 'DELETE' : 'POST', credentials: 'include',
+        headers: { 'X-CSRFToken': await getCsrfToken() },
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Pin could not be updated.')
+      setPinUpdates(current => ({ ...current, [message.id]: { pinned_at: payload.message.pinned_at, pinned_by_id: payload.message.pinned_by_id } }))
+      setPinsVersion(version => version + 1)
+    } catch (pinError) { setError(pinError.message) }
+  }
+  const toggleStar = async message => {
+    const direct = mode === 'direct'
+    const endpoint = direct ? `/api/direct-messages/${message.id}/star/` : `/api/chat-messages/${message.id}/star/`
+    setError('')
+    try {
+      const response = await fetch(endpoint, {
+        method: isStarred(message) ? 'DELETE' : 'POST', credentials: 'include',
+        headers: { 'X-CSRFToken': await getCsrfToken() },
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Star could not be updated.')
+      setStarUpdates(current => ({ ...current, [message.id]: Boolean(payload.message.starred) }))
+      if (!payload.message.starred) setStarredItems(current => current.filter(item => !(item.message.id === message.id && item.kind === (direct ? 'direct' : 'channel'))))
+    } catch (starError) { setError(starError.message) }
+  }
+  // The signature changes when somebody else pins or unpins a message that is in
+  // the loaded feed, which is how a pin made elsewhere reaches this bar without
+  // a reload. Local pins bump pinsVersion directly.
+  const pinSignature = activeMessages.filter(message => message.pinned_at && !message.deleted_at).map(message => `${message.id}:${message.pinned_at}`).join(',')
+  useEffect(() => {
+    const direct = mode === 'direct'
+    const target = direct ? selectedConversationId : selectedChannel
+    if (!workspaceId || target === null || target === undefined || target === '') { setPinnedMessages([]); return undefined }
+    const endpoint = direct ? `/api/direct-conversations/${target}/pins/` : `/api/workspaces/${workspaceId}/chat-pins/?channel=${encodeURIComponent(target)}`
+    const controller = new AbortController()
+    fetch(endpoint, { credentials: 'include', signal: controller.signal, headers: { 'X-Workspace-Id': String(workspaceId) } })
+      .then(response => response.ok ? response.json() : { messages: [] })
+      .then(payload => setPinnedMessages(Array.isArray(payload.messages) ? payload.messages : []))
+      .catch(() => {})
+    return () => controller.abort()
+  }, [mode, selectedChannel, selectedConversationId, workspaceId, pinsVersion, pinSignature])
+  useEffect(() => { setPinIndex(0); setPinsExpanded(false) }, [mode, selectedChannel, selectedConversationId])
+  useEffect(() => {
+    if (!starredOpen || !workspaceId) return undefined
+    const controller = new AbortController()
+    setStarredLoading(true)
+    fetch(`/api/workspaces/${workspaceId}/starred-messages/`, { credentials: 'include', signal: controller.signal, headers: { 'X-Workspace-Id': String(workspaceId) } })
+      .then(response => response.ok ? response.json() : { items: [] })
+      .then(payload => setStarredItems(Array.isArray(payload.items) ? payload.items : []))
+      .catch(() => {})
+      .finally(() => setStarredLoading(false))
+    return () => controller.abort()
+  }, [starredOpen, workspaceId])
+  const openStarredItem = item => {
+    setStarredOpen(false)
+    const messageId = item.message.id
+    if (item.kind === 'channel') {
+      if (mode === 'channels') { selectChannel(item.target_id); setRevealMessageId(messageId); setHighlightMessageId(messageId) }
+      else { requestChatThread('chat_channel', item.target_id, messageId); onNavigate?.('Channels') }
+    } else if (mode === 'direct') {
+      selectConversation(Number(item.target_id)); setRevealMessageId(messageId); setHighlightMessageId(messageId)
+    } else {
+      requestChatThread('direct_conversation', item.target_id, messageId); onNavigate?.('Chats')
+    }
+  }
   const startEditing = message => {
     if (savingEdit || submitting || uploadingFile) return
     setEmojiOpen(false)
@@ -1041,6 +1126,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Message could not be deleted.')
       setMessageDeletes(current => ({ ...current, [message.id]: payload.message }))
+      setPinsVersion(version => version + 1)
       if (editingMessageId === message.id) cancelEditing()
       if (replyTo?.id === message.id) setReplyTo(null)
     } catch (deleteError) { setError(deleteError.message) }
@@ -1092,12 +1178,15 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     // long as the ring lasts.
     const highlighted = highlightMessageId !== null && String(message.id) === String(highlightMessageId)
     const archivedThread = mode === 'direct' && selectedConversation?.is_archived
+    const pinned = isPinned(message)
+    const starred = isStarred(message)
     return <div className={`chat-message ${message.parent_id ? 'chat-reply' : ''} ${isMine ? 'chat-message-mine' : ''} ${hasMessageActions ? 'chat-message-has-actions' : ''} ${archivedThread ? 'chat-message-archived' : ''} ${highlighted ? 'chat-message-highlight' : ''}`} data-message-id={message.id} key={message.id}>
       <Avatar name={message.author_name} avatarUrl={author.avatar_url} presence={effectivePresence(author)} small />
       <div className="chat-message-body">
         <div className="chat-message-meta">
           {isMine ? <strong>{message.author_name}</strong> : <button type="button" className="chat-member-name" onClick={() => setProfileMember(author)} aria-label={`View ${message.author_name}'s profile`}>{message.author_name}</button>}
           <span>{formatRelativeActivityTime(message.created_at)}</span>
+          {pinned && !deletedAt && <Pin size={12} className="chat-pinned-marker" aria-label="Pinned" />}
           {isMine && !deletedAt && <span className={`chat-receipt${message.read ? ' chat-receipt-read' : ''}`} aria-label={receiptLabel} title={receiptLabel}>{message.read || message.delivered ? <CheckCheck size={14} /> : <Check size={14} />}</span>}
           {editedAt && !deletedAt && <span className="chat-edited-marker" title={`Edited ${formatRelativeActivityTime(editedAt)}`}>edited</span>}
         </div>
@@ -1110,6 +1199,8 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
         {hasMessageActions && <div className={`chat-message-actions ${reactions.length ? 'has-reactions' : ''}`}>
           <MessageReactionBar message={message} reactions={reactions} isMine={isMine} onToggle={toggleReaction} />
           <button type="button" className="chat-reply-button" onClick={() => setReplyTo(message)}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>
+          <button type="button" className={`chat-star-button${starred ? ' active' : ''}`} onClick={() => toggleStar(message)} aria-pressed={starred} aria-label={starred ? 'Remove star' : 'Star message'} title={starred ? 'Remove star' : 'Star message'}><Star size={13} fill={starred ? 'currentColor' : 'none'} /></button>
+          {!archivedThread && <button type="button" className={`chat-pin-button${pinned ? ' active' : ''}`} onClick={() => togglePin(message)} aria-pressed={pinned} aria-label={pinned ? 'Unpin message' : 'Pin message'} title={pinned ? 'Unpin message' : 'Pin message'}><Pin size={13} fill={pinned ? 'currentColor' : 'none'} /></button>}
           {isMine && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
           {isMine && <button type="button" className="chat-delete-button" onClick={() => deleteMessage(message)} aria-label="Delete message">Delete</button>}
         </div>}
@@ -1123,6 +1214,56 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     {firstUnreadMessageId !== null && String(message.id) === String(firstUnreadMessageId) && <div className="chat-new-message-divider" role="separator" aria-label="New messages"><span>New messages</span></div>}
     {renderMessage(message)}
   </Fragment>
+
+  const pinPreview = message => message.message || (message.shared_files || [])[0]?.original_name || (message.shared_documents || [])[0]?.title || 'Attachment'
+  // One line at the top of the thread. With several pins it shows one at a time:
+  // pressing it jumps to that message and moves on to the next, so repeated
+  // presses walk through them, and the list button opens all of them at once.
+  const renderPinsBar = () => {
+    const livePins = pinnedMessages.filter(message => !messageDeletes[message.id] && (pinUpdates[message.id] ? pinUpdates[message.id].pinned_at : message.pinned_at) != null)
+    if (!livePins.length) return null
+    const index = Math.min(pinIndex, livePins.length - 1)
+    const current = livePins[index]
+    return <div className="chat-pins-bar" role="region" aria-label="Pinned messages">
+      <div className="chat-pins-current">
+        <Pin size={14} className="chat-pins-icon" aria-hidden="true" />
+        <button type="button" className="chat-pins-jump" onClick={() => { jumpToMessage(current.id); setPinIndex((index + 1) % livePins.length) }} aria-label={`Go to pinned message from ${current.author_name}`}>
+          <strong>{livePins.length > 1 ? `Pinned ${index + 1} of ${livePins.length}` : 'Pinned'}</strong>
+          <span>{current.author_name}: {pinPreview(current)}</span>
+        </button>
+        <button type="button" className="chat-pins-toggle" onClick={() => setPinsExpanded(open => !open)} aria-expanded={pinsExpanded} aria-label={pinsExpanded ? 'Hide pinned messages' : `Show all ${livePins.length} pinned messages`} title={pinsExpanded ? 'Hide pinned messages' : 'Show all pinned messages'}><ChevronDown size={16} /></button>
+      </div>
+      {pinsExpanded && <ul className="chat-pins-list">
+        {livePins.map(message => <li key={message.id}>
+          <button type="button" className="chat-pins-item" onClick={() => { setPinsExpanded(false); jumpToMessage(message.id) }}>
+            <strong>{message.author_name}</strong>
+            <span>{pinPreview(message)}</span>
+            <small>{formatRelativeActivityTime(message.created_at)}</small>
+          </button>
+          <button type="button" className="chat-pins-unpin" onClick={() => togglePin(message)} aria-label={`Unpin message from ${message.author_name}`} title="Unpin"><X size={14} /></button>
+        </li>)}
+      </ul>}
+    </div>
+  }
+  const renderStarredButton = () => <Popover.Root open={starredOpen} onOpenChange={setStarredOpen}>
+    <Popover.Trigger asChild><button type="button" className={`chat-feed-search-toggle chat-starred-toggle${starredOpen ? ' active' : ''}`} aria-label="Starred messages" title="Starred messages"><Star size={17} /></button></Popover.Trigger>
+    <Popover.Portal>
+      <Popover.Content className="chat-starred-panel" side="bottom" align="end" sideOffset={8} collisionPadding={12} aria-label="Starred messages">
+        <h3>Starred messages</h3>
+        {starredLoading && !starredItems.length ? <p className="chat-starred-empty">Loading...</p>
+          : starredItems.length ? <ul>
+            {starredItems.map(item => <li key={`${item.kind}-${item.message.id}`}>
+              <button type="button" className="chat-starred-item" onClick={() => openStarredItem(item)}>
+                <small>{item.kind === 'channel' ? `#${item.target_id}` : item.target_title}</small>
+                <strong>{item.message.author_name}</strong>
+                <span>{pinPreview(item.message)}</span>
+              </button>
+            </li>)}
+          </ul> : <p className="chat-starred-empty">Star a message to find it here later.</p>}
+        <Popover.Arrow className="chat-reaction-picker-arrow" />
+      </Popover.Content>
+    </Popover.Portal>
+  </Popover.Root>
 
   const renderPostsPane = () => <div className="chat-message-pane">
     <div className="chat-message-scroll" ref={messageScrollRef} onScroll={handleMessageScroll}>
@@ -1330,11 +1471,13 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {messageSearchOpen
             ? <label className="chat-feed-search"><Search size={15} /><input autoFocus value={messageSearch} onChange={event => setMessageSearch(event.target.value)} placeholder="Search messages" aria-label="Search messages" /><button type="button" onClick={() => { setMessageSearch(''); setMessageSearchOpen(false) }} aria-label="Close message search"><X size={14} /></button></label>
             : <button type="button" className="chat-feed-search-toggle" onClick={() => setMessageSearchOpen(true)} aria-label="Search messages" title="Search messages"><Search size={17} /></button>}
-          <button type="button" className={`chat-details-toggle ${detailsOpen ? 'active' : ''}`} onClick={() => setDetailsOpen(open => !open)} aria-label={detailsOpen ? 'Hide conversation details' : 'Show conversation details'} aria-expanded={detailsOpen} disabled={mode === 'direct' && !selectedConversation}><MoreVertical size={18} /></button>
+          {renderStarredButton()}
+          <button type="button" className={`chat-details-toggle${detailsOpen ? 'active' : ''}`} onClick={() => setDetailsOpen(open => !open)} aria-label={detailsOpen ? 'Hide conversation details' : 'Show conversation details'} aria-expanded={detailsOpen} disabled={mode === 'direct' && !selectedConversation}><MoreVertical size={18} /></button>
         </div>
         {mode === 'direct' && selectedConversation?.is_archived && <div className="chat-archive-banner"><Archive size={15} /><span>Archived chat</span><button type="button" onClick={() => restoreConversation(selectedConversation)}><ArchiveRestore size={14} /> Restore</button></div>}
         <div className={`chat-feed-body ${detailsOpen ? 'details-open' : ''}`}>
           <div className="chat-main-pane">
+            {activePane === 'posts' && renderPinsBar()}
             {activePane === 'posts' ? renderPostsPane() : activePane === 'files' ? renderFilesPane() : renderAboutPane()}
         {activePane === 'posts' && (mode === 'channels' || selectedConversation) && <form className="chat-inline-composer" onSubmit={editingMessageId !== null ? saveEdit : mode === 'channels' ? submitChannelMessage : submitDirectMessage}>
           {editingMessageId !== null && <div className="reply-context"><span>Editing message</span><button type="button" disabled={savingEdit} onClick={cancelEditing}>Cancel</button></div>}

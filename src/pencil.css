@@ -3002,6 +3002,32 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 }
 .chat-workspace-view .chat-reply-button, .chat-workspace-view .chat-edit-button, .chat-workspace-view .chat-delete-button { min-height: 24px; padding: 0 5px; border: 0; background: transparent; color: var(--pencil-text-muted); font-size: 11px; }
 .chat-workspace-view .chat-reply-button:hover, .chat-workspace-view .chat-edit-button:hover { color: var(--pencil-text); }
+.chat-workspace-view .chat-star-button, .chat-workspace-view .chat-pin-button { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 0 4px; border: 0; background: transparent; color: var(--pencil-text-muted); cursor: pointer; }
+.chat-workspace-view .chat-star-button:hover, .chat-workspace-view .chat-pin-button:hover { color: var(--pencil-text); }
+.chat-workspace-view .chat-star-button.active { color: #d99a00; }
+.chat-workspace-view .chat-pin-button.active, .chat-workspace-view .chat-pinned-marker { color: var(--pencil-bronze, #c49a6c); }
+.chat-workspace-view .chat-pinned-marker { flex: 0 0 auto; }
+.chat-workspace-view .chat-pins-bar { flex: 0 0 auto; border-bottom: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.1)); background: var(--pencil-surface, transparent); }
+.chat-workspace-view .chat-pins-current { display: flex; align-items: center; gap: 8px; padding: 6px 12px; min-width: 0; }
+.chat-workspace-view .chat-pins-icon { flex: 0 0 auto; color: var(--pencil-bronze, #c49a6c); }
+.chat-workspace-view .chat-pins-jump { display: flex; flex: 1 1 auto; align-items: baseline; gap: 8px; min-width: 0; min-height: 28px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font-size: 12px; }
+.chat-workspace-view .chat-pins-jump strong { flex: 0 0 auto; font-size: 11px; color: var(--pencil-text-muted); }
+.chat-workspace-view .chat-pins-jump span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-workspace-view .chat-pins-toggle, .chat-workspace-view .chat-pins-unpin { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--pencil-text-muted); cursor: pointer; }
+.chat-workspace-view .chat-pins-toggle[aria-expanded='true'] svg { transform: rotate(180deg); }
+.chat-workspace-view .chat-pins-list { margin: 0; padding: 0 12px 8px; list-style: none; max-height: 220px; overflow-y: auto; }
+.chat-workspace-view .chat-pins-list li { display: flex; align-items: center; gap: 4px; }
+.chat-workspace-view .chat-pins-item { display: flex; flex: 1 1 auto; align-items: baseline; gap: 8px; min-width: 0; padding: 6px 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font-size: 12px; }
+.chat-workspace-view .chat-pins-item span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-workspace-view .chat-pins-item small { flex: 0 0 auto; color: var(--pencil-text-muted); }
+.chat-starred-panel { z-index: 80; width: min(360px, calc(100vw - 24px)); max-height: 60vh; overflow-y: auto; padding: 12px; border: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.12)); border-radius: 12px; background: var(--pencil-surface, #fff); color: var(--pencil-text, inherit); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
+.chat-starred-panel h3 { margin: 0 0 8px; font-size: 13px; }
+.chat-starred-panel ul { margin: 0; padding: 0; list-style: none; }
+.chat-starred-item { display: grid; width: 100%; gap: 1px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; font-size: 12px; }
+.chat-starred-item:hover { background: rgba(0, 0, 0, 0.05); }
+.chat-starred-item small { color: var(--pencil-text-muted); }
+.chat-starred-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-starred-empty { margin: 0; font-size: 12px; color: var(--pencil-text-muted); }
 .chat-workspace-view .chat-delete-button:hover { color: var(--pencil-danger); }
 
 /* Reaction and composer emoji popovers share one bounded card. Radix supplies

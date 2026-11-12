@@ -287,6 +287,80 @@ it('offers more than thumbs up and posts the selected reaction', async () => {
   expect(reactionCall[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ emoji: '🎉' }) })
 })
 
+it('pins a message, shows it in the pins bar, and unpins it from the list', async () => {
+  const dana = { id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z', pinned_at: null }
+  const pinned = { ...dana, pinned_at: '2026-09-12T11:00:00Z', pinned_by_id: 9 }
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [dana] },
+    '/direct-conversations/11/pins/': { messages: [] },
+    '/direct-messages/1/pin/': { message: pinned },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  await openConversation()
+  expect(screen.queryByRole('region', { name: 'Pinned messages' })).not.toBeInTheDocument()
+
+  // The pins fetch that follows the pin returns the pinned message.
+  fetchMock.mockImplementation(async (input, init = {}) => {
+    const url = String(input)
+    const body = url.includes('/pins/') ? { messages: [pinned] }
+      : url.includes('/pin/') ? { message: init.method === 'DELETE' ? dana : pinned }
+        : url.includes('/messages/') ? { messages: [dana] }
+          : url.includes('/csrf/') ? { status: 'ok' } : url.includes('/documents/') ? { documents: [] } : url.includes('/files/') ? { files: [] } : {}
+    return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body, text: async () => JSON.stringify(body) }
+  })
+  fireEvent.click(await screen.findByRole('button', { name: 'Pin message' }))
+
+  const bar = await screen.findByRole('region', { name: 'Pinned messages' })
+  expect(within(bar).getByText(/Dana Reed: See you then\./)).toBeInTheDocument()
+  const pinCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes('/direct-messages/1/pin/') && init?.method === 'POST')
+  expect(pinCall).toBeTruthy()
+
+  fireEvent.click(within(bar).getByRole('button', { name: 'Show all 1 pinned messages' }))
+  fireEvent.click(within(bar).getByRole('button', { name: 'Unpin message from Dana Reed' }))
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes('/direct-messages/1/pin/') && init?.method === 'DELETE')).toBe(true))
+})
+
+it('stars and unstars a message with the star button', async () => {
+  const fetchMock = mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z', starred: false }] },
+    '/direct-conversations/11/pins/': { messages: [] },
+    '/direct-messages/1/star/': { message: { id: 1, starred: true } },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  await openConversation()
+
+  const star = await screen.findByRole('button', { name: 'Star message' })
+  fireEvent.click(star)
+  await screen.findByRole('button', { name: 'Remove star' })
+  expect(screen.getByRole('button', { name: 'Remove star' })).toHaveAttribute('aria-pressed', 'true')
+  const starCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/direct-messages/1/star/'))
+  expect(starCall[1]).toMatchObject({ method: 'POST' })
+})
+
+it('opens the Starred list and shows messages starred across the workspace', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [] },
+    '/direct-conversations/11/messages/': { messages: [] },
+    '/direct-conversations/11/pins/': { messages: [] },
+    '/starred-messages/': { items: [{ kind: 'channel', target_id: 'general', starred_at: '2026-09-12T10:00:00Z', message: { id: 5, author_name: 'Priya Shah', message: 'Budget sign-off is Friday', created_at: '2026-09-12T10:00:00Z', starred: true } }] },
+    '/notifications/': { status: 200, body: {} },
+  })
+  renderChat(dataFor())
+  fireEvent.click(await screen.findByRole('button', { name: /^DA Dana Reed/ }))
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Starred messages' }))
+  const panel = await screen.findByRole('dialog', { name: 'Starred messages' })
+  expect(within(panel).getByText('#general')).toBeInTheDocument()
+  expect(within(panel).getByText('Budget sign-off is Friday')).toBeInTheDocument()
+})
+
 it('opens the full emoji picker from the reaction plus and posts the choice', async () => {
   const fetchMock = mockApi({
     '/documents/': { documents: [] },
