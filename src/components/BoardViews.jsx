@@ -5904,7 +5904,14 @@ function TodayDashboard({
   const firstName = String(currentUserName || "").trim().split(/\s+/)[0] || "";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const plannedToday = dueToday.length + completedToday.length;
+  // Today's workload is everything still open that wants attention now - due today,
+  // overdue, or already under way (in progress or in review, in any planner or
+  // workstream) - plus what was finished today. Counting only what was due today
+  // read 100% while overdue work sat untouched.
+  const openToday = new Map();
+  [...dueToday, ...overdue, ...tasks.filter((task) => isOpen(task) && (task.status === "in progress" || task.status === "review"))]
+    .forEach((task) => openToday.set(task.id, task));
+  const plannedToday = openToday.size + completedToday.length;
   const donePercent = plannedToday ? Math.round((completedToday.length / plannedToday) * 100) : 0;
   const metrics = [
     {
@@ -6110,7 +6117,7 @@ function TodayDashboard({
           size={132}
           stroke={12}
           caption={plannedToday ? "done today" : "nothing due"}
-          label={`${donePercent}% of today's tasks done`}
+          label={`${completedToday.length} of ${plannedToday} tasks done today (${donePercent}%)`}
           className="today-ring"
         />
       </header>

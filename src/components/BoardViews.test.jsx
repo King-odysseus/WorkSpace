@@ -908,3 +908,20 @@ it('finds a teammate by name and shows everyone past the first six on request', 
   expect(screen.getByRole('button', { name: 'Open Person7 Tester profile' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Show all 8' })).toBeNull()
 })
+
+it('does not read 100% on the Today ring while overdue or in-progress work is still open', () => {
+  const done = { id: 1, title: 'Shipped', status: 'done', completed_at: '2026-09-12T09:00:00', assignee_id: 7, due_date: '2026-09-12', priority: 'normal', tag: 'Ops' }
+  const overdue = { id: 2, title: 'Late', status: 'todo', assignee_id: 7, due_date: '2026-09-01', priority: 'normal', tag: 'Ops' }
+  const underway = { id: 3, title: 'Under way', status: 'in progress', assignee_id: 7, due_date: null, priority: 'normal', tag: 'Ops' }
+  const noise = { id: 4, title: 'Not today', status: 'todo', assignee_id: 7, due_date: '2026-12-01', priority: 'normal', tag: 'Ops' }
+  renderDashboard([done, overdue, underway, noise])
+
+  // 1 finished of 3 that want attention today (the overdue one, the one under way, and the finished one).
+  expect(screen.getByRole('img', { name: '1 of 3 tasks done today (33%)' })).toBeInTheDocument()
+})
+
+it('reads 100% only when nothing that wants attention is left open', () => {
+  const done = { id: 1, title: 'Shipped', status: 'done', completed_at: '2026-09-12T09:00:00', assignee_id: 7, due_date: '2026-09-12', priority: 'normal', tag: 'Ops' }
+  renderDashboard([done])
+  expect(screen.getByRole('img', { name: '1 of 1 tasks done today (100%)' })).toBeInTheDocument()
+})
