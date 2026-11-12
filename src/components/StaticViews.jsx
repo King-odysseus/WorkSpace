@@ -8,7 +8,7 @@ import {
   ChevronRight, CircleHelp, ClipboardList, Clock3, Cookie, Download, FileText, FolderKanban,
   Globe2, Hash, Keyboard, LayoutGrid, Laptop, Mail, Megaphone, MessageSquare, Monitor,
   MonitorDown, Plus, Search, Settings, ShieldCheck, SlidersHorizontal, Smartphone, Target, Users,
-  Volume2, X,
+  Volume2, X, Pin, Repeat, Sparkles,
 } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog.jsx'
@@ -19,42 +19,69 @@ import { RELEASE_NOTES, latestReleaseDate, markReleaseNotesSeen, releaseNotesUnr
 import { getInstallSnapshot, promptToInstall, subscribeToInstallState } from '../lib/install-prompt.js'
 
 const HELP_TOPICS = [
+  // Tasks
   {
     title: 'Create and assign a task',
     icon: ClipboardList,
     group: 'tasks',
     intro: 'Capture work so someone owns it and knows when it is due.',
     steps: [
-      'Open Today, My tasks, Planner, or Daily operations and select Add task.',
+      'Select New task on Today or My tasks, or Create task in Planner. On Today you can also type a title into Add a task and press Enter, then choose Add details to fill in the rest.',
       'Enter a clear task name and add any useful description.',
       'Assign the task to the right person or leave it unassigned.',
-      'Choose a due date and project, then set priority and bucket.',
+      'Choose a due date, project, workstream, priority and bucket. Pick a template to start from saved details, or set it to repeat daily, weekly or monthly.',
       'Select Create task.',
+    ],
+  },
+  {
+    title: 'Work through My tasks',
+    icon: CheckCircle2,
+    group: 'tasks',
+    intro: 'My tasks is every open task assigned to you, grouped by when it is due.',
+    steps: [
+      'Open My tasks. Use the search box, the project list, Filter and Sort to narrow it down.',
+      'Tick the circle to finish a task, or change its status from the dropdown on the row.',
+      'Select Views to save the filters you are using. Saved views come back in one click, and you can share one with the whole team.',
+      'Open a task to change its owner, dates, subtasks, attachments and comments.',
+    ],
+  },
+  {
+    title: 'Set a reminder',
+    icon: Bell,
+    group: 'tasks',
+    intro: 'Ask Workspace to nudge you about a task or a message at a time you choose.',
+    steps: [
+      'Select the bell on a message, on a task row or planner card, or Remind me inside an open task.',
+      'Pick In 1 hour, Tomorrow, or Next week, or choose an exact date and time. Add a short note if it helps.',
+      'The reminder arrives as a notification when it falls due. Opening a message reminder takes you to that message.',
+      'Today lists your pending reminders in the Reminders panel, where you can cancel one before it fires. Reminders are private to you and are not emailed.',
     ],
   },
   {
     title: 'Review task status and workload',
     icon: BarChart3,
     group: 'tasks',
-    intro: 'Use My tasks, Team, and Reports to understand what is moving or blocked.',
+    intro: 'Use Today, Team and Reports to see what is moving, late or blocked.',
     steps: [
-      'Open My tasks to review work assigned to you.',
-      'Open Team and choose a scope, then switch between People, Status, and Priority.',
-      'Check Blocked, Overdue, and Unassigned metrics.',
-      'Open a task to change status, owner, dates, or context.',
+      'On Today, the ring shows how much of the work that wants attention has been finished: tasks due today, overdue and in progress, plus what you completed today.',
+      'Select a tile (Due today, Completed, Blocked, Check-ins) to open the matching list.',
+      'Open Team to see each person capacity and workload for the week.',
+      'Open Reports for counts, charts and trends across the whole workspace.',
     ],
   },
+
+  // Planner
   {
     title: 'Plan project work',
     icon: LayoutGrid,
     group: 'planner',
-    intro: 'Use Planner to organise delivery work by bucket, owner, priority, and date.',
+    intro: 'Planner organises shared work into buckets with an owner, priority and date.',
     steps: [
-      'Open Planner and choose All projects or a specific project.',
-      'Switch between Board, Table, and Gantt.',
-      'Add a project task and assign it to the delivery owner.',
-      'Drag tasks between buckets or use the bucket selector on a card.',
-      'Save filtered views that the team should reuse.',
+      'Open Planner and choose All work or a project, then a workstream if you want to narrow it further.',
+      'Search, or filter by status, priority, assignee and due date.',
+      'Drag a card between buckets, or use the bucket selector on the card.',
+      'Use Select to move, archive or delete several cards at once. Archived buckets can be restored from Archived.',
+      'Select Views to save the current filters for yourself or the team.',
     ],
   },
   {
@@ -66,81 +93,204 @@ const HELP_TOPICS = [
       'Open My planner from the sidebar.',
       'Add a personal item and choose the planner it belongs to.',
       'Tick an item to finish it.',
-      'Rename or add planners as your routines change.',
+      'Rename or add planners as your routines change. On Today, Show private plan lists what is open for today.',
     ],
   },
   {
     title: 'Run daily operations',
-    icon: ClipboardList,
+    icon: Repeat,
     group: 'planner',
-    intro: 'Keep recurring non-project work moving through predictable lanes.',
+    intro: 'Daily operations is the board for recurring, non-project work.',
     steps: [
-      'Open Daily operations from the sidebar.',
-      'Create a workstream such as Finance, Customer Support, or People.',
-      'Add an operation task and leave its project scope as operations.',
-      'Move work through buckets and update status when it starts or finishes.',
-      'Add a blocker and explanation when work is stuck.',
+      'Open Daily operations. The Routines panel at the top lists every open repeating task that is not part of a project, with how often it repeats and when it is due.',
+      'Select Mark done on a routine. The next occurrence is created automatically on its schedule.',
+      'Create a workstream such as Finance or Customer Support, then add tasks with the project left as operations.',
+      'Move work through buckets, and add a blocker note when something is stuck.',
     ],
   },
+
+  // Projects
   {
     title: 'Track a project',
     icon: Target,
     group: 'projects',
-    intro: 'Keep delivery progress, controls, resources, and budget in one place.',
+    intro: 'Keep delivery progress, controls, resources and budget in one place.',
     steps: [
-      'Open Projects and create or select a project.',
-      'Use Overview, Kanban, Tasks, Risks, Issues, Resources, Budget, and Activity.',
+      'Open Projects and create or select a project. Search, or filter by status, health and due date, and switch between cards and a list.',
+      'Use Overview, Kanban, Tasks, Risks, Issues, Resources, Budget and Activity.',
       'Add risks and issues from the risk register and issue log.',
-      'Update status as mitigation and delivery progress changes.',
+      'Update the project status as mitigation and delivery progress changes.',
     ],
   },
+
+  // Chat and channels
   {
     title: 'Talk with the team',
     icon: MessageSquare,
     group: 'messaging',
     intro: 'Use Channels for shared topics and Chats for private conversations.',
     steps: [
-      'Open Channels for team-wide discussions.',
-      'Open an existing channel or create a new one.',
-      'Type a message and press Enter to send.',
-      'Use reply to keep a thread clear.',
-      'Open Chats for one-to-one or group conversations.',
+      'Open Channels for team-wide discussions, or create a channel (private ones are only visible to their members).',
+      'Type a message and press Enter to send. Shift and Enter adds a new line.',
+      'Use Reply to keep a thread clear, and react with an emoji.',
+      'Open Chats for one-to-one or group conversations, or message yourself for private notes.',
     ],
   },
   {
-    title: 'Use mentions and threads',
+    title: 'Pin and star messages',
+    icon: Pin,
+    group: 'messaging',
+    intro: 'Keep important messages within reach of the whole team, or just yourself.',
+    steps: [
+      'Select Pin under any message. Pinned messages appear in a bar at the top of that channel or chat, and a conversation can hold as many pins as it needs.',
+      'Anyone in the conversation can pin or unpin a message. Open the bar to step through the pins, and select one to jump to it.',
+      'Select Star to favourite a message just for yourself.',
+      'Select the star at the top of the page to see every message you have starred, across channels and chats.',
+    ],
+  },
+  {
+    title: 'Use mentions and notifications',
     icon: Hash,
     group: 'messaging',
     intro: 'Keep attention and context attached to the right conversation.',
     steps: [
       'Type @ in a message or comment to mention a teammate.',
-      'Open a thread from the reply action under a message.',
-      'Follow a thread to keep receiving replies.',
-      'Use notifications to return to the message or task that needs attention.',
+      'Use the bell for workspace activity and the chat icon for messages. Selecting an alert takes you to the message or task.',
+      'Choose which alerts you receive, and when to be quiet, in Settings under Notifications.',
     ],
   },
+  {
+    title: 'Find anything with search',
+    icon: Search,
+    group: 'messaging',
+    intro: 'One search box looks across tasks, messages, check-ins and more.',
+    steps: [
+      'Press / or select the search box at the top and type at least two letters.',
+      'Use the chips under the box (All, Tasks, Messages, Check-ins) to narrow the results.',
+      'Message results show who wrote them and when. Select one to open the exact task, check-in, or message.',
+    ],
+  },
+
+  // Insights
+  {
+    title: 'Check in with the team',
+    icon: Users,
+    group: 'insights',
+    intro: 'Check-ins are short daily updates that keep everyone aligned.',
+    steps: [
+      'Open Check-ins and select My check-in. Share what you finished, what is next, and anything blocking you.',
+      'Switch between All, Today, Past week and Past month, and use Everyone to look at one teammate.',
+      'The panel on the right shows who has not checked in yet, with a Nudge button.',
+      'Blockers raised today are listed beside the updates.',
+    ],
+  },
+  {
+    title: 'Read Reports',
+    icon: BarChart3,
+    group: 'insights',
+    intro: 'Reports show progress, workload and delivery across the workspace.',
+    steps: [
+      'Open Reports and choose a scope (all work, operations or one project) and a period.',
+      'With a week, month, quarter or year selected, the tiles show how the numbers compare with the previous period.',
+      'Select a tile to open the matching tasks in Planner.',
+      'Select Export CSV to download the report.',
+    ],
+  },
+  {
+    title: 'See team capacity',
+    icon: Users,
+    group: 'insights',
+    intro: 'Team shows who is available and who is carrying too much.',
+    steps: [
+      'Open Team. Type in Find a teammate to look someone up by name or email.',
+      'Use All, Available, At capacity and Overloaded to filter by workload.',
+      'The list shows six people at first. Select Show all to see everyone.',
+      'Owners and managers can invite people and change roles from here.',
+    ],
+  },
+  {
+    title: 'Use the calendar',
+    icon: CalendarDays,
+    group: 'insights',
+    intro: 'Plan meetings, focus time, deadlines and reminders in one place.',
+    steps: [
+      'Open Calendar and switch between Month, Week and Day, or use the arrows and Today to move around.',
+      'Select Add event, or the plus on a day. Choose a type and how long before it starts you want a reminder.',
+      'Use the Calendars panel to show or hide meetings, deadlines, focus time and reminders.',
+      'Task due dates appear on the calendar too. Select one to open the task.',
+    ],
+  },
+  {
+    title: 'Clock in and out',
+    icon: Clock3,
+    group: 'insights',
+    intro: 'Record your working time from the Today page.',
+    steps: [
+      'On Today, select Clock in in the right-hand panel. Start a break when you step away and end it when you return.',
+      'Set your status to Available, Busy, Away or Offline from the same panel.',
+      'Select Clock out when you finish. Owners and managers see time worked in Reports.',
+    ],
+  },
+
+  // Files
+  {
+    title: 'Manage files and documents',
+    icon: FileText,
+    group: 'files',
+    intro: 'Files holds uploads, documents, presentations and spreadsheets in one place.',
+    steps: [
+      'Open Files from the sidebar menu or Settings. Select Upload, or create a new document, presentation or spreadsheet.',
+      'Filter by All, Documents, Presentations, Spreadsheets or Uploads, search by name, and sort by newest, name or size.',
+      'Switch between thumbnails and a table. The note under the heading shows how much space your uploaded files use.',
+      'You can delete files you uploaded. Share a document with the permission level you want people to have.',
+    ],
+  },
+  {
+    title: 'Read PDF and Word files in the app',
+    icon: BookOpen,
+    group: 'files',
+    intro: 'Open documents without leaving Workspace. Download one when you want to edit it.',
+    steps: [
+      'Select a PDF or Word (.docx) file in Files, in a chat, or on a task. It opens in a read-only viewer.',
+      'A Word document shows its headings, lists and tables as a reading view. Fonts, columns, headers and images are not reproduced.',
+      'Select Download to open the original in your own app and edit it there.',
+      'Older .doc files cannot be shown in the viewer, so they download instead.',
+    ],
+  },
+  {
+    title: 'Import data from a spreadsheet',
+    icon: Download,
+    group: 'files',
+    intro: 'Bring tasks, projects and people in from a CSV or Excel file.',
+    steps: [
+      'Open Import data and choose the type of import.',
+      'Upload your file, then match its columns to Workspace fields.',
+      'Preview the records, check any rows flagged for review, then import.',
+    ],
+  },
+
+  // Settings and access
   {
     title: 'Manage settings and access',
     icon: Settings,
     group: 'settings',
-    intro: 'Keep profile, notifications, members, and workspace controls current.',
+    intro: 'Keep your profile, notifications, workspaces and access current.',
     steps: [
-      'Open Settings and choose Profile, Notifications, Members, or Preferences.',
-      'Update your photo, presence, and notification choices.',
-      'Owners and managers can invite members and change roles.',
-      'Review AI provider settings before enabling assistant features.',
+      'Open Settings from your profile menu. The sections are Profile, Appearance, Notifications, Workspaces, Workspace access, AI settings, Integrations and Templates.',
+      'Update your photo, presence and notification choices.',
+      'Owners and managers can invite members, change roles and manage webhooks and templates.',
+      'Review AI provider settings before turning on assistant features.',
     ],
   },
   {
     title: 'Update your profile',
     icon: Camera,
     group: 'settings',
-    intro: 'Keep your identity, photo, and availability clear for teammates.',
+    intro: 'Keep your identity, photo and availability clear for teammates.',
     steps: [
-      'Open Settings.',
-      'Select Profile.',
+      'Open Settings and select Profile.',
       'Upload or remove a profile photo.',
-      'Set your presence to Available, Busy, Away, or Offline.',
+      'Set your presence to Available, Busy, Away or Offline.',
       'Review your email address and workspace role.',
     ],
   },
@@ -150,21 +300,54 @@ const HELP_TOPICS = [
     group: 'settings',
     intro: 'Bring someone into the workspace with the correct access level.',
     steps: [
-      'Open Team or Settings.',
-      'Scroll to Members and access.',
-      'Select Invite team member.',
+      'Open Team and select Invite, or go to Settings and open Workspace access.',
       'Enter their email address and choose Member or Manager.',
-      'Send the invitation.',
+      'Send the invitation. You can resend or cancel it while it is pending.',
+    ],
+  },
+  {
+    title: 'Ask Zuri',
+    icon: Sparkles,
+    group: 'settings',
+    intro: 'Zuri is the built-in assistant for questions and quick actions.',
+    steps: [
+      'Select Assistant in the top bar, or open Zuri from the sidebar. An owner must switch on AI in Settings first.',
+      'Ask a question, or ask for something like a task to be created. You can attach a file or an image.',
+      'When Zuri proposes a change, it shows exactly what it will do and waits for you to confirm it.',
+    ],
+  },
+  {
+    title: 'Use Workspace on your phone',
+    icon: Smartphone,
+    group: 'settings',
+    intro: 'The phone layout keeps the places you use most within thumb reach.',
+    steps: [
+      'The bar along the bottom holds My tasks, Today, Channels and Chats, with More in the middle.',
+      'Select More to open the full menu, including Planner, Check-ins, Projects, Calendar and Reports.',
+      'Open Install app in Settings to add Workspace to your home screen.',
+    ],
+  },
+  {
+    title: 'Change how Workspace looks',
+    icon: SlidersHorizontal,
+    group: 'settings',
+    intro: 'Switch between light and dark, and make room on a small screen.',
+    steps: [
+      'Select the sun or moon in the top bar to switch between light and dark mode.',
+      'Select the round button on the edge of the sidebar to collapse it to icons, or press Ctrl and \\.',
+      'Select it again to bring the full sidebar back. Workspace remembers your choice.',
     ],
   },
 ]
 
 const HELP_GUIDES = [
-  { id: 'tasks', title: 'Task guidance', icon: ClipboardList, description: 'Statuses, buckets, estimates and moving work around.' },
-  { id: 'planner', title: 'Planner guidance', icon: LayoutGrid, description: 'Buckets, workstreams, drag-and-drop and archiving.' },
+  { id: 'tasks', title: 'Task guidance', icon: ClipboardList, description: 'Creating, finishing and reminding yourself about work.' },
+  { id: 'planner', title: 'Planner guidance', icon: LayoutGrid, description: 'Buckets, workstreams, routines and your private planner.' },
   { id: 'projects', title: 'Project guidance', icon: FolderKanban, description: 'Owners, progress, risk panels and budgets.' },
-  { id: 'messaging', title: 'Chat and channel guidance', icon: MessageSquare, description: 'Channels, direct messages, mentions and threads.' },
-  { id: 'settings', title: 'Settings guidance', icon: Settings, description: 'Members, roles, AI providers and webhooks.' },
+  { id: 'messaging', title: 'Chat and channel guidance', icon: MessageSquare, description: 'Channels, pins and stars, mentions and search.' },
+  { id: 'insights', title: 'Insights guidance', icon: BarChart3, description: 'Check-ins, reports, team capacity and the calendar.' },
+  { id: 'files', title: 'Files guidance', icon: FileText, description: 'Uploads, reading PDF and Word files, and importing data.' },
+  { id: 'settings', title: 'Settings guidance', icon: Settings, description: 'Access, Zuri, phone use and appearance.' },
 ]
 
 const HELP_SHORTCUTS = [
@@ -207,7 +390,7 @@ function HelpView({ onNavigate }) {
         <div className="help-resource-main">
           <header className="help-section-heading">
             <h2>Guides</h2>
-            <span>{visibleGuides.length} topics - {matchingTopics.length} articles</span>
+            <span>{visibleGuides.length} {visibleGuides.length === 1 ? 'topic' : 'topics'} - {matchingTopics.length} {matchingTopics.length === 1 ? 'article' : 'articles'}</span>
           </header>
           <div className="help-guide-grid">
             {visibleGuides.map(guide => {
@@ -218,7 +401,7 @@ function HelpView({ onNavigate }) {
                   <span><Icon size={20} /></span>
                   <strong>{guide.title}</strong>
                   <small>{guide.description}</small>
-                  <em>{guideCount(guide)} articles</em>
+                  <em>{guideCount(guide)} {guideCount(guide) === 1 ? 'article' : 'articles'}</em>
                 </button>
               )
             })}
@@ -229,7 +412,7 @@ function HelpView({ onNavigate }) {
             <Card className="help-article-list">
               <header className="help-section-heading">
                 <h2>{HELP_GUIDES.find(guide => guide.id === selectedGuide)?.title}</h2>
-                <span>{guideTopics.length} articles</span>
+                <span>{guideTopics.length} {guideTopics.length === 1 ? 'article' : 'articles'}</span>
               </header>
               <div className="help-article-items">
                 {guideTopics.map(topic => {

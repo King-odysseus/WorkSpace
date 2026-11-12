@@ -172,3 +172,25 @@ it('keeps the cookie choices hidden after a stored selection', () => {
 
   expect(screen.queryByText('We use cookies')).not.toBeInTheDocument()
 })
+
+it('documents the current features and says "1 article" in the singular', async () => {
+  const user = userEvent.setup()
+  render(<HelpView onNavigate={vi.fn()} />)
+
+  // Project guidance has exactly one article.
+  expect(screen.getByText('1 article')).toBeInTheDocument()
+
+  // Features added since the first Help was written are findable by search.
+  for (const [term, guide] of [['Pin and star messages', 'Chat and channel guidance'], ['Set a reminder', 'Task guidance'], ['Routines', 'Planner guidance'], ['PDF and Word', 'Files guidance']]) {
+    await user.clear(screen.getByRole('textbox', { name: 'Search help articles' }))
+    await user.type(screen.getByRole('textbox', { name: 'Search help articles' }), term)
+    // The matching guide stays listed, and one with no match drops out.
+    expect(screen.getAllByText(guide).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Settings guidance')).toBeNull()
+  }
+
+  // Features that do not exist are not described.
+  await user.clear(screen.getByRole('textbox', { name: 'Search help articles' }))
+  await user.type(screen.getByRole('textbox', { name: 'Search help articles' }), 'Gantt')
+  expect(screen.getByText('No articles match that search.')).toBeInTheDocument()
+})
