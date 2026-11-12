@@ -40,6 +40,8 @@ import {
 import { Button } from "./ui/button.jsx";
 import { CircularProgress } from "./ui/circular-progress.jsx";
 import RemindersPanel from "./RemindersPanel.jsx";
+import RemindMenu from "./RemindMenu.jsx";
+import SavedViewsMenu from "./SavedViewsMenu.jsx";
 import { AppSelect } from "./ui/select.jsx";
 import { SearchInput } from "./ui/search-input.jsx";
 import { Card } from "./ui/card.jsx";
@@ -1600,6 +1602,9 @@ function TeamBoardView({
   );
 }
 
+// What a saved My tasks view remembers; anything not named here is not saved.
+const MY_TASKS_VIEW_DEFAULTS = { status: "all", priority: "all", project: "all", bucket: "all", sort: "due", overdueOnly: false };
+
 function MyTasksView({
   tasks,
   currentUserId,
@@ -1607,6 +1612,7 @@ function MyTasksView({
   projects,
   buckets,
   members = [],
+  workspaceId,
   onAddTask,
   onOpenTask,
   onComplete,
@@ -1914,6 +1920,20 @@ function MyTasksView({
           avatarUrl={assignee?.avatar_url}
           className="row-avatar"
         />
+        {workspaceId && !done && (
+          <RemindMenu workspaceId={workspaceId} targetType="task" targetId={task.id}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Remind me about ${task.title}`}
+              title="Remind me"
+              className="opacity-0 transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
+            >
+              <Bell size={16} />
+            </Button>
+          </RemindMenu>
+        )}
         {canManageTasks && (
           <Popover>
             <PopoverTrigger asChild>
@@ -1994,6 +2014,25 @@ function MyTasksView({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
+            {workspaceId && (
+              <SavedViewsMenu
+                workspaceId={workspaceId}
+                currentUserId={currentUserId}
+                scope="my-tasks"
+                defaults={MY_TASKS_VIEW_DEFAULTS}
+                filters={{ status, priority, project, bucket, sort, overdueOnly }}
+                search={query}
+                onApply={(view) => {
+                  setStatus(view.status);
+                  setPriority(view.priority);
+                  setProject(view.project);
+                  setBucket(view.bucket);
+                  setSort(view.sort);
+                  setOverdueOnly(view.overdueOnly);
+                  setQuery(view.search);
+                }}
+              />
+            )}
             <AppSelect
               className="chip-select w-full sm:w-[200px]"
               value={project}

@@ -51,3 +51,24 @@ it('deletes one of your own views', async () => {
   await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/saved-views/1/', 'DELETE'))
   await waitFor(() => expect(screen.queryByText('Overdue work')).toBeNull())
 })
+
+it('lists only the views saved on this screen and saves with its scope', async () => {
+  const defaults = { status: 'all', sort: 'due' }
+  const taskView = { id: 8, name: 'My overdue', filter: encodeViewFilters({ status: 'todo', sort: 'due' }, defaults, 'my-tasks'), search: '', project_scope: 'all', shared: false, owner_id: 7 }
+  const fetchMock = mockApi({ '/api/workspaces/1/saved-views/': { saved_views: [mine, taskView] } })
+  const onApply = vi.fn()
+  render(<SavedViewsMenu workspaceId={1} currentUserId={7} scope="my-tasks" defaults={defaults} filters={{ status: 'todo', sort: 'due' }} onApply={onApply} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Saved views' }))
+
+  expect(await screen.findByText('My overdue')).toBeInTheDocument()
+  expect(screen.queryByText('Overdue work')).toBeNull()
+  fireEvent.click(screen.getByText('My overdue'))
+  expect(onApply).toHaveBeenCalledWith({ status: 'todo', sort: 'due', search: '', projectScope: 'all' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Saved views' }))
+  fireEvent.change(await screen.findByLabelText('View name'), { target: { value: 'Next' } })
+  fireEvent.submit(screen.getByLabelText('View name').closest('form'))
+  await waitFor(() => expectRequest(fetchMock, '/api/workspaces/1/saved-views/', 'POST'))
+  const [, init] = expectRequest(fetchMock, '/api/workspaces/1/saved-views/', 'POST')
+  expect(JSON.parse(JSON.parse(init.body).filter)._scope).toBe('my-tasks')
+})

@@ -15,27 +15,38 @@ import { getCsrfToken } from '../lib/workspace-format.js'
 
 export const DEFAULT_PLANNER_VIEW = { status: 'all', priority: 'all', assignee: 'all', workstream: 'all', bucketFilter: 'all', dueFilter: 'all', staleOnly: false }
 
-export function encodeViewFilters(filters) {
-  const picked = {}
-  for (const key of Object.keys(DEFAULT_PLANNER_VIEW)) picked[key] = filters[key] ?? DEFAULT_PLANNER_VIEW[key]
+// A view carries the screen it was saved on, so My tasks and the Planner each list
+// only their own. Older views have no scope and belong to the Planner.
+export function encodeViewFilters(filters, defaults = DEFAULT_PLANNER_VIEW, scope = 'planner') {
+  const picked = { _scope: scope }
+  for (const key of Object.keys(defaults)) picked[key] = filters[key] ?? defaults[key]
   return JSON.stringify(picked)
 }
 
-export function decodeViewFilters(token) {
+export function viewScope(token) {
   try {
     const parsed = JSON.parse(token)
-    if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_PLANNER_VIEW }
-    const filters = { ...DEFAULT_PLANNER_VIEW }
-    for (const key of Object.keys(DEFAULT_PLANNER_VIEW)) {
-      if (typeof parsed[key] === typeof DEFAULT_PLANNER_VIEW[key]) filters[key] = parsed[key]
-    }
-    return filters
+    return parsed && typeof parsed._scope === 'string' ? parsed._scope : 'planner'
   } catch {
-    return { ...DEFAULT_PLANNER_VIEW }
+    return 'planner'
   }
 }
 
-export default function SavedViewsMenu({ workspaceId, currentUserId, filters, search = '', projectScope = 'all', onApply }) {
+export function decodeViewFilters(token, defaults = DEFAULT_PLANNER_VIEW) {
+  try {
+    const parsed = JSON.parse(token)
+    if (!parsed || typeof parsed !== 'object') return { ...defaults }
+    const filters = { ...defaults }
+    for (const key of Object.keys(defaults)) {
+      if (typeof parsed[key] === typeof defaults[key]) filters[key] = parsed[key]
+    }
+    return filters
+  } catch {
+    return { ...defaults }
+  }
+}
+
+export default function SavedViewsMenu({ workspaceId, currentUserId, filters, search = '', projectScope = 'all', onApply, scope = 'planner', defaults = DEFAULT_PLANNER_VIEW }) {
   const [open, setOpen] = useState(false)
   const [views, setViews] = useState([])
   const [loading, setLoading] = useState(false)
@@ -71,7 +82,7 @@ export default function SavedViewsMenu({ workspaceId, currentUserId, filters, se
       const response = await fetch(`/api/workspaces/${workspaceId}/saved-views/`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) },
-        body: JSON.stringify({ name: trimmed, filter: encodeViewFilters(filters), search, project_scope: projectScope, shared }),
+        body: JSON.stringify({ name: trimmed, filter: encodeViewFilters(filters, defaults, scope), search, project_scope: projectScope, shared }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'The view could not be saved.')
@@ -99,8 +110,10 @@ export default function SavedViewsMenu({ workspaceId, currentUserId, filters, se
     }
   }
 
+  const scopedViews = views.filter(view => viewScope(view.filter) === scope)
+
   const apply = view => {
-    onApply({ ...decodeViewFilters(view.filter), search: view.search || '', projectScope: view.project_scope || 'all' })
+    onApply({ ...decodeViewFilters(view.filter, defaults), search: view.search || '', projectScope: view.project_scope || 'all' })
     setOpen(false)
   }
 
@@ -112,8 +125,8 @@ export default function SavedViewsMenu({ workspaceId, currentUserId, filters, se
       <Popover.Content className="saved-views-panel" side="bottom" align="start" sideOffset={8} collisionPadding={12} aria-label="Saved views">
         <h3>Saved views</h3>
         {loading && !views.length ? <p className="saved-views-empty">Loading...</p>
-          : views.length ? <ul>
-            {views.map(view => <li key={view.id}>
+          : scopedViews.length ? <ul>
+            {scopedViews.map(view => <li key={view.id}>
               <button type="button" className="saved-views-apply" onClick={() => apply(view)}>
                 <strong>{view.name}</strong>
                 {view.shared && <small><Users size={12} aria-hidden="true" /> Shared{view.owner_id !== currentUserId ? ' by a teammate' : ''}</small>}

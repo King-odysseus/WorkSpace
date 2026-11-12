@@ -10145,6 +10145,7 @@ function WorkspaceView({
   if (active === "My tasks") {
     return (
       <MyTasksView
+        workspaceId={workspaceId}
         tasks={tasks}
         currentUserId={currentUserId}
         currentUserName={currentUserName}
