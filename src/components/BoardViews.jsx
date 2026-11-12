@@ -6144,7 +6144,7 @@ function TodayDashboard({
       {children}
 
       <div className="mt-[18px] grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_376px]">
-        <div className="grid min-w-0 grid-cols-1 content-start gap-[76px]">
+        <div data-column="today-main" className="grid min-w-0 grid-cols-1 content-start gap-[76px]">
           <section data-panel="tasks">
             <div className="-mt-1 flex items-center justify-between gap-3">
               <h2 className="text-[16px] font-semibold leading-[22px] text-text-primary">Today's tasks</h2>

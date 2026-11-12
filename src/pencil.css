@@ -9378,3 +9378,12 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
     align-self: start;
   }
 }
+
+/* Today: the left column's last card stretches down so both columns end on the
+   same line, whichever one is longer. (The right column pins while it scrolls; a
+   shorter left column used to stop well above it.) */
+@media (min-width: 1024px) {
+  [data-column='today-main'] { display: flex; flex-direction: column; }
+  [data-column='today-main'] > :last-child { display: flex; flex: 1 1 auto; flex-direction: column; }
+  [data-column='today-main'] > :last-child > :last-child { flex: 1 1 auto; }
+}
