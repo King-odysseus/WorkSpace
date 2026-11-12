@@ -9355,3 +9355,26 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
 .calendar-upcoming-task:hover, .calendar-upcoming-task:focus-visible { background: var(--color-info-soft); }
 .calendar-upcoming-task::before { inset: 14px auto 14px 10px; }
 .calendar-upcoming-event-main, .calendar-upcoming-task { padding-left: 26px; }
+
+/* The month grid gets room inside its card instead of running to the edges. */
+.calendar-month-content { padding: 22px 22px 26px !important; }
+.calendar-month-weekdays { margin-bottom: 10px; }
+@media (max-width: 639px) { .calendar-month-content { padding: 14px 12px 18px !important; } }
+.calendar-month-weekdays { height: 24px; margin-bottom: 4px; }
+
+/* Right-hand cards stay in view while the long left column scrolls, and the two
+   columns finish together at the end of the page. The rail keeps its natural
+   height: if it is taller than the window, the rest of it comes into view as the
+   page reaches the end, so no card is ever cut off or hidden in an inner scroller. */
+@media (min-width: 1024px) {
+  [data-rail='today'],
+  .my-task-sidebar,
+  .calendar-side-stack,
+  .pencil-team-layout > :last-child,
+  .pencil-followup-layout > :last-child,
+  .pencil-checkins-view .pencil-checkin-layout > :last-child {
+    position: sticky;
+    top: 8px;
+    align-self: start;
+  }
+}

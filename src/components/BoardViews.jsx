@@ -6327,7 +6327,7 @@ function TodayDashboard({
           </section>
         </div>
 
-        <aside className="grid min-w-0 grid-cols-1 content-start gap-6">
+        <aside data-rail="today" className="grid min-w-0 grid-cols-1 content-start gap-6">
           <ClockInCard
             shifts={workShifts}
             currentUserId={currentUserId}
