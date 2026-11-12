@@ -693,7 +693,9 @@ button { cursor: pointer; }
     right: 0 !important;
     left: 0 !important;
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    width: min(350px, calc(100vw - 40px));
+    /* Seven slots (six destinations plus More) need more room than the
+       original five did, or the labels truncate. */
+    width: min(392px, calc(100vw - 20px));
     margin: 0 auto;
     transform: translate3d(0, 0, 0) !important;
     translate: none !important;

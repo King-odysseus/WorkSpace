@@ -3271,7 +3271,9 @@ function App() {
     ["Today", "Today"],
     ["My tasks", "My tasks"],
     ["Planner", "Planner"],
+    ["Channels", "Channels"],
     ["Chats", "Chats"],
+    ["Check-ins", "Check-ins"],
   ]
     .map(([label, page]) => {
       const item = navItemsByLabel.get(page);
