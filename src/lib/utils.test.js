@@ -23,14 +23,14 @@ describe('cn', () => {
 })
 
 describe('buttonVariants', () => {
-  // The design gives every control the 12px control radius. Buttons used to be
-  // pills, so a stray `rounded-full` surviving anywhere is the regression this
-  // guards - it is silent, and the only symptom is a corner that looks wrong.
-  it('gives every size the control radius rather than the pill', () => {
+  // Buttons are pills and the square icon sizes are circles. A stray
+  // `rounded-control` surviving anywhere is the regression this guards - it is
+  // silent, and the only symptom is a corner that looks wrong.
+  it('gives every size the pill radius rather than the control radius', () => {
     for (const size of ['default', 'sm', 'lg', 'page', 'icon', 'icon-sm']) {
       const classes = buttonVariants({ size })
-      expect(classes, size).toContain('rounded-control')
-      expect(classes, size).not.toContain('rounded-full')
+      expect(classes, size).toContain('rounded-full')
+      expect(classes, size).not.toContain('rounded-control')
     }
   })
 

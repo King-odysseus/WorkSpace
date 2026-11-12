@@ -13,17 +13,17 @@
  *   are the app's own --color-surface-hover, --color-danger and
  *   --color-text-primary, so the classes below name the token, not the hex.
  *
- *   Geometry comes from the design's radius ladder. Flowbite's defaults use
- *   rounded-lg on controls; the design uses the 12px control radius, which
- *   the app already exposes as --radius-control.
+ *   Geometry: buttons are pills (rounded-full) and the square icon sizes
+ *   therefore render as circles. Flowbite's defaults use rounded-lg on
+ *   controls. The 12px --radius-control still applies to fields and cards.
  *
  * tailwind-merge is the reason `base` is replaced wholesale rather than
  * extended: it only knows the class names it ships with, so a custom
- * `rounded-control` would not be seen as overriding Flowbite's `rounded-lg`
- * and the wrong radius would win silently.
+ * `rounded-full` replaces Flowbite's `rounded-lg` only because `base` is replaced
+ * wholesale, so the wrong radius cannot win silently.
  */
 
-/* The design's control: 42px tall, a 14px/500 label, the 12px control radius.
+/* The control: 42px tall, a 14px/500 label, fully rounded (a pill).
    Flowbite's `md` size is h-10/text-sm, so it is restated rather than tweaked. */
 const controlSize = 'h-[42px] px-5 text-label'
 
@@ -31,7 +31,7 @@ const controlSize = 'h-[42px] px-5 text-label'
 const iconSize = 'size-[42px] p-0'
 
 const base =
-  'relative flex items-center justify-center gap-2 rounded-control text-center font-medium ' +
+  'relative flex items-center justify-center gap-2 rounded-full text-center font-medium ' +
   'whitespace-nowrap transition-colors outline-none disabled:pointer-events-none disabled:opacity-50 ' +
   'focus-visible:ring-[3px] focus-visible:ring-info/35 focus-visible:border-info [&_svg]:shrink-0'
 

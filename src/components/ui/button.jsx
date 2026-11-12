@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
  * when the primitive moved onto Flowbite. `variant` and `size` map onto
  * Flowbite's `color` and `size`, and everything else passes through.
  *
- * The design's control is 42x42 with a 12px radius and a 14px/500 label, so
+ * The control is 42px tall, a pill, with a 14px/500 label (icon sizes are 42x42 circles), so
  * `default` and `page` both resolve to Flowbite's `md`, which
  * src/lib/flowbite-theme.js restates to that geometry. `page` differs only in
  * the icon size it carries, which is why it still has its own entry.
@@ -64,7 +64,7 @@ function buttonVariants({ variant = 'default', size = 'default', className } = {
   }[variant]
 
   return cn(
-    'relative inline-flex items-center justify-center gap-2 rounded-control font-medium whitespace-nowrap',
+    'relative inline-flex items-center justify-center gap-2 rounded-full font-medium whitespace-nowrap',
     geometry,
     skin,
     className,
