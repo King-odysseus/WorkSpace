@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Archive, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
+import { Archive, ArrowDown, Bell, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import { AppSelect } from './ui/select.jsx'
 import BulkActionBar from './BulkActionBar.jsx'
@@ -10,6 +10,8 @@ import Avatar from './Avatar.jsx'
 import BoardMembersDialog from './BoardMembersDialog.jsx'
 import BoardPeople from './BoardPeople.jsx'
 import SavedViewsMenu from './SavedViewsMenu.jsx'
+import RemindMenu from './RemindMenu.jsx'
+import RoutinesPanel from './RoutinesPanel.jsx'
 import { TaskProgressActions, TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
@@ -20,7 +22,7 @@ const STALE_DAYS = 14
 // The design's compact lane card: a completion checkbox and title lead, then
 // owner, workstream/estimate, and status. Status moves between lanes by dragging
 // the card; the overflow menu carries the moves a drag cannot express.
-function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onMoveWithinBucket, canMoveUp = false, canMoveDown = false, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect, members = [] }) {
+function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanently, onOpen, onDelete, onDeletePermanently, onMove, onMoveWithinBucket, canMoveUp = false, canMoveDown = false, onStatusChange, draggedTaskId, setDraggedTaskId, dropTaskId, dropBefore, dropAfter, selectMode = false, selected = false, onToggleSelect, members = [], workspaceId }) {
   const saveProgress = useContext(TaskProgressActions)
   const isDone = task.status === 'done'
   const otherBuckets = buckets.filter(bucket => bucket.name !== task.bucket)
@@ -63,6 +65,11 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
       >
         {task.title}
       </button>
+      {workspaceId && !isDone && (
+        <RemindMenu workspaceId={workspaceId} targetType="task" targetId={task.id}>
+          <button type="button" className="planner-card-menu planner-card-remind" aria-label={`Remind me about ${task.title}`} title="Remind me"><Bell size={15} /></button>
+        </RemindMenu>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button type="button" className="planner-card-menu" aria-label={`Actions for ${task.title}`} title={`Actions for ${task.title}`}><MoreHorizontal size={16} /></button>
@@ -663,6 +670,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       selected={selectedTaskIds.some(id => String(id) === String(task.id))}
       onToggleSelect={toggleTaskSelected}
       members={members}
+      workspaceId={workspaceId}
     />
   }
   const draggedBucketName = buckets.find(bucket => bucket.id === draggedBucketId)?.name
@@ -723,6 +731,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     </header>
 
     {bucketArchiveOpen ? archiveContent : <>
+    {isOperations && <RoutinesPanel tasks={tasks} today={today} onOpenTask={onOpenTask} onStatusChange={onStatusChange} />}
     <div className="planner-commandbar mt-[9px] flex flex-wrap items-center gap-3">
       <SearchInput
         className="planner-search w-full min-w-0 sm:max-w-[280px] sm:flex-1"

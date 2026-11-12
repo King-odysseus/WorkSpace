@@ -9279,3 +9279,26 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
 /* The date button in a dialog is a filled pill like the other fields. */
 .task-dialog .datetime-trigger.datetime-trigger.datetime-trigger { border-color: transparent !important; background: var(--soft-field) !important; box-shadow: none !important; }
 .task-dialog .date-field-trigger.date-field-trigger.date-field-trigger { border-color: transparent !important; background: var(--soft-field) !important; box-shadow: none !important; }
+
+.checkin-person-filter { height: 42px; padding: 0 18px; border-radius: 999px; box-shadow: var(--shadow-soft); background-color: var(--pencil-surface); font-size: 13px; }
+
+/* "+3 vs previous month" under a report tile. */
+.report-compare { display: block; margin-top: 6px; color: var(--pencil-text-muted); font-size: 11px; font-weight: 600; }
+.report-compare.is-up { color: var(--color-success); }
+.report-compare.is-down { color: var(--color-danger); }
+
+/* Daily operations: the Routines panel above the board. */
+.routines-panel { margin-top: 18px; padding: 22px 24px; border-radius: var(--radius-soft-card); background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
+.routines-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.routines-heading h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 600; }
+.routines-heading span { color: var(--pencil-text-muted); font-size: 12px; }
+.routines-list { display: grid; gap: 4px; margin: 14px 0 0; padding: 0; list-style: none; }
+.routines-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 14px; border-radius: 18px; }
+.routines-row:hover { background: var(--pencil-surface-hover); }
+.routines-title { flex: 1 1 200px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--pencil-text); font-size: 14px; font-weight: 500; text-align: left; cursor: pointer; }
+.routines-title:hover { text-decoration: underline; }
+.routines-cadence { padding: 3px 12px; border-radius: 999px; background: var(--color-info-soft); color: var(--color-info); font-size: 11px; font-weight: 600; }
+.routines-due { min-width: 110px; color: var(--pencil-text-muted); font-size: 12px; }
+.routines-due.is-overdue { color: var(--color-danger); font-weight: 600; }
+.routines-empty { margin: 12px 0 0; color: var(--pencil-text-muted); font-size: 13px; }
+.planner-card-remind { margin-right: 2px; }

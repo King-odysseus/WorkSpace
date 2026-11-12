@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest'
 import PlannerBoard from './PlannerBoard.jsx'
 import { TaskProgressActions } from './TaskProgressBar.jsx'
 import { toDateKey } from '../lib/workspace-format.js'
+import { mockApi } from '../test/setup-tests.js'
 
 const renderPlanner = (props = {}) => render(
   <PlannerBoard
@@ -1208,4 +1209,23 @@ it('sets progress from the planner card dropdown', () => {
   fireEvent.change(screen.getByRole('combobox', { name: 'Percent complete for Mostly there' }), { target: { value: '90' } })
 
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 90)
+})
+
+it('shows Routines on Daily operations and a Remind me bell on each card', () => {
+  // Daily operations remembers its workstream filter; an earlier test may have set one.
+  localStorage.removeItem('workspace-operations-workstream-filter')
+  mockApi({})
+  const routine = { id: 5, title: 'Morning stand-up', bucket: 'Backlog', status: 'todo', priority: 'normal', recurrence: 'daily', due_date: toDateKey(new Date()), project_id: null, assignee_ids: [], position: 0 }
+  renderPlanner({ workspaceId: 1, scopeMode: 'operations', projectFilter: 'operations', currentUserId: 7, tasks: [routine] })
+
+  expect(screen.getByRole('region', { name: 'Routines' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Mark Morning stand-up done' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Remind me about Morning stand-up')).toBeInTheDocument()
+})
+
+it('keeps Routines off the project planner', () => {
+  mockApi({})
+  const routine = { id: 5, title: 'Morning stand-up', bucket: 'Backlog', status: 'todo', priority: 'normal', recurrence: 'daily', due_date: toDateKey(new Date()), project_id: null, assignee_ids: [], position: 0 }
+  renderPlanner({ workspaceId: 1, scopeMode: 'projects', currentUserId: 7, tasks: [routine] })
+  expect(screen.queryByRole('region', { name: 'Routines' })).toBeNull()
 })
