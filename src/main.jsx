@@ -3287,7 +3287,10 @@ function App() {
       // wording and the page is "My tasks", and navigating to the label instead
       // lands on a view name no branch handles, which falls through to a
       // generic list of the whole workspace.
-      return { ...item, label, page };
+      // The bar swaps two glyphs from the sidebar's: Today wears the compass and
+      // More wears the house. Only the bar does this; the sidebar keeps its own.
+      const icon = label === "Today" ? Compass : item.icon;
+      return { ...item, icon, label, page };
     })
     .filter(Boolean);
   const renderMobileTab = ({ label, page, icon: Icon, active: itemActive, onSelect }) => {
@@ -4681,7 +4684,7 @@ function App() {
           aria-haspopup="menu"
           className="flex h-full min-w-0 max-w-[66px] flex-1 flex-col items-center gap-1 pt-3.5 font-medium text-[#93B4D4] transition-colors hover:text-white"
         >
-          <Compass size={20} className="shrink-0" aria-hidden="true" />
+          <Home size={20} className="shrink-0" aria-hidden="true" />
           <span className="max-w-full truncate text-[10px] leading-none">
             More
           </span>
@@ -5057,6 +5060,8 @@ function WorkspaceView({
     () => localStorage.getItem("workspace-calendar-upcoming-open") !== "false",
   );
   const [checkInRange, setCheckInRange] = useState("today");
+  // "all" or the id of one teammate; narrows the list, not the range counts.
+  const [checkInPerson, setCheckInPerson] = useState("all");
   const [checkInPage, setCheckInPage] = useState(1);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState("");
@@ -7021,6 +7026,22 @@ function WorkspaceView({
       (task) => task.status === "done" && (task.completed_at || task.actual_completion_date),
     );
     const reportCompletedCount = report.status_counts.done || reportCompletedTasks.length;
+    // "Compared with last month": the server sends the period before the chosen one
+    // (week, month, quarter or year). All time and custom ranges have none.
+    const previousPeriod = detailedReport?.previous || null;
+    const compareLine = (current, before, unit = "") => {
+      if (!previousPeriod) return null;
+      const change = current - before;
+      const sign = change > 0 ? "+" : change < 0 ? "-" : "";
+      return (
+        <small
+          className={`report-compare${change > 0 ? " is-up" : change < 0 ? " is-down" : ""}`}
+          data-compare
+        >
+          {change === 0 ? "No change" : `${sign}${Math.abs(change)}${unit}`} vs {previousPeriod.label}
+        </small>
+      );
+    };
     const serverWeekBuckets = detailedReport?.completed_by_week;
     const reportWeekBuckets = Array.isArray(serverWeekBuckets)
       ? serverWeekBuckets.map((week, index) => ({
@@ -7262,6 +7283,7 @@ function WorkspaceView({
             <span>Total tasks</span>
             <strong>{report.total_tasks}</strong>
             <em>{report.completion_rate}% complete - {report.average_progress || 0}% average progress</em>
+            {compareLine(report.total_tasks, previousPeriod?.total_tasks ?? 0)}
           </button>
           <button
             type="button"
@@ -7271,6 +7293,8 @@ function WorkspaceView({
             <span>Completed</span>
             <strong>{reportCompletedCount}</strong>
             <em>{report.completion_rate}% completion rate</em>
+            {compareLine(reportCompletedCount, previousPeriod?.completed_tasks ?? 0)}
+            {compareLine(report.completion_rate, previousPeriod?.completion_rate ?? 0, " pts")}
           </button>
           <button
             type="button"
@@ -9103,10 +9127,20 @@ function WorkspaceView({
         filterCheckInsByRange(localData.checkIns, range.value, today).length,
       ]),
     );
+    // Everyone who has checked in at all, for the person filter.
+    const checkInPeople = [
+      ...new Map(
+        localData.checkIns
+          .filter((item) => item.user_id)
+          .map((item) => [String(item.user_id), item.user_name || "Teammate"]),
+      ),
+    ].sort((a, b) => a[1].localeCompare(b[1]));
     const visibleCheckIns = filterCheckInsByRange(
       localData.checkIns,
       checkInRange,
       today,
+    ).filter(
+      (item) => checkInPerson === "all" || String(item.user_id) === checkInPerson,
     );
     // Ten cards to a page under whichever range is chosen. The range counts and the
     // summary cards beside the list keep reading the whole range, not the page.
@@ -9156,6 +9190,17 @@ function WorkspaceView({
               </button>
             ))}
           </div>
+          <select
+            className="checkin-person-filter"
+            value={checkInPerson}
+            onChange={(event) => { setCheckInPerson(event.target.value); setCheckInPage(1); }}
+            aria-label="Filter check-ins by person"
+          >
+            <option value="all">Everyone</option>
+            {checkInPeople.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
           <span className="checkin-date-chip" aria-live="polite">
             <CalendarDays size={16} aria-hidden="true" />
             <span>
