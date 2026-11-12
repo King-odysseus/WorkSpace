@@ -9336,3 +9336,22 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
    days became separate rounded cells with gaps. It now grows to fit its weeks. */
 .calendar-week.calendar-view-month { height: auto; min-height: 684px; overflow: visible; }
 .calendar-view-month .calendar-month-content { overflow: visible; }
+
+/* Calendar side panel: the header actions no longer float over the date. The title,
+   date and the three round buttons sit in one row, and the buttons are always
+   visible. Event rows are soft rounded rows with a clear hover state. */
+.calendar-side-heading { height: auto; min-height: 40px; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-bottom: 14px; border-bottom: 0; }
+.calendar-upcoming-meta { margin-left: auto; }
+.calendar-upcoming-actions { position: static; top: auto; right: auto; gap: 6px; opacity: 1; }
+.calendar-export { width: 32px; height: 32px; border-radius: 50%; background: var(--soft-field); }
+.calendar-export:hover, .calendar-export:focus-visible { background: var(--color-info-soft); color: var(--color-info); }
+.calendar-upcoming-card { height: auto; min-height: 364px; }
+.calendar-upcoming-event { height: auto; min-height: 56px; margin-bottom: 8px; overflow: hidden; border: 0; border-radius: 18px; background: var(--soft-field); transition: background-color 150ms ease; }
+.calendar-upcoming-event:hover, .calendar-upcoming-event:focus-within { background: var(--color-info-soft); }
+.calendar-upcoming-event::before { inset: 14px auto 14px 10px; }
+.calendar-day-add { top: 0; right: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--pencil-surface); box-shadow: var(--shadow-soft); color: var(--pencil-navy); }
+.calendar-day-add:hover, .calendar-day-add:focus-visible { background: var(--pencil-navy); color: #fff; }
+.calendar-upcoming-task { margin-bottom: 8px; border-radius: 18px; background: var(--soft-field); transition: background-color 150ms ease; }
+.calendar-upcoming-task:hover, .calendar-upcoming-task:focus-visible { background: var(--color-info-soft); }
+.calendar-upcoming-task::before { inset: 14px auto 14px 10px; }
+.calendar-upcoming-event-main, .calendar-upcoming-task { padding-left: 26px; }
