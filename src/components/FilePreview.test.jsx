@@ -1,6 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import FilePreview from './FilePreview.jsx'
+import { parseDocx } from '../lib/docx-reader.js'
+
+vi.mock('../lib/docx-reader.js', () => ({ parseDocx: vi.fn() }))
+
+// parseDocx is mocked, so the body only has to exist for the viewer to hand it on.
+const stubDocxDownload = () => vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8) })))
+
+afterEach(() => { vi.mocked(parseDocx).mockReset(); vi.unstubAllGlobals() })
 
 // The file name is drawn in the bar as well as on the frame, so these look for
 // the rendered element itself rather than by title.
@@ -32,7 +40,7 @@ it('renders a PDF in the browser viewer', () => {
 })
 
 it('falls back to a download for a type the server will not serve inline', () => {
-  preview({ url: '/api/workspace-files/4/download/', name: 'Plan.docx' })
+  preview({ url: '/api/workspace-files/4/download/', name: 'Plan.doc' })
 
   expect(screen.getByText('This file type cannot be shown inside the app.')).toBeInTheDocument()
   expect(document.body.querySelector('iframe')).toBeNull()
@@ -41,6 +49,33 @@ it('falls back to a download for a type the server will not serve inline', () =>
     'href',
     '/api/workspace-files/4/download/?download=1',
   )
+})
+
+it('shows a Word document as a reading view with a download for editing', async () => {
+  stubDocxDownload()
+  vi.mocked(parseDocx).mockResolvedValue({
+    blocks: [
+      { type: 'paragraph', level: 1, list: false, runs: [{ text: 'Launch plan', bold: false, italic: false, underline: false }] },
+      { type: 'paragraph', level: 0, list: false, runs: [{ text: 'Ship ', bold: false, italic: false, underline: false }, { text: 'Friday', bold: true, italic: false, underline: false }] },
+      { type: 'table', rows: [[[{ type: 'paragraph', level: 0, list: false, runs: [{ text: 'Owner', bold: false, italic: false, underline: false }] }], [{ type: 'paragraph', level: 0, list: false, runs: [{ text: 'Dana', bold: false, italic: false, underline: false }] }]]] },
+    ],
+  })
+  preview({ url: '/api/workspace-files/4/download/', name: 'Plan.docx' })
+
+  expect(await screen.findByRole('heading', { name: 'Launch plan' })).toBeInTheDocument()
+  expect(screen.getByText('Friday').tagName).toBe('STRONG')
+  expect(screen.getByRole('cell', { name: 'Dana' })).toBeInTheDocument()
+  expect(document.body.querySelector('iframe')).toBeNull()
+  expect(screen.getAllByRole('link', { name: /Download/ })[0]).toHaveAttribute('href', '/api/workspace-files/4/download/?download=1')
+})
+
+it('offers the download when a Word document cannot be read', async () => {
+  stubDocxDownload()
+  vi.mocked(parseDocx).mockRejectedValue(new Error('This is not a valid Word document.'))
+  preview({ url: '/api/workspace-files/4/download/', name: 'Broken.docx' })
+
+  expect(await screen.findByText('This is not a valid Word document.')).toBeInTheDocument()
+  expect(screen.getAllByRole('link', { name: /Download/ }).length).toBeGreaterThan(0)
 })
 
 it('refuses to load a URL whose scheme could run script', () => {

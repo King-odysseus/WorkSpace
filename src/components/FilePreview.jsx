@@ -13,10 +13,71 @@
 // anchor to that ancestor instead of the viewport. Portalling sidesteps it
 // rather than relying on where each call site happens to sit.
 
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, Download, FileWarning } from 'lucide-react'
 import { downloadHref, previewKind, previewSrc } from '../lib/file-preview.js'
+import { parseDocx } from '../lib/docx-reader.js'
+
+function DocxRuns({ runs }) {
+  return runs.map((run, index) => {
+    let content = run.text.split('\n').map((line, lineIndex) => <Fragment key={lineIndex}>{lineIndex > 0 && <br />}{line}</Fragment>)
+    if (run.underline) content = <u>{content}</u>
+    if (run.italic) content = <em>{content}</em>
+    if (run.bold) content = <strong>{content}</strong>
+    return <Fragment key={index}>{content}</Fragment>
+  })
+}
+
+function DocxBlocks({ blocks }) {
+  return blocks.map((block, index) => {
+    if (block.type === 'table') {
+      return <table className="docx-table" key={index}><tbody>
+        {block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}><DocxBlocks blocks={cell} /></td>)}</tr>)}
+      </tbody></table>
+    }
+    if (block.level) {
+      const Heading = `h${Math.min(block.level + 1, 6)}`
+      return <Heading key={index}><DocxRuns runs={block.runs} /></Heading>
+    }
+    if (!block.runs.length) return <p className="docx-gap" key={index} aria-hidden="true" />
+    return <p className={block.list ? 'docx-list-item' : undefined} key={index}>{block.list && <span aria-hidden="true">{'• '}</span>}<DocxRuns runs={block.runs} /></p>
+  })
+}
+
+// Reads the file in the browser and shows its text. Nothing is converted on the
+// server, so this costs no extra hosting; the Download action stays the route to
+// the real document and to editing it.
+function DocxViewer({ src, name, download }) {
+  const [state, setState] = useState({ status: 'loading', blocks: [], message: '' })
+  useEffect(() => {
+    const controller = new AbortController()
+    setState({ status: 'loading', blocks: [], message: '' })
+    fetch(src, { credentials: 'include', signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error('The document could not be loaded.')
+        return response.arrayBuffer()
+      })
+      .then(parseDocx)
+      .then(({ blocks }) => setState({ status: 'ready', blocks, message: '' }))
+      .catch(error => { if (!controller.signal.aborted) setState({ status: 'error', blocks: [], message: error.message || 'The document could not be shown.' }) })
+    return () => controller.abort()
+  }, [src])
+
+  if (state.status === 'loading') return <div className="file-preview-fallback" role="status"><p>Opening {name}...</p></div>
+  if (state.status === 'error') {
+    return <div className="file-preview-fallback">
+      <FileWarning size={30} />
+      <p><strong>{name}</strong></p>
+      <p>{state.message}</p>
+      {download && <a className="primary-button" href={download}><Download size={15} /> Download</a>}
+    </div>
+  }
+  return <article className="docx-page" aria-label={name}>
+    <DocxBlocks blocks={state.blocks} />
+    <p className="docx-note">Reading view. Download the file to edit it or see the full layout.</p>
+  </article>
+}
 
 export default function FilePreview({ file, onClose }) {
   const backRef = useRef(null)
@@ -67,6 +128,7 @@ export default function FilePreview({ file, onClose }) {
             shows only the first page here, so the Download action in the bar
             stays the reliable route on a phone. */}
         {kind === 'pdf' && <iframe className="file-preview-frame" src={src} title={name} />}
+        {kind === 'docx' && <DocxViewer src={src} name={name} download={download} />}
         {kind === 'none' && <div className="file-preview-fallback">
           <FileWarning size={30} />
           <p><strong>{name}</strong></p>

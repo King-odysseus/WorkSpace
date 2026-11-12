@@ -6,9 +6,13 @@ it('only calls a file previewable when the server would serve it inline', () => 
   expect(previewKind('Scan.JPEG')).toBe('image')
   expect(previewKind('animation.webp')).toBe('image')
   expect(previewKind('Brief.pdf')).toBe('pdf')
-  // Everything else arrives as an attachment, so an <img> or an <iframe> would
+  // A .docx is fetched and read in the browser. Everything else arrives as an
+  // attachment, so an <img> or an <iframe> would
   // render nothing rather than the file.
-  expect(previewKind('Plan.docx')).toBe('none')
+  expect(previewKind('Plan.docx')).toBe('docx')
+  expect(previewKind('Old.DOCX')).toBe('docx')
+  // The older binary .doc is not a zip, so the browser cannot read it.
+  expect(previewKind('Plan.doc')).toBe('none')
   expect(previewKind('Budget.xlsx')).toBe('none')
   expect(previewKind('notes.txt')).toBe('none')
   expect(previewKind('')).toBe('none')
