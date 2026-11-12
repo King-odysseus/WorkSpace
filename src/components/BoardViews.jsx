@@ -11,7 +11,7 @@ import {
   Sparkles,
   ArrowUpDown,
   ArrowUpRight,
-  Brush,
+  Inbox,
   CalendarCheck2,
   CalendarDays,
   Check,
@@ -3056,7 +3056,7 @@ function ProjectRiskIssuePanel({
                 ) : (
                   <tr>
                     <td className="project-register-empty" colSpan="8">
-                      <Brush size={22} />
+                      <Inbox size={22} />
                       <strong>
                         No {activeTab === "risk" ? "risks" : "issues"} yet
                       </strong>
@@ -3389,7 +3389,7 @@ function ProjectRiskIssuePanel({
                 ) : (
                   <tr>
                     <td className="project-register-empty" colSpan="9">
-                      <Brush size={22} />
+                      <Inbox size={22} />
                       <strong>No issues yet</strong>
                       <span>Add an issue to start tracking active delivery problems.</span>
                     </td>
@@ -3423,7 +3423,7 @@ function ProjectRiskIssuePanel({
               ))
             ) : (
               <div className="project-issue-mobile-empty">
-                <Brush size={22} />
+                <Inbox size={22} />
                 <strong>No issues yet</strong>
                 <span>Active delivery problems will appear here.</span>
               </div>
@@ -3708,7 +3708,7 @@ function ProjectRiskIssuePanel({
               ) : (
                 <tr>
                   <td className="project-register-empty" colSpan="6">
-                    <Brush size={22} />
+                    <Inbox size={22} />
                     <strong>
                       No {activeTab === "risk" ? "risks" : "issues"} yet
                     </strong>

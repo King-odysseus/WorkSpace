@@ -17,7 +17,7 @@ const DatePicker = lazy(() =>
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog.jsx'
-import { Brush, CalendarDays, Plus } from 'lucide-react'
+import { CalendarDays, Inbox, Plus } from 'lucide-react'
 import { formatDay, toDateKey } from '../lib/workspace-format.js'
 
 // Every view's page header. This stays a thin wrapper over the design
@@ -86,7 +86,7 @@ function DateField({ label, name, value, onChange, required, disabled, placehold
 }
 
 function EmptyState({ text }) {
-  return <div className="empty-workspace"><div className="empty-workspace-icon" aria-hidden="true"><Brush size={18} /></div><p>{text}</p></div>
+  return <div className="empty-workspace"><div className="empty-workspace-icon" aria-hidden="true"><Inbox size={18} /></div><p>{text}</p></div>
 }
 
 // Replaces window.confirm() everywhere in the app with a dialog styled like the

@@ -9331,3 +9331,8 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
 .chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-bubble { border-radius: 20px 20px 6px 20px; background: var(--pencil-navy); }
 .chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-bubble p,
 .chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-bubble a { color: #fff; text-decoration-color: rgb(255 255 255 / 55%); }
+
+/* The month card had a fixed 684px height, which clipped the last week once the
+   days became separate rounded cells with gaps. It now grows to fit its weeks. */
+.calendar-week.calendar-view-month { height: auto; min-height: 684px; overflow: visible; }
+.calendar-view-month .calendar-month-content { overflow: visible; }

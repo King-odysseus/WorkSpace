@@ -27,7 +27,6 @@ import {
   ArrowUpRight,
   BarChart3,
   Bell,
-  Brush,
   Building2,
   CalendarDays,
   Camera,
