@@ -890,3 +890,21 @@ it('keeps the admin invitation action on the Pencil Team screen', () => {
   renderBoard({ tasks: [], canManageMembers: true })
   expect(screen.getByRole('button', { name: 'Invite' })).toBeInTheDocument()
 })
+
+it('finds a teammate by name and shows everyone past the first six on request', () => {
+  const people = Array.from({ length: 8 }, (_, index) => ({ id: 20 + index, first_name: `Person${index}`, last_name: 'Tester', email: `p${index}@example.com`, role: 'member' }))
+  renderBoard({ tasks: [], members: people })
+
+  // Six is the resting size; the rest sit behind a control rather than being lost.
+  expect(screen.getAllByRole('listitem')).toHaveLength(6)
+  fireEvent.click(screen.getByRole('button', { name: 'Show all 8' }))
+  expect(screen.getAllByRole('listitem')).toHaveLength(8)
+  fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }))
+  expect(screen.getAllByRole('listitem')).toHaveLength(6)
+
+  // A search looks through all eight, including the two that were hidden.
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Find a teammate' }), { target: { value: 'person7' } })
+  expect(screen.getAllByRole('listitem')).toHaveLength(1)
+  expect(screen.getByRole('button', { name: 'Open Person7 Tester profile' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Show all 8' })).toBeNull()
+})

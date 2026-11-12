@@ -400,6 +400,8 @@ function TeamBoardView({
   const today = toDateKey(new Date());
   const [tab, setTab] = useState("overview");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
+  const [memberQuery, setMemberQuery] = useState("");
+  const [showAllMembers, setShowAllMembers] = useState(false);
   const [taskGrouping, setTaskGrouping] = useState("owner");
   const [showTerminal, setShowTerminal] = useState(false);
   const [query, setQuery] = useState("");
@@ -964,13 +966,22 @@ function TeamBoardView({
     { id: "at-capacity", label: "At capacity", count: availabilityCounts["at-capacity"] || 0 },
     { id: "overloaded", label: "Overloaded", count: availabilityCounts.overloaded || 0 },
   ];
-  const availabilityRows = visibleMemberStats
+  const matchingMembers = visibleMemberStats
     .filter(
       (item) =>
         availabilityFilter === "all" ||
         availabilityLabel(item).toLowerCase().replace(" ", "-") === availabilityFilter,
     )
-    .slice(0, 6);
+    .filter((item) => {
+      const needle = memberQuery.trim().toLowerCase();
+      if (!needle) return true;
+      return [memberName(item.member), item.member.email].filter(Boolean).join(" ").toLowerCase().includes(needle);
+    });
+  // The list used to stop at six with no way to see the rest. Six is still the
+  // resting size, but a search or "Show all" reveals everyone.
+  const TEAM_PREVIEW = 6;
+  const availabilityRows =
+    showAllMembers || memberQuery.trim() ? matchingMembers : matchingMembers.slice(0, TEAM_PREVIEW);
   return (
     <section className="workspace-view pencil-team-view">
       <WorkspaceViewHeading
@@ -980,6 +991,13 @@ function TeamBoardView({
         action={canManageMembers ? "Invite" : undefined}
         icon={Users}
         onAction={onInvite}
+      />
+      <SearchInput
+        className="mb-4 w-full sm:w-[320px]"
+        label="Find a teammate"
+        placeholder="Find a teammate"
+        value={memberQuery}
+        onChange={(event) => setMemberQuery(event.target.value)}
       />
       <div className="pencil-team-filters" role="tablist" aria-label="Team capacity filters">
         {availabilityTabs.map((item) => (
@@ -998,6 +1016,13 @@ function TeamBoardView({
       <div className="pencil-team-layout">
         <div className="pencil-team-main">
           <p className="pencil-team-list-label">{members.length} members · {visibleMemberStats.filter((item) => item.risk > 0).length} needs attention</p>
+          {matchingMembers.length > TEAM_PREVIEW && !memberQuery.trim() && (
+            <div className="mb-3 flex justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowAllMembers((open) => !open)}>
+                {showAllMembers ? "Show fewer" : `Show all ${matchingMembers.length}`}
+              </Button>
+            </div>
+          )}
           <div className="pencil-team-table" role="list">
             <div className="pencil-team-table-head" aria-hidden="true"><span>Member</span><span>Availability</span><span>Workload</span><span>Tasks</span><span /></div>
             {availabilityRows.map((item) => {

@@ -855,3 +855,26 @@ it('attaches a screenshot pasted into the Zuri message box so it is sent as a pi
   const [, init] = expectRequest(fetchMock, '/api/workspaces/4/files/', 'POST')
   expect(init.body.get('file').name).toMatch(/^Screenshot \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}\.png$/)
 })
+
+it('shows how much space uploads use and sorts files by name or size', async () => {
+  mockApi({
+    '/documents/': { documents: [] },
+    '/files/': { files: [
+      { id: 1, original_name: 'small.txt', size: 2048, created_at: '2026-11-01T10:00:00Z', uploaded_by: 'Nate' },
+      { id: 2, original_name: 'big.pdf', size: 3 * 1048576, created_at: '2026-11-02T10:00:00Z', uploaded_by: 'Nate' },
+      { id: 3, original_name: 'alpha.docx', size: 10240, created_at: '2026-11-03T10:00:00Z', uploaded_by: 'Nate' },
+    ] },
+    '/members/': { members: [] },
+  })
+  const { container } = render(<FilesWorkspaceView workspaceId={4} currentUserId={1} />)
+
+  // 2 KB + 3 MB + 10 KB, in the unit a reader can use.
+  expect(await screen.findByText('Uploads use 3.0 MB')).toBeInTheDocument()
+  const names = () => [...container.querySelectorAll('.files-thumbnail-tile strong')].map(node => node.textContent)
+  expect(names()).toEqual(['alpha.docx', 'big.pdf', 'small.txt'])
+
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sort files' }), { target: { value: 'size' } })
+  expect(names()).toEqual(['big.pdf', 'alpha.docx', 'small.txt'])
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sort files' }), { target: { value: 'name' } })
+  expect(names()).toEqual(['alpha.docx', 'big.pdf', 'small.txt'])
+})
