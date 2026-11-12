@@ -78,6 +78,9 @@ class SavedView(models.Model):
     filter_value = models.CharField(max_length=300, default='all')
     search = models.CharField(max_length=200, blank=True)
     project_scope = models.CharField(max_length=80, default='all')
+    # A shared view is listed for every member of the workspace; only its owner
+    # can change or delete it.
+    shared = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -85,7 +88,7 @@ class SavedView(models.Model):
         constraints = [models.UniqueConstraint(fields=['workspace', 'user', 'name'], name='unique_saved_view_per_user')]
 
     def as_dict(self):
-        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'filter': self.filter_value, 'search': self.search, 'project_scope': self.project_scope, 'created_at': self.created_at.isoformat()}
+        return {'id': self.id, 'workspace_id': self.workspace_id, 'name': self.name, 'filter': self.filter_value, 'search': self.search, 'project_scope': self.project_scope, 'shared': self.shared, 'owner_id': self.user_id, 'created_at': self.created_at.isoformat()}
 
 
 # Granular capabilities a membership can hold, independent of the coarse
@@ -2030,4 +2033,36 @@ class PersonalTask(models.Model):
             'completed_at': self.completed_at.isoformat() if self.completed_at else '',
             'progress_percent': self.progress_percent,
             'position': self.position,
+        }
+
+
+class Reminder(models.Model):
+    """A member's "remind me about this" on a task or a chat message.
+
+    Personal: only its owner sees it. It is delivered as an ordinary in-app
+    notification the next time the owner's notifications are read once
+    ``remind_at`` has passed, so it needs no scheduler and no extra service.
+    ``label`` is a snapshot of what the reminder is about, so the list still
+    reads sensibly if the original is later deleted.
+    """
+    TARGET_TYPES = [('task', 'Task'), ('chat_message', 'Channel message'), ('direct_message', 'Direct message')]
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='reminders')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='workspace_reminders')
+    target_type = models.CharField(max_length=20, choices=TARGET_TYPES)
+    target_id = models.PositiveIntegerField()
+    label = models.CharField(max_length=200, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    remind_at = models.DateTimeField()
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['remind_at', 'id']
+        indexes = [models.Index(fields=['user', 'workspace', 'delivered_at', 'remind_at'])]
+
+    def as_dict(self):
+        return {
+            'id': self.id, 'workspace_id': self.workspace_id, 'target_type': self.target_type, 'target_id': self.target_id,
+            'label': self.label, 'note': self.note, 'remind_at': self.remind_at.isoformat(),
+            'delivered_at': self.delivered_at.isoformat() if self.delivered_at else None,
         }

@@ -20,7 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from django.utils.text import slugify
 
-from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, ChatMessageStar, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, DirectMessageStar, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
+from .models import AuditLog, CalendarEvent, ChannelReadState, ChatChannel, ChatMessageReaction, ChatMessageStar, CheckIn, CheckInComment, ChatMessage, DirectConversation, DirectConversationRead, DirectMessage, DirectMessageReaction, DirectMessageStar, FollowUp, FollowUpComment, LookupValue, Membership, NotificationDelivery, NotificationPreference, PERMISSION_KEYS, PlanBucket, Project, ProjectExpense, Reminder, ProjectResource, ProjectStakeholder, ProjectTemplate, PushSubscription, RiskIssue, SavedView, Task, TaskAssignee, TaskAttachment, TaskChangeHistory, TaskCodeRegistry, TaskComment, TaskSubtask, TaskSupporter, TaskTemplate, UserProfile, Workspace, WorkspaceDocument, WorkspaceFile, WorkspaceInvitation, WorkspaceNotification, WorkspaceWebhook, WorkShift, generate_invitation_token
 from .webhooks import notify_workspace_webhooks
 from .shifts import close_abandoned_shifts
 from .board_access import (
@@ -178,6 +178,7 @@ NOTIFICATION_KIND_PREFERENCE = {
     'document_comment': 'task_updates',
     'invitation_response': 'manager_activity',
     'calendar_reminder': 'calendar_reminders',
+    'reminder': 'task_updates',
     'due_soon_reminder': 'task_updates',
     'overdue_reminder': 'task_updates',
     'blocked_alert': 'task_updates',
@@ -214,7 +215,7 @@ P16_TASK_UPDATE_KINDS = frozenset({
     'follow_up_completed', 'follow_up_comment', 'follow_up_created',
     'follow_up_deleted', 'follow_up_status', 'follow_up_due_date',
     'follow_up_task', 'calendar_created', 'calendar_updated',
-    'calendar_deleted', 'calendar_reminder', 'check_in_blocker',
+    'calendar_deleted', 'calendar_reminder', 'reminder', 'check_in_blocker',
     'check_in_comment', 'check_in_submitted', 'check_in_reminder',
     'check_in_summary', 'document_comment_resolved', 'document_shared',
     'document_comment', 'due_soon_reminder', 'overdue_reminder',
@@ -713,6 +714,113 @@ def deliver_due_calendar_reminders(workspace_id):
     return delivered_count
 
 
+REMINDER_NOTE_LIMIT = 200
+REMINDER_PENDING_LIMIT = 100
+
+
+def deliver_due_reminders(workspace_id, user):
+    """Turn this member's reminders that have come due into notifications.
+
+    Called whenever they read their notifications or reminders, so delivery
+    needs no scheduler. Each reminder is claimed under a row lock first, so two
+    overlapping requests deliver it once.
+    """
+    now = timezone.now()
+    delivered = 0
+    for reminder in Reminder.objects.filter(workspace_id=workspace_id, user=user, delivered_at__isnull=True, remind_at__lte=now):
+        with transaction.atomic():
+            locked = Reminder.objects.select_for_update().filter(id=reminder.id, delivered_at__isnull=True).first()
+            if locked is None:
+                continue
+            target_type, target_id, message_id = 'task', locked.target_id, None
+            if locked.target_type == 'chat_message':
+                message = ChatMessage.objects.filter(id=locked.target_id, workspace_id=workspace_id).first()
+                if message is not None:
+                    target_type, target_id, message_id = 'chat_channel', message.channel, message.id
+            elif locked.target_type == 'direct_message':
+                message = DirectMessage.objects.filter(id=locked.target_id, conversation__workspace_id=workspace_id).first()
+                if message is not None:
+                    target_type, target_id, message_id = 'direct_conversation', message.conversation_id, message.id
+            create_notification(
+                workspace_id, user, 'reminder', f'Reminder: {locked.label}'[:200], locked.note,
+                target_type=target_type, target_id=target_id, message_id=message_id, notify_webhooks=False,
+            )
+            locked.delivered_at = now
+            locked.save(update_fields=['delivered_at'])
+            delivered += 1
+    return delivered
+
+
+def reminder_target(request, workspace_id, membership, target_type, target_id):
+    """The record a reminder points at and a label for it, or (None, '') when the
+    member cannot see it."""
+    if target_type == 'task':
+        task = visible_tasks(Task.objects.filter(workspace_id=workspace_id, id=target_id), workspace_id, request.user, membership).first()
+        if task is None:
+            return None, ''
+        return task, (f'{task.code} {task.title}' if task.code else task.title).strip()
+    if target_type == 'chat_message':
+        message = visible_chat_message(request, target_id)
+        if message is None or message.workspace_id != workspace_id or message.deleted_at:
+            return None, ''
+        return message, f'#{message.channel}: {message.message[:80]}'
+    if target_type == 'direct_message':
+        message = visible_direct_message(request, target_id)
+        if message is None or message.conversation.workspace_id != workspace_id or message.deleted_at:
+            return None, ''
+        return message, f'Direct message: {message.message[:80]}'
+    return None, ''
+
+
+@require_http_methods(['GET', 'POST'])
+def reminder_list(request, workspace_id):
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    if request.method == 'GET':
+        deliver_due_reminders(workspace_id, request.user)
+        pending = Reminder.objects.filter(workspace_id=workspace_id, user=request.user, delivered_at__isnull=True)[:REMINDER_PENDING_LIMIT]
+        return JsonResponse({'reminders': [reminder.as_dict() for reminder in pending]})
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    target_type = str(payload.get('target_type', '')).strip()
+    try:
+        target_id = int(payload.get('target_id'))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'target_id must be a number.'}, status=400)
+    remind_at, parse_error = parse_event_datetime(payload.get('remind_at'), 'remind_at')
+    if parse_error:
+        return parse_error
+    if timezone.is_naive(remind_at):
+        remind_at = timezone.make_aware(remind_at)
+    if remind_at <= timezone.now():
+        return JsonResponse({'error': 'Pick a time in the future.'}, status=400)
+    note = str(payload.get('note', '')).strip()
+    if len(note) > REMINDER_NOTE_LIMIT:
+        return JsonResponse({'error': f'Note must be {REMINDER_NOTE_LIMIT} characters or fewer.'}, status=400)
+    target, label = reminder_target(request, workspace_id, membership, target_type, target_id)
+    if target is None:
+        return JsonResponse({'error': 'That item was not found.'}, status=404)
+    if Reminder.objects.filter(workspace_id=workspace_id, user=request.user, delivered_at__isnull=True).count() >= REMINDER_PENDING_LIMIT:
+        return JsonResponse({'error': 'You have too many pending reminders.'}, status=400)
+    reminder = Reminder.objects.create(workspace_id=workspace_id, user=request.user, target_type=target_type, target_id=target_id, label=label[:200], note=note, remind_at=remind_at)
+    return JsonResponse({'reminder': reminder.as_dict()}, status=201)
+
+
+@require_http_methods(['DELETE'])
+def reminder_detail(request, workspace_id, reminder_id):
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    reminder = Reminder.objects.filter(id=reminder_id, workspace_id=workspace_id, user=request.user).first()
+    if reminder is None:
+        return JsonResponse({'error': 'Reminder was not found.'}, status=404)
+    reminder.delete()
+    return JsonResponse({'deleted': reminder_id})
+
+
 def requested_workspace(request, user):
     workspace_id = request.headers.get('X-Workspace-Id')
     memberships = user_workspace_ids(user)
@@ -824,7 +932,19 @@ def workspace_search(request, workspace_id):
         return JsonResponse({'results': []})
     if len(query) > 200:
         return JsonResponse({'error': 'q must be 200 characters or fewer.'}, status=400)
-    limit_per_kind = 8
+    # Optional narrowing: ?kind=chat_message,direct_message limits the result
+    # types, ?channel= limits channel messages to one channel and ?since=YYYY-MM-DD
+    # limits messages to those sent on or after that day. Choosing a single type
+    # gives it a longer list, since the reader has already said what they want.
+    kinds = {kind.strip() for kind in request.GET.get('kind', '').split(',') if kind.strip()}
+    channel_filter = request.GET.get('channel', '').strip()
+    since = None
+    if request.GET.get('since'):
+        try:
+            since = date.fromisoformat(request.GET['since'])
+        except ValueError:
+            return JsonResponse({'error': 'since must use YYYY-MM-DD format.'}, status=400)
+    limit_per_kind = 30 if len(kinds) == 1 else 8
     results = []
 
     tasks = visible_tasks(Task.objects.filter(workspace_id=workspace_id), workspace_id, request.user, search_membership).exclude(state='archived').filter(
@@ -844,13 +964,22 @@ def workspace_search(request, workspace_id):
         results.append({'kind': 'task_comment', 'id': comment.id, 'title': comment.task.title, 'snippet': comment.body[:160], 'target_type': 'task', 'target_id': comment.task_id, 'meta': comment.author.get_full_name() or comment.author.email})
 
     allowed_channels = set(accessible_chat_channels(workspace_id, request.user).values_list('name', flat=True))
-    messages = ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=allowed_channels).filter(message__icontains=query).select_related('author').order_by('-created_at')[:limit_per_kind]
-    for message in messages:
-        results.append({'kind': 'chat_message', 'id': message.id, 'title': f'#{message.channel}', 'snippet': message.message[:160], 'target_type': 'chat_channel', 'target_id': message.channel, 'meta': message.author.get_full_name() or message.author.email})
+    messages = ChatMessage.objects.filter(workspace_id=workspace_id, channel__in=allowed_channels, deleted_at__isnull=True).filter(message__icontains=query)
+    if channel_filter:
+        messages = messages.filter(channel=channel_filter)
+    if since:
+        messages = messages.filter(created_at__date__gte=since)
+    for message in messages.select_related('author').order_by('-created_at')[:limit_per_kind]:
+        results.append({'kind': 'chat_message', 'id': message.id, 'title': f'#{message.channel}', 'snippet': message.message[:160], 'target_type': 'chat_channel', 'target_id': message.channel, 'meta': message.author.get_full_name() or message.author.email, 'message_id': message.id, 'created_at': message.created_at.isoformat()})
 
-    direct_messages = DirectMessage.objects.filter(conversation__workspace_id=workspace_id, conversation__participants=request.user).filter(message__icontains=query).select_related('author', 'conversation').order_by('-created_at')[:limit_per_kind]
-    for message in direct_messages:
-        results.append({'kind': 'direct_message', 'id': message.id, 'title': 'Direct message', 'snippet': message.message[:160], 'target_type': 'direct_conversation', 'target_id': message.conversation_id, 'meta': message.author.get_full_name() or message.author.email})
+    direct_messages = DirectMessage.objects.filter(conversation__workspace_id=workspace_id, conversation__participants=request.user, deleted_at__isnull=True).filter(message__icontains=query)
+    if channel_filter:
+        # A channel filter is about channels, so it leaves direct chats out.
+        direct_messages = direct_messages.none()
+    if since:
+        direct_messages = direct_messages.filter(created_at__date__gte=since)
+    for message in direct_messages.select_related('author', 'conversation').order_by('-created_at')[:limit_per_kind]:
+        results.append({'kind': 'direct_message', 'id': message.id, 'title': 'Direct message', 'snippet': message.message[:160], 'target_type': 'direct_conversation', 'target_id': message.conversation_id, 'meta': message.author.get_full_name() or message.author.email, 'message_id': message.id, 'created_at': message.created_at.isoformat()})
 
     check_ins = CheckIn.objects.filter(workspace_id=workspace_id).filter(
         Q(completed__icontains=query) | Q(next_steps__icontains=query) | Q(blockers__icontains=query)
@@ -863,6 +992,8 @@ def workspace_search(request, workspace_id):
     for follow_up in follow_ups:
         results.append({'kind': 'follow_up', 'id': follow_up.id, 'title': follow_up.note[:80], 'snippet': follow_up.note[:160], 'target_type': 'follow_up', 'target_id': follow_up.id, 'meta': follow_up.status})
 
+    if kinds:
+        results = [result for result in results if result['kind'] in kinds]
     return JsonResponse({'results': results, 'query': query})
 
 
@@ -2153,7 +2284,7 @@ def saved_view_list(request, workspace_id):
     if error:
         return error
     if request.method == 'GET':
-        views = SavedView.objects.filter(workspace_id=workspace_id, user=request.user)
+        views = SavedView.objects.filter(workspace_id=workspace_id).filter(Q(user=request.user) | Q(shared=True))
         return JsonResponse({'saved_views': [view.as_dict() for view in views]})
     try:
         payload = json.loads(request.body or '{}')
@@ -2167,7 +2298,8 @@ def saved_view_list(request, workspace_id):
         return JsonResponse({'error': 'Saved view name must be between 1 and 100 characters.'}, status=400)
     if len(filter_value) > 300 or len(search) > 200 or len(project_scope) > 80:
         return JsonResponse({'error': 'Saved view filters and searches are too long.'}, status=400)
-    view, _ = SavedView.objects.update_or_create(workspace_id=workspace_id, user=request.user, name=name, defaults={'filter_value': filter_value, 'search': search, 'project_scope': project_scope})
+    shared = payload.get('shared') is True
+    view, _ = SavedView.objects.update_or_create(workspace_id=workspace_id, user=request.user, name=name, defaults={'filter_value': filter_value, 'search': search, 'project_scope': project_scope, 'shared': shared})
     return JsonResponse({'saved_view': view.as_dict()}, status=201)
 
 
@@ -2673,6 +2805,7 @@ def notification_list(request, workspace_id):
         return error
     from .models import WorkspaceNotification
     if request.method == 'GET':
+        deliver_due_reminders(workspace_id, request.user)
         everything = WorkspaceNotification.objects.filter(workspace_id=workspace_id, recipient=request.user)
         notifications = everything
         activity = everything.exclude(target_type__in=['chat_channel', 'direct_conversation'])
