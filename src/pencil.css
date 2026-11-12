@@ -9302,3 +9302,32 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
 .routines-due.is-overdue { color: var(--color-danger); font-weight: 600; }
 .routines-empty { margin: 12px 0 0; color: var(--pencil-text-muted); font-size: 13px; }
 .planner-card-remind { margin-right: 2px; }
+
+/* Calendar month: separate rounded days on the page instead of a ruled table, with
+   pill-shaped events and a tinted today. Week and day views keep their structure. */
+.calendar-month-weekdays { height: 28px; margin-bottom: 8px; border-bottom: 0; background: transparent; }
+.calendar-grid { gap: 8px; padding: 2px; }
+.calendar-day { min-height: 112px; padding: 10px; border: 0 !important; border-radius: 20px; background: var(--soft-field); transition: background-color 150ms ease, box-shadow 150ms ease; }
+.calendar-day:hover, .calendar-day:focus-within { background: var(--color-info-soft); box-shadow: var(--shadow-soft); }
+.calendar-day.is-today { background: var(--color-info-soft); }
+.calendar-view-month .event-pill { height: 22px; padding: 0 12px; border-radius: 999px; box-shadow: none !important; }
+.event-pill { border-left-width: 1px; border-color: transparent; border-radius: 999px; }
+@media (max-width: 639px) {
+  .calendar-grid { gap: 4px; }
+  .calendar-day { min-height: 64px; padding: 6px; border-radius: 14px; }
+}
+
+/* Channels and Chats: your own messages sit on the right in a navy bubble, with
+   your avatar on the right, and everyone else's sit on the left in a soft grey
+   bubble. This used to apply to direct chats only; channels showed every message
+   down the left edge. */
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message { padding: 8px 0; border-bottom: 0; }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-bubble { display: inline-block; max-width: min(560px, 100%); padding: 10px 16px; border: 0; border-radius: 20px 20px 20px 6px; background: var(--soft-field); box-shadow: none; }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine { grid-template-columns: minmax(0, 1fr) 36px; }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine > .avatar { grid-column: 2; grid-row: 1; }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-body { grid-column: 1; grid-row: 1; align-items: flex-end; }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-meta { justify-content: flex-end; }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-actions { justify-content: flex-end; }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-bubble { border-radius: 20px 20px 6px 20px; background: var(--pencil-navy); }
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-bubble p,
+.chat-workspace-view:is(.chat-mode-direct, .chat-mode-channels) .chat-message-mine .chat-message-bubble a { color: #fff; text-decoration-color: rgb(255 255 255 / 55%); }
