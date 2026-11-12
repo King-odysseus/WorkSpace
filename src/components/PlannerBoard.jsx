@@ -9,6 +9,7 @@ import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import Avatar from './Avatar.jsx'
 import BoardMembersDialog from './BoardMembersDialog.jsx'
 import BoardPeople from './BoardPeople.jsx'
+import SavedViewsMenu from './SavedViewsMenu.jsx'
 import { TaskProgressActions, TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
@@ -746,6 +747,19 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
         <option value="all">{isOperations ? 'All workstreams' : 'All workstreams'}</option>
         {workstreams.map(value => <option key={value} value={value}>{value}</option>)}
       </AppSelect>
+      {workspaceId && <SavedViewsMenu
+        workspaceId={workspaceId}
+        currentUserId={currentUserId}
+        filters={{ status, priority, assignee, workstream, bucketFilter, dueFilter, staleOnly }}
+        search={searchQuery}
+        projectScope={projectFilter}
+        onApply={view => {
+          setStatus(view.status); setPriority(view.priority); setAssignee(view.assignee); setWorkstream(view.workstream)
+          setBucketFilter(view.bucketFilter); setDueFilter(view.dueFilter); setStaleOnly(view.staleOnly)
+          onSearchChange?.(view.search)
+          if (view.projectScope !== projectFilter) onProjectFilterChange?.(view.projectScope)
+        }}
+      />}
       {workspaceId && <BoardPeople target={boardTarget} members={members} canManage={Boolean(canManageBuckets)} scopeNoun={isOperations ? 'workstream' : 'project'} onOpen={() => setPeopleOpen(true)} />}
       {peopleOpen && boardTarget && <BoardMembersDialog workspaceId={workspaceId} kind={boardTarget.kind} board={boardTarget.board} members={members} onSaved={ids => onBoardMembersChanged?.(boardTarget.kind, boardTarget.board.id, ids)} onClose={() => setPeopleOpen(false)} />}
       {canManageBuckets && <Button type="button" variant="outline" className={`planner-desktop-control planner-archive-button gap-2.5 ${bucketArchiveOpen ? 'border-navy' : ''}`} onClick={onToggleBucketArchive} aria-pressed={bucketArchiveOpen}>

@@ -7,6 +7,7 @@ import '../chat-mobile.css'
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
+import RemindMenu from './RemindMenu.jsx'
 import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, ChevronDown, ChevronLeft, Compass, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Pin, Plus, Search, Smile, Star, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
@@ -1201,6 +1202,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           <button type="button" className="chat-reply-button" onClick={() => setReplyTo(message)}>Reply{message.reply_count ? ` (${message.reply_count})` : ''}</button>
           <button type="button" className={`chat-star-button${starred ? ' active' : ''}`} onClick={() => toggleStar(message)} aria-pressed={starred} aria-label={starred ? 'Remove star' : 'Star message'} title={starred ? 'Remove star' : 'Star message'}><Star size={13} fill={starred ? 'currentColor' : 'none'} /></button>
           {!archivedThread && <button type="button" className={`chat-pin-button${pinned ? ' active' : ''}`} onClick={() => togglePin(message)} aria-pressed={pinned} aria-label={pinned ? 'Unpin message' : 'Pin message'} title={pinned ? 'Unpin message' : 'Pin message'}><Pin size={13} fill={pinned ? 'currentColor' : 'none'} /></button>}
+          {workspaceId && !message.deleted_at && <RemindMenu workspaceId={workspaceId} targetType={mode === 'direct' ? 'direct_message' : 'chat_message'} targetId={message.id} label="Remind me about this message" />}
           {isMine && <button type="button" className="chat-edit-button" onClick={() => startEditing(message)}>Edit</button>}
           {isMine && <button type="button" className="chat-delete-button" onClick={() => deleteMessage(message)} aria-label="Delete message">Delete</button>}
         </div>}

@@ -8780,3 +8780,30 @@ html:not([data-theme='dark']) .settings-view .avatar-initials {
 .settings-workspace-name-row .primary-button { min-height: 40px; padding: 0 18px; font-size: 13px; font-weight: 600; }
 .settings-workspace-name-row .primary-button:disabled { opacity: .5; cursor: not-allowed; }
 .settings-workspace-name-hint { margin: 0; color: var(--pencil-text-muted); font-size: 12px; line-height: 17px; }
+
+/* Saved task views menu (planner). */
+.saved-views-panel { z-index: 80; width: min(340px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto; padding: 12px; border: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.12)); border-radius: 16px; background: var(--pencil-surface, #fff); color: var(--pencil-text, inherit); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
+.saved-views-panel h3 { margin: 0 0 8px; font-size: 13px; }
+.saved-views-panel ul { margin: 0 0 10px; padding: 0; list-style: none; }
+.saved-views-panel li { display: flex; align-items: center; gap: 4px; }
+.saved-views-apply { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border: 0; border-radius: 12px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.saved-views-apply:hover { background: var(--pencil-surface-hover, rgba(0, 0, 0, 0.05)); }
+.saved-views-apply small { display: inline-flex; align-items: center; gap: 4px; color: var(--pencil-text-muted, #667085); font-size: 11px; }
+.saved-views-delete { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--pencil-text-muted, #667085); cursor: pointer; }
+.saved-views-delete:hover { color: #c70036; }
+.saved-views-empty { margin: 0 0 10px; color: var(--pencil-text-muted, #667085); font-size: 13px; }
+.saved-views-form { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.12)); }
+.saved-views-form input[type='text'] { height: 36px; padding: 0 14px; border: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.18)); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 13px; }
+.saved-views-share { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.saved-views-error { margin: 8px 0 0; color: #c70036; font-size: 12px; }
+
+/* Remind me popover (messages and tasks). */
+.chat-workspace-view .remind-trigger { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--pencil-text-muted); cursor: pointer; }
+.chat-workspace-view .remind-trigger:hover { color: var(--pencil-text); }
+.remind-panel { z-index: 80; width: min(320px, calc(100vw - 24px)); padding: 12px; border: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.12)); border-radius: 16px; background: var(--pencil-surface, #fff); color: var(--pencil-text, inherit); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
+.remind-panel h3 { margin: 0 0 8px; font-size: 13px; }
+.remind-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.remind-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; }
+.remind-field input { height: 36px; padding: 0 14px; border: 1px solid var(--pencil-border, rgba(0, 0, 0, 0.18)); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 13px; }
+.remind-done { margin: 0; font-size: 13px; }
+.remind-error { margin: 8px 0 0; color: #c70036; font-size: 12px; }

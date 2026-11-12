@@ -5,7 +5,9 @@ import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 // the detail drawer with comments, subtasks, attachments and dependencies.
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Bell, Check, ChevronDown, X } from 'lucide-react'
+import RemindMenu from './RemindMenu.jsx'
+import { Button } from './ui/button.jsx'
 import { DateField } from './workspace-ui.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
@@ -302,6 +304,9 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
               <p className="eyebrow">Edit task</p>
               <h2 id="task-detail-title">{taskFields.title || task.title}</h2>
               <p id="task-detail-summary">{assigneeLabel} | {projectLabel} | {dueLabel}</p>
+              {workspaceId && <RemindMenu workspaceId={workspaceId} targetType="task" targetId={task.id}>
+                <Button type="button" variant="outline" size="sm" className="mt-2 gap-2"><Bell size={14} aria-hidden="true" /> Remind me</Button>
+              </RemindMenu>}
             </div>
             <button type="button" className="close-button task-dialog-close" onClick={onClose} aria-label="Close task details">
               <X size={18} />
