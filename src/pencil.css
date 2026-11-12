@@ -8963,7 +8963,7 @@ html:not([data-theme='dark']) .settings-view .avatar-initials {
   section:has(> [data-metric]) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
   [data-metric] { padding: 14px 16px; min-height: 0; }
   [data-metric] strong { margin-top: 2px; font-size: 24px; line-height: 28px; }
-  [data-metric] > span:last-child { margin-top: 8px; }
+  [data-metric] .metric-body > span:last-child { margin-top: 8px; }
 }
 
 /* Single-surface search and filter pills. The wrapper owns the one surface (the
@@ -9103,7 +9103,6 @@ header[data-hero='today'] p.text-text-muted { margin-top: 12px; color: rgb(255 2
 @media (max-width: 639px) {
   header[data-hero='today'] { padding: 24px 22px; border-radius: 24px; }
   header[data-hero='today'] h1 { font-size: 30px; line-height: 34px; }
-  header[data-hero='today'] > button { width: 100%; }
 }
 
 /* Rows that sit inside one grouped card stay flat with a faint divider, so a
@@ -9111,11 +9110,67 @@ header[data-hero='today'] p.text-text-muted { margin-top: 12px; color: rgb(255 2
 :root { --soft-divider: rgb(16 24 40 / 6%); }
 :root[data-theme='dark'], .dark { --soft-divider: rgb(255 255 255 / 8%); }
 .my-task-row { border-color: var(--soft-divider) !important; border-radius: 0 !important; box-shadow: none !important; }
-header[data-hero='today'] > button { color: #0B0B45 !important; font-weight: 600; }
-header[data-hero='today'] > button svg { color: #0B0B45 !important; }
 
 /* Dark theme: the collapse button needs its own colours or it vanishes into the sidebar. */
 html[data-theme='dark'] .sidebar-expand-flyout { background: rgb(255 255 255 / 16%); color: #fff; box-shadow: var(--shadow-lift); }
 html[data-theme='dark'] .sidebar-expand-flyout:hover { background: rgb(255 255 255 / 26%); color: #fff; }
-html[data-theme='dark'] header[data-hero='today'] > button { background: #C49A6C !important; color: #0B0B45 !important; opacity: 1; }
-html[data-theme='dark'] header[data-hero='today'] > button svg { color: #0B0B45 !important; }
+
+/* ==========================================================================
+   Home (Today) and top bar, completing the soft-surfaces design
+   ========================================================================== */
+
+/* Hero: greeting, actions and the progress ring. */
+header[data-hero='today'] [data-hero-actions] button { height: 46px; padding: 0 22px; font-weight: 600; }
+header[data-hero='today'] [data-hero-actions] button:first-child { background: #C49A6C !important; color: #0B0B45 !important; }
+header[data-hero='today'] [data-hero-actions] button:first-child svg { color: #0B0B45 !important; }
+header[data-hero='today'] [data-hero-actions] button:not(:first-child) { border: 0 !important; background: rgb(255 255 255 / 12%) !important; color: #fff !important; box-shadow: none !important; }
+header[data-hero='today'] [data-hero-actions] button:not(:first-child):hover { background: rgb(255 255 255 / 20%) !important; }
+header[data-hero='today'] [data-hero-actions] button:not(:first-child) svg { color: #fff !important; }
+header[data-hero='today'] .today-ring { flex: none; color: #C49A6C; }
+header[data-hero='today'] .today-ring .stroke-border { stroke: rgb(255 255 255 / 22%); }
+header[data-hero='today'] .today-ring span { color: #fff !important; }
+header[data-hero='today'] h1 { font-size: 38px; line-height: 44px; }
+@media (max-width: 639px) {
+  header[data-hero='today'] .today-ring { display: none; }
+  header[data-hero='today'] h1 { font-size: 26px; line-height: 32px; }
+  header[data-hero='today'] [data-hero-actions] { margin-top: 18px; gap: 8px; }
+  header[data-hero='today'] [data-hero-actions] button { height: 42px; padding: 0 16px; font-size: 13px; }
+}
+
+/* Stat tiles: a tinted icon circle beside the number. */
+[data-metric] { display: flex; align-items: center; gap: 16px; padding: 22px 24px; }
+.metric-icon { display: grid; width: 48px; height: 48px; flex: none; place-items: center; border-radius: 50%; }
+.metric-icon[data-tone='info'] { background: var(--color-info-soft); color: var(--color-info); }
+.metric-icon[data-tone='success'] { background: var(--color-success-soft); color: var(--color-success); }
+.metric-icon[data-tone='danger'] { background: var(--color-danger-soft); color: var(--color-danger); }
+.metric-icon[data-tone='warning'] { background: var(--color-warning-soft); color: var(--color-warning); }
+.metric-body { min-width: 0; }
+@media (max-width: 639px) {
+  [data-metric] { gap: 10px; padding: 12px 14px; }
+  .metric-icon { width: 34px; height: 34px; }
+  .metric-icon svg { width: 17px; height: 17px; }
+}
+
+/* Reminders panel. */
+.reminder-row:hover { background: var(--pencil-surface-hover); }
+.reminder-cancel { display: inline-flex; width: 28px; height: 28px; flex: none; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--pencil-text-muted); cursor: pointer; }
+.reminder-cancel:hover { background: var(--pencil-surface-hover); color: var(--pencil-text); }
+
+/* Top bar: floating round icon buttons, a pill profile, and room to breathe. The
+   header sits on the page background instead of a ruled white strip. */
+header.shell-header { flex-basis: 84px; height: 84px !important; padding: 0 32px !important; border-bottom-color: transparent !important; background: transparent !important; }
+.shell-header-search > div { height: 46px; }
+.shell-header-icon { width: 44px !important; height: 44px !important; flex: 0 0 44px; margin-right: 12px; border-radius: 50% !important; background: var(--pencil-surface) !important; box-shadow: var(--shadow-soft); }
+.shell-header-icon:hover { box-shadow: var(--shadow-lift); }
+.shell-header .shell-header-assistant { height: 44px !important; border-radius: 999px !important; box-shadow: var(--shadow-soft) !important; }
+.shell-header-account { height: 44px; padding: 0 14px 0 6px !important; border-radius: 999px; background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
+.shell-header-divider { display: none !important; }
+
+/* Mid-width desktops: the Assistant button keeps its icon but drops its label so
+   the search field has room, and the workspace name takes a little less. */
+@media (min-width: 1024px) and (max-width: 1599px) {
+  .shell-header-context { width: 220px; min-width: 0; flex-basis: 220px; }
+  .shell-header .shell-header-assistant { width: 44px !important; padding: 0 !important; justify-content: center !important; margin-right: 12px !important; }
+  .shell-header .shell-header-assistant span { display: none !important; }
+  .shell-header-search { flex: 1 1 320px; max-width: 520px; min-width: 240px; }
+}

@@ -7,6 +7,8 @@ import toast from "react-hot-toast";
 import {
   AlertTriangle,
   Archive,
+  Bell,
+  Sparkles,
   ArrowUpDown,
   ArrowUpRight,
   Brush,
@@ -36,6 +38,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "./ui/button.jsx";
+import { CircularProgress } from "./ui/circular-progress.jsx";
+import RemindersPanel from "./RemindersPanel.jsx";
 import { AppSelect } from "./ui/select.jsx";
 import { SearchInput } from "./ui/search-input.jsx";
 import { Card } from "./ui/card.jsx";
@@ -5564,6 +5568,7 @@ function TodayDashboard({
   currentUserName,
   currentUserId,
   currentUserPresence,
+  workspaceId,
   workspaceName,
   tasks,
   events,
@@ -5830,9 +5835,18 @@ function TodayDashboard({
     `${overdue.length} overdue`,
     `${pendingCheckIns} team ${pendingCheckIns === 1 ? "check-in" : "check-ins"} still pending`,
   ].join(" · ");
+  // The hero greets the member by first name and shows how much of today's list is
+  // done. "Planned" is what was due today plus what was finished today.
+  const firstName = String(currentUserName || "").trim().split(/\s+/)[0] || "";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const plannedToday = dueToday.length + completedToday.length;
+  const donePercent = plannedToday ? Math.round((completedToday.length / plannedToday) * 100) : 0;
   const metrics = [
     {
       key: "due-today",
+      icon: Target,
+      tone: "info",
       label: "Due today",
       value: dueToday.length,
       sub: `${overdue.length} overdue`,
@@ -5840,6 +5854,8 @@ function TodayDashboard({
     },
     {
       key: "completed",
+      icon: CheckCircle2,
+      tone: "success",
       label: "Completed",
       value: completedThisWeek.length,
       sub: "this week",
@@ -5847,6 +5863,8 @@ function TodayDashboard({
     },
     {
       key: "blocked",
+      icon: AlertTriangle,
+      tone: "danger",
       label: "Blocked",
       value: blocked.length,
       sub: "needs attention",
@@ -5854,6 +5872,8 @@ function TodayDashboard({
     },
     {
       key: "check-ins",
+      icon: Users,
+      tone: "warning",
       label: "Check-ins",
       value: `${checkedInCount} of ${memberCount}`,
       sub: `${pendingCheckIns} pending`,
@@ -6005,12 +6025,30 @@ function TodayDashboard({
       <header data-hero="today" className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[17px]">
         <div className="min-w-0">
           <p className="text-overline uppercase text-navy">{eyebrow}</p>
-          <h1 className="mt-1 text-page-heading text-text-primary">Today</h1>
+          {/* The page is still "Today" to assistive technology and to the rest of
+              the app; the greeting is what a reader sees. */}
+          <h1 aria-label="Today" className="mt-1 text-page-heading text-text-primary">{greeting}{firstName ? `, ${firstName}` : ""}</h1>
           <p className="mt-1.5 text-body-small text-text-muted">{summaryLine}</p>
+          <div data-hero-actions className="mt-6 flex flex-wrap gap-3">
+            <Button type="button" size="page" variant="gold" onClick={onAddTask}>
+              <Plus size={18} strokeWidth={2} aria-hidden="true" /> New task
+            </Button>
+            <Button type="button" size="page" variant="ghost" aria-label="Plan my day" onClick={() => onNavigate("My planner")}>
+              <Sparkles size={18} aria-hidden="true" /> Plan my day
+            </Button>
+            <Button type="button" size="page" variant="ghost" aria-label="Open calendar" onClick={() => onNavigate("Calendar")}>
+              <CalendarDays size={18} aria-hidden="true" /> Calendar
+            </Button>
+          </div>
         </div>
-        <Button type="button" size="page" variant="gold" onClick={onAddTask}>
-          <Plus size={18} strokeWidth={2} aria-hidden="true" /> New task
-        </Button>
+        <CircularProgress
+          value={donePercent}
+          size={132}
+          stroke={12}
+          caption={plannedToday ? "done today" : "nothing due"}
+          label={`${donePercent}% of today's tasks done`}
+          className="today-ring"
+        />
       </header>
 
       <section className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -6022,9 +6060,12 @@ function TodayDashboard({
             onClick={metric.onOpen}
             className="rounded-card border border-border bg-card text-left transition-colors hover:border-border-strong"
           >
-            <span className="block text-[12px] leading-4 text-text-muted">{metric.label}</span>
-            <strong className="mt-1 block text-[32px] leading-9 tracking-[-0.6px] text-text-primary">{metric.value}</strong>
-            <span className="mt-3.5 block text-[12px] leading-4 text-success">{metric.sub}</span>
+            <span data-tone={metric.tone} className="metric-icon" aria-hidden="true"><metric.icon size={20} /></span>
+            <span className="metric-body">
+              <span className="block text-[12px] leading-4 text-text-muted">{metric.label}</span>
+              <strong className="mt-1 block text-[32px] leading-9 tracking-[-0.6px] text-text-primary">{metric.value}</strong>
+              <span className="mt-3.5 block text-[12px] leading-4 text-success">{metric.sub}</span>
+            </span>
           </button>
         ))}
       </section>
@@ -6223,6 +6264,8 @@ function TodayDashboard({
             onSubmitShift={onSubmitShift}
             onChangePresence={onChangePresence}
           />
+
+          {workspaceId ? <RemindersPanel workspaceId={workspaceId} /> : null}
 
           <section className="-mt-1 min-h-[264px] rounded-card border border-border bg-card px-[19px] pb-5 pt-[19px]">
               <h2 className="text-[16px] font-semibold leading-[19px] text-text-primary">

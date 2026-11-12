@@ -4544,6 +4544,7 @@ function App() {
                 today={today}
                 todayLabel={todayLabel}
                 currentUserName={currentUserName}
+                workspaceId={activeWorkspaceId}
                 workspaceName={currentWorkspace?.name || "your workspace"}
                 tasks={tasks}
                 events={workspaceData.events}
