@@ -693,9 +693,8 @@ button { cursor: pointer; }
     right: 0 !important;
     left: 0 !important;
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    /* Seven slots (six destinations plus More) need more room than the
-       original five did, or the labels truncate. */
-    width: min(392px, calc(100vw - 20px));
+    /* Five slots: four destinations with More in the middle. */
+    width: min(360px, calc(100vw - 20px));
     margin: 0 auto;
     transform: translate3d(0, 0, 0) !important;
     translate: none !important;
@@ -1814,14 +1813,14 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 
 .task-composer-body, .task-detail-form { display: grid; min-width: 0; align-content: start; gap: 24px; }
 .task-composer-field, .task-dialog-body label, .task-detail-form label { display: grid; min-width: 0; gap: 8px; color: var(--pencil-text-secondary); font-size: 13px; font-weight: 500; }
-.task-dialog input:not([type='checkbox']):not([type='file']), .task-dialog textarea, .task-dialog [data-slot='select-trigger'].app-select-trigger { width: 100%; min-height: 44px; border: 1px solid var(--pencil-border) !important; border-radius: 12px !important; background: var(--pencil-surface) !important; color: var(--pencil-text) !important; font-size: 13px; box-shadow: none !important; }
+.task-dialog input:not([type='checkbox']):not([type='file']), .task-dialog textarea, .task-dialog [data-slot='select-trigger'].app-select-trigger { width: 100%; min-height: 44px; border: 1px solid transparent !important; border-radius: 999px !important; background: var(--soft-field) !important; color: var(--pencil-text) !important; font-size: 13px; box-shadow: none !important; }
 .task-dialog input:not([type='checkbox']):not([type='file']):focus, .task-dialog textarea:focus, .task-dialog [data-slot='select-trigger'].app-select-trigger:focus-visible { border-color: var(--pencil-navy) !important; outline: 0; box-shadow: 0 0 0 2px rgb(0 22 102 / 14%) !important; }
-.task-dialog textarea { min-height: 96px; resize: vertical; }
+.task-dialog textarea { min-height: 96px; resize: vertical; border-radius: 22px !important; }
 .task-dialog [data-slot='select-trigger'].app-select-trigger[data-disabled], .task-dialog input:disabled, .task-dialog textarea:disabled { cursor: not-allowed; opacity: .62; }
 .task-composer-grid, .task-dialog-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .task-composer-grid > *, .task-dialog-grid > * { min-width: 0; }
 .task-dialog-section { min-width: 0; padding: 0; border: 0; }
-.task-dialog-section + .task-dialog-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--pencil-border); }
+.task-dialog-section + .task-dialog-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--soft-divider); }
 .task-dialog .drawer-section-heading { display: flex; min-height: 24px; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .task-dialog .drawer-section-heading h3 { margin: 0; color: var(--pencil-text); font-size: 16px; font-weight: 600; line-height: 22px; }
 .task-dialog .drawer-section-heading > span { color: var(--pencil-text-muted); font-size: 11px; line-height: 16px; }
@@ -9073,7 +9072,7 @@ aside[class*='bg-navy'] > div:first-child { padding-top: 28px !important; gap: 1
 
 /* Today hero: the page header becomes the one navy card that opens the page.
    Same elements and the same New task button (now bronze); only the look changes. */
-header[data-hero='today'] {
+header[data-hero] {
   position: relative;
   align-items: center;
   gap: 24px;
@@ -9084,7 +9083,7 @@ header[data-hero='today'] {
   background: linear-gradient(135deg, var(--pencil-navy), var(--pencil-navy-hover));
   box-shadow: var(--shadow-lift);
 }
-header[data-hero='today']::after {
+header[data-hero]::after {
   content: '';
   position: absolute;
   top: -80px;
@@ -9096,13 +9095,13 @@ header[data-hero='today']::after {
   filter: blur(60px);
   pointer-events: none;
 }
-header[data-hero='today'] > * { position: relative; z-index: 1; }
-header[data-hero='today'] .text-navy { color: var(--pencil-bronze-soft); }
-header[data-hero='today'] h1 { color: #fff; font-size: 40px; line-height: 44px; }
-header[data-hero='today'] p.text-text-muted { margin-top: 12px; color: rgb(255 255 255 / 76%); font-size: 15px; line-height: 22px; }
+header[data-hero] > * { position: relative; z-index: 1; }
+header[data-hero] .text-navy { color: var(--pencil-bronze-soft); }
+header[data-hero] h1 { color: #fff; font-size: 40px; line-height: 44px; }
+header[data-hero] p.text-text-muted { margin-top: 12px; color: rgb(255 255 255 / 76%); font-size: 15px; line-height: 22px; }
 @media (max-width: 639px) {
-  header[data-hero='today'] { padding: 24px 22px; border-radius: 24px; }
-  header[data-hero='today'] h1 { font-size: 30px; line-height: 34px; }
+  header[data-hero] { padding: 24px 22px; border-radius: 24px; }
+  header[data-hero] h1 { font-size: 30px; line-height: 34px; }
 }
 
 /* Rows that sit inside one grouped card stay flat with a faint divider, so a
@@ -9120,21 +9119,21 @@ html[data-theme='dark'] .sidebar-expand-flyout:hover { background: rgb(255 255 2
    ========================================================================== */
 
 /* Hero: greeting, actions and the progress ring. */
-header[data-hero='today'] [data-hero-actions] button { height: 46px; padding: 0 22px; font-weight: 600; }
-header[data-hero='today'] [data-hero-actions] button:first-child { background: #C49A6C !important; color: #0B0B45 !important; }
-header[data-hero='today'] [data-hero-actions] button:first-child svg { color: #0B0B45 !important; }
-header[data-hero='today'] [data-hero-actions] button:not(:first-child) { border: 0 !important; background: rgb(255 255 255 / 12%) !important; color: #fff !important; box-shadow: none !important; }
-header[data-hero='today'] [data-hero-actions] button:not(:first-child):hover { background: rgb(255 255 255 / 20%) !important; }
-header[data-hero='today'] [data-hero-actions] button:not(:first-child) svg { color: #fff !important; }
-header[data-hero='today'] .today-ring { flex: none; color: #C49A6C; }
-header[data-hero='today'] .today-ring .stroke-border { stroke: rgb(255 255 255 / 22%); }
-header[data-hero='today'] .today-ring span { color: #fff !important; }
-header[data-hero='today'] h1 { font-size: 38px; line-height: 44px; }
+header[data-hero] [data-hero-actions] button { height: 46px; padding: 0 22px; font-weight: 600; }
+header[data-hero] [data-hero-actions] button:first-child { background: #C49A6C !important; color: #0B0B45 !important; }
+header[data-hero] [data-hero-actions] button:first-child svg { color: #0B0B45 !important; }
+header[data-hero] [data-hero-actions] button:not(:first-child) { border: 0 !important; background: rgb(255 255 255 / 12%) !important; color: #fff !important; box-shadow: none !important; }
+header[data-hero] [data-hero-actions] button:not(:first-child):hover { background: rgb(255 255 255 / 20%) !important; }
+header[data-hero] [data-hero-actions] button:not(:first-child) svg { color: #fff !important; }
+header[data-hero] .today-ring { flex: none; color: #C49A6C; }
+header[data-hero] .today-ring .stroke-border { stroke: rgb(255 255 255 / 22%); }
+header[data-hero] .today-ring span { color: #fff !important; }
+header[data-hero] h1 { font-size: 38px; line-height: 44px; }
 @media (max-width: 639px) {
-  header[data-hero='today'] .today-ring { display: none; }
-  header[data-hero='today'] h1 { font-size: 26px; line-height: 32px; }
-  header[data-hero='today'] [data-hero-actions] { margin-top: 18px; gap: 8px; }
-  header[data-hero='today'] [data-hero-actions] button { height: 42px; padding: 0 16px; font-size: 13px; }
+  header[data-hero] .today-ring { display: none; }
+  header[data-hero] h1 { font-size: 26px; line-height: 32px; }
+  header[data-hero] [data-hero-actions] { margin-top: 18px; gap: 8px; }
+  header[data-hero] [data-hero-actions] button { height: 42px; padding: 0 16px; font-size: 13px; }
 }
 
 /* Stat tiles: a tinted icon circle beside the number. */
@@ -9203,3 +9202,80 @@ header.shell-header { flex-basis: 84px; height: 84px !important; padding: 0 32px
 /* Phone top bar: the same round, shadowed icon buttons as the desktop header. */
 .shell-appbar-controls button:not(.shell-appbar-avatar-button) { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; padding: 0; border-radius: 50%; background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
 .shell-appbar-controls { gap: 8px !important; }
+
+
+/* ==========================================================================
+   Every other page: headers, forms, dialogs and drawers
+   ========================================================================== */
+
+/* Page headers drop their hairline and keep a little more air under them. */
+[data-slot='page-header-divider'] { display: none; }
+header[data-slot='page-header'] { padding-bottom: 10px; }
+
+/* A page header can be the page's one navy hero card (Check-ins). */
+header[data-slot='page-header'][data-hero] {
+  position: relative;
+  overflow: hidden;
+  padding: 36px 40px;
+  border-radius: 32px;
+  background: linear-gradient(135deg, var(--pencil-navy), var(--pencil-navy-hover));
+  box-shadow: var(--shadow-lift);
+}
+header[data-slot='page-header'][data-hero]::after { content: ''; position: absolute; top: -80px; right: -60px; width: 280px; height: 280px; border-radius: 50%; background: rgb(196 154 108 / 22%); filter: blur(60px); pointer-events: none; }
+header[data-slot='page-header'][data-hero] > * { position: relative; z-index: 1; }
+header[data-slot='page-header'][data-hero] [data-slot='page-header-eyebrow'] { color: var(--pencil-bronze-soft); }
+header[data-slot='page-header'][data-hero] [data-slot='page-header-title'] { color: #fff; font-size: 36px; line-height: 42px; }
+header[data-slot='page-header'][data-hero] [data-slot='page-header-description'] { color: rgb(255 255 255 / 76%); }
+header[data-slot='page-header'][data-hero] [data-slot='page-header-actions'] button { background: #C49A6C !important; color: #0B0B45 !important; font-weight: 600; }
+header[data-slot='page-header'][data-hero] [data-slot='page-header-actions'] button svg { color: #0B0B45 !important; }
+@media (max-width: 639px) {
+  header[data-slot='page-header'][data-hero] { padding: 22px; border-radius: 24px; }
+  header[data-slot='page-header'][data-hero] [data-slot='page-header-title'] { font-size: 26px; line-height: 32px; }
+}
+
+/* Fields: one filled surface, pill-shaped, with no outline until focused. The
+   focus ring rules above are more specific and still apply. Search wrappers and
+   other wrapper-owned fields opt out of all of this on their own. */
+:root { --soft-field: #F3F4F6; }
+:root[data-theme='dark'], .dark { --soft-field: rgb(255 255 255 / 7%); }
+input:where(:not([type='button'], [type='submit'], [type='reset'], [type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden'], [type='image'], [type='color'])) {
+  padding-inline: 18px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--soft-field);
+}
+textarea { border-color: transparent; border-radius: 22px; background: var(--soft-field); }
+select { padding-inline: 16px; border-color: transparent; border-radius: 999px; background-color: var(--soft-field); }
+
+/* Dialogs, modals and drawers: rounder, floating on a lifted shadow. */
+[data-slot='dialog-content'], .task-dialog, .modal { border-color: var(--soft-edge) !important; border-radius: 28px !important; box-shadow: var(--shadow-lift) !important; }
+[data-slot='drawer-content'] { border-color: var(--soft-edge) !important; box-shadow: var(--shadow-lift) !important; }
+[data-slot='drawer-content'][data-side='right'] { border-radius: 28px 0 0 28px; }
+[data-slot='drawer-content'][data-side='left'] { border-radius: 0 28px 28px 0; }
+[data-slot='drawer-header'], [data-slot='drawer-footer'], [data-slot='drawer-danger-zone'] { border-color: var(--soft-divider); }
+
+/* Settings navigation and calendar events become pills. */
+.settings-nav-link { border-radius: 999px; }
+.event-pill { border-radius: 999px; }
+
+/* Light theme: the sidebar collapse button gets a bronze ring so it reads against
+   the page. The dark theme keeps its own look. */
+:root:not([data-theme='dark']) .sidebar-expand-flyout { border: 2px solid var(--pencil-bronze); }
+
+/* Files: the sort control and the storage note. */
+.files-storage { display: inline-flex; margin-top: 10px; padding: 5px 14px; border-radius: 999px; background: var(--color-info-soft); color: var(--color-info); font-size: 12px; font-weight: 600; }
+.files-sort select { height: 42px; padding: 0 16px; border-radius: 999px; box-shadow: var(--shadow-soft); background-color: var(--pencil-surface); font-size: 13px; }
+
+/* Dropdowns inside dialogs and drawers are filled pills like the other fields,
+   not white boxes with an outline. */
+:is([data-slot='dialog-content'], [data-slot='drawer-content'], .modal, .task-dialog) :is([data-slot='select-trigger'], .assignee-picker-trigger, .datetime-trigger) { border-color: transparent !important; background: var(--soft-field) !important; box-shadow: none !important; }
+
+/* The Files toolbar now holds four things (categories, sort, search, view), so it
+   wraps instead of using a fixed three-column grid. */
+.files-browser-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.files-categories { flex: 1 1 320px; }
+.files-search { flex: 1 1 240px; max-width: 360px; }
+
+/* The date button in a dialog is a filled pill like the other fields. */
+.task-dialog .datetime-trigger.datetime-trigger.datetime-trigger { border-color: transparent !important; background: var(--soft-field) !important; box-shadow: none !important; }
+.task-dialog .date-field-trigger.date-field-trigger.date-field-trigger { border-color: transparent !important; background: var(--soft-field) !important; box-shadow: none !important; }
