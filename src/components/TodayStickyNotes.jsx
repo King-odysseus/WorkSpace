@@ -13,6 +13,7 @@ import { workspaceCall, isoDate } from '../lib/workspace-api.js'
 // opens My planner.
 const MAX_NOTES = 8
 const UNDO_MS = 8000
+const ORDER_KEY = 'today-sticky-order'
 const minutes = time => { const [h, m] = time.split(':').map(Number); return h * 60 + m }
 
 export default function TodayStickyNotes({ workspaceId, teamTasks = [], onCompleteTask, onOpenPlanner }) {
@@ -28,6 +29,10 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
   const [view, setView] = useState(() => { try { return localStorage.getItem('today-sticky-view') === 'list' ? 'list' : 'board' } catch { return 'board' } })
   const remember = (key, value) => { try { localStorage.setItem(key, value) } catch { /* not remembered */ } }
   const toggleOpen = () => setOpen(current => { remember('today-sticky-open', String(!current)); return !current })
+  // The order the person gave the notes by dragging them, remembered on this device.
+  const [order, setOrder] = useState(() => { try { const saved = JSON.parse(localStorage.getItem(ORDER_KEY)); return Array.isArray(saved) ? saved : [] } catch { return [] } })
+  const [dragId, setDragId] = useState(null)
+  const [overId, setOverId] = useState(null)
   const chooseView = next => { setView(next); remember('today-sticky-view', next) }
 
   useEffect(() => {
@@ -145,8 +150,51 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
     return [...planNotes, ...fromTeam, ...fromPersonal]
   }, [plan, teamTasks, personal])
 
+  // Notes the person has placed come first in the order they set; anything new follows in the usual order.
+  const ordered = useMemo(() => {
+    const rank = id => { const at = order.indexOf(id); return at === -1 ? Number.MAX_SAFE_INTEGER : at }
+    return notes.map((note, index) => ({ note, index })).sort((a, b) => rank(a.note.id) - rank(b.note.id) || a.index - b.index).map(item => item.note)
+  }, [notes, order])
+
+  const moveNote = (fromId, toId) => {
+    if (!fromId || !toId || fromId === toId) return
+    const ids = ordered.map(note => note.id)
+    const from = ids.indexOf(fromId)
+    const to = ids.indexOf(toId)
+    if (from === -1 || to === -1) return
+    ids.splice(to, 0, ids.splice(from, 1)[0])
+    setOrder(ids)
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(ids)) } catch { /* not remembered */ }
+  }
+  const nudgeNote = (id, delta) => {
+    const ids = ordered.map(note => note.id)
+    const target = ids[ids.indexOf(id) + delta]
+    if (target) moveNote(id, target)
+  }
+  // Drag and drop with the pointer, or Alt with the arrow keys on a focused note.
+  const dragProps = note => ({
+    draggable: true,
+    tabIndex: 0,
+    onDragStart: event => { setDragId(note.id); event.dataTransfer.effectAllowed = 'move'; try { event.dataTransfer.setData('text/plain', note.id) } catch { /* some browsers refuse */ } },
+    onDragOver: event => { if (!dragId) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setOverId(note.id) },
+    onDragLeave: () => setOverId(current => (current === note.id ? null : current)),
+    onDrop: event => { event.preventDefault(); moveNote(dragId, note.id); setDragId(null); setOverId(null) },
+    onDragEnd: () => { setDragId(null); setOverId(null) },
+    onKeyDown: event => {
+      if (!event.altKey || event.target !== event.currentTarget) return
+      const delta = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key]
+      if (!delta) return
+      event.preventDefault()
+      nudgeNote(note.id, delta)
+      const node = event.currentTarget
+      requestAnimationFrame(() => node.isConnected && node.focus())
+    },
+    'data-note-id': note.id,
+    className: `${dragId === note.id ? 'is-dragging' : ''}${overId === note.id && dragId !== note.id ? ' is-over' : ''}`.trim(),
+  })
+
   if (!loaded) return null
-  const shown = notes.slice(0, MAX_NOTES)
+  const shown = ordered.slice(0, MAX_NOTES)
   const canTick = note => note.kind === 'team' || note.kind === 'personal' || note.kind === 'plan'
   const hasPercent = note => note.kind === 'team' || note.kind === 'personal'
   const progressFor = note => (
@@ -169,8 +217,8 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
         <button type="button" className="today-sticky-toggle" aria-expanded={open} aria-controls="today-sticky-body" onClick={toggleOpen}>
           {open ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
           <span>
-            <strong><Sparkles size={16} aria-hidden="true" /> Zuri&apos;s day plan</strong>
-            <small>{open ? 'Zuri&apos;s plan for today, your tasks and your planner items. Only you can see your planner items.' : `${notes.length} ${notes.length === 1 ? 'item' : 'items'} - select to show`}</small>
+            <strong><Sparkles size={16} aria-hidden="true" /> {"Zuri's day plan"}</strong>
+            <small>{open ? 'Zuri\'s plan for today, your tasks and your planner items. Only you can see your planner items.' : `${notes.length} ${notes.length === 1 ? 'item' : 'items'} - select to show`}</small>
           </span>
         </button>
         {open && <div className="today-sticky-tools">
@@ -193,7 +241,7 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
           ? view === 'list'
             ? <ol className="plan-list" aria-label="Sticky notes as a list">
               {shown.map(note => (
-                <li key={note.id} className={`plan-row is-${note.tone === 'break' ? 'break' : 'work'}${hasPercent(note) ? ' has-actions' : ''}${note.isDone ? ' is-done' : ''}`}>
+                <li key={note.id} {...dragProps(note)} className={`plan-row is-${note.tone === 'break' ? 'break' : 'work'}${hasPercent(note) ? ' has-actions' : ''}${note.isDone ? ' is-done' : ''} ${dragProps(note).className}`}>
                   <div className="plan-row-time">
                     {canTick(note) && tickFor(note)}
                     <strong>{note.header}</strong>
@@ -220,12 +268,14 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
                   leading={canTick(note) ? tickFor(note) : undefined}
                   onClick={onOpenPlanner}
                   label={`Open planner: ${note.title}`}
+                  articleProps={dragProps(note)}
                 >
                   {hasPercent(note) && progressFor(note)}
                 </StickyNote>
               ))}
             </div>
           : <p className="today-sticky-empty">Nothing here yet. Use Plan my day, or add items in My planner, and they will appear as notes.</p>}
+        {shown.length > 1 && <p className="memo-card-meta today-sticky-hint">Drag a note to put it where you want it. With the keyboard, focus a note and press Alt with an arrow key.</p>}
         {notes.length > shown.length && <p className="memo-card-meta">{notes.length - shown.length} more in My planner.</p>}
       </div>}
     </section>

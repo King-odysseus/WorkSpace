@@ -133,6 +133,45 @@ describe('Today sticky notes', () => {
     expect(open).toHaveBeenCalled()
   })
 
+  it('reorders notes by dragging one onto another, and remembers the order', async () => {
+    localStorage.setItem('today-sticky-open', 'true')
+    const two = { '/personal/day-plan/': { note: null }, '/personal/planners/': { planners: [planner], tasks: [item(1, 'Alpha', 0, { due_date: '2026-11-20' }), item(2, 'Beta', 1, { due_date: '2026-11-21' })] } }
+    mockApi(two)
+    const first = render(<TodayStickyNotes workspaceId={4} onOpenPlanner={() => {}} />)
+    const titles = () => screen.getAllByRole('listitem').map(node => node.querySelector('h3')?.textContent)
+    await screen.findByText('Alpha')
+    expect(titles()).toEqual(['Alpha', 'Beta'])
+    const data = {}
+    const dataTransfer = { setData: (key, value) => { data[key] = value }, getData: key => data[key], effectAllowed: '', dropEffect: '' }
+    const [alpha, beta] = screen.getAllByRole('listitem')
+    fireEvent.dragStart(beta, { dataTransfer })
+    fireEvent.dragOver(alpha, { dataTransfer })
+    fireEvent.drop(alpha, { dataTransfer })
+    expect(titles()).toEqual(['Beta', 'Alpha'])
+    first.unmount()
+    mockApi(two)
+    render(<TodayStickyNotes workspaceId={4} onOpenPlanner={() => {}} />)
+    await screen.findByText('Alpha')
+    expect(titles()).toEqual(['Beta', 'Alpha'])
+  })
+
+  it('reorders a focused note with Alt and an arrow key', async () => {
+    localStorage.setItem('today-sticky-open', 'true')
+    mockApi({ '/personal/day-plan/': { note: null }, '/personal/planners/': { planners: [planner], tasks: [item(1, 'Alpha', 0, { due_date: '2026-11-20' }), item(2, 'Beta', 1, { due_date: '2026-11-21' })] } })
+    render(<TodayStickyNotes workspaceId={4} onOpenPlanner={() => {}} />)
+    await screen.findByText('Alpha')
+    const titles = () => screen.getAllByRole('listitem').map(node => node.querySelector('h3')?.textContent)
+    fireEvent.keyDown(screen.getAllByRole('listitem')[0], { key: 'ArrowRight', altKey: true })
+    expect(titles()).toEqual(['Beta', 'Alpha'])
+  })
+
+  it('shows the subtitle with a real apostrophe', async () => {
+    localStorage.setItem('today-sticky-open', 'true')
+    mockApi(planData)
+    render(<TodayStickyNotes workspaceId={4} onOpenPlanner={() => {}} />)
+    expect(await screen.findByText(/Zuri's plan for today/)).toBeTruthy()
+  })
+
   it('says so when there is nothing yet', async () => {
     localStorage.setItem('today-sticky-open', 'true')
     mockApi({ '/personal/day-plan/': { note: null }, '/personal/planners/': { planners: [], tasks: [] } })
