@@ -102,7 +102,7 @@ PERMISSION_KEYS = (
     'create_projects', 'manage_projects',
     'create_workstreams', 'manage_workstreams',
     'use_ai', 'manage_ai_access', 'manage_ai_providers', 'comment_check_ins',
-    'view_reports',
+    'view_reports', 'post_memos',
 )
 
 # The manager default mirrors every capability the old coarse owner-or-manager
@@ -130,6 +130,10 @@ class Membership(models.Model):
     # None means "use the role default"; a list is an explicit override, only
     # meaningful (and only settable via the API) for role='manager'.
     permissions = models.JSONField(null=True, blank=True, default=None)
+    # Owners and managers can choose not to check in. It is their own choice (see
+    # check_in_preference), and it takes them out of the pending list, the daily
+    # reminder and the check-in counts. A member never has this set.
+    skips_check_ins = models.BooleanField(default=False)
     # Capacity is workspace-scoped: the same person can work different hours in
     # different teams, and a manager's setting must not leak into another
     # workspace's workload calculations.
@@ -187,6 +191,7 @@ class Membership(models.Model):
             'last_name': self.user.last_name,
             'role': self.role,
             'permissions': sorted(self.effective_permissions()),
+            'skips_check_ins': self.skips_check_ins,
             'joined_at': self.joined_at.isoformat(),
             'avatar_url': profile.avatar_url if profile else '',
             'company': profile.company if profile else '',
@@ -2066,3 +2071,50 @@ class Reminder(models.Model):
             'label': self.label, 'note': self.note, 'remind_at': self.remind_at.isoformat(),
             'delivered_at': self.delivered_at.isoformat() if self.delivered_at else None,
         }
+
+
+class Memo(models.Model):
+    """A company memo: one announcement to everyone in a workspace.
+
+    It lives on the Memos page for good (until archived). For a while after it is
+    posted it also shows as a banner at the top of the app, which each person can
+    close for themselves without touching anyone else's view.
+    """
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='memos')
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='workspace_memos')
+    title = models.CharField(max_length=160)
+    body = models.TextField(max_length=5000)
+    # The banner stops showing at this moment; null means it never shows as a banner.
+    banner_until = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['workspace', 'archived_at', '-created_at'])]
+
+    def banner_active(self, now=None):
+        return self.archived_at is None and self.banner_until is not None and self.banner_until > (now or timezone.now())
+
+    def as_dict(self, dismissed_ids=frozenset()):
+        author = self.author
+        return {
+            'id': self.id, 'workspace_id': self.workspace_id, 'title': self.title, 'body': self.body,
+            'author_id': self.author_id,
+            'author_name': (author.get_full_name() or author.email) if author else 'Former member',
+            'created_at': self.created_at.isoformat(), 'updated_at': self.updated_at.isoformat(),
+            'banner_until': self.banner_until.isoformat() if self.banner_until else None,
+            'banner_active': self.banner_active(), 'dismissed': self.id in dismissed_ids,
+            'archived': self.archived_at is not None,
+        }
+
+
+class MemoDismissal(models.Model):
+    """Someone closed a memo's banner. Only their own view is affected."""
+    memo = models.ForeignKey(Memo, on_delete=models.CASCADE, related_name='dismissals')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memo_dismissals')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['memo', 'user'], name='unique_memo_dismissal')]

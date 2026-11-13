@@ -179,6 +179,7 @@ NOTIFICATION_KIND_PREFERENCE = {
     'invitation_response': 'manager_activity',
     'calendar_reminder': 'calendar_reminders',
     'reminder': 'task_updates',
+    'memo': 'task_updates',
     'due_soon_reminder': 'task_updates',
     'overdue_reminder': 'task_updates',
     'blocked_alert': 'task_updates',
@@ -215,7 +216,7 @@ P16_TASK_UPDATE_KINDS = frozenset({
     'follow_up_completed', 'follow_up_comment', 'follow_up_created',
     'follow_up_deleted', 'follow_up_status', 'follow_up_due_date',
     'follow_up_task', 'calendar_created', 'calendar_updated',
-    'calendar_deleted', 'calendar_reminder', 'reminder', 'check_in_blocker',
+    'calendar_deleted', 'calendar_reminder', 'reminder', 'memo', 'check_in_blocker',
     'check_in_comment', 'check_in_submitted', 'check_in_reminder',
     'check_in_summary', 'document_comment_resolved', 'document_shared',
     'document_comment', 'due_soon_reminder', 'overdue_reminder',
@@ -3185,6 +3186,32 @@ def member_list(request, workspace_id):
             member_dict['on_break'] = bool(shift and shift.is_on_break)
             member_dict['clock_in_at'] = shift.started_at.isoformat() if shift else ''
     return JsonResponse({'members': member_dicts, 'pagination': pagination})
+
+
+@require_http_methods(['GET', 'PATCH'])
+def check_in_preference(request, workspace_id):
+    """Whether the signed-in owner or manager checks in. Their own choice only.
+
+    Members are expected to check in, so they cannot opt out; the page that offers
+    this to leaders also leaves it out for them.
+    """
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    can_opt_out = membership.role in {'owner', 'manager'}
+    if request.method == 'GET':
+        return JsonResponse({'skips_check_ins': membership.skips_check_ins, 'can_opt_out': can_opt_out})
+    if not can_opt_out:
+        return JsonResponse({'error': 'Only owners and managers can opt out of check-ins.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+    if not isinstance(payload.get('skips_check_ins'), bool):
+        return JsonResponse({'error': 'skips_check_ins must be true or false.'}, status=400)
+    membership.skips_check_ins = payload['skips_check_ins']
+    membership.save(update_fields=['skips_check_ins'])
+    return JsonResponse({'skips_check_ins': membership.skips_check_ins, 'can_opt_out': True})
 
 
 @require_http_methods(['PATCH', 'DELETE'])

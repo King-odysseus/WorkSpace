@@ -114,7 +114,10 @@ def run_workspace_automation(workspace_id):
     if timezone.localtime(now).hour == reminder_hour:
         members = list(Membership.objects.filter(workspace_id=workspace_id).select_related('user'))
         checked_in_ids = set(CheckIn.objects.filter(workspace_id=workspace_id, date=today).values_list('user_id', flat=True))
-        missing_members = [membership for membership in members if membership.user_id not in checked_in_ids]
+        # Leaders who opted out are neither reminded nor counted as missing. One who
+        # checked in anyway still counts as checked in.
+        required = [membership for membership in members if not membership.skips_check_ins or membership.user_id in checked_in_ids]
+        missing_members = [membership for membership in required if membership.user_id not in checked_in_ids]
         for membership in missing_members:
             if deliver_once(
                 workspace_id, membership.user, 'check_in_reminder',
@@ -123,11 +126,11 @@ def run_workspace_automation(workspace_id):
                 dedup_key=f'check_in_reminder:{today.isoformat()}:{membership.user_id}',
             ):
                 counts['check_in_reminders'] += 1
-        checked_count = len(members) - len(missing_members)
+        checked_count = len(required) - len(missing_members)
         for leader in _leaders(workspace_id):
             if deliver_once(
                 workspace_id, leader.user, 'check_in_summary',
-                f'{checked_count} of {len(members)} checked in',
+                f'{checked_count} of {len(required)} checked in',
                 f'{len(missing_members)} team member(s) have not submitted today\'s check-in.',
                 target_type='workspace', target_id=workspace_id,
                 dedup_key=f'check_in_summary:{today.isoformat()}:{leader.user_id}',
