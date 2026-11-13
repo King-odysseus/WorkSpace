@@ -52,6 +52,8 @@ import {
   Compass,
   Menu,
   Megaphone,
+  MapPin,
+  CalendarOff,
   MessageSquare,
   MoreHorizontal,
   ChevronLeft,
@@ -89,6 +91,9 @@ import { TaskProgressActions } from "./components/TaskProgressBar.jsx";
 import { flowbiteTheme } from "./lib/flowbite-theme.js";
 import MemoBanner from "./components/MemoBanner.jsx";
 import MemosView from "./components/MemosView.jsx";
+import { installAutoGrow } from "./lib/auto-grow.js";
+import LeaveView from "./components/LeaveView.jsx";
+import WhereWeWorkView from "./components/WhereWeWorkView.jsx";
 import { requestMemo } from "./lib/memo-navigation.js";
 import { Button } from "./components/ui/button.jsx";
 import TodayPrivatePlan from "./components/TodayPrivatePlan.jsx";
@@ -446,7 +451,7 @@ function NotificationIndicator({
 // a corrupted workspace-last-page on the very next load.
 const KNOWN_PAGES = new Set([
   "Today", "My tasks", "My planner", "Daily operations", "Team",
-  "Channels", "Chats", "Follow-up", "Check-ins", "Memos",
+  "Channels", "Chats", "Follow-up", "Check-ins", "Memos", "Time off", "Where we work",
   "Planner", "Projects", "Calendar", "Import data",
   "Reports", "Activity",
   "Settings", "Notifications", "Screen sharing", "What's new",
@@ -472,6 +477,8 @@ function useVisualViewportVariables() {
 
 function App() {
   useVisualViewportVariables();
+  // Text areas for writing (chat, Zuri, memos, notes) grow as you type.
+  useEffect(() => installAutoGrow(), []);
   const today = toDateKey(new Date());
   const todayLabel = formatLongDate(today);
   // Supports PWA shortcuts (manifest.webmanifest) and any other deep link that
@@ -2656,6 +2663,14 @@ function App() {
       setActive("Memos");
       return;
     }
+    if (targetType === "request") {
+      setActive("Memos");
+      return;
+    }
+    if (targetType === "leave") {
+      setActive("Time off");
+      return;
+    }
     if (targetType === "check_in") {
       setPendingCheckInId(targetId);
       setActive("Check-ins");
@@ -3247,6 +3262,8 @@ function App() {
         },
         { label: "Check-ins", icon: Check },
         { label: "Memos", icon: Megaphone },
+        { label: "Time off", icon: CalendarOff },
+        { label: "Where we work", icon: MapPin },
       ],
     },
     {
@@ -8126,6 +8143,8 @@ function WorkspaceView({
         calendar_reminder: "Calendar reminder",
         reminder: "Reminder",
         memo: "Memo",
+        request: "Request",
+        leave: "Time off",
         risk_issue_assigned: "Risk assigned",
         manager_activity: "Manager activity",
         membership_change: "Member update",
@@ -9140,6 +9159,14 @@ function WorkspaceView({
         )}
       </section>
     );
+  }
+
+  if (active === "Time off") {
+    return <LeaveView workspaceId={workspaceId} role={currentWorkspace?.role} />;
+  }
+
+  if (active === "Where we work") {
+    return <WhereWeWorkView workspaceId={workspaceId} currentUserId={currentUserId} />;
   }
 
   if (active === "Memos") {

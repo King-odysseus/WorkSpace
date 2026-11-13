@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useLayoutEffect, useRef } from 'react'
 import { Megaphone, X } from 'lucide-react'
 import useMemos from '../lib/use-memos.js'
 
@@ -9,11 +9,24 @@ export default function MemoBanner({ workspaceId, onOpen }) {
   const { memos, dismiss } = useMemos(workspaceId)
   const live = memos.filter(memo => memo.banner_active && !memo.dismissed)
   const memo = live[0]
+  const bannerRef = useRef(null)
+  // Pages that fill the screen (the Zuri page) subtract this, so the banner never
+  // pushes their bottom edge off screen.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const element = bannerRef.current
+    if (!memo || !element) { root.style.removeProperty('--memo-banner-h'); return undefined }
+    const apply = () => root.style.setProperty('--memo-banner-h', `${Math.ceil(element.getBoundingClientRect().height) + 24}px`)
+    apply()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(apply) : null
+    observer?.observe(element)
+    return () => { observer?.disconnect(); root.style.removeProperty('--memo-banner-h') }
+  }, [memo?.id])
   if (!memo) return null
   const preview = memo.body.replace(/\s+/g, ' ').slice(0, 120)
 
   return (
-    <section className="memo-banner" role="region" aria-label="Announcement">
+    <section ref={bannerRef} className="memo-banner" role="region" aria-label="Announcement">
       <button type="button" className="memo-banner-open" onClick={() => onOpen(memo)} aria-label={`Open memo: ${memo.title}`}>
         <span className="memo-banner-icon" aria-hidden="true"><Megaphone size={18} /></span>
         <span className="memo-banner-copy">

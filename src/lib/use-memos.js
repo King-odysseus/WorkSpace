@@ -66,11 +66,12 @@ export default function useMemos(workspaceId) {
   const post = async fields => { const payload = await send('', 'POST', fields); announceMemosChanged(); return payload.memo }
   const update = async (id, fields) => { const payload = await send(`${id}/`, 'PATCH', fields); announceMemosChanged(); return payload.memo }
   const archive = async id => { await send(`${id}/`, 'DELETE'); announceMemosChanged() }
+  const respond = async (id, note) => { const payload = await send(`${id}/respond/`, 'POST', { note }); announceMemosChanged(); return payload.memo }
   const dismiss = async id => {
     // Close it at once; the server records it so it stays closed on other devices.
     setMemos(current => current.map(memo => (memo.id === id ? { ...memo, dismissed: true } : memo)))
     try { await send(`${id}/dismiss/`, 'POST') } catch { announceMemosChanged() }
   }
 
-  return { memos, canPost, loaded, error, reload: load, post, update, archive, dismiss }
+  return { memos, canPost, loaded, error, reload: load, post, update, archive, respond, dismiss }
 }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
+import { fitTextarea } from '../lib/auto-grow.js'
 import { MoreHorizontal, AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, Maximize2, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Alert } from './ui/alert.jsx'
@@ -1481,6 +1482,9 @@ function AssistantHistory({ conversation }) {
 
 function AssistantChatBody({ conversation, transcriptRef, heading }) {
   const { turns, pendingActions, message, setMessage, error, busy, attachment, setAttachment, attaching, documentNote, attachFile, pasteFile, ask, resolvePendingActions, clearConfirm, setClearConfirm, historyOpen, undoable, undoDeletes } = conversation
+  // The box grows with the message, then scrolls; clearing it after a send shrinks it back.
+  const composerRef = useRef(null)
+  useLayoutEffect(() => { fitTextarea(composerRef.current) }, [message, historyOpen])
   if (historyOpen) {
     return <>
       {heading}
@@ -1570,7 +1574,7 @@ function AssistantChatBody({ conversation, transcriptRef, heading }) {
             <Paperclip size={19} />
             <input type="file" onChange={attachFile} disabled={attaching || busy} accept=".pdf,.docx,.txt,.md,.csv,.json,.xml,.log,.yaml,.yml,.xlsx,.xlsm,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp" aria-label="Attach a document for Zuri to read" />
           </label>
-          <textarea value={message} onChange={event => setMessage(event.target.value)} onPaste={pasteFile} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
+          <textarea ref={composerRef} rows={1} value={message} onChange={event => setMessage(event.target.value)} onPaste={pasteFile} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !busy) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} className="ai-chat-input" aria-label="Message to Zuri" placeholder={attachment ? 'Ask about the attached file...' : 'Ask anything...'} />
         </div>
         <button className="ai-chat-send" disabled={busy || (!message.trim() && !attachment)} aria-label="Send message"><Send size={20} /></button>
       </div>

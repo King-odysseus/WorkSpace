@@ -11,6 +11,45 @@ const SEEN_KEY = 'workspace-whats-new-seen-v1'
 
 const RELEASE_NOTES = [
   {
+    date: '2026-11-13',
+    title: 'Time off, requests and where we work',
+    items: [
+      'Time off: request annual leave, sick leave or another absence, with half days. Managers approve leave for members, and owners approve leave for managers. Everyone can see who is away.',
+      'Approved leave comes out of capacity on the Team page, and people on leave show as On leave. Zuri plans your day around it.',
+      'Requests: ask your managers for something from Memos > Requests, and see the answer. Managers can approve, decline or reply.',
+      'Request memos: a manager can ask the whole team for a response by a date, and see who has answered and who has not.',
+      'Where we work: see who is in the office, at home or elsewhere each day. Set your usual week, change single days, and owners can choose optional office days.',
+    ],
+  },
+  {
+    date: '2026-11-13',
+    title: 'Company memos',
+    items: [
+      'Owners and managers can post memos. The newest one shows as a banner you can open, read, and close for yourself, and it also arrives as a notification.',
+      'Zuri can draft a memo for you. It shows what it will post and waits for your confirmation.',
+      'Owners and managers who do not need to check in can turn on Skip my daily check-ins in Settings.',
+    ],
+  },
+  {
+    date: '2026-11-13',
+    title: 'Zuri improvements',
+    items: [
+      'Plan my day: Zuri suggests a schedule that fits your working hours, with times for each task and short 5-minute breaks. It is saved as a note under My planner that you can edit or delete, and it never counts in your progress ring.',
+      'New chat is a plus icon in the Zuri header, and the other actions sit in a menu. The message box is rounder and grows as you type.',
+      'Minimised Zuri is a small round icon with its own close button, above the bottom bar on a phone.',
+      'Scrolling inside Zuri on a phone no longer scrolls the page behind it.',
+    ],
+  },
+  {
+    date: '2026-11-13',
+    title: 'Today and Team',
+    items: [
+      'The progress ring on Today now counts your own planner items and the tasks assigned to you in other planners and workstreams.',
+      'Team availability no longer shows people who are offline or busy as Available.',
+      'The planner board now shows every card in each column, and the Done bar moves down with it.',
+    ],
+  },
+  {
     date: '2026-09-13',
     title: 'Zuri can read your documents',
     items: [

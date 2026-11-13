@@ -36,6 +36,7 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [dailyMinutes, setDailyMinutes] = useState(0)
+  const [leaveShare, setLeaveShare] = useState(0)
   const minutesRef = useRef(0)
   minutesRef.current = dailyMinutes
   const titlesRef = useRef(openPersonalTitles)
@@ -81,10 +82,13 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
       .then(data => {
         if (cancelled) return
         setNote(data.note)
+        const share = Number(data.leave_share) || 0
+        setLeaveShare(share)
         setDailyMinutes(Number(data.daily_minutes) || 0)
-        minutesRef.current = Number(data.daily_minutes) || 0
+        // A half day off halves the hours there are to plan.
+        minutesRef.current = Math.round((Number(data.daily_minutes) || 0) * (1 - share))
         setLoaded(true)
-        if (takePendingDayPlan()) generate()
+        if (takePendingDayPlan() && share < 1) generate()
       })
       .catch(failure => { if (!cancelled) { setError(failure.message); setLoaded(true) } })
     return () => { cancelled = true }
@@ -127,10 +131,12 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
           <p>Zuri&apos;s suggestion for today. It is a note: it does not count in your progress ring.</p>
         </div>
         <div className="day-plan-actions">
-          <Button type="button" variant="outline" size="sm" disabled={Boolean(busy)} onClick={generate}>{note ? 'Plan again' : 'Plan my day with Zuri'}</Button>
+          <Button type="button" variant="outline" size="sm" disabled={Boolean(busy) || leaveShare >= 1} onClick={generate}>{note ? 'Plan again' : 'Plan my day with Zuri'}</Button>
           {note && <button type="button" className="day-plan-delete" aria-label="Delete day plan" title="Delete day plan" disabled={Boolean(busy)} onClick={remove}><Trash2 size={15} /></button>}
         </div>
       </header>
+      {leaveShare >= 1 && <p className="day-plan-status">You are on approved leave today, so there is nothing to plan.</p>}
+      {leaveShare > 0 && leaveShare < 1 && <p className="day-plan-status">You have half a day off today, so Zuri plans around the other half.</p>}
       {busy && <p className="day-plan-status" role="status">{busy}</p>}
       {error && <p className="day-plan-error" role="alert">{error}</p>}
       {note && !editing && <>

@@ -2,6 +2,7 @@
 // dashboard, and the panels they embed (project progress, risks/issues,
 // stakeholders and resources, and the time clock).
 
+import { workspaceCall } from "../lib/workspace-api.js";
 import { requestDayPlan } from "../lib/day-plan-navigation.js";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -416,7 +417,37 @@ function TeamBoardView({
   const [teamTaskReload, setTeamTaskReload] = useState(0);
   const [profileTasks, setProfileTasks] = useState([]);
   const [profileTasksLoading, setProfileTasksLoading] = useState(false);
+  // Approved leave and where people work, for this week. Leave takes people out of
+  // capacity and out of "Available"; it is a plain read, so a failure just leaves
+  // capacity as it was.
+  const [weekPeople, setWeekPeople] = useState({});
   const usesServerTasks = Boolean(workspaceId);
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    let cancelled = false;
+    const now = new Date();
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+    workspaceCall(workspaceId, `locations/?start=${toDateKey(monday)}&end=${toDateKey(sunday)}`, "GET")
+      .then((result) => {
+        if (cancelled) return;
+        const todayKey = toDateKey(new Date());
+        const people = {};
+        (result.members || []).forEach((person) => {
+          const days = Object.values(person.days || {});
+          const today = (person.days || {})[todayKey] || {};
+          people[String(person.id)] = {
+            leaveShare: days.reduce((total, day) => total + (Number(day.leave) || 0), 0),
+            leaveToday: Number(today.leave) || 0,
+            location: today.location || null,
+            locationAssumed: today.source === "pattern" || today.source === "policy",
+          };
+        });
+        setWeekPeople(people);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [workspaceId]);
   const sourceTasks = usesServerTasks ? serverTasks : tasks;
   const sendMemberMessage = (member) => { requestDirectMessage(member.id); onNavigate("Chats"); };
   const completeTeamTask = (id) =>
@@ -710,9 +741,12 @@ function TeamBoardView({
         0,
         Number(member.daily_capacity_minutes ?? 480) || 0,
       );
+      const away = weekPeople[String(member.id)] || {};
+      // A day off comes out of the week's capacity, in proportion for a half day.
       const capacityMinutes = Math.max(
         0,
-        Number(member.weekly_capacity_minutes ?? 2400) || 0,
+        (Number(member.weekly_capacity_minutes ?? 2400) || 0) -
+          Math.round((away.leaveShare || 0) * dailyCapacityMinutes),
       );
       const plannedMinutes =
         usesServerTasks && taskSummary
@@ -742,6 +776,9 @@ function TeamBoardView({
         dailyCapacityMinutes,
         capacityMinutes,
         plannedMinutes,
+        leaveToday: away.leaveToday || 0,
+        location: away.location || null,
+        locationAssumed: Boolean(away.locationAssumed),
         risk,
       };
     })
@@ -946,6 +983,8 @@ function TeamBoardView({
       ? 100
       : 0;
   const availabilityLabel = (item) => {
+    // Someone off all day is not capacity, whatever their workload or presence says.
+    if (item.leaveToday >= 1) return "On leave";
     const workloadPercent = item.capacityMinutes
       ? Math.round((item.plannedMinutes / item.capacityMinutes) * 100)
       : item.plannedMinutes
@@ -975,6 +1014,7 @@ function TeamBoardView({
     { id: "overloaded", label: "Overloaded", count: availabilityCounts.overloaded || 0 },
     { id: "away", label: "Away", count: availabilityCounts.away || 0 },
     { id: "offline", label: "Offline", count: availabilityCounts.offline || 0 },
+    { id: "on-leave", label: "On leave", count: availabilityCounts["on-leave"] || 0 },
   ];
   const matchingMembers = visibleMemberStats
     .filter(
@@ -1045,7 +1085,7 @@ function TeamBoardView({
               return <article className="pencil-team-row" role="listitem" key={item.member.id}>
                 <button type="button" className="pencil-team-person" onClick={() => setProfileMember(item.member)} aria-label={`Open ${memberName(item.member)} profile`}>
                   <Avatar name={memberName(item.member)} avatarUrl={item.member.avatar_url} presence={effectivePresence(item.member)} className="pencil-team-avatar" />
-                  <span className="pencil-team-person-copy"><strong>{memberName(item.member)}</strong><small>{item.member.job_role || item.member.role || "Member"}</small></span>
+                  <span className="pencil-team-person-copy"><strong>{memberName(item.member)}</strong><small>{item.member.job_role || item.member.role || "Member"}{item.location ? ` - ${{ office: "Office", home: "Home", other: "Elsewhere" }[item.location]}${item.locationAssumed ? " (usual)" : ""}` : ""}</small></span>
                 </button>
                 <span className={`pencil-team-status ${label.toLowerCase().replace(" ", "-")}`}>{label}</span>
                 <span className="pencil-team-workload"><small>{formatCapacityMinutes(item.plannedMinutes)} / {formatCapacityMinutes(item.capacityMinutes)}</small><i><b style={{ width: `${workload}%` }} /></i></span>
@@ -1065,7 +1105,7 @@ function TeamBoardView({
           </section>
           <section className="pencil-team-card">
             <h2>Availability</h2>
-            {[['Available', 'available'], ['Busy', 'busy'], ['At capacity', 'at-capacity'], ['Overloaded', 'overloaded'], ['Away', 'away'], ['Offline', 'offline']].map(([label, key]) => <div className="pencil-team-breakdown" key={key}><span><i className={key} />{label}</span><b style={{ width: `${members.length ? ((availabilityCounts[key] || 0) / members.length) * 108 : 0}px` }} /> <em>{availabilityCounts[key] || 0}</em></div>)}
+            {[['Available', 'available'], ['Busy', 'busy'], ['At capacity', 'at-capacity'], ['Overloaded', 'overloaded'], ['Away', 'away'], ['Offline', 'offline'], ['On leave', 'on-leave']].map(([label, key]) => <div className="pencil-team-breakdown" key={key}><span><i className={key} />{label}</span><b style={{ width: `${members.length ? ((availabilityCounts[key] || 0) / members.length) * 108 : 0}px` }} /> <em>{availabilityCounts[key] || 0}</em></div>)}
             <small>Capacity is measured in hours allocated this week.</small>
           </section>
           {canManageMembers && <section className="pencil-team-card pencil-team-invites"><h2>Pending invitations</h2>{invitations.filter((item) => item.status === 'pending').slice(0, 2).map((item) => <div key={item.id}><span>{item.email}<small>Invited as {item.role}</small></span><button type="button" onClick={() => onResendInvitation(item)}>Resend</button></div>)}<button type="button" className="pencil-team-invite-button" onClick={onInvite}><Users size={16} /> Invite someone</button></section>}
@@ -4091,7 +4131,6 @@ function ClockInCard({
         </button>
       )}
       <div className="mt-2 flex items-center gap-2">
-        <span className={`presence-dot presence-${presence}`} aria-hidden="true" />
         <span className="text-caption opacity-70">Status</span>
         <AppSelect
           className="clock-status-select"

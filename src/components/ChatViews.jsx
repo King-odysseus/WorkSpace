@@ -59,7 +59,7 @@ const MESSAGE_REACTIONS = [
   ['👏', 'Applause'],
 ]
 
-const CHAT_COMPOSER_MAX_HEIGHT = 140
+const CHAT_COMPOSER_MAX_HEIGHT = 220
 const CHAT_HISTORY_PAGE_SIZE = 10
 const CHAT_JUMP_THRESHOLD = 320
 // One message carries at most this many attachments, counting documents and

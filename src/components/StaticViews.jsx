@@ -341,6 +341,40 @@ const HELP_TOPICS = [
     ],
   },
   {
+    title: 'Send and answer requests',
+    icon: Megaphone,
+    group: 'messaging',
+    intro: 'Requests are how people ask their managers for something, and how a manager asks the team.',
+    steps: [
+      'Open Memos, then Requests, and select Send request. Say what you need, add details and a date if it matters.',
+      'Managers see every request there, and can approve, decline or reply. You are notified of the answer, and can withdraw a request that is still waiting.',
+      'To ask the whole team for something, a manager chooses New memo and sets Type to Ask the team for a response. Each person answers once, and the manager sees who has and has not.',
+    ],
+  },
+  {
+    title: 'Ask for time off',
+    icon: CalendarDays,
+    group: 'insights',
+    intro: 'Request leave or an absence, and see who is away so work can be planned around it.',
+    steps: [
+      'Open Time off. Choose the type and dates, tick the half-day boxes if you start or finish at midday, and send it.',
+      'A manager approves leave for members. Leave asked for by a manager goes to an owner, and an owner records their own as approved.',
+      'Everyone can see who is away and when. Only you and the approvers see the type and your note.',
+      'Approved leave comes out of capacity on the Team page, and shows people as On leave. Zuri plans around it.',
+    ],
+  },
+  {
+    title: 'See where the team works',
+    icon: Users,
+    group: 'insights',
+    intro: 'Where we work shows who is in the office, at home or elsewhere, day by day.',
+    steps: [
+      'Open Where we work. Under My usual week, set where you normally work, then change any single day in the table.',
+      'A day nobody set is assumed from the usual week and shown lighter. A ? means nobody has said.',
+      'Owners and managers can choose office days. People elsewhere on those days are highlighted, and nothing is blocked.',
+    ],
+  },
+  {
     title: 'Use Workspace on your phone',
     icon: Smartphone,
     group: 'settings',

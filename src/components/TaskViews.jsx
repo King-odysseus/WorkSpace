@@ -305,7 +305,7 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
               <h2 id="task-detail-title">{taskFields.title || task.title}</h2>
               <p id="task-detail-summary">{assigneeLabel} | {projectLabel} | {dueLabel}</p>
               {workspaceId && <RemindMenu workspaceId={workspaceId} targetType="task" targetId={task.id}>
-                <Button type="button" variant="outline" size="sm" className="mt-2 gap-2"><Bell size={14} aria-hidden="true" /> Remind me</Button>
+                <Button type="button" variant="outline" size="sm" className="remind-task-button mt-2 gap-2"><Bell size={14} aria-hidden="true" /> Remind me</Button>
               </RemindMenu>}
             </div>
             <button type="button" className="close-button task-dialog-close" onClick={onClose} aria-label="Close task details">
