@@ -9029,7 +9029,11 @@ aside[class*='bg-navy'] > div:first-child { padding-top: 28px !important; gap: 1
   aside[class*='bg-navy'].is-sidebar-collapsed nav button,
   aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] { width: 46px; margin-inline: auto; border-radius: 999px !important; }
 }
-.sidebar-expand-flyout { top: 120px; left: calc(100% - 17px); width: 34px; height: 34px; border-radius: 50%; background: var(--pencil-surface); color: var(--pencil-navy); box-shadow: var(--shadow-lift); }
+/* The toggle straddles the rail's right edge, vertically centred in the gap
+   between the brand block and the first nav item - the logo above, Today below -
+   so it covers neither. Collapsed the gap is logo bottom 62 to Today top 96;
+   expanded it is the divider at 135 to Today at 194. */
+.sidebar-expand-flyout { top: 164px; left: calc(100% - 15px); width: 30px; height: 30px; border-radius: 50%; background: var(--pencil-surface); color: var(--pencil-navy); box-shadow: var(--shadow-lift); }
 .sidebar-expand-flyout:hover { background: var(--pencil-surface); color: var(--pencil-navy); transform: translateY(-50%) scale(1.06); }
 
 
@@ -9572,10 +9576,9 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .checkin-detail-composer textarea { height: auto; max-height: 220px !important; min-height: 64px; }
 .memo-form textarea, .request-form textarea, .memo-response textarea, .day-plan-edit-form textarea { resize: none; max-height: 220px; overflow-y: hidden; }
 
-/* Collapsed rail: the expand arrow sits just outside the rail so it no longer
-   overlaps the round Home button. */
+/* Collapsed rail: the brand block is shorter, so the gap above Today sits higher. */
 @media (min-width: 1024px) {
-  .sidebar-expand-flyout.is-collapsed { left: calc(100% - 6px); }
+  .sidebar-expand-flyout.is-collapsed { top: 79px; }
 }
 
 /* The Zuri page has no page padding, so give the announcement banner its own
