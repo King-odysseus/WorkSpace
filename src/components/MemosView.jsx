@@ -6,6 +6,7 @@ import { AppSelect } from './ui/select.jsx'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import RequestsPanel from './RequestsPanel.jsx'
+import { workspaceCall } from '../lib/workspace-api.js'
 import useMemos from '../lib/use-memos.js'
 import { OPEN_MEMO_EVENT, takePendingMemo } from '../lib/memo-navigation.js'
 
@@ -122,9 +123,45 @@ function MemoReader({ memo, canChange, isAuthor, onRespond, onEdit, onArchive, o
   )
 }
 
+// Memos that were archived, kept out of the main list and read here. Loaded when the
+// history is opened, so the page stays light. A poster can put one back.
+function MemoHistory({ workspaceId, canRestore, onOpen, version }) {
+  const [items, setItems] = useState(null)
+  const [opened, setOpened] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (!opened) return
+    workspaceCall(workspaceId, 'memos/?archived=1', 'GET').then(data => setItems(data.memos || [])).catch(loadError => setError(loadError.message))
+  }, [opened, workspaceId, version])
+  const restore = async memo => {
+    try {
+      await workspaceCall(workspaceId, `memos/${memo.id}/`, 'PATCH', { archived: false })
+      setItems(current => current.filter(item => item.id !== memo.id))
+      toast.success('Memo restored.')
+      window.dispatchEvent(new Event('workspace:memos-changed'))
+    } catch (restoreError) {
+      setError(restoreError.message)
+    }
+  }
+  return (
+    <details className="history-block" onToggle={event => setOpened(event.currentTarget.open)}>
+      <summary>History: archived memos{items ? ` (${items.length})` : ''}</summary>
+      {error && <p className="memo-error" role="alert">{error}</p>}
+      {items && !items.length && <p className="memo-empty-inline">No archived memos.</p>}
+      {(items || []).map(memo => (
+        <p className="leave-away" key={memo.id}>
+          <button type="button" className="memo-card-title" onClick={() => onOpen(memo)}>{memo.title}</button> - {memo.author_name}, {day(memo.created_at)}
+          {canRestore && <button type="button" className="history-restore" onClick={() => restore(memo)} aria-label={`Restore ${memo.title}`}>Restore</button>}
+        </p>
+      ))}
+    </details>
+  )
+}
+
 export default function MemosView({ workspaceId, currentUserId, role }) {
   const { memos, canPost, loaded, error, post, update, archive, respond } = useMemos(workspaceId)
   const [tab, setTab] = useState('memos')
+  const [historyMemo, setHistoryMemo] = useState(null)
   const [openId, setOpenId] = useState(null)
   const [editing, setEditing] = useState(null) // null | 'new' | a memo
 
@@ -143,8 +180,8 @@ export default function MemosView({ workspaceId, currentUserId, role }) {
     <section className="workspace-view memos-view">
       <WorkspaceViewHeading
         eyebrow="Collaborate"
-        title="Memos"
-        subtitle="Announcements for the whole workspace."
+        title="Memos/Requests"
+        subtitle="Announcements for the whole workspace, and requests to and from your managers."
         action={canPost && tab === 'memos' ? 'New memo' : undefined}
         icon={Plus}
         onAction={() => setEditing('new')}
@@ -173,6 +210,8 @@ export default function MemosView({ workspaceId, currentUserId, role }) {
         ) : (
           <div className="memo-empty"><Megaphone size={22} aria-hidden="true" /><strong>No memos yet</strong><p>{canPost ? 'Post the first announcement for your team.' : 'Announcements from your managers will appear here.'}</p></div>
         ))}
+      {tab === 'memos' && loaded && <MemoHistory workspaceId={workspaceId} canRestore={canPost} onOpen={memo => setHistoryMemo(memo)} version={memos.length} />}
+      {historyMemo && <MemoReader memo={historyMemo} canChange={false} isAuthor onRespond={() => {}} onEdit={() => {}} onArchive={() => {}} onClose={() => setHistoryMemo(null)} />}
       {opened && !editing && <MemoReader memo={opened} isAuthor={opened.author_id === currentUserId} onRespond={async (id, note) => { const result = await respond(id, note); toast.success('Your answer is saved.'); return result }} canChange={canChange(opened)} onEdit={memo => setEditing(memo)} onArchive={async memo => { await archive(memo.id); toast.success('Memo archived.') }} onClose={() => setOpenId(null)} />}
       {editing && <MemoForm memo={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSave={async fields => { if (editing === 'new') { await post(fields); toast.success(fields.kind === 'request' ? 'Request posted to the team.' : 'Memo posted.') } else { await update(editing.id, fields); toast.success('Memo updated.') } }} />}
     </section>

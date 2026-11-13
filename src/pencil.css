@@ -9764,3 +9764,33 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .ai-chat-messages::-webkit-scrollbar, .ai-page .ai-chat-messages::-webkit-scrollbar { display: none; width: 0; height: 0; }
 /* In the Today rail the quick note fills the column, right under the clock card. */
 [data-rail="today"] .today-quick-note { width: 100%; margin: 0; }
+
+/* Tasks on the Today sticky notes: a tick and a percentage, as on the planner cards. */
+.plan-sticky .sticky-tick { display: grid; place-items: center; color: transparent; }
+.plan-sticky .sticky-tick:hover, .plan-sticky .sticky-tick:focus-visible { color: currentColor; background: #fff; outline: 0; }
+.plan-sticky .sticky-progress { margin-top: auto; }
+.plan-sticky .task-progress-select { background: rgb(255 255 255 / 70%); color: inherit; }
+.plan-row.has-actions { grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) minmax(150px, 220px); align-items: center; }
+.plan-row .plan-row-time { display: flex; align-items: center; gap: 10px; }
+.plan-row .plan-row-time .sticky-tick { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 999px; color: transparent; border-color: var(--pencil-text-muted); background: var(--pencil-surface); }
+.plan-row .plan-row-time .sticky-tick:hover, .plan-row .plan-row-time .sticky-tick:focus-visible { color: #067647; border-color: #067647; }
+.plan-row-actions { min-width: 0; }
+.today-sticky-undo { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; padding: 8px 12px; border-radius: 10px; background: #ecfdf3; color: #067647; font-size: 13px; font-weight: 600; }
+.today-sticky-undo button { padding: 2px 10px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
+@media (max-width: 760px) { .plan-row.has-actions { grid-template-columns: 1fr; } }
+
+/* History blocks keep finished things out of the way until they are wanted. */
+.history-block { margin: 14px 0 0; padding: 10px 14px; border: 1px solid var(--pencil-border); border-radius: 14px; background: var(--pencil-surface-muted); }
+.history-block > summary { cursor: pointer; font-size: 14px; font-weight: 700; color: var(--pencil-navy); }
+.history-block[open] > summary { margin-bottom: 10px; }
+.history-block .request-card { background: var(--pencil-surface); }
+.history-restore { margin-left: 10px; padding: 2px 12px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); font-weight: 600; cursor: pointer; }
+/* Zuri's day plan on Today: the arrow sits at the far left of the card. */
+.today-sticky { padding: 16px 20px 16px 12px !important; }
+.today-sticky-toggle { gap: 6px; }
+.today-sticky-toggle > svg { flex: 0 0 auto; }
+
+/* Zuri's day plan on Today: the arrow sits at the far left of the card. */
+.today-sticky { padding: 16px 20px 16px 12px !important; }
+.today-sticky-toggle { gap: 6px; }
+.today-sticky-toggle > svg { flex: 0 0 auto; }

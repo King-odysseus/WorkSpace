@@ -337,7 +337,7 @@ const HELP_TOPICS = [
     intro: 'A memo is an announcement for the whole workspace. It shows as a banner and stays on the Memos page.',
     steps: [
       'The newest memo you have not dismissed shows as a banner across the top. Select it to read the whole memo, or the X to hide it for yourself.',
-      'Open Memos in the sidebar to read every memo, including ones you dismissed. Memos also arrive as a notification.',
+      'Open Memos/Requests in the sidebar to read every memo, including ones you dismissed. Memos also arrive as a notification.',
       'Owners and managers can select New memo, write a title and text, and choose how many days it shows as a banner. Archive a memo to take it off the page.',
       'You can also ask Zuri to draft one. Zuri shows the memo and posts it only after you confirm.',
     ],
@@ -348,7 +348,7 @@ const HELP_TOPICS = [
     group: 'messaging',
     intro: 'Requests are how people ask their managers for something, and how a manager asks the team.',
     steps: [
-      'Open Memos, then Requests, and select Send request. Say what you need, add details and a date if it matters.',
+      'Open Memos/Requests, then the Requests tab, and select Send request. Say what you need, add details and a date if it matters.',
       'Managers see every request there, and can approve, decline or reply. You are notified of the answer, and can withdraw a request that is still waiting.',
       'To ask the whole team for something, a manager chooses New memo and sets Type to Ask the team for a response. Each person answers once, and the manager sees who has and has not.',
     ],

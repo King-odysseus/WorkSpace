@@ -92,6 +92,7 @@ import { flowbiteTheme } from "./lib/flowbite-theme.js";
 import MemoBanner from "./components/MemoBanner.jsx";
 import MemosView from "./components/MemosView.jsx";
 import { installAutoGrow } from "./lib/auto-grow.js";
+import { NavCountsFeeder } from "./lib/use-nav-counts.js";
 import LeaveView from "./components/LeaveView.jsx";
 import WhereWeWorkView from "./components/WhereWeWorkView.jsx";
 import { requestMemo } from "./lib/memo-navigation.js";
@@ -452,7 +453,7 @@ function NotificationIndicator({
 // a corrupted workspace-last-page on the very next load.
 const KNOWN_PAGES = new Set([
   "Today", "My tasks", "My planner", "Daily operations", "Team",
-  "Channels", "Chats", "Follow-up", "Check-ins", "Memos", "Time off", "Where we work",
+  "Channels", "Chats", "Follow-up", "Check-ins", "Memos/Requests", "Time off", "Where we work",
   "Planner", "Projects", "Calendar", "Import data",
   "Reports", "Activity",
   "Settings", "Notifications", "Screen sharing", "What's new",
@@ -478,6 +479,7 @@ function useVisualViewportVariables() {
 
 function App() {
   useVisualViewportVariables();
+  const [navCounts, setNavCounts] = useState({ memos: 0, timeOff: 0 });
   // Text areas for writing (chat, Zuri, memos, notes) grow as you type.
   useEffect(() => installAutoGrow(), []);
   const today = toDateKey(new Date());
@@ -488,7 +490,8 @@ function App() {
     const requested = new URLSearchParams(window.location.search).get("view");
     const saved = localStorage.getItem("workspace-last-page");
     const requestedPage = requested || saved || "Today";
-    const page = requestedPage === "Team board" ? "Team" : requestedPage;
+    // Memos was renamed when requests joined it; a saved or linked "Memos" still lands there.
+    const page = requestedPage === "Team board" ? "Team" : requestedPage === "Memos" ? "Memos/Requests" : requestedPage;
     return KNOWN_PAGES.has(page) ? page : "Today";
   });
   useEffect(() => {
@@ -2661,11 +2664,11 @@ function App() {
     }
     if (targetType === "memo") {
       requestMemo(targetId);
-      setActive("Memos");
+      setActive("Memos/Requests");
       return;
     }
     if (targetType === "request") {
-      setActive("Memos");
+      setActive("Memos/Requests");
       return;
     }
     if (targetType === "leave") {
@@ -3262,8 +3265,8 @@ function App() {
           badgeTone: "warning",
         },
         { label: "Check-ins", icon: Check },
-        { label: "Memos", icon: Megaphone },
-        { label: "Time off", icon: CalendarOff },
+        { label: "Memos/Requests", icon: Megaphone, badge: navCounts.memos, badgeTone: "warning" },
+        { label: "Time off", icon: CalendarOff, badge: navCounts.timeOff, badgeTone: "warning" },
         { label: "Where we work", icon: MapPin },
       ],
     },
@@ -3628,6 +3631,7 @@ function App() {
 
   return (
     <TaskProgressActions.Provider value={changeTaskProgress}>
+      <NavCountsFeeder workspaceId={activeWorkspaceId} userId={session.user.id} onChange={setNavCounts} />
     <div
       className={cn(
         "workspace-app-shell flex h-dvh overflow-hidden bg-surface-secondary",
@@ -4375,7 +4379,7 @@ function App() {
                 workspaceId={activeWorkspaceId}
                 onOpen={(memo) => {
                   requestMemo(memo.id);
-                  setActive("Memos");
+                  setActive("Memos/Requests");
                 }}
               />
             )}
@@ -4635,16 +4639,27 @@ function App() {
                 onComplete={completeTask}
                 onStatusChange={changeTaskStatus}
                 >
-                  <TodayStickyNotes
-                    key={`notes:${session.user.id}:${activeWorkspaceId}`}
-                    workspaceId={activeWorkspaceId}
-                    onOpenPlanner={() => setActive("My planner")}
-                  />
                   <TodayPrivatePlan
                     key={`${session.user.id}:${activeWorkspaceId}`}
                     workspaceId={activeWorkspaceId}
                     userId={session.user.id}
                     today={today}
+                    onOpenPlanner={() => setActive("My planner")}
+                  />
+                  <TodayStickyNotes
+                    key={`notes:${session.user.id}:${activeWorkspaceId}`}
+                    workspaceId={activeWorkspaceId}
+                    teamTasks={tasks.filter(
+                      (task) =>
+                        taskIsAssignedTo(task, session.user.id) &&
+                        task.status !== "done" &&
+                        task.status !== "cancelled" &&
+                        task.state !== "archived" &&
+                        (Boolean(task.due_date && task.due_date <= today) ||
+                          task.status === "in progress" ||
+                          task.status === "review"),
+                    )}
+                    onCompleteTask={completeTask}
                     onOpenPlanner={() => setActive("My planner")}
                   />
                   <FirstSessionChecklist
@@ -9175,7 +9190,7 @@ function WorkspaceView({
     return <WhereWeWorkView workspaceId={workspaceId} currentUserId={currentUserId} />;
   }
 
-  if (active === "Memos") {
+  if (active === "Memos/Requests") {
     return (
       <MemosView
         workspaceId={workspaceId}

@@ -5,6 +5,7 @@ import { Button } from './ui/button.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { fmtDate, useWorkspaceCall } from '../lib/workspace-api.js'
+import { announceCountsChanged } from '../lib/use-nav-counts.js'
 
 // Time off. A request goes to the people who can approve it (a manager's goes to
 // an owner). Everyone can see who is away and when; only the person and their
@@ -19,6 +20,9 @@ const ROLE_LINE = {
   manager: 'Request your own leave (an owner approves it) and approve leave for members.',
   owner: 'Approve leave for managers and members. Your own time off is recorded as approved straight away.',
 }
+
+// Over, declined or withdrawn leave goes to History so the page shows what is live.
+const isHistory = (item, todayIso) => item.status === 'declined' || item.status === 'cancelled' || item.end_date < todayIso
 
 export function describeSpan(item) {
   const first = fmtDate(item.start_date, { dateStyle: 'medium' })
@@ -121,11 +125,13 @@ export default function LeaveView({ workspaceId, role }) {
     const result = await call('time-off/', 'POST', fields)
     toast.success(result.leave?.status === 'approved' ? 'Time off recorded.' : 'Request sent. You will be told when it is decided.')
     await load()
+    announceCountsChanged()
   }
   const decide = async (item, decision, note) => {
     await call(`time-off/${item.id}/`, 'PATCH', { decision, note })
     toast.success(decision === 'approved' ? `Approved ${item.user_name}'s leave.` : `Declined ${item.user_name}'s leave.`)
     await load()
+    announceCountsChanged()
   }
   const withdraw = async item => {
     try {
@@ -156,7 +162,7 @@ export default function LeaveView({ workspaceId, role }) {
           <section aria-label="My time off">
             <h2>My time off</h2>
             {loaded && !data.mine.length && <p className="memo-empty-inline"><CalendarOff size={16} aria-hidden="true" /> You have not asked for any time off.</p>}
-            {data.mine.map(item => (
+            {data.mine.filter(item => !isHistory(item, todayIso)).map(item => (
               <article className="request-card" key={item.id}>
                 <header><strong>{KIND_LABEL[item.kind]}</strong><span className={`request-status is-${item.status}`}>{STATUS_LABEL[item.status]}</span></header>
                 <p className="memo-card-meta">{describeSpan(item)}</p>
@@ -166,6 +172,16 @@ export default function LeaveView({ workspaceId, role }) {
                 )}
               </article>
             ))}
+            {data.mine.some(item => isHistory(item, todayIso)) && (
+              <details className="history-block">
+                <summary>History ({data.mine.filter(item => isHistory(item, todayIso)).length})</summary>
+                {data.mine.filter(item => isHistory(item, todayIso)).map(item => (
+                  <p className="leave-away" key={item.id}>
+                    <strong>{KIND_LABEL[item.kind]}</strong> - {describeSpan(item)} <span className={`request-status is-${item.status}`}>{STATUS_LABEL[item.status]}</span>
+                  </p>
+                ))}
+              </details>
+            )}
           </section>
           <section aria-label="Who is away">
             <h2>Who is away</h2>
@@ -176,13 +192,15 @@ export default function LeaveView({ workspaceId, role }) {
           </section>
           {data.can_approve && (
             <section aria-label="Decided recently">
-              <h2>Decided recently</h2>
-              {loaded && !data.recent.length && <p className="memo-empty-inline">Nothing decided in the last 60 days.</p>}
-              {data.recent.map(item => (
-                <p className="leave-away" key={item.id}>
-                  <strong>{item.user_name}</strong> - {KIND_LABEL[item.kind]}, {describeSpan(item)} <span className={`request-status is-${item.status}`}>{STATUS_LABEL[item.status]}</span>
-                </p>
-              ))}
+              <details className="history-block">
+                <summary>History: decided in the last 60 days ({data.recent.length})</summary>
+                {!data.recent.length && <p className="memo-empty-inline">Nothing decided in the last 60 days.</p>}
+                {data.recent.map(item => (
+                  <p className="leave-away" key={item.id}>
+                    <strong>{item.user_name}</strong> - {KIND_LABEL[item.kind]}, {describeSpan(item)} <span className={`request-status is-${item.status}`}>{STATUS_LABEL[item.status]}</span>
+                  </p>
+                ))}
+              </details>
             </section>
           )}
         </div>

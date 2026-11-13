@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { Check, Inbox, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { fmtDate, useWorkspaceCall } from '../lib/workspace-api.js'
+import { announceCountsChanged } from '../lib/use-nav-counts.js'
 
 // Requests from members to the people who run the workspace. A member sees and
 // manages only their own; people who can answer requests see everyone's.
@@ -93,11 +94,12 @@ export default function RequestsPanel({ workspaceId, currentUserId, onChanged })
 
   useEffect(() => { load() }, [load])
 
-  const send = async fields => { await call('requests/', 'POST', fields); toast.success('Request sent. You will be told when it is answered.'); await load(); onChanged?.() }
+  const send = async fields => { await call('requests/', 'POST', fields); toast.success('Request sent. You will be told when it is answered.'); await load(); announceCountsChanged(); onChanged?.() }
   const decide = async (id, decision, note) => {
     await call(`requests/${id}/`, 'PATCH', { decision, note })
     toast.success({ approved: 'Request approved.', declined: 'Request declined.', cancel: 'Request withdrawn.' }[decision] || 'Saved.')
     await load()
+    announceCountsChanged()
     onChanged?.()
   }
 
@@ -113,7 +115,13 @@ export default function RequestsPanel({ workspaceId, currentUserId, onChanged })
         <section className="leave-decide" aria-label="Requests from the team">
           <h2>Inbox: requests from the team{waiting.length ? ` (${waiting.length} waiting)` : ''}</h2>
           {loaded && !others.length && <p className="memo-empty-inline">Nothing from your team yet.</p>}
-          <div className="leave-decide-grid">{[...waiting, ...answered].map(item => <RequestCard key={item.id} item={item} canManage onDecide={decide} />)}</div>
+          <div className="leave-decide-grid">{waiting.map(item => <RequestCard key={item.id} item={item} canManage onDecide={decide} />)}</div>
+          {answered.length > 0 && (
+            <details className="history-block">
+              <summary>History ({answered.length})</summary>
+              <div className="leave-decide-grid">{answered.map(item => <RequestCard key={item.id} item={item} canManage onDecide={decide} />)}</div>
+            </details>
+          )}
         </section>
       )}
       <div className="leave-layout">
@@ -122,7 +130,13 @@ export default function RequestsPanel({ workspaceId, currentUserId, onChanged })
           <section aria-label="My requests">
             <h2>My requests</h2>
             {loaded && !mineItems.length && <p className="memo-empty-inline"><Inbox size={16} aria-hidden="true" /> You have not asked for anything yet.</p>}
-            {mineItems.map(item => <RequestCard key={item.id} item={item} mine onDecide={decide} />)}
+            {mineItems.filter(item => item.status === 'pending').map(item => <RequestCard key={item.id} item={item} mine onDecide={decide} />)}
+            {mineItems.some(item => item.status !== 'pending') && (
+              <details className="history-block">
+                <summary>History ({mineItems.filter(item => item.status !== 'pending').length})</summary>
+                {mineItems.filter(item => item.status !== 'pending').map(item => <RequestCard key={item.id} item={item} mine onDecide={decide} />)}
+              </details>
+            )}
           </section>
         </div>
       </div>

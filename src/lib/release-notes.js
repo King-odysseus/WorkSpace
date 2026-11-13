@@ -25,7 +25,7 @@ const RELEASE_NOTES = [
     items: [
       'Time off: request annual leave, sick leave or another absence, with half days. Managers approve leave for members, and owners approve leave for managers. Everyone can see who is away.',
       'Approved leave comes out of capacity on the Team page, and people on leave show as On leave. Zuri plans your day around it.',
-      'Requests: ask your managers for something from Memos > Requests, and see the answer. Managers can approve, decline or reply.',
+      'Requests: ask your managers for something from Memos/Requests > Requests, and see the answer. Managers can approve, decline or reply.',
       'Request memos: a manager can ask the whole team for a response by a date, and see who has answered and who has not.',
       'Where we work: see who is in the office, at home or elsewhere each day. Set your usual week, change single days, and owners can choose optional office days.',
     ],

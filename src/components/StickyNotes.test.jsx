@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import PersonalPlanner from './PersonalPlanner.jsx'
 import TodayStickyNotes from './TodayStickyNotes.jsx'
 import TodayQuickNote from './TodayQuickNote.jsx'
+import { TaskProgressActions } from './TaskProgressBar.jsx'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); try { localStorage.clear() } catch { /* nothing to clear */ } })
@@ -98,7 +99,7 @@ describe('Today sticky notes', () => {
   it('is closed by default, opens on request, and remembers that', async () => {
     mockApi(planData)
     const first = render(<TodayStickyNotes workspaceId={4} onOpenPlanner={() => {}} />)
-    const toggle = await screen.findByRole('button', { name: /Sticky notes/ })
+    const toggle = await screen.findByRole('button', { name: /day plan/i })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByText('Call the bank')).toBeNull()
     fireEvent.click(toggle)
@@ -137,6 +138,55 @@ describe('Today sticky notes', () => {
     mockApi({ '/personal/day-plan/': { note: null }, '/personal/planners/': { planners: [], tasks: [] } })
     render(<TodayStickyNotes workspaceId={4} onOpenPlanner={() => {}} />)
     expect(await screen.findByText(/Nothing here yet/)).toBeTruthy()
+  })
+})
+
+describe('Today sticky notes: finishing tasks', () => {
+  const team = { id: 21, title: 'Send the offer pack', status: 'in progress', progress_percent: 30, due_date: '2026-11-12', project: 'Tijha Academy' }
+  const planData = { '/personal/day-plan/': { note: null }, '/personal/planners/': { planners: [planner], tasks: [item(1, 'Call the bank', 0)] } }
+  const patchBodies = fetchMock => fetchMock.mock.calls.filter(([url, init]) => /personal\/tasks\/\d+\//.test(String(url)) && init?.method === 'PATCH').map(([, init]) => JSON.parse(init.body))
+
+  it('ticks a team task complete, offers undo, and sets its percentage', async () => {
+    localStorage.setItem('today-sticky-open', 'true')
+    localStorage.setItem('today-sticky-view', 'list')
+    mockApi(planData)
+    const complete = vi.fn()
+    const progress = vi.fn()
+    render(<TaskProgressActions.Provider value={progress}><TodayStickyNotes workspaceId={4} teamTasks={[team]} onCompleteTask={complete} onOpenPlanner={() => {}} /></TaskProgressActions.Provider>)
+    expect(await screen.findByText('Send the offer pack')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Percent complete for Send the offer pack'), { target: { value: '60' } })
+    expect(progress).toHaveBeenCalledWith(team, 60)
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Send the offer pack complete' }))
+    expect(complete).toHaveBeenCalledWith(21)
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(complete).toHaveBeenCalledTimes(2)
+  })
+
+  it('saves a personal items percentage', async () => {
+    localStorage.setItem('today-sticky-open', 'true')
+    const fetchMock = mockApi({ ...planData, '/personal/tasks/1/': { task: item(1, 'Call the bank', 0, { progress_percent: 40 }) } })
+    render(<TodayStickyNotes workspaceId={4} teamTasks={[]} onOpenPlanner={() => {}} />)
+    fireEvent.change(await screen.findByLabelText('Percent complete for Call the bank'), { target: { value: '40' } })
+    await waitFor(() => expect(patchBodies(fetchMock)).toContainEqual({ progress_percent: 40 }))
+  })
+
+  it('ticks a personal item complete and can undo it', async () => {
+    localStorage.setItem('today-sticky-open', 'true')
+    const fetchMock = mockApi({ ...planData, '/personal/tasks/1/': { task: item(1, 'Call the bank', 0, { is_done: true, progress_percent: 100 }) } })
+    render(<TodayStickyNotes workspaceId={4} teamTasks={[]} onOpenPlanner={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark Call the bank complete' }))
+    await waitFor(() => expect(patchBodies(fetchMock)).toContainEqual({ is_done: true }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(patchBodies(fetchMock)).toContainEqual({ is_done: false }))
+  })
+
+  it('gives plan blocks no tick or percentage, because they are not tasks', async () => {
+    localStorage.setItem('today-sticky-open', 'true')
+    mockApi({ '/personal/day-plan/': { note: { date: '2026-11-13', body: '23:00-23:59 Late block (1h)', notes: {} } }, '/personal/planners/': { planners: [], tasks: [] } })
+    render(<TodayStickyNotes workspaceId={4} teamTasks={[]} onOpenPlanner={() => {}} />)
+    expect(await screen.findByText('Late block')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /complete/ })).toBeNull()
+    expect(screen.queryByLabelText(/Percent complete/)).toBeNull()
   })
 })
 

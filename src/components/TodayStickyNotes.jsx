@@ -1,19 +1,27 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, LayoutGrid, List, StickyNote as StickyIcon } from 'lucide-react'
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronDown, ChevronRight, LayoutGrid, List, Sparkles } from 'lucide-react'
 import StickyNote from './StickyNote.jsx'
+import { TaskProgressActions, TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { parsePlan } from '../lib/day-plan-parse.js'
 import { workspaceCall, isoDate } from '../lib/workspace-api.js'
 
-// A board of sticky notes on Today: the blocks of today's day plan if there is one
-// (the block you are in right now is marked), then your open planner items. Both
-// are private to you. Selecting a note opens My planner, where they are edited.
+// A board (or list) on Today: the blocks of today's day plan if there is one (the
+// block you are in right now is marked), then the tasks assigned to you that are
+// wanted now, then your open planner items. Tasks and planner items can be ticked
+// off and given a percentage right here; plan blocks are time slots, not tasks, so
+// they have neither. Selecting a note opens My planner.
 const MAX_NOTES = 8
+const UNDO_MS = 8000
 const minutes = time => { const [h, m] = time.split(':').map(Number); return h * 60 + m }
 
-export default function TodayStickyNotes({ workspaceId, onOpenPlanner }) {
+export default function TodayStickyNotes({ workspaceId, teamTasks = [], onCompleteTask, onOpenPlanner }) {
+  const setTeamProgress = useContext(TaskProgressActions)
   const [plan, setPlan] = useState(null)
-  const [tasks, setTasks] = useState([])
+  const [personal, setPersonal] = useState([])
   const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState('')
+  const [recent, setRecent] = useState([])
+  const timers = useRef([])
   // Shut by default so Today stays short; what the person chooses is remembered.
   const [open, setOpen] = useState(() => { try { return localStorage.getItem('today-sticky-open') === 'true' } catch { return false } })
   const [view, setView] = useState(() => { try { return localStorage.getItem('today-sticky-view') === 'list' ? 'list' : 'board' } catch { return 'board' } })
@@ -31,11 +39,46 @@ export default function TodayStickyNotes({ workspaceId, onOpenPlanner }) {
     ]).then(([planData, plannerData]) => {
       if (cancelled) return
       setPlan(planData.note)
-      setTasks(Array.isArray(plannerData.tasks) ? plannerData.tasks : [])
+      setPersonal(Array.isArray(plannerData.tasks) ? plannerData.tasks : [])
       setLoaded(true)
     })
-    return () => { cancelled = true }
+    return () => { cancelled = true; timers.current.forEach(clearTimeout) }
   }, [workspaceId])
+
+  const rememberDone = entry => {
+    setRecent(current => [...current.filter(item => item.key !== entry.key), entry])
+    timers.current.push(setTimeout(() => setRecent(current => current.filter(item => item.key !== entry.key)), UNDO_MS))
+  }
+
+  const patchPersonal = async (item, patch) => {
+    setError('')
+    const before = item
+    setPersonal(current => current.map(task => (task.id === item.id ? { ...task, ...patch } : task)))
+    try {
+      const saved = (await workspaceCall(workspaceId, `personal/tasks/${item.id}/`, 'PATCH', patch)).task
+      setPersonal(current => current.map(task => (task.id === item.id ? saved : task)))
+      return saved
+    } catch (failure) {
+      setPersonal(current => current.map(task => (task.id === item.id ? before : task)))
+      setError(failure.message || 'That did not save.')
+      return null
+    }
+  }
+
+  const finish = async note => {
+    if (note.kind === 'team') {
+      rememberDone({ key: note.id, title: note.title, undo: () => onCompleteTask?.(note.raw.id) })
+      await onCompleteTask?.(note.raw.id)
+    } else if (note.kind === 'personal') {
+      const saved = await patchPersonal(note.raw, { is_done: true })
+      if (saved) rememberDone({ key: note.id, title: note.title, undo: () => patchPersonal(saved, { is_done: false }) })
+    }
+  }
+  const setPercent = async (note, percent) => {
+    if (note.kind === 'team') return setTeamProgress?.(note.raw, percent)
+    if (percent === 100) return finish(note)
+    return patchPersonal(note.raw, { progress_percent: percent })
+  }
 
   const notes = useMemo(() => {
     const now = new Date()
@@ -43,42 +86,71 @@ export default function TodayStickyNotes({ workspaceId, onOpenPlanner }) {
     const blocks = plan ? parsePlan(plan.body).blocks : []
     const fromPlan = blocks.map(block => ({
       id: `plan-${block.key}`,
+      kind: 'plan',
       header: `${block.start} - ${block.end}`,
       chip: block.duration,
       title: block.title,
       detail: (plan.notes || {})[block.key] || block.detail,
       tone: block.kind,
       active: minutes(block.start) <= nowMinutes && nowMinutes < minutes(block.end),
-      // Past blocks go to the back so the board starts with what is next.
       past: minutes(block.end) <= nowMinutes,
     }))
-    const upcoming = [...fromPlan.filter(note => !note.past), ...fromPlan.filter(note => note.past)]
-    const fromPlanner = tasks
+    const planNotes = [...fromPlan.filter(note => !note.past), ...fromPlan.filter(note => note.past)]
+    const fromTeam = teamTasks
+      .filter(task => task.status !== 'done' && task.status !== 'cancelled')
+      .map(task => ({
+        id: `team-${task.id}`,
+        kind: 'team',
+        raw: task,
+        header: task.due_date ? `Due ${task.due_date}` : 'Assigned to you',
+        chip: task.project || task.workstream || '',
+        title: task.title,
+        detail: '',
+        tone: 'task',
+        active: Boolean(task.due_date && task.due_date < isoDate(now)),
+      }))
+    const fromPersonal = personal
       .filter(task => !task.is_done)
       .sort((a, b) => String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')))
       .map(task => ({
-        id: `task-${task.id}`,
+        id: `personal-${task.id}`,
+        kind: 'personal',
+        raw: task,
         header: task.due_date ? `Due ${task.due_date}${task.due_time ? ` ${task.due_time}` : ''}` : 'My planner',
-        chip: task.progress_percent ? `${task.progress_percent}%` : '',
+        chip: '',
         title: task.title,
         detail: task.notes ? task.notes.slice(0, 90) : '',
         tone: 'task',
         active: false,
       }))
-    return [...upcoming, ...fromPlanner]
-  }, [plan, tasks])
+    return [...planNotes, ...fromTeam, ...fromPersonal]
+  }, [plan, teamTasks, personal])
 
   if (!loaded) return null
   const shown = notes.slice(0, MAX_NOTES)
+  const canTick = note => note.kind === 'team' || note.kind === 'personal'
+  const progressFor = note => (
+    <TaskProgressBar
+      className="sticky-progress"
+      value={taskProgressValue(note.raw)}
+      title={note.title}
+      onChange={percent => setPercent(note, percent)}
+    />
+  )
+  const tickFor = note => (
+    <button type="button" className="sticky-tick" onClick={() => finish(note)} aria-label={`Mark ${note.title} complete`} aria-pressed={false}>
+      <Check size={12} aria-hidden="true" />
+    </button>
+  )
 
   return (
-    <section className="today-sticky" aria-label="Sticky notes">
+    <section className="today-sticky" aria-label="Zuri day plan">
       <header className="today-sticky-head">
         <button type="button" className="today-sticky-toggle" aria-expanded={open} aria-controls="today-sticky-body" onClick={toggleOpen}>
           {open ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
           <span>
-            <strong><StickyIcon size={16} aria-hidden="true" /> Sticky notes</strong>
-            <small>{open ? (plan ? 'Today\'s plan and your open planner items. Only you can see these.' : 'Your open planner items. Only you can see these.') : `${notes.length} ${notes.length === 1 ? 'note' : 'notes'} - select to show`}</small>
+            <strong><Sparkles size={16} aria-hidden="true" /> Zuri&apos;s day plan</strong>
+            <small>{open ? 'Zuri&apos;s plan for today, your tasks and your planner items. Only you can see your planner items.' : `${notes.length} ${notes.length === 1 ? 'item' : 'items'} - select to show`}</small>
           </span>
         </button>
         {open && <div className="today-sticky-tools">
@@ -90,22 +162,47 @@ export default function TodayStickyNotes({ workspaceId, onOpenPlanner }) {
         </div>}
       </header>
       {open && <div id="today-sticky-body">
+        {error && <p className="memo-error" role="alert">{error}</p>}
+        {recent.map(entry => (
+          <p className="today-sticky-undo" role="status" key={entry.key}>
+            Completed &quot;{entry.title}&quot;.
+            <button type="button" onClick={() => { setRecent(current => current.filter(item => item.key !== entry.key)); entry.undo() }}>Undo</button>
+          </p>
+        ))}
         {shown.length
           ? view === 'list'
             ? <ol className="plan-list" aria-label="Sticky notes as a list">
               {shown.map(note => (
-                <li key={note.id} className={`plan-row is-${note.tone === 'break' ? 'break' : 'work'}`}>
-                  <div className="plan-row-time"><strong>{note.header}</strong></div>
+                <li key={note.id} className={`plan-row is-${note.tone === 'break' ? 'break' : 'work'}${canTick(note) ? ' has-actions' : ''}`}>
+                  <div className="plan-row-time">
+                    {canTick(note) && tickFor(note)}
+                    <strong>{note.header}</strong>
+                  </div>
                   <div className="plan-row-main">
                     <div className="plan-row-title"><strong>{note.title}</strong>{note.chip && <em>{note.chip}</em>}</div>
                     {note.detail && <p>{note.detail}</p>}
                   </div>
+                  {canTick(note) && <div className="plan-row-actions">{progressFor(note)}</div>}
                 </li>
               ))}
             </ol>
             : <div className="plan-board" role="list" aria-label="Sticky notes">
               {shown.map((note, index) => (
-                <StickyNote key={note.id} header={note.header} chip={note.chip} title={note.title} detail={note.detail} tone={note.tone} tilt={index} active={note.active} onClick={onOpenPlanner} label={`Open planner: ${note.title}`} />
+                <StickyNote
+                  key={note.id}
+                  header={note.header}
+                  chip={note.chip}
+                  title={note.title}
+                  detail={note.detail}
+                  tone={note.tone}
+                  tilt={index}
+                  active={note.active}
+                  leading={canTick(note) ? tickFor(note) : undefined}
+                  onClick={onOpenPlanner}
+                  label={`Open planner: ${note.title}`}
+                >
+                  {canTick(note) && progressFor(note)}
+                </StickyNote>
               ))}
             </div>
           : <p className="today-sticky-empty">Nothing here yet. Use Plan my day, or add items in My planner, and they will appear as notes.</p>}
