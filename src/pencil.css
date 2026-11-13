@@ -9986,3 +9986,99 @@ aside[class*='bg-navy'] nav { overflow-x: hidden; }
 /* Team: the gauges sit in the middle of their cards. */
 .team-day-top { align-items: stretch; }
 .team-day-ringcard { align-content: center; justify-items: center; }
+
+/* Planner timeline: tasks as bars on a calendar, milestones and links. */
+.planner-view-toggle { margin-top: 14px; width: fit-content; }
+.timeline { display: grid; gap: 14px; margin-top: 14px; }
+.timeline-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.timeline-legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: auto; font-size: 12px; color: var(--pencil-text-muted); }
+.timeline-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; }
+.timeline-legend i + i { margin-left: 8px; }
+.timeline-legend .is-todo, .timeline-bar.is-todo { background: #c9d2e6; }
+.timeline-legend .is-in-progress, .timeline-bar.is-in-progress { background: #0B0B45; }
+.timeline-legend .is-done, .timeline-bar.is-done { background: #12b76a; }
+.timeline-legend .is-blocked, .timeline-bar.is-blocked { background: #d92d20; }
+.timeline-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 9px 12px; border-radius: 12px; background: #fef0c7; color: #93370d; font-size: 13px; }
+.timeline-banner button { padding: 3px 12px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
+.timeline-milestones { padding: 14px 16px; border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface); }
+.timeline-milestones header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.timeline-milestones h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; font-weight: 700; }
+.timeline-milestones header span { padding: 0 8px; border-radius: 999px; background: var(--pencil-surface-muted); font-size: 12px; }
+.timeline-milestones ul { display: grid; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.timeline-milestones li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 10px; border-radius: 12px; background: var(--pencil-surface-muted); }
+.timeline-milestones li.is-late .timeline-ms-meta { color: #b42318; font-weight: 600; }
+.timeline-milestones li.is-complete .timeline-ms-meta { color: #067647; font-weight: 600; }
+.timeline-ms-name { display: inline-flex; align-items: center; gap: 6px; color: #C49A6C; }
+.timeline-ms-name strong { color: var(--pencil-text); }
+.timeline-ms-meta { font-size: 12px; color: var(--pencil-text-muted); }
+.timeline-ms-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+.timeline-ms-add, .timeline-ms-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.timeline-ms-add input, .timeline-ms-edit input, .timeline-schedule input { min-height: 34px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); font-size: 13px; }
+.timeline-ms-add input:first-child, .timeline-ms-edit input:first-child { flex: 1 1 220px; }
+.timeline-frame { display: flex; overflow: hidden; border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface); }
+.timeline-labels { flex: none; border-right: 1px solid var(--pencil-border); background: var(--pencil-surface); z-index: 2; }
+.timeline-corner { display: flex; align-items: flex-end; padding: 0 14px 8px; border-bottom: 1px solid var(--pencil-border); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--pencil-text-muted); box-sizing: border-box; }
+.timeline-label { display: flex; align-items: center; gap: 8px; padding: 0 12px; box-sizing: border-box; border-bottom: 1px solid var(--pencil-border); min-width: 0; }
+.timeline-label.is-milestone { background: var(--pencil-surface-muted); }
+.timeline-label-ms { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: #C49A6C; font-size: 13px; }
+.timeline-label-ms strong { overflow: hidden; color: var(--pencil-text); text-overflow: ellipsis; white-space: nowrap; }
+.timeline-label-ms small { color: var(--pencil-text-muted); }
+.timeline-label-ms.is-complete { color: #12b76a; } .timeline-label-ms.is-late { color: #d92d20; }
+.timeline-task-name { flex: 1; min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--pencil-text); font-size: 13px; font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.timeline-task-name:hover { text-decoration: underline; }
+.timeline-ms-select.app-select-trigger { flex: none; width: 112px; min-height: 28px; border-radius: 999px; font-size: 11px; }
+.timeline-scroll { flex: 1; min-width: 0; overflow-x: auto; }
+.timeline-canvas { position: relative; }
+.timeline-head { position: relative; border-bottom: 1px solid var(--pencil-border); background: var(--pencil-surface-muted); box-sizing: border-box; }
+.timeline-month { position: absolute; top: 6px; padding-left: 6px; font-size: 12px; font-weight: 700; color: var(--pencil-navy); white-space: nowrap; }
+.timeline-tick { position: absolute; bottom: 6px; font-size: 11px; text-align: center; color: var(--pencil-text-muted); }
+.timeline-tick.is-weekend { opacity: .6; }
+.timeline-tick.is-today { color: #fff; }
+.timeline-tick.is-today::before { content: ""; position: absolute; left: 50%; top: -3px; z-index: -1; width: 22px; height: 20px; transform: translateX(-50%); border-radius: 999px; background: #0B0B45; }
+.timeline-body { position: absolute; left: 0; }
+.timeline-weekend { position: absolute; top: 0; bottom: 0; background: rgb(16 24 40 / 3.5%); }
+.timeline-rule { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--pencil-border); box-sizing: border-box; }
+.timeline-rule.is-milestone { background: rgb(196 154 108 / 8%); }
+.timeline-today { position: absolute; top: 0; bottom: 0; width: 2px; background: #C49A6C; opacity: .85; }
+.timeline-links { position: absolute; inset: 0; overflow: visible; }
+.timeline-bar { position: absolute; display: flex; align-items: center; height: 26px; overflow: visible; border-radius: 8px; color: #fff; font-size: 12px; font-weight: 600; user-select: none; touch-action: none; box-shadow: 0 1px 2px rgb(16 24 40 / 18%); }
+.timeline-bar.is-todo { color: #0B0B45; }
+.timeline-bar.is-draggable { cursor: grab; }
+.timeline-bar.is-dragging { cursor: grabbing; opacity: .85; z-index: 5; box-shadow: 0 8px 18px rgb(16 24 40 / 28%); }
+.timeline-bar.is-linking { outline: 3px solid #C49A6C; outline-offset: 2px; }
+.timeline-bar:focus-visible { outline: 3px solid #C49A6C; outline-offset: 2px; }
+.timeline-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: rgb(255 255 255 / 28%); pointer-events: none; }
+.timeline-bar.is-todo .timeline-bar-fill { background: rgb(11 11 69 / 18%); }
+.timeline-bar-title { position: relative; overflow: hidden; padding: 0 22px 0 10px; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-grip { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.timeline-grip.is-start { left: 0; } .timeline-grip.is-end { right: 0; }
+.timeline-link-button { position: absolute; right: -11px; top: 50%; display: grid; width: 22px; height: 22px; place-items: center; padding: 0; transform: translateY(-50%); border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); color: #0B0B45; opacity: 0; cursor: pointer; }
+.timeline-bar:hover .timeline-link-button, .timeline-bar:focus-within .timeline-link-button, .timeline-bar.is-linking .timeline-link-button { opacity: 1; }
+.timeline-diamond { position: absolute; width: 16px; height: 16px; transform: translate(-50%, -50%) rotate(45deg); border-radius: 3px; background: #C49A6C; box-shadow: 0 1px 3px rgb(16 24 40 / 30%); }
+.timeline-diamond.is-complete { background: #12b76a; } .timeline-diamond.is-late { background: #d92d20; }
+.timeline-unscheduled { padding: 14px 16px; border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface); }
+.timeline-unscheduled h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #93370d; }
+.timeline-unscheduled ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.timeline-unscheduled li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: var(--pencil-surface-muted); }
+.timeline-schedule { display: inline-flex; gap: 6px; }
+@media (max-width: 760px) { .timeline-frame { flex-direction: column; } .timeline-labels { display: none; } .timeline-ms-actions { margin-left: 0; } }
+
+.timeline-head { isolation: isolate; }
+.timeline-milestones header button { margin-left: auto; padding: 3px 12px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); font-size: 12px; font-weight: 600; cursor: pointer; }
+
+/* Team: a task title opens its board; the card it lands on flashes. */
+.team-day-task-link { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.team-day-task-link:hover strong { text-decoration: underline; color: #0B0B45; }
+.planner-task-card.is-found { animation: task-found 1s ease 3; box-shadow: 0 0 0 3px #C49A6C, 0 12px 28px rgb(16 24 40 / 22%); }
+@keyframes task-found { 50% { transform: scale(1.03); } }
+
+/* Follow-up detail: wider, header in one row, buttons side by side. */
+.modal.followup-detail { width: min(760px, calc(100vw - 32px)); max-width: 760px; }
+.followup-detail .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.followup-detail .modal-header h2 { margin: 2px 0 0; }
+.followup-detail .modal-header .eyebrow { margin: 0; }
+.followup-detail-actions { flex-wrap: nowrap; }
+.followup-detail-actions .primary-button, .followup-detail-actions .secondary-button { flex: none; white-space: nowrap; }
+.followup-detail .drawer-comment-form { display: flex; align-items: flex-end; gap: 10px; }
+.followup-detail .drawer-comment-form textarea { flex: 1; min-width: 0; }
+.followup-detail .drawer-comment-form .primary-button { flex: none; white-space: nowrap; }

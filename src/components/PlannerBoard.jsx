@@ -16,6 +16,7 @@ import RoutinesPanel from './RoutinesPanel.jsx'
 import { TaskProgressActions, TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
 import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
+import TimelineView from './TimelineView.jsx'
 
 const statusLabel = { todo: 'To do', 'in progress': 'In progress', review: 'Review', blocked: 'Blocked', on_hold: 'On hold', cancelled: 'Cancelled', done: 'Done' }
 const STALE_DAYS = 14
@@ -34,6 +35,7 @@ function PlannerTaskCard({ task, buckets, today, canReorder, canDeletePermanentl
   const taskTag = task.tag && task.tag !== 'General' ? task.tag : task.labels?.[0]
   const meta = [taskTag, task.workstream, formatEstimateMinutes(task.estimate_minutes), !isOverdue && task.due_date].filter(Boolean)
   return <article
+    data-task-id={task.id}
     className={`planner-card planner-task-card group/card relative flex shrink-0 flex-col justify-between border border-border bg-card text-left transition-colors${String(draggedTaskId) === String(task.id) ? ' is-dragging opacity-50' : ''}${String(dropTaskId) === String(task.id) && String(draggedTaskId) !== String(task.id) ? ' is-drop-target border-navy' : ''}${dropBefore ? ' is-drop-before' : ''}${dropAfter ? ' is-drop-after' : ''}${selectMode ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
     draggable={canReorder && !selectMode}
     onClick={selectMode ? () => onToggleSelect?.(task.id) : undefined}
@@ -125,7 +127,7 @@ function taskHasAssignee(task) {
   return Boolean((task.assignee_ids || []).length || task.assignee_id || task.assignee?.id || task.member)
 }
 
-export default function PlannerBoard({ workspaceId, onBoardMembersChanged, buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all', onBulkArchive, onBulkDelete, onBulkMove }) {
+export default function PlannerBoard({ workspaceId, onBoardMembersChanged, buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all', onBulkArchive, onBulkDelete, onBulkMove, onTaskPatched }) {
   const [status, setStatus] = useState('all')
   const [peopleOpen, setPeopleOpen] = useState(false)
   const [priority, setPriority] = useState('all')
@@ -394,6 +396,9 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
   // one and it completes the task, so a second would be a reliable source of
   // mistakes. Turning the mode off clears the selection, which keeps the board
   // from holding a hidden selection nobody can see.
+  // Board is the kanban; Timeline is the same tasks on a calendar with milestones and links.
+  const [boardView, setBoardView] = useState(() => { try { return localStorage.getItem('planner-board-view') === 'timeline' ? 'timeline' : 'board' } catch { return 'board' } })
+  const chooseBoardView = next => { setBoardView(next); try { localStorage.setItem('planner-board-view', next) } catch { /* not remembered */ } }
   const [selectMode, setSelectMode] = useState(false)
   const [selectedTaskIds, setSelectedTaskIds] = useState([])
   const clearSelection = () => setSelectedTaskIds([])
@@ -804,6 +809,10 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       {buckets.map(bucket => <button type="button" role="tab" aria-selected={activeMobileBucketId === bucket.id} className={activeMobileBucketId === bucket.id ? 'is-active' : ''} key={bucket.id} onClick={() => { setMobileBucketPinned(true); setMobileBucketId(bucket.id) }}>{bucket.name}</button>)}
     </div>
 
+    {!isOperations && <div className="plan-view-toggle planner-view-toggle" role="group" aria-label="Planner view">
+      <button type="button" aria-pressed={boardView === 'board'} className={boardView === 'board' ? 'is-active' : ''} onClick={() => chooseBoardView('board')}>Board</button>
+      <button type="button" aria-pressed={boardView === 'timeline'} className={boardView === 'timeline' ? 'is-active' : ''} onClick={() => chooseBoardView('timeline')}>Timeline</button>
+    </div>}
     <div className="planner-scope-summary mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">
       <span aria-live="polite">{scopeLine}</span>
       {filtersHiding && <button type="button" className="text-caption font-medium text-navy underline underline-offset-2" onClick={clearHiddenFilters}>Clear filters</button>}
@@ -812,6 +821,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     {createPanel}
     {(bucketError || workstreamError) && <p className="auth-error" role="alert">{bucketError || workstreamError}</p>}
 
+    {boardView === 'timeline' && !isOperations ? <TimelineView workspaceId={workspaceId} tasks={visibleTasks} isLeader={Boolean(canManageBuckets)} canEdit={Boolean(canManageTasks)} projectFilter={projectFilter} onOpenTask={onOpenTask} onTaskPatched={onTaskPatched} /> : <>
     <div
       ref={boardRef}
       className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`}
@@ -980,7 +990,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       {doneTasks.map(task => renderTaskCard(task, null, -1, 0))}
     </CollapsibleSection>
     <p className="planner-done-note">Tasks finished more than 60 days ago move to Archived, where you can still view and restore them.</p></>}
-    </>}
+    </>}</>}
     <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</p>
     <BulkActionBar
       selectedCount={selectedTaskIds.length}

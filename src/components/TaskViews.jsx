@@ -92,6 +92,20 @@ function AssigneePicker({ members = [], value = [], onChange, disabled = false }
 
 function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buckets = [], tasks = [], currentUserId, canManageTasks = false, canDeletePermanently = false, onClose, onDelete, onDeletePermanently, onTaskUpdated }) {
   const canEdit = task.can_edit ?? true
+  // Milestones this task can belong to; only owners and managers may attach (the server decides).
+  const [milestoneList, setMilestoneList] = useState([])
+  useEffect(() => {
+    if (!workspaceId) return undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const response = await fetch('/api/workspaces/' + workspaceId + '/milestones/', { credentials: 'include' })
+        const data = response.ok ? await response.json() : { milestones: [] }
+        if (!cancelled) setMilestoneList(data.milestones || [])
+      } catch { /* the milestone list is optional */ }
+    })()
+    return () => { cancelled = true }
+  }, [workspaceId])
   const [comments, setComments] = useState([])
   const [subtasks, setSubtasks] = useState([])
   const [attachments, setAttachments] = useState([])
@@ -473,6 +487,21 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
                     <button className="secondary-button" disabled={!canEdit}>Add</button>
                   </form>
                 </section>
+
+                {(milestoneList.length > 0 || task.milestone_id) && <section className="drawer-section task-dialog-section">
+                  <div className="drawer-section-heading"><h3>Milestone</h3></div>
+                  <AppSelect value={task.milestone_id ? String(task.milestone_id) : ''} aria-label="Milestone" disabled={!canManageTasks} onChange={async event => {
+                    setError('')
+                    const response = await request('/api/tasks/' + task.id + '/milestone/', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ milestone_id: event.target.value ? Number(event.target.value) : null }) })
+                    const data = await response.json()
+                    if (!response.ok) return setError(data.error || 'The milestone could not be set.')
+                    onTaskUpdated(data.task)
+                  }}>
+                    <option value="">No milestone</option>
+                    {milestoneList.map(milestone => <option key={milestone.id} value={String(milestone.id)}>{milestone.title} ({milestone.due_date})</option>)}
+                  </AppSelect>
+                  {!canManageTasks && <p className="drawer-muted">Owners and managers attach tasks to milestones.</p>}
+                </section>}
 
                 <section className="drawer-section task-dialog-section">
                   <div className="drawer-section-heading">

@@ -12,6 +12,16 @@ const SEEN_KEY = 'workspace-whats-new-seen-v1'
 const RELEASE_NOTES = [
   {
     date: '2026-11-13',
+    title: 'Timeline, milestones and linked tasks',
+    items: [
+      'The Planner has a new Timeline view next to Board: every task with dates is a bar from its start to its due date, with today marked.',
+      'Drag a bar to move it, or pull either end to change a date. Tasks without dates are listed under the chart, where you can give them one.',
+      'Select the link button on a bar, then another task, to say it must wait. The arrow turns red when the later task is planned to start too early. Select an arrow to remove the link.',
+      'Owners and managers can add milestones with a date. Attach tasks to one from the task or from the timeline, and it is reached when all its tasks are done or when you mark it reached.',
+    ],
+  },
+  {
+    date: '2026-11-13',
     title: 'The team day at a glance',
     items: [
       'For owners and managers, Team now opens with a Daily picture: planned hours for each person against their day, tasks done today, time logged, and whether they have checked in.',

@@ -196,6 +196,7 @@ function mapTaskFromApi(apiTask, { today, workspaceRole, currentUserId } = {}) {
     state: apiTask.state || 'active',
     archived_at: apiTask.archived_at || '',
     supporters: apiTask.supporter_ids || [],
+    milestone_id: apiTask.milestone_id ?? null,
     blocked_by_ids: apiTask.blocked_by_ids || [],
     blocking_ids: apiTask.blocking_ids || [],
     is_blocked_by_dependency: apiTask.is_blocked_by_dependency || false,

@@ -5,6 +5,7 @@ import { Button } from './ui/button.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { fmtDate, isoDate, workspaceCall } from '../lib/workspace-api.js'
 import { getCsrfToken } from '../lib/workspace-format.js'
+import { openTaskBoard } from '../lib/board-navigation.js'
 
 // The Team page's daily picture, for owners and managers: who is planned for what,
 // what is done, who has checked in and clocked in; a week grid of planned hours
@@ -90,7 +91,7 @@ function TaskLine({ task, members, ownerId, onReassign, onDelete }) {
   const [confirming, setConfirming] = useState(false)
   return (
     <li className="team-day-task">
-      <span><strong>{task.title}</strong>{task.due_date ? ` - due ${task.due_date}` : ''}{task.estimate_minutes ? ` - ${hours(task.estimate_minutes)}` : ' - no estimate'}</span>
+      <span><button type="button" className="team-day-task-link" title="Show this task on its board" onClick={() => openTaskBoard(task.id)}><strong>{task.title}</strong></button>{task.due_date ? ` - due ${task.due_date}` : ''}{task.estimate_minutes ? ` - ${hours(task.estimate_minutes)}` : ' - no estimate'}</span>
       <span className="team-day-task-actions">
         {onReassign && (
           <AppSelect className="team-day-reassign" value="" aria-label={`Reassign ${task.title}`} onChange={event => event.target.value && onReassign(task, event.target.value)}>

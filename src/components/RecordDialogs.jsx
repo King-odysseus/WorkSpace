@@ -189,7 +189,7 @@ function FollowUpDetailDialog({ followUp, linkedTaskTitle, canUpdate, canEdit, o
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal composer-modal followup-detail" role="dialog" aria-modal="true" aria-labelledby="follow-up-detail-title" onMouseDown={event => event.stopPropagation()}>
         <div className="modal-header">
-          <div><p className="eyebrow">Follow-up</p><h2 id="follow-up-detail-title">{status === 'completed' ? 'Completed follow-up' : 'Follow-up'}</h2></div>
+          <div><p className="eyebrow">Follow-up</p><h2 id="follow-up-detail-title">{status === 'completed' ? 'Completed follow-up' : 'Open follow-up'}</h2></div>
           <button type="button" className="close-button" onClick={onClose} aria-label="Close follow-up"><X size={18} /></button>
         </div>
         <p className="followup-detail-note">{followUp.note}</p>

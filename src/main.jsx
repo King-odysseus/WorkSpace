@@ -96,6 +96,7 @@ import { NavCountsFeeder } from "./lib/use-nav-counts.js";
 import LeaveView from "./components/LeaveView.jsx";
 import WhereWeWorkView from "./components/WhereWeWorkView.jsx";
 import { requestMemo } from "./lib/memo-navigation.js";
+import { OPEN_TASK_BOARD_EVENT, flashTaskCard } from "./lib/board-navigation.js";
 import { Button } from "./components/ui/button.jsx";
 import TodayPrivatePlan from "./components/TodayPrivatePlan.jsx";
 import TodayStickyNotes from "./components/TodayStickyNotes.jsx";
@@ -4540,6 +4541,7 @@ function App() {
                 }
                 onComplete={completeTask}
                 onStatusChange={changeTaskStatus}
+                onTaskPatched={(updatedTask) => setTasks((current) => current.map((item) => (item.id === updatedTask.id ? { ...item, ...mapApiTask(updatedTask) } : item)))}
                 onBucketChange={changeTaskBucket}
                 onDelete={deleteTask}
                 onDeletePermanently={deleteTaskPermanently}
@@ -5074,6 +5076,7 @@ function WorkspaceView({
   onToggleSidebar,
   onComplete,
   onStatusChange,
+  onTaskPatched,
   onBucketChange,
   onDelete,
   onDeletePermanently,
@@ -5457,6 +5460,26 @@ function WorkspaceView({
       current = false;
     };
   }, [active, workspaceId, notificationFilter, notificationPage, notificationReload]);
+  // A task chosen from a list elsewhere (the Team page): open the board it sits on.
+  useEffect(() => {
+    const openBoard = (event) => {
+      const task = tasks.find((item) => item.id === event.detail?.taskId);
+      if (!task) {
+        toast.error("That task is not on a board you can open.");
+        return;
+      }
+      onSearchChange?.("");
+      if (task.project_id) {
+        setPlannerProjectFilter(String(task.project_id));
+        onNavigate("Planner");
+      } else {
+        onNavigate("Daily operations");
+      }
+      flashTaskCard(task.id);
+    };
+    window.addEventListener(OPEN_TASK_BOARD_EVENT, openBoard);
+    return () => window.removeEventListener(OPEN_TASK_BOARD_EVENT, openBoard);
+  }, [tasks, onNavigate, onSearchChange]);
   useEffect(() => {
     const handleReportFilter = (event) => {
       if (event.detail) setPlannerFilter(event.detail);
@@ -6876,6 +6899,7 @@ function WorkspaceView({
             sessionStorage.setItem("workspace-new-task-scope", "operations");
             onAddTask();
           }}
+          onTaskPatched={onTaskPatched}
           onTaskMove={onBucketChange}
           onBucketReorder={reorderBuckets}
           newBucketName={newBucketName}
@@ -6954,6 +6978,7 @@ function WorkspaceView({
                 : "";
             onAddTask(null, { projectId });
           }}
+          onTaskPatched={onTaskPatched}
           onTaskMove={onBucketChange}
           onBucketReorder={reorderBuckets}
           newBucketName={newBucketName}

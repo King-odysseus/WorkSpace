@@ -122,6 +122,17 @@ describe('TeamDayPanel', () => {
     expect(screen.getByText('Orphan 11')).toBeTruthy()
   })
 
+  it('asks the shell to open the board a task is on when its title is selected', async () => {
+    const heard = vi.fn()
+    window.addEventListener('workspace:open-task-board', heard)
+    mockApi({ '/team-day/': dayPayload })
+    render(<TeamDayPanel workspaceId={4} isLeader />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Nobody owns this' }))
+    window.removeEventListener('workspace:open-task-board', heard)
+    expect(heard).toHaveBeenCalledTimes(1)
+    expect(heard.mock.calls[0][0].detail).toEqual({ taskId: 90 })
+  })
+
   it('shows the week grid with a move suggestion, and the move reassigns the task', async () => {
     localStorage.setItem('team-day-mode', 'week')
     const cell = (planned, capacity, tasks = []) => ({ planned_minutes: planned, capacity_minutes: capacity, leave_share: 0, location: null, source: 'none', task_count: tasks.length, tasks })
