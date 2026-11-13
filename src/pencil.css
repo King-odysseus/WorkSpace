@@ -9561,7 +9561,7 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
    little. Finished tasks move to Archived after 60 days. Phones keep their own
    one-bucket layout. */
 @media (min-width: 1024px) {
-  .planner-column { height: clamp(520px, calc(100dvh - 300px), 900px) !important; min-height: 0; overflow: hidden !important; }
+  .planner-column { height: clamp(420px, calc(100dvh - 340px), 900px) !important; min-height: 0; overflow: hidden !important; }
   .planner-column .planner-column-body { flex: 1 1 auto !important; overflow-y: auto !important; max-height: none !important; }
 }
 
