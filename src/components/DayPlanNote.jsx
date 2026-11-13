@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Sparkles, Trash2 } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { LayoutGrid, List, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { Card } from './ui/card.jsx'
 import { getCsrfToken, readJsonResponse, toDateKey } from '../lib/workspace-format.js'
 import { takePendingDayPlan } from '../lib/day-plan-navigation.js'
+import { parsePlan } from '../lib/day-plan-parse.js'
 
 // Zuri's plan for the day, kept as a note at the bottom of My planner. It is a
 // note and not a planner item: nothing that counts planner work (the Today ring,
@@ -27,6 +29,61 @@ export function buildPlanPrompt(openPersonalTitles, today, dailyMinutes) {
   ].join(' ')
 }
 
+// One block of the plan with the person's own note under it. The note saves when
+// the box loses focus, and stays with the block (by its start time) if the plan is
+// edited.
+function BlockNote({ block, saved, onSave }) {
+  const [text, setText] = useState(saved || '')
+  useEffect(() => { setText(saved || '') }, [saved])
+  return (
+    <textarea
+      className="plan-block-note"
+      aria-label={`Note for ${block.start} ${block.title}`}
+      placeholder="Add a note"
+      rows={2}
+      maxLength={500}
+      value={text}
+      onChange={event => setText(event.target.value)}
+      onBlur={() => { if (text.trim() !== (saved || '').trim()) onSave(block.key, text) }}
+    />
+  )
+}
+
+function PlanBoard({ blocks, notes, onSaveNote }) {
+  return (
+    <div className="plan-board" role="list" aria-label="Day plan as sticky notes">
+      {blocks.map((block, index) => (
+        <article key={block.key} role="listitem" className={`plan-sticky is-${block.kind} tilt-${index % 3}`}>
+          <header>
+            <strong>{block.start} - {block.end}</strong>
+            {block.duration && <span>{block.duration}</span>}
+          </header>
+          <h3>{block.title}</h3>
+          {block.detail && <p>{block.detail}</p>}
+          <BlockNote block={block} saved={notes[block.key]} onSave={onSaveNote} />
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function PlanList({ blocks, notes, onSaveNote }) {
+  return (
+    <ol className="plan-list" aria-label="Day plan as a list">
+      {blocks.map(block => (
+        <li key={block.key} className={`plan-row is-${block.kind}`}>
+          <div className="plan-row-time"><strong>{block.start}</strong><span>{block.end}</span></div>
+          <div className="plan-row-main">
+            <div className="plan-row-title"><strong>{block.title}</strong>{block.duration && <em>{block.duration}</em>}</div>
+            {block.detail && <p>{block.detail}</p>}
+            <BlockNote block={block} saved={notes[block.key]} onSave={onSaveNote} />
+          </div>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
   const today = toDateKey(new Date())
   const [note, setNote] = useState(null)
@@ -39,6 +96,7 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
   const [leaveShare, setLeaveShare] = useState(0)
   const minutesRef = useRef(0)
   minutesRef.current = dailyMinutes
+  const [view, setView] = useState(() => { try { return localStorage.getItem('day-plan-view') === 'list' ? 'list' : 'board' } catch { return 'board' } })
   const titlesRef = useRef(openPersonalTitles)
   titlesRef.current = openPersonalTitles
 
@@ -95,6 +153,22 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
     // generate is stable per workspace; today only changes at midnight.
   }, [workspaceId, today]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const chooseView = next => {
+    setView(next)
+    try { localStorage.setItem('day-plan-view', next) } catch { /* the choice just is not remembered */ }
+  }
+  const saveBlockNote = async (key, text) => {
+    setError('')
+    try {
+      const data = await call(`/api/workspaces/${workspaceId}/personal/day-plan/`, 'PUT', { date: today, notes: { ...(note?.notes || {}), [key]: text } })
+      setNote(data.note)
+      toast.success('Note saved.')
+    } catch (failure) {
+      setError(failure.message)
+    }
+  }
+  const plan = note ? parsePlan(note.body) : null
+
   const remove = async () => {
     setBusy('Deleting...')
     setError('')
@@ -102,6 +176,7 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
       await call(`/api/workspaces/${workspaceId}/personal/day-plan/?date=${today}`, 'DELETE')
       setNote(null)
       setEditing(false)
+      toast.success('Day plan deleted.')
     } catch (failure) {
       setError(failure.message)
     } finally {
@@ -116,6 +191,7 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
     try {
       await save(draft.trim())
       setEditing(false)
+      toast.success('Day plan saved.')
     } catch (failure) {
       setError(failure.message)
     } finally {
@@ -131,6 +207,10 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
           <p>Zuri&apos;s suggestion for today. It is a note: it does not count in your progress ring.</p>
         </div>
         <div className="day-plan-actions">
+          {note && plan.blocks.length > 0 && <div className="plan-view-toggle" role="group" aria-label="Plan view">
+            <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'is-active' : ''} onClick={() => chooseView('board')}><LayoutGrid size={14} aria-hidden="true" /> Board</button>
+            <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'is-active' : ''} onClick={() => chooseView('list')}><List size={14} aria-hidden="true" /> List</button>
+          </div>}
           <Button type="button" variant="outline" size="sm" disabled={Boolean(busy) || leaveShare >= 1} onClick={generate}>{note ? 'Plan again' : 'Plan my day with Zuri'}</Button>
           {note && <button type="button" className="day-plan-delete" aria-label="Delete day plan" title="Delete day plan" disabled={Boolean(busy)} onClick={remove}><Trash2 size={15} /></button>}
         </div>
@@ -140,8 +220,14 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
       {busy && <p className="day-plan-status" role="status">{busy}</p>}
       {error && <p className="day-plan-error" role="alert">{error}</p>}
       {note && !editing && <>
-        <pre className="day-plan-body">{note.body}</pre>
-        <button type="button" className="day-plan-edit" onClick={() => { setDraft(note.body); setEditing(true) }}>Edit</button>
+        {plan.blocks.length > 0
+          ? <>
+            {plan.intro.length > 0 && <p className="plan-text">{plan.intro.join(' ')}</p>}
+            {view === 'list' ? <PlanList blocks={plan.blocks} notes={note.notes || {}} onSaveNote={saveBlockNote} /> : <PlanBoard blocks={plan.blocks} notes={note.notes || {}} onSaveNote={saveBlockNote} />}
+            {plan.outro.length > 0 && <div className="plan-text plan-outro">{plan.outro.map(line => <p key={line}>{line}</p>)}</div>}
+          </>
+          : <pre className="day-plan-body">{note.body}</pre>}
+        <button type="button" className="day-plan-edit" onClick={() => { setDraft(note.body); setEditing(true) }}>Edit plan text</button>
       </>}
       {editing && <div className="day-plan-edit-form">
         <textarea aria-label="Day plan text" value={draft} onChange={event => setDraft(event.target.value)} rows={8} />

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { Megaphone, Pencil, Plus, Trash2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { Button } from './ui/button.jsx'
+import { AppSelect } from './ui/select.jsx'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import RequestsPanel from './RequestsPanel.jsx'
@@ -42,18 +44,18 @@ function MemoForm({ memo, onSave, onClose }) {
         <DialogDescription>{memo ? 'Changes show for everyone straight away.' : 'Everyone in the workspace is notified when you post.'}</DialogDescription>
         <form className="memo-form" onSubmit={submit}>
           {!memo && <label>Type
-            <select value={kind} onChange={event => setKind(event.target.value)}>
+            <AppSelect value={kind} aria-label="Type" className="form-select" onChange={event => setKind(event.target.value)}>
               <option value="memo">Announcement</option>
               <option value="request">Ask the team for a response</option>
-            </select>
+            </AppSelect>
           </label>}
           <label>Title<input type="text" value={title} maxLength={160} onChange={event => setTitle(event.target.value)} autoFocus required /></label>
           <label>Memo<textarea value={body} maxLength={5000} rows={8} onChange={event => setBody(event.target.value)} required /></label>
           {kind === 'request' && <label>Answers needed by (optional)<input type="date" value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>}
           <label>Show as a banner for
-            <select value={bannerDays} onChange={event => setBannerDays(event.target.value)}>
+            <AppSelect value={bannerDays} aria-label="Show as a banner for" className="form-select" onChange={event => setBannerDays(event.target.value)}>
               {BANNER_CHOICES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
+            </AppSelect>
           </label>
           {error && <p className="memo-error" role="alert">{error}</p>}
           <div className="memo-actions">
@@ -171,8 +173,8 @@ export default function MemosView({ workspaceId, currentUserId, role }) {
         ) : (
           <div className="memo-empty"><Megaphone size={22} aria-hidden="true" /><strong>No memos yet</strong><p>{canPost ? 'Post the first announcement for your team.' : 'Announcements from your managers will appear here.'}</p></div>
         ))}
-      {opened && !editing && <MemoReader memo={opened} isAuthor={opened.author_id === currentUserId} onRespond={respond} canChange={canChange(opened)} onEdit={memo => setEditing(memo)} onArchive={memo => archive(memo.id)} onClose={() => setOpenId(null)} />}
-      {editing && <MemoForm memo={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSave={fields => (editing === 'new' ? post(fields) : update(editing.id, fields))} />}
+      {opened && !editing && <MemoReader memo={opened} isAuthor={opened.author_id === currentUserId} onRespond={async (id, note) => { const result = await respond(id, note); toast.success('Your answer is saved.'); return result }} canChange={canChange(opened)} onEdit={memo => setEditing(memo)} onArchive={async memo => { await archive(memo.id); toast.success('Memo archived.') }} onClose={() => setOpenId(null)} />}
+      {editing && <MemoForm memo={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSave={async fields => { if (editing === 'new') { await post(fields); toast.success(fields.kind === 'request' ? 'Request posted to the team.' : 'Memo posted.') } else { await update(editing.id, fields); toast.success('Memo updated.') } }} />}
     </section>
   )
 }

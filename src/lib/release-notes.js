@@ -46,7 +46,7 @@ const RELEASE_NOTES = [
     items: [
       'The progress ring on Today now counts your own planner items and the tasks assigned to you in other planners and workstreams.',
       'Team availability no longer shows people who are offline or busy as Available.',
-      'The planner board now shows every card in each column, and the Done bar moves down with it.',
+      'Planner columns are about one screen tall and scroll inside, so the Done bar sits at the bottom of the screen. Tasks finished more than 60 days ago move to Archived, where they can still be viewed and restored.',
     ],
   },
   {

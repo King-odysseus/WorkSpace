@@ -1,15 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import { CalendarOff, Check, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
+import { AppSelect } from './ui/select.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { fmtDate, useWorkspaceCall } from '../lib/workspace-api.js'
 
 // Time off. A request goes to the people who can approve it (a manager's goes to
 // an owner). Everyone can see who is away and when; only the person and their
-// approvers see the kind of leave and the note.
+// approvers see the kind of leave and the note. The page changes with the role:
+// staff ask and watch, managers also decide for members, owners also decide for
+// managers and see what was decided lately.
 const KINDS = [['annual', 'Annual leave'], ['sick', 'Sick leave'], ['other', 'Other absence']]
 const KIND_LABEL = Object.fromEntries(KINDS)
 const STATUS_LABEL = { pending: 'Waiting', approved: 'Approved', declined: 'Declined', cancelled: 'Withdrawn' }
+const ROLE_LINE = {
+  member: 'Request leave. A manager approves it, and everyone can see who is away so work can be planned around it.',
+  manager: 'Request your own leave (an owner approves it) and approve leave for members.',
+  owner: 'Approve leave for managers and members. Your own time off is recorded as approved straight away.',
+}
 
 export function describeSpan(item) {
   const first = fmtDate(item.start_date, { dateStyle: 'medium' })
@@ -46,7 +55,7 @@ function LeaveForm({ onSend, role }) {
     <form className="request-form" onSubmit={submit} aria-label="Request time off">
       <h2>Request time off</h2>
       <label>Type
-        <select value={kind} onChange={event => setKind(event.target.value)}>{KINDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <AppSelect value={kind} onChange={event => setKind(event.target.value)} aria-label="Type" className="form-select">{KINDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</AppSelect>
       </label>
       <div className="leave-dates">
         <label>From<input type="date" value={start} onChange={event => { setStart(event.target.value); if (!end) setEnd(event.target.value) }} required /></label>
@@ -56,6 +65,7 @@ function LeaveForm({ onSend, role }) {
       <label className="leave-check"><input type="checkbox" checked={endHalf} onChange={event => setEndHalf(event.target.checked)} /> Last day ends at midday</label>
       <label>Note (optional, only you and approvers see it)<textarea value={note} rows={2} maxLength={1000} onChange={event => setNote(event.target.value)} /></label>
       {role === 'owner' && <p className="memo-card-meta">As an owner, your time off is recorded as approved straight away.</p>}
+      {role === 'manager' && <p className="memo-card-meta">An owner will approve this.</p>}
       {error && <p className="memo-error" role="alert">{error}</p>}
       <div className="memo-actions"><Button type="submit" loading={busy}>Send request</Button></div>
     </form>
@@ -69,7 +79,7 @@ function DecideCard({ item, onDecide }) {
   const decide = async decision => {
     setBusy(true)
     setError('')
-    try { await onDecide(item.id, decision, note) } catch (decideError) { setError(decideError.message); setBusy(false) }
+    try { await onDecide(item, decision, note) } catch (decideError) { setError(decideError.message); setBusy(false) }
   }
   return (
     <article className="request-card">
@@ -91,13 +101,13 @@ function DecideCard({ item, onDecide }) {
 
 export default function LeaveView({ workspaceId, role }) {
   const call = useWorkspaceCall(workspaceId)
-  const [data, setData] = useState({ mine: [], team: [], to_decide: [], can_approve: false })
+  const [data, setData] = useState({ mine: [], team: [], to_decide: [], recent: [], can_approve: false })
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
     try {
-      setData(await call('time-off/', 'GET'))
+      setData({ mine: [], team: [], to_decide: [], recent: [], can_approve: false, ...(await call('time-off/', 'GET')) })
       setError('')
     } catch (loadError) {
       setError(loadError.message)
@@ -107,46 +117,75 @@ export default function LeaveView({ workspaceId, role }) {
   }, [call])
   useEffect(() => { load() }, [load])
 
-  const send = async fields => { await call('time-off/', 'POST', fields); await load() }
-  const decide = async (id, decision, note) => { await call(`time-off/${id}/`, 'PATCH', { decision, note }); await load() }
-  const withdraw = async id => {
-    try { await decide(id, 'cancel') } catch (withdrawError) { setError(withdrawError.message) }
+  const send = async fields => {
+    const result = await call('time-off/', 'POST', fields)
+    toast.success(result.leave?.status === 'approved' ? 'Time off recorded.' : 'Request sent. You will be told when it is decided.')
+    await load()
   }
+  const decide = async (item, decision, note) => {
+    await call(`time-off/${item.id}/`, 'PATCH', { decision, note })
+    toast.success(decision === 'approved' ? `Approved ${item.user_name}'s leave.` : `Declined ${item.user_name}'s leave.`)
+    await load()
+  }
+  const withdraw = async item => {
+    try {
+      await call(`time-off/${item.id}/`, 'PATCH', { decision: 'cancel' })
+      toast.success('Time off withdrawn.')
+      await load()
+    } catch (withdrawError) {
+      setError(withdrawError.message)
+    }
+  }
+  const effectiveRole = role || data.role || 'member'
+  const todayIso = new Date().toISOString().slice(0, 10)
 
   return (
     <section className="workspace-view leave-view">
-      <WorkspaceViewHeading eyebrow="People" title="Time off" subtitle="Request leave, and see who is away so work can be planned around it." />
+      <WorkspaceViewHeading eyebrow="People" title="Time off" subtitle={ROLE_LINE[effectiveRole] || ROLE_LINE.member} />
       {error && <p className="memo-error" role="alert">{error}</p>}
-      <div className="requests-panel">
-        <LeaveForm onSend={send} role={role} />
-        {data.can_approve && (
-          <section aria-label="Leave to decide">
-            <h2>To decide{data.to_decide.length ? ` (${data.to_decide.length})` : ''}</h2>
-            {loaded && !data.to_decide.length && <p className="memo-empty-inline">Nothing is waiting for you.</p>}
-            {data.to_decide.map(item => <DecideCard key={item.id} item={item} onDecide={decide} />)}
+      {data.can_approve && (
+        <section className="leave-decide" aria-label="Leave to decide">
+          <h2>To decide{data.to_decide.length ? ` (${data.to_decide.length})` : ''}</h2>
+          {loaded && !data.to_decide.length && <p className="memo-empty-inline">Nothing is waiting for you.</p>}
+          <div className="leave-decide-grid">{data.to_decide.map(item => <DecideCard key={item.id} item={item} onDecide={decide} />)}</div>
+        </section>
+      )}
+      <div className="leave-layout">
+        <LeaveForm onSend={send} role={effectiveRole} />
+        <div className="leave-side">
+          <section aria-label="My time off">
+            <h2>My time off</h2>
+            {loaded && !data.mine.length && <p className="memo-empty-inline"><CalendarOff size={16} aria-hidden="true" /> You have not asked for any time off.</p>}
+            {data.mine.map(item => (
+              <article className="request-card" key={item.id}>
+                <header><strong>{KIND_LABEL[item.kind]}</strong><span className={`request-status is-${item.status}`}>{STATUS_LABEL[item.status]}</span></header>
+                <p className="memo-card-meta">{describeSpan(item)}</p>
+                {item.reviewer_name && item.status !== 'pending' && <p className="memo-card-meta">{STATUS_LABEL[item.status]} by {item.reviewer_name}{item.review_note ? `: ${item.review_note}` : ''}</p>}
+                {(item.status === 'pending' || item.status === 'approved') && item.end_date >= todayIso && (
+                  <div className="memo-actions"><Button type="button" variant="secondary" size="sm" onClick={() => withdraw(item)}>Withdraw</Button></div>
+                )}
+              </article>
+            ))}
           </section>
-        )}
-        <section aria-label="My time off">
-          <h2>My time off</h2>
-          {loaded && !data.mine.length && <p className="memo-empty-inline"><CalendarOff size={16} aria-hidden="true" /> You have not asked for any time off.</p>}
-          {data.mine.map(item => (
-            <article className="request-card" key={item.id}>
-              <header><strong>{KIND_LABEL[item.kind]}</strong><span className={`request-status is-${item.status}`}>{STATUS_LABEL[item.status]}</span></header>
-              <p className="memo-card-meta">{describeSpan(item)}</p>
-              {item.reviewer_name && item.status !== 'pending' && <p className="memo-card-meta">{STATUS_LABEL[item.status]} by {item.reviewer_name}{item.review_note ? `: ${item.review_note}` : ''}</p>}
-              {(item.status === 'pending' || item.status === 'approved') && item.end_date >= new Date().toISOString().slice(0, 10) && (
-                <div className="memo-actions"><Button type="button" variant="secondary" size="sm" onClick={() => withdraw(item.id)}>Withdraw</Button></div>
-              )}
-            </article>
-          ))}
-        </section>
-        <section aria-label="Who is away">
-          <h2>Who is away</h2>
-          {loaded && !data.team.length && <p className="memo-empty-inline">Nobody has approved time off coming up.</p>}
-          {data.team.map(item => (
-            <p className="leave-away" key={item.id}><strong>{item.user_name}</strong> - {describeSpan(item)}</p>
-          ))}
-        </section>
+          <section aria-label="Who is away">
+            <h2>Who is away</h2>
+            {loaded && !data.team.length && <p className="memo-empty-inline">Nobody has approved time off coming up.</p>}
+            {data.team.map(item => (
+              <p className="leave-away" key={item.id}><strong>{item.user_name}</strong> - {describeSpan(item)}</p>
+            ))}
+          </section>
+          {data.can_approve && (
+            <section aria-label="Decided recently">
+              <h2>Decided recently</h2>
+              {loaded && !data.recent.length && <p className="memo-empty-inline">Nothing decided in the last 60 days.</p>}
+              {data.recent.map(item => (
+                <p className="leave-away" key={item.id}>
+                  <strong>{item.user_name}</strong> - {KIND_LABEL[item.kind]}, {describeSpan(item)} <span className={`request-status is-${item.status}`}>{STATUS_LABEL[item.status]}</span>
+                </p>
+              ))}
+            </section>
+          )}
+        </div>
       </div>
     </section>
   )

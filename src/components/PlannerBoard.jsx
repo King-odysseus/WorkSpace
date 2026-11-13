@@ -963,14 +963,15 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
         </section>})}
       {!buckets.length && <p className="planner-empty planner-board-empty">{bucketScope ? 'This scope has no lanes yet. Add a bucket to start planning.' : 'This workspace has no lanes yet. Add a bucket to start planning.'}</p>}
     </div>
-    {doneTasks.length > 0 && <CollapsibleSection
+    {doneTasks.length > 0 && <><CollapsibleSection
       className="planner-done-band"
       title="Done"
       count={doneTasks.length}
       contentClassName="planner-done-band-list"
     >
       {doneTasks.map(task => renderTaskCard(task, null, -1, 0))}
-    </CollapsibleSection>}
+    </CollapsibleSection>
+    <p className="planner-done-note">Tasks finished more than 60 days ago move to Archived, where you can still view and restore them.</p></>}
     </>}
     <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</p>
     <BulkActionBar

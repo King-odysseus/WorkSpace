@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { Building2, ChevronLeft, ChevronRight, Home, MapPin, Plane } from 'lucide-react'
 import { Button } from './ui/button.jsx'
+import { AppSelect } from './ui/select.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { fmtDate, isoDate, useWorkspaceCall } from '../lib/workspace-api.js'
 
@@ -51,7 +53,6 @@ export default function WhereWeWorkView({ workspaceId, currentUserId }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()))
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [pattern, setPattern] = useState({})
   const [officeDays, setOfficeDays] = useState([])
 
@@ -75,12 +76,12 @@ export default function WhereWeWorkView({ workspaceId, currentUserId }) {
   const shownIndexes = useMemo(() => dates.map((_, index) => index).filter(index => index < 5 || data?.members.some(member => member.working_days.includes(index))), [dates, data])
 
   const run = async work => {
-    setError(''); setNotice('')
+    setError('')
     try { await work(); await load() } catch (runError) { setError(runError.message) }
   }
-  const setDay = (date, value) => run(() => call('locations/', 'PUT', { date, location: value || null }))
-  const savePattern = () => run(async () => { await call('location-pattern/', 'PUT', { pattern }); setNotice('Your usual week is saved.') })
-  const savePolicy = () => run(async () => { await call('office-days/', 'PATCH', { office_days: officeDays }); setNotice('Office days are saved.') })
+  const setDay = (date, value) => run(async () => { await call('locations/', 'PUT', { date, location: value || null }); toast.success(value ? `Saved: ${PLACES[value][0]} on ${fmtDate(date)}.` : `Back to your usual place on ${fmtDate(date)}.`) })
+  const savePattern = () => run(async () => { await call('location-pattern/', 'PUT', { pattern }); toast.success('Your usual week is saved.') })
+  const savePolicy = () => run(async () => { await call('office-days/', 'PATCH', { office_days: officeDays }); toast.success('Office days are saved.') })
   const shift = weeks => setWeekStart(current => new Date(current.getFullYear(), current.getMonth(), current.getDate() + weeks * 7))
 
   const members = data?.members || []
@@ -98,7 +99,6 @@ export default function WhereWeWorkView({ workspaceId, currentUserId }) {
           : 'Office, home or elsewhere, day by day.'}
       />
       {error && <p className="memo-error" role="alert">{error}</p>}
-      {notice && <p className="memo-notice" role="status">{notice}</p>}
       <div className="where-toolbar">
         <Button type="button" variant="secondary" size="sm" onClick={() => shift(-1)} aria-label="Previous week"><ChevronLeft size={14} aria-hidden="true" /></Button>
         <strong>{fmtDate(start, { dateStyle: 'medium' })} to {fmtDate(end, { dateStyle: 'medium' })}</strong>
@@ -120,10 +120,10 @@ export default function WhereWeWorkView({ workspaceId, currentUserId }) {
                   return (
                     <td key={key}>
                       {member.id === currentUserId && day && day.source !== 'off' && day.source !== 'leave'
-                        ? <select className="where-select" aria-label={`Where you work on ${fmtDate(key)}`} value={day.source === 'set' ? day.location : ''} onChange={event => setDay(key, event.target.value)}>
+                        ? <AppSelect className="where-select" aria-label={`Where you work on ${fmtDate(key)}`} value={day.source === 'set' ? day.location : ''} onChange={event => setDay(key, event.target.value)}>
                           <option value="">{day.location ? `${PLACES[day.location][0]} (usual)` : 'Not set'}</option>
                           {Object.entries(PLACES).map(([value, [label]]) => <option key={value} value={value}>{label}</option>)}
-                        </select>
+                        </AppSelect>
                         : <Cell day={day} officeDays={data.office_days} weekday={index} />}
                     </td>
                   )
@@ -142,10 +142,10 @@ export default function WhereWeWorkView({ workspaceId, currentUserId }) {
           <div className="where-pattern">
             {WEEKDAYS.slice(0, 5).map((label, index) => (
               <label key={label}>{label}
-                <select value={pattern[String(index)] || ''} onChange={event => setPattern(current => { const next = { ...current }; if (event.target.value) next[String(index)] = event.target.value; else delete next[String(index)]; return next })}>
+                <AppSelect aria-label={`Usual place on ${label}`} className="form-select" value={pattern[String(index)] || ''} onChange={event => setPattern(current => { const next = { ...current }; if (event.target.value) next[String(index)] = event.target.value; else delete next[String(index)]; return next })}>
                   <option value="">Not set</option>
                   {Object.entries(PLACES).map(([value, [placeLabel]]) => <option key={value} value={value}>{placeLabel}</option>)}
-                </select>
+                </AppSelect>
               </label>
             ))}
           </div>

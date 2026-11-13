@@ -2,6 +2,7 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import MemosView from './MemosView.jsx'
+import userEvent from '@testing-library/user-event'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
 
 afterEach(() => { vi.restoreAllMocks() })
@@ -39,7 +40,9 @@ describe('MemosView', () => {
     const fetchMock = mockApi({ '/memos/': { memos: [], can_post: true } })
     render(<MemosView workspaceId={4} currentUserId={9} role="manager" />)
     fireEvent.click(await screen.findByRole('button', { name: /New memo/ }))
-    fireEvent.change(await screen.findByLabelText('Type'), { target: { value: 'request' } })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('combobox', { name: 'Type' }))
+    await user.click(await screen.findByRole('option', { name: 'Ask the team for a response' }))
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Holiday dates' } })
     fireEvent.change(screen.getByLabelText('Memo'), { target: { value: 'Tell me yours.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post memo' }))

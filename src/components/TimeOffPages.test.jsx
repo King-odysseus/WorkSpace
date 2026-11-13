@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import LeaveView, { describeSpan } from './LeaveView.jsx'
 import RequestsPanel from './RequestsPanel.jsx'
 import WhereWeWorkView, { summariseDay } from './WhereWeWorkView.jsx'
+import userEvent from '@testing-library/user-event'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
 
 afterEach(() => { vi.restoreAllMocks() })
@@ -97,8 +98,10 @@ describe('WhereWeWorkView', () => {
     render(<WhereWeWorkView workspaceId={4} currentUserId={1} />)
     expect(await screen.findByText('Mia')).toBeTruthy()
     expect(screen.getAllByText(/On leave/).length).toBeGreaterThan(0)
-    const select = await screen.findByLabelText(/Where you work on/, { selector: 'select' }).catch(() => screen.getAllByLabelText(/Where you work on/)[0])
-    fireEvent.change(select, { target: { value: 'other' } })
+    const select = (await screen.findAllByRole('combobox', { name: /Where you work on/ }))[0]
+    const user = userEvent.setup()
+    await user.click(select)
+    await user.click(await screen.findByRole('option', { name: 'Other' }))
     await waitFor(() => expectRequest(fetchMock, '/locations/', 'PUT'))
     expect(JSON.parse(expectRequest(fetchMock, '/locations/', 'PUT')[1].body).location).toBe('other')
   })

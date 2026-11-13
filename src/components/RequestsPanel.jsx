@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import { Check, Inbox, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { fmtDate, useWorkspaceCall } from '../lib/workspace-api.js'
@@ -92,8 +93,13 @@ export default function RequestsPanel({ workspaceId, currentUserId, onChanged })
 
   useEffect(() => { load() }, [load])
 
-  const send = async fields => { await call('requests/', 'POST', fields); await load(); onChanged?.() }
-  const decide = async (id, decision, note) => { await call(`requests/${id}/`, 'PATCH', { decision, note }); await load(); onChanged?.() }
+  const send = async fields => { await call('requests/', 'POST', fields); toast.success('Request sent. You will be told when it is answered.'); await load(); onChanged?.() }
+  const decide = async (id, decision, note) => {
+    await call(`requests/${id}/`, 'PATCH', { decision, note })
+    toast.success({ approved: 'Request approved.', declined: 'Request declined.', cancel: 'Request withdrawn.' }[decision] || 'Saved.')
+    await load()
+    onChanged?.()
+  }
 
   const mineItems = items.filter(item => item.requester_id === currentUserId)
   const others = items.filter(item => item.requester_id !== currentUserId)
@@ -101,21 +107,25 @@ export default function RequestsPanel({ workspaceId, currentUserId, onChanged })
   const answered = others.filter(item => item.status !== 'pending')
 
   return (
-    <div className="requests-panel">
+    <div className="requests-wrap">
       {error && <p className="memo-error" role="alert">{error}</p>}
-      <NewRequestForm onSend={send} />
       {canManage && (
-        <section aria-label="Requests from the team">
-          <h2>From the team{waiting.length ? ` (${waiting.length} waiting)` : ''}</h2>
+        <section className="leave-decide" aria-label="Requests from the team">
+          <h2>Inbox: requests from the team{waiting.length ? ` (${waiting.length} waiting)` : ''}</h2>
           {loaded && !others.length && <p className="memo-empty-inline">Nothing from your team yet.</p>}
-          {[...waiting, ...answered].map(item => <RequestCard key={item.id} item={item} canManage onDecide={decide} />)}
+          <div className="leave-decide-grid">{[...waiting, ...answered].map(item => <RequestCard key={item.id} item={item} canManage onDecide={decide} />)}</div>
         </section>
       )}
-      <section aria-label="My requests">
-        <h2>My requests</h2>
-        {loaded && !mineItems.length && <p className="memo-empty-inline"><Inbox size={16} aria-hidden="true" /> You have not asked for anything yet.</p>}
-        {mineItems.map(item => <RequestCard key={item.id} item={item} mine onDecide={decide} />)}
-      </section>
+      <div className="leave-layout">
+        <NewRequestForm onSend={send} />
+        <div className="leave-side">
+          <section aria-label="My requests">
+            <h2>My requests</h2>
+            {loaded && !mineItems.length && <p className="memo-empty-inline"><Inbox size={16} aria-hidden="true" /> You have not asked for anything yet.</p>}
+            {mineItems.map(item => <RequestCard key={item.id} item={item} mine onDecide={decide} />)}
+          </section>
+        </div>
+      </div>
     </div>
   )
 }

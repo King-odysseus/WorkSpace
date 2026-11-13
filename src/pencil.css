@@ -9556,12 +9556,13 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .task-dialog-heading-copy .remind-task-button { display: inline-flex !important; width: fit-content !important; min-width: 0 !important; align-items: center !important; justify-content: center !important; gap: 8px !important; padding: 0 16px !important; line-height: 1 !important; }
 .task-dialog-heading-copy .remind-task-button svg { flex: 0 0 auto; margin: 0 !important; }
 
-/* Planner board on desktop: every column runs its full length, so no card hides
-   behind an inner scrollbar. The page grows instead, and the Done bar below the
-   board moves down with it. Phones keep their own one-bucket layout. */
+/* Planner board on desktop: columns are about one screen tall and scroll inside,
+   so the Done bar sits at the bottom of the viewport and the page only grows by a
+   little. Finished tasks move to Archived after 60 days. Phones keep their own
+   one-bucket layout. */
 @media (min-width: 1024px) {
-  .planner-column { height: auto !important; min-height: 744px; overflow: visible !important; }
-  .planner-column .planner-column-body { flex: 0 0 auto !important; overflow: visible !important; max-height: none !important; }
+  .planner-column { height: clamp(520px, calc(100dvh - 300px), 900px) !important; min-height: 0; overflow: hidden !important; }
+  .planner-column .planner-column-body { flex: 1 1 auto !important; overflow-y: auto !important; max-height: none !important; }
 }
 
 /* Writing boxes grow with their text (see lib/auto-grow.js), then scroll. */
@@ -9591,3 +9592,85 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .drawer-comment-form ~ .chat-mention-picker button:hover, .drawer-comment-form ~ .chat-mention-picker button:focus-visible { background: var(--pencil-surface-muted); outline: 0; }
 .drawer-comment-form ~ .chat-mention-picker strong { font-size: 13px; font-weight: 600; }
 .drawer-comment-form ~ .chat-mention-picker span { color: var(--pencil-text-muted); font-size: 12px; }
+
+/* Requests, time off and where we work: full width, cards side by side, and the
+   weights and spacing the rest of the app uses. */
+.requests-panel { max-width: none !important; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-items: start; gap: 20px; margin-top: 20px; }
+.requests-panel > section { min-width: 0; }
+.requests-panel > section:not(.request-form) { padding: 0; }
+.requests-panel > section > h2, .request-form h2 { margin: 0 0 12px !important; font-size: 17px !important; font-weight: 700 !important; line-height: 1.3; color: var(--pencil-navy) !important; }
+.request-form { padding: 20px 22px !important; border-radius: 20px !important; box-shadow: 0 1px 2px rgb(16 24 40 / 5%); }
+.request-form label { font-weight: 600 !important; color: var(--pencil-text); }
+.request-form label.leave-check { font-weight: 500 !important; }
+.request-form input[type="text"], .request-form input[type="date"], .request-form select, .request-form textarea { min-height: 42px; border-radius: 14px !important; }
+.request-form textarea { min-height: 84px; }
+.request-card { border-radius: 18px !important; padding: 16px 18px !important; box-shadow: 0 1px 2px rgb(16 24 40 / 5%); }
+.request-card header strong { font-size: 15px; font-weight: 700; }
+.leave-view .requests-panel > section:first-child, .where-view .where-pattern { align-items: end; }
+
+.where-scroll { border-radius: 20px !important; box-shadow: 0 1px 2px rgb(16 24 40 / 5%); }
+.where-table { min-width: 720px; table-layout: fixed; }
+.where-table th:first-child, .where-table td:first-child { width: 220px; }
+.where-table thead th { padding: 12px 14px; font-size: 11px !important; font-weight: 700 !important; letter-spacing: .06em; text-transform: uppercase; text-align: center; }
+.where-table thead th:first-child { text-align: left; }
+.where-table tbody th { padding: 12px 14px; font-size: 14px; font-weight: 700; text-align: left; }
+.where-table td { padding: 10px 8px; text-align: center; }
+.where-table tbody tr:last-child th, .where-table tbody tr:last-child td { border-bottom: 0; }
+.where-cell { padding: 5px 12px !important; font-size: 13px; }
+.where-cell.is-none, .where-cell.is-off { font-size: 14px; }
+.where-select { min-width: 118px; min-height: 34px; padding: 4px 12px; font-weight: 600; }
+.where-toolbar strong { font-size: 15px; }
+.where-pattern { gap: 14px; }
+.where-pattern label { min-width: 112px; }
+.where-pattern .leave-check { min-width: 0; }
+.where-legend { margin: 10px 2px 0 !important; }
+
+/* Layout shared by Time off and Requests: decisions across the top, then the form
+   beside the person's own lists. Full width, and the same drop-down as the rest of
+   the app. */
+.leave-view, .where-view, .memos-view { max-width: none; }
+.requests-wrap { display: grid; gap: 24px; margin-top: 8px; }
+.leave-decide > h2, .leave-side > section > h2, .request-form h2 { margin: 0 0 12px; font-size: 17px; font-weight: 700; color: var(--pencil-navy); }
+.leave-decide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 16px; }
+.leave-decide-grid .request-card { margin: 0; }
+.leave-layout { display: grid; grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr); gap: 24px; align-items: start; margin-top: 16px; }
+.leave-side { display: grid; gap: 24px; min-width: 0; }
+.leave-side .request-card { margin: 0 0 12px; }
+.leave-view > .leave-decide { margin-top: 16px; }
+.request-form .app-select-trigger, .where-pattern .app-select-trigger { width: 100%; min-height: 42px; justify-content: space-between; border-radius: 14px; font-size: 14px; }
+.where-select.app-select-trigger { width: auto; min-width: 128px; min-height: 34px; border-radius: 999px; font-size: 13px; }
+@media (max-width: 900px) { .leave-layout { grid-template-columns: 1fr; } }
+.planner-done-note { margin: 8px 4px 0; font-size: 12px; color: var(--pencil-text-muted); }
+
+/* Day plan as sticky notes on a board, or as a list. */
+.plan-view-toggle { display: inline-flex; padding: 3px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface-muted); }
+.plan-view-toggle button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--pencil-text-muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+.plan-view-toggle button.is-active { background: #0B0B45; color: #fff; }
+.plan-text { margin: 14px 0 0; font-size: 14px; line-height: 1.6; color: var(--pencil-text-secondary, var(--pencil-text)); }
+.plan-text p { margin: 6px 0; }
+.plan-outro { padding: 12px 14px; border-radius: 12px; background: var(--pencil-surface-muted); }
+.plan-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; margin: 18px 0 10px; padding: 18px; border-radius: 18px; background: repeating-linear-gradient(0deg, transparent 0 27px, rgb(16 24 40 / 4%) 27px 28px), var(--pencil-surface-muted); }
+.plan-sticky { position: relative; display: flex; flex-direction: column; gap: 6px; min-height: 190px; padding: 22px 16px 14px; border-radius: 4px 4px 14px 4px; background: #fff3a8; color: #3b3a1a; box-shadow: 0 6px 14px rgb(16 24 40 / 14%); transition: transform 150ms ease; }
+.plan-sticky::before { content: ""; position: absolute; top: -8px; left: 50%; width: 54px; height: 16px; transform: translateX(-50%) rotate(-2deg); background: rgb(255 255 255 / 55%); box-shadow: 0 1px 2px rgb(16 24 40 / 10%); }
+.plan-sticky.is-break { background: #cdeed9; color: #1d4a35; }
+.plan-sticky.tilt-0 { transform: rotate(-1.2deg); } .plan-sticky.tilt-1 { transform: rotate(.8deg); } .plan-sticky.tilt-2 { transform: rotate(-.4deg); }
+.plan-sticky:hover, .plan-sticky:focus-within { transform: rotate(0) translateY(-2px); }
+.plan-sticky header { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.plan-sticky header span { padding: 1px 8px; border-radius: 999px; background: rgb(11 11 69 / 10%); font-weight: 700; }
+.plan-sticky h3 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.3; }
+.plan-sticky p { margin: 0; font-size: 13px; line-height: 1.45; opacity: .85; }
+.plan-block-note { width: 100%; margin-top: auto; padding: 7px 9px; border: 1px dashed rgb(11 11 69 / 28%); border-radius: 8px; background: rgb(255 255 255 / 45%); color: inherit; font: inherit; font-size: 13px; resize: none; }
+.plan-block-note:focus { outline: 2px solid #C49A6C; background: rgb(255 255 255 / 75%); }
+.plan-list { display: grid; gap: 10px; margin: 16px 0 8px; padding: 0; list-style: none; }
+.plan-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 14px; padding: 14px 16px; border: 1px solid var(--pencil-border); border-left: 4px solid #C49A6C; border-radius: 14px; background: var(--pencil-surface); }
+.plan-row.is-break { border-left-color: #12b76a; background: #f6fef9; }
+.plan-row-time { display: grid; align-content: start; font-variant-numeric: tabular-nums; }
+.plan-row-time strong { font-size: 15px; color: var(--pencil-navy); }
+.plan-row-time span { font-size: 12px; color: var(--pencil-text-muted); }
+.plan-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.plan-row-title strong { font-size: 15px; }
+.plan-row-title em { padding: 1px 9px; border-radius: 999px; background: var(--pencil-selected); font-size: 12px; font-style: normal; font-weight: 700; color: var(--pencil-navy); }
+.plan-row-main p { margin: 4px 0 0; font-size: 13px; color: var(--pencil-text-muted); }
+.plan-row .plan-block-note { margin-top: 8px; background: var(--pencil-surface-muted); border-color: var(--pencil-border); }
+@media (max-width: 640px) { .plan-row { grid-template-columns: 1fr; gap: 6px; } .plan-row-time { display: flex; gap: 6px; align-items: baseline; } }
+@media (prefers-reduced-motion: reduce) { .plan-sticky { transition: none; } }
