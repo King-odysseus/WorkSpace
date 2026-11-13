@@ -9496,3 +9496,7 @@ body:has([data-slot='dialog-content'].ai-chat-window) .main-content { overflow: 
 }
 .ai-minimized-bubble .ai-minimized-open svg { color: #C49A6C !important; stroke: #C49A6C !important; opacity: 1 !important; }
 .day-plan-note { align-self: start; height: auto; }
+
+/* Collapsed rail: the active page is already the white circle, so the thin
+   left-edge marker is dropped; it showed as a notch cut into the circle. */
+aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > span[aria-hidden='true'] { display: none !important; }
