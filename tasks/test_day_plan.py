@@ -31,6 +31,10 @@ class DayPlanTests(TestCase):
         self.client.delete(self.url)
         self.assertEqual(PlannerDayNote.objects.count(), 0)
 
+    def test_the_read_carries_the_persons_working_hours(self):
+        Membership.objects.filter(user=self.ada).update(daily_capacity_minutes=360)
+        self.assertEqual(self.client.get(self.url).json()['daily_minutes'], 360)
+
     def test_each_day_has_its_own_note(self):
         self.put('Today', date='2026-01-05')
         self.put('Later', date='2026-01-06')

@@ -368,7 +368,12 @@ def personal_day_plan(request, workspace_id):
     notes = PlannerDayNote.objects.filter(workspace_id=workspace_id, owner=request.user, date=day)
     if request.method == 'GET':
         note = notes.first()
-        return JsonResponse({'note': note.as_dict() if note else None})
+        # The person's own working hours (Settings > Team), so a plan fits their day.
+        return JsonResponse({
+            'note': note.as_dict() if note else None,
+            'daily_minutes': membership.daily_capacity_minutes,
+            'working_days': membership.working_days,
+        })
     if request.method == 'DELETE':
         notes.delete()
         return JsonResponse({'note': None})

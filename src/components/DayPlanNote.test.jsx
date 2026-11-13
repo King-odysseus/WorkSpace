@@ -43,7 +43,10 @@ describe('DayPlanNote', () => {
 
   it('asks for breaks and time per task', () => {
     const prompt = buildPlanPrompt([], '2026-11-13')
-    expect(prompt).toMatch(/breaks/)
+    expect(prompt).toMatch(/5 minutes/)
+    expect(prompt).toMatch(/Do not schedule a lunch/)
+    expect(buildPlanPrompt([], '2026-11-13', 390)).toMatch(/6.5 hours long/)
+    expect(prompt).not.toMatch(/hours long/)
     expect(prompt).toMatch(/how long each task/)
   })
 })

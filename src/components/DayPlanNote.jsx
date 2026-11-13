@@ -8,15 +8,20 @@ import { takePendingDayPlan } from '../lib/day-plan-navigation.js'
 // Zuri's plan for the day, kept as a note at the bottom of My planner. It is a
 // note and not a planner item: nothing that counts planner work (the Today ring,
 // the planner totals) ever reads it, and the person can delete it at any time.
-export function buildPlanPrompt(openPersonalTitles, today) {
+export function buildPlanPrompt(openPersonalTitles, today, dailyMinutes) {
+  const hours = dailyMinutes ? Math.round((dailyMinutes / 60) * 10) / 10 : 0
+  const length = hours
+    ? `My working day is ${hours} hours long (Settings), so plan no more than ${hours} hours of work in total, and say what to move if it does not fit.`
+    : ''
   const own = openPersonalTitles.length
     ? `My private planner items still open: ${openPersonalTitles.slice(0, 40).map(title => `"${title}"`).join('; ')}.`
     : 'I have no open items in my private planner.'
   return [
     `Plan my working day for ${today}.`,
+    length,
     'Use the tasks assigned to me in the workspace that are overdue, due today or in progress, plus my planner items below.',
     own,
-    'Give a short schedule as plain lines like "09:00-11:00 Task name (2h)". Say how long each task should take, group small ones together, and put breaks in (a short one about every 90 minutes and a proper lunch break).',
+    'Give a short schedule as plain lines like "09:00-11:00 Task name (2h)". Say how long each task should take, group small ones together, and put breaks in (just 5 minutes about every 90 minutes). Do not schedule a lunch break: lunch is already covered by my employer, outside the hours I am planning.',
     'Put the most important or most overdue work first. If it cannot all fit in one day, say what to move to another day.',
     'Reply with the plan only, in plain text without markdown. Do not propose any changes to tasks: the actions must be null.',
   ].join(' ')
@@ -30,6 +35,9 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [dailyMinutes, setDailyMinutes] = useState(0)
+  const minutesRef = useRef(0)
+  minutesRef.current = dailyMinutes
   const titlesRef = useRef(openPersonalTitles)
   titlesRef.current = openPersonalTitles
 
@@ -55,7 +63,7 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
     setBusy('Zuri is planning your day...')
     setError('')
     try {
-      const data = await call(`/api/workspaces/${workspaceId}/ai/chat/`, 'POST', { message: buildPlanPrompt(titlesRef.current, today), history: [] })
+      const data = await call(`/api/workspaces/${workspaceId}/ai/chat/`, 'POST', { message: buildPlanPrompt(titlesRef.current, today, minutesRef.current), history: [] })
       const plan = String(data.answer || '').trim()
       if (!plan) throw new Error('Zuri did not return a plan. Try again.')
       await save(plan)
@@ -73,6 +81,8 @@ export default function DayPlanNote({ workspaceId, openPersonalTitles }) {
       .then(data => {
         if (cancelled) return
         setNote(data.note)
+        setDailyMinutes(Number(data.daily_minutes) || 0)
+        minutesRef.current = Number(data.daily_minutes) || 0
         setLoaded(true)
         if (takePendingDayPlan()) generate()
       })
