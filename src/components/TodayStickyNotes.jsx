@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { StickyNote as StickyIcon } from 'lucide-react'
+import { ChevronDown, ChevronRight, LayoutGrid, List, StickyNote as StickyIcon } from 'lucide-react'
 import StickyNote from './StickyNote.jsx'
 import { parsePlan } from '../lib/day-plan-parse.js'
 import { workspaceCall, isoDate } from '../lib/workspace-api.js'
@@ -14,6 +14,12 @@ export default function TodayStickyNotes({ workspaceId, onOpenPlanner }) {
   const [plan, setPlan] = useState(null)
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
+  // Shut by default so Today stays short; what the person chooses is remembered.
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem('today-sticky-open') === 'true' } catch { return false } })
+  const [view, setView] = useState(() => { try { return localStorage.getItem('today-sticky-view') === 'list' ? 'list' : 'board' } catch { return 'board' } })
+  const remember = (key, value) => { try { localStorage.setItem(key, value) } catch { /* not remembered */ } }
+  const toggleOpen = () => setOpen(current => { remember('today-sticky-open', String(!current)); return !current })
+  const chooseView = next => { setView(next); remember('today-sticky-view', next) }
 
   useEffect(() => {
     if (!workspaceId) return undefined
@@ -68,20 +74,43 @@ export default function TodayStickyNotes({ workspaceId, onOpenPlanner }) {
   return (
     <section className="today-sticky" aria-label="Sticky notes">
       <header className="today-sticky-head">
-        <div>
-          <h2><StickyIcon size={16} aria-hidden="true" /> Sticky notes</h2>
-          <p>{plan ? 'Today\'s plan and your open planner items. Only you can see these.' : 'Your open planner items. Only you can see these.'}</p>
-        </div>
-        <button type="button" className="secondary-button" onClick={onOpenPlanner}>Open planner</button>
+        <button type="button" className="today-sticky-toggle" aria-expanded={open} aria-controls="today-sticky-body" onClick={toggleOpen}>
+          {open ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
+          <span>
+            <strong><StickyIcon size={16} aria-hidden="true" /> Sticky notes</strong>
+            <small>{open ? (plan ? 'Today\'s plan and your open planner items. Only you can see these.' : 'Your open planner items. Only you can see these.') : `${notes.length} ${notes.length === 1 ? 'note' : 'notes'} - select to show`}</small>
+          </span>
+        </button>
+        {open && <div className="today-sticky-tools">
+          <div className="plan-view-toggle" role="group" aria-label="Sticky notes view">
+            <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'is-active' : ''} onClick={() => chooseView('board')}><LayoutGrid size={14} aria-hidden="true" /> Board</button>
+            <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'is-active' : ''} onClick={() => chooseView('list')}><List size={14} aria-hidden="true" /> List</button>
+          </div>
+          <button type="button" className="secondary-button" onClick={onOpenPlanner}>Open planner</button>
+        </div>}
       </header>
-      {shown.length
-        ? <div className="plan-board" role="list" aria-label="Sticky notes">
-          {shown.map((note, index) => (
-            <StickyNote key={note.id} header={note.header} chip={note.chip} title={note.title} detail={note.detail} tone={note.tone} tilt={index} active={note.active} onClick={onOpenPlanner} label={`Open planner: ${note.title}`} />
-          ))}
-        </div>
-        : <p className="today-sticky-empty">Nothing here yet. Use Plan my day, or add items in My planner, and they will appear as notes.</p>}
-      {notes.length > shown.length && <p className="memo-card-meta">{notes.length - shown.length} more in My planner.</p>}
+      {open && <div id="today-sticky-body">
+        {shown.length
+          ? view === 'list'
+            ? <ol className="plan-list" aria-label="Sticky notes as a list">
+              {shown.map(note => (
+                <li key={note.id} className={`plan-row is-${note.tone === 'break' ? 'break' : 'work'}`}>
+                  <div className="plan-row-time"><strong>{note.header}</strong></div>
+                  <div className="plan-row-main">
+                    <div className="plan-row-title"><strong>{note.title}</strong>{note.chip && <em>{note.chip}</em>}</div>
+                    {note.detail && <p>{note.detail}</p>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+            : <div className="plan-board" role="list" aria-label="Sticky notes">
+              {shown.map((note, index) => (
+                <StickyNote key={note.id} header={note.header} chip={note.chip} title={note.title} detail={note.detail} tone={note.tone} tilt={index} active={note.active} onClick={onOpenPlanner} label={`Open planner: ${note.title}`} />
+              ))}
+            </div>
+          : <p className="today-sticky-empty">Nothing here yet. Use Plan my day, or add items in My planner, and they will appear as notes.</p>}
+        {notes.length > shown.length && <p className="memo-card-meta">{notes.length - shown.length} more in My planner.</p>}
+      </div>}
     </section>
   )
 }

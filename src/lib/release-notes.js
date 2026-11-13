@@ -15,8 +15,8 @@ const RELEASE_NOTES = [
     title: 'Sticky notes',
     items: [
       'Your day plan is now a board of sticky notes, one per block with its time and length, or a list. Add your own note to any block.',
-      'My planner can show your items as sticky notes too. Drag them into a new order, or use the arrows. The order is saved.',
-      'Today has a Sticky notes widget: the blocks of your plan (the one you are in is marked) and your open planner items.',
+      'My planner can show your items as sticky notes on a board. Drag a note anywhere and it stays there. Edit its title and text in place, change its colour, tick it to finish it, or remove it: archive it to restore it later, or delete it for good.',
+      'Today has a Quick note, one sticky note for jotting things down that saves as you type, and a Sticky notes board with your plan and open planner items. The board is closed until you open it, and Today remembers your choice and whether you prefer the board or a list.',
     ],
   },
   {

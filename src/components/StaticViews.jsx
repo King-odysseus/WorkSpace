@@ -326,7 +326,8 @@ const HELP_TOPICS = [
       'Select Plan my day on Today, or Plan my day with Zuri at the bottom of My planner. An owner must switch on Zuri in Settings first.',
       'Zuri looks at the tasks assigned to you and your private planner items, then writes a short schedule with times and breaks.',
       'The plan is saved under My planner as sticky notes, one per block, or as a list (use the Board / List switch). Add your own note to any block. Edit the plan text, ask for a new one with Plan again, or delete it. It never counts in your progress ring.',
-      'In My planner, switch to Notes to see your items as sticky notes and drag them into the order you want. Today also shows a Sticky notes widget.',
+      'In My planner, switch to Notes to see your items as sticky notes. Drag a note anywhere by its top bar (or focus it and use the arrow keys), change its colour with the dot, edit its title and text in place, tick it to finish it, and use the X to archive it (restore it from Archived notes) or delete it.',
+      'Today has a Quick note for jotting things down, and a Sticky notes board that stays closed until you open it. It remembers whether you like the board or the list.',
     ],
   },
   {

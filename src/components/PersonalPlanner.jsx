@@ -4,6 +4,7 @@
 // remember to filter it out.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock, LayoutGrid, List, MoreHorizontal, NotebookPen, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { Card } from './ui/card.jsx'
@@ -11,7 +12,7 @@ import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import { TaskProgressBar, progressOptions, taskProgressValue } from './TaskProgressBar.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import DayPlanNote from './DayPlanNote.jsx'
-import StickyNote from './StickyNote.jsx'
+import { NOTE_COLORS, NOTE_COLOR_LABEL } from '../lib/note-colors.js'
 import { formatDay, getCsrfToken, readJsonResponse, toDateKey } from '../lib/workspace-format.js'
 
 // A due time is the reason the field exists, so a task that named one is late the
@@ -25,69 +26,174 @@ function isOverdue(task, today, nowTime) {
   return Boolean(task.due_time) && task.due_time < nowTime
 }
 
-// Open planner items as sticky notes. They can be dragged into a new order (or
-// moved with the arrows, for anyone not using a mouse); the order is saved on each
-// item's position, so it is the same on every device.
-function PersonalStickyBoard({ tasks, today, nowTime, onToggle, onReorder, onNotes }) {
-  const [dragId, setDragId] = React.useState(null)
-  const [overId, setOverId] = React.useState(null)
-  const move = (id, targetId) => {
-    if (id === targetId) return
-    const ids = tasks.map(task => task.id)
-    const from = ids.indexOf(id)
-    const to = ids.indexOf(targetId)
-    if (from < 0 || to < 0) return
-    ids.splice(to, 0, ids.splice(from, 1)[0])
-    onReorder(ids)
-  }
-  const step = (id, delta) => {
-    const index = tasks.findIndex(task => task.id === id)
-    const target = tasks[index + delta]
-    if (target) move(id, target.id)
-  }
+// Open planner items as sticky notes on a board. A note can be dragged anywhere
+// (by its top bar, or with the arrow keys when it has focus) and stays where it was
+// put, on every device. Its title and text can be edited in place and its colour
+// changed. Ticking finishes it; removing offers to archive it (it can come back)
+// or delete it for good.
+const NOTE_W = 248
+const NOTE_H = 232
+const GAP = 16
+
+function StickyCard({ task, x, y, today, nowTime, dragging, onToggle, onPatch, onArchive, onDelete, onDragStart, onDragMove, onDragEnd, onNudge }) {
+  const [palette, setPalette] = React.useState(false)
+  const [removing, setRemoving] = React.useState(false)
+  const color = task.color || 'blue'
+  const overdue = isOverdue(task, today, nowTime)
   return (
-    <div className="plan-board" role="list" aria-label="My planner as sticky notes">
-      {tasks.map((task, index) => (
-        <StickyNote
-          key={task.id}
-          tone="task"
-          tilt={index}
-          header={task.due_date ? `Due ${formatDay(task.due_date)}${task.due_time ? ` ${task.due_time}` : ''}` : 'No due date'}
-          chip={task.progress_percent ? `${task.progress_percent}%` : ''}
-          title={task.title}
-          leading={<button type="button" className="sticky-tick" onClick={() => onToggle(task)} aria-label={`Finish ${task.title}`} aria-pressed={false} />}
-          active={isOverdue(task, today, nowTime)}
-          articleProps={{
-            draggable: true,
-            className: `${dragId === task.id ? 'is-dragging' : ''}${overId === task.id && dragId !== task.id ? ' is-drop-target' : ''}`,
-            onDragStart: event => { setDragId(task.id); event.dataTransfer.effectAllowed = 'move'; try { event.dataTransfer.setData('text/plain', String(task.id)) } catch { /* some browsers refuse */ } },
-            onDragOver: event => { event.preventDefault(); setOverId(task.id) },
-            onDragLeave: () => setOverId(current => (current === task.id ? null : current)),
-            onDrop: event => { event.preventDefault(); move(dragId, task.id); setDragId(null); setOverId(null) },
-            onDragEnd: () => { setDragId(null); setOverId(null) },
-          }}
-        >
-          <textarea
-            className="plan-block-note"
-            aria-label={`Notes for ${task.title}`}
-            placeholder="Add a note"
-            rows={2}
-            defaultValue={task.notes}
-            onBlur={event => onNotes(task, event.target)}
-          />
-          <div className="sticky-move" role="group" aria-label={`Move ${task.title}`}>
-            <button type="button" onClick={() => step(task.id, -1)} disabled={index === 0} aria-label={`Move ${task.title} earlier`} title="Move earlier"><ChevronLeft size={14} aria-hidden="true" /></button>
-            <button type="button" onClick={() => step(task.id, 1)} disabled={index === tasks.length - 1} aria-label={`Move ${task.title} later`} title="Move later"><ChevronRight size={14} aria-hidden="true" /></button>
-          </div>
-        </StickyNote>
-      ))}
-    </div>
+    <article
+      className={`sticky-card plan-sticky color-${color}${overdue ? ' is-active' : ''}${dragging ? ' is-dragging' : ''}`}
+      role="listitem"
+      tabIndex={0}
+      aria-label={`Sticky note: ${task.title}. Use the arrow keys to move it.`}
+      style={{ left: x, top: y, width: NOTE_W, minHeight: NOTE_H }}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget) return
+        const step = event.shiftKey ? 48 : 16
+        const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }
+        if (moves[event.key]) { event.preventDefault(); onNudge(task, ...moves[event.key]) }
+      }}
+    >
+      <div
+        className="sticky-bar"
+        title="Drag to move"
+        onPointerDown={event => { if (event.target.closest('button')) return; event.currentTarget.setPointerCapture?.(event.pointerId); onDragStart(task, event) }}
+        onPointerMove={event => onDragMove(task, event)}
+        onPointerUp={event => { event.currentTarget.releasePointerCapture?.(event.pointerId); onDragEnd(task, event) }}
+        onPointerCancel={event => onDragEnd(task, event, true)}
+      >
+        <button type="button" className="sticky-tick" onClick={() => onToggle(task)} aria-label={`Finish ${task.title}`} aria-pressed={false} />
+        <span className="sticky-due">{task.due_date ? `Due ${formatDay(task.due_date)}${task.due_time ? ` ${task.due_time}` : ''}` : 'No due date'}</span>
+        <button type="button" className="sticky-icon" onClick={() => { setPalette(open => !open); setRemoving(false) }} aria-label={`Change colour of ${task.title}`} aria-expanded={palette} title="Colour"><span className={`sticky-dot color-${color}`} /></button>
+        <button type="button" className="sticky-icon" onClick={() => { setRemoving(open => !open); setPalette(false) }} aria-label={`Remove ${task.title}`} aria-expanded={removing} title="Remove"><X size={14} aria-hidden="true" /></button>
+      </div>
+      {palette && <div className="note-colors" role="group" aria-label={`Colour for ${task.title}`}>
+        {NOTE_COLORS.map(name => (
+          <button key={name} type="button" className={`note-color color-${name}${color === name ? ' is-selected' : ''}`} aria-label={`${NOTE_COLOR_LABEL[name]} for ${task.title}`} aria-pressed={color === name} onClick={() => { onPatch(task, { color: name }, true); setPalette(false) }} />
+        ))}
+      </div>}
+      {removing && <div className="sticky-remove" role="group" aria-label={`Remove ${task.title}`}>
+        <button type="button" onClick={() => onArchive(task)}>Archive</button>
+        <button type="button" className="is-danger" onClick={() => onDelete(task)}>Delete</button>
+        <button type="button" onClick={() => setRemoving(false)}>Cancel</button>
+      </div>}
+      <input
+        className="sticky-title-input"
+        aria-label={`Title of ${task.title}`}
+        defaultValue={task.title}
+        maxLength={300}
+        onBlur={event => { const next = event.target.value.trim(); if (!next) { event.target.value = task.title } else if (next !== task.title) onPatch(task, { title: next }, true) }}
+        onKeyDown={event => { if (event.key === 'Enter') event.target.blur() }}
+      />
+      <textarea
+        className="plan-block-note"
+        aria-label={`Notes for ${task.title}`}
+        placeholder="Add a note"
+        rows={3}
+        defaultValue={task.notes}
+        onBlur={event => { if (event.target.value !== (task.notes || '')) onPatch(task, { notes: event.target.value }, true) }}
+      />
+    </article>
+  )
+}
+
+function PersonalStickyBoard({ tasks, archived, today, nowTime, onToggle, onPatch, onArchive, onRestore, onDelete }) {
+  const boardRef = React.useRef(null)
+  const [width, setWidth] = React.useState(900)
+  const [drag, setDrag] = React.useState(null)
+  React.useLayoutEffect(() => {
+    const element = boardRef.current
+    if (!element) return undefined
+    const measure = () => setWidth(element.clientWidth || 900)
+    measure()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
+    observer?.observe(element)
+    return () => observer?.disconnect()
+  }, [])
+
+  const columns = Math.max(1, Math.floor((width - GAP) / (NOTE_W + GAP)))
+  const maxX = Math.max(0, width - NOTE_W - GAP)
+  const clamp = (value, limit) => Math.max(0, Math.min(limit, Math.round(value)))
+  // A note nobody has moved yet takes the next free slot in a tidy grid.
+  let unplaced = 0
+  const spots = new Map(tasks.map(task => {
+    if (task.pos_x != null && task.pos_y != null) return [task.id, { x: clamp(task.pos_x, maxX), y: task.pos_y }]
+    const index = unplaced
+    unplaced += 1
+    return [task.id, { x: GAP + (index % columns) * (NOTE_W + GAP), y: GAP + Math.floor(index / columns) * (NOTE_H + GAP) }]
+  }))
+  const where = task => (drag && drag.id === task.id ? { x: drag.x, y: drag.y } : spots.get(task.id))
+  const height = Math.max(520, ...tasks.map(task => where(task).y + NOTE_H + GAP))
+
+  const dragStart = (task, event) => {
+    const spot = spots.get(task.id)
+    setDrag({ id: task.id, x: spot.x, y: spot.y, startX: event.clientX, startY: event.clientY, originX: spot.x, originY: spot.y })
+  }
+  const dragMove = (task, event) => {
+    setDrag(current => (current && current.id === task.id
+      ? { ...current, x: clamp(current.originX + event.clientX - current.startX, maxX), y: clamp(current.originY + event.clientY - current.startY, 5800) }
+      : current))
+  }
+  const dragEnd = (task, event, cancelled) => {
+    const current = drag
+    setDrag(null)
+    if (!current || current.id !== task.id || cancelled) return
+    const spot = spots.get(task.id)
+    if (current.x !== spot.x || current.y !== spot.y) onPatch(task, { pos_x: current.x, pos_y: current.y }, true)
+  }
+  const nudge = (task, dx, dy) => {
+    const spot = spots.get(task.id)
+    onPatch(task, { pos_x: clamp(spot.x + dx, maxX), pos_y: clamp(spot.y + dy, 5800) }, true)
+  }
+
+  return (
+    <>
+      <div className="sticky-canvas" ref={boardRef} role="list" aria-label="My planner as sticky notes" style={{ height }}>
+        {tasks.map(task => {
+          const spot = where(task)
+          return (
+            <StickyCard
+              key={task.id}
+              task={task}
+              x={spot.x}
+              y={spot.y}
+              today={today}
+              nowTime={nowTime}
+              dragging={drag?.id === task.id}
+              onToggle={onToggle}
+              onPatch={onPatch}
+              onArchive={onArchive}
+              onDelete={onDelete}
+              onDragStart={dragStart}
+              onDragMove={dragMove}
+              onDragEnd={dragEnd}
+              onNudge={nudge}
+            />
+          )
+        })}
+      </div>
+      {archived.length > 0 && (
+        <details className="sticky-archive">
+          <summary>Archived notes ({archived.length})</summary>
+          <ul>
+            {archived.map(task => (
+              <li key={task.id}>
+                <span>{task.title}</span>
+                <button type="button" onClick={() => onRestore(task)} aria-label={`Restore ${task.title}`}>Restore</button>
+                <button type="button" className="is-danger" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}>Delete</button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
   )
 }
 
 function PersonalPlanner({ workspaceId }) {
   const [planners, setPlanners] = useState([])
   const [tasks, setTasks] = useState([])
+  const [archivedTasks, setArchivedTasks] = useState([])
   const [selectedPlannerId, setSelectedPlannerId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -140,6 +246,7 @@ function PersonalPlanner({ workspaceId }) {
         if (cancelled) return
         setPlanners(data.planners || [])
         setTasks(data.tasks || [])
+        setArchivedTasks(data.archived_tasks || [])
         setError('')
       })
       .catch(failure => { if (!cancelled) setError(failure.message) })
@@ -276,15 +383,25 @@ function PersonalPlanner({ workspaceId }) {
   }
 
   const commitNotes = (task, input) => patchTask(task, { notes: input.value })
-  // New order for the open items: each one's place becomes its position.
-  const reorderOpen = ids => {
-    const positions = new Map(ids.map((id, index) => [id, index]))
-    setTasks(current => current.map(item => (positions.has(item.id) ? { ...item, position: positions.get(item.id) } : item)))
-    ids.forEach((id, index) => {
-      const original = tasks.find(item => item.id === id)
-      if (original && original.position !== index) patchTask({ ...original }, { position: index }, false)
-    })
-  }
+  // Putting a note away keeps it (it can be restored); deleting removes it for good.
+  const archiveNote = task => run(async () => {
+    const saved = (await request(`/tasks/${task.id}/`, 'PATCH', { archived: true })).task
+    setTasks(current => current.filter(item => item.id !== task.id))
+    setArchivedTasks(current => [...current, saved])
+    toast.success('Note archived. You can restore it from Archived notes.')
+  })
+  const restoreNote = task => run(async () => {
+    const saved = (await request(`/tasks/${task.id}/`, 'PATCH', { archived: false })).task
+    setArchivedTasks(current => current.filter(item => item.id !== task.id))
+    setTasks(current => [...current, saved])
+    toast.success('Note restored.')
+  })
+  const deleteNote = task => run(async () => {
+    await request(`/tasks/${task.id}/`, 'DELETE')
+    setTasks(current => current.filter(item => item.id !== task.id))
+    setArchivedTasks(current => current.filter(item => item.id !== task.id))
+    toast.success('Note deleted.')
+  })
   const isManaging = Boolean(addingPlanner || managingPlannerId || renamingId || confirmingPlannerId)
   const compactLayout = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches
 
@@ -508,7 +625,7 @@ function PersonalPlanner({ workspaceId }) {
                 {activeTasks.length
                   ? <>
                     {openTasks.length > 0 && (view === 'board'
-                      ? <PersonalStickyBoard tasks={[...openTasks].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id)} today={today} nowTime={nowTime} onToggle={toggleTask} onReorder={reorderOpen} onNotes={commitNotes} />
+                      ? <PersonalStickyBoard tasks={[...openTasks].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id)} archived={archivedTasks} today={today} nowTime={nowTime} onToggle={toggleTask} onPatch={patchTask} onArchive={archiveNote} onRestore={restoreNote} onDelete={deleteNote} />
                       : <ul className="personal-task-list">{openTasks.map(renderPersonalTask)}</ul>)}
                     {doneTasks.length > 0 && <CollapsibleSection
                       className="personal-planner-done"

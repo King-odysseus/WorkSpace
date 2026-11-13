@@ -9703,3 +9703,62 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .today-sticky-head h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 17px; font-weight: 700; color: var(--pencil-navy); }
 .today-sticky-head p, .today-sticky-empty { margin: 4px 0 0; font-size: 13px; color: var(--pencil-text-muted); }
 .today-sticky .plan-board { margin-bottom: 4px; }
+
+/* Delete confirmations: Cancel and Delete sit side by side, never stacked. */
+.personal-planner-confirm-actions { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; justify-content: flex-end !important; gap: 10px !important; width: 100%; }
+.personal-planner-confirm-actions [data-slot='button'], .personal-planner-confirm-actions button { width: auto !important; flex: 0 0 auto !important; margin: 0 !important; }
+
+.today-sticky-toggle { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.today-sticky-toggle strong { display: flex; align-items: center; gap: 7px; font-size: 17px; font-weight: 700; color: var(--pencil-navy); }
+.today-sticky-toggle small { display: block; margin-top: 3px; font-size: 13px; color: var(--pencil-text-muted); }
+.today-sticky-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.today-sticky .plan-list { margin-top: 16px; }
+
+/* Free-placement sticky notes (My planner) and the Today quick note. */
+.plan-sticky.color-yellow { background: #fff3a8; color: #3b3a1a; }
+.plan-sticky.color-pink { background: #ffd6e0; color: #5a1f33; }
+.plan-sticky.color-green { background: #cdeed9; color: #1d4a35; }
+.plan-sticky.color-blue { background: #cfe3fb; color: #12305c; }
+.plan-sticky.color-purple { background: #e5d9fb; color: #3d2570; }
+.plan-sticky.color-orange { background: #ffddb8; color: #6b3a0a; }
+.sticky-canvas { position: relative; margin: 18px 0 10px; border-radius: 18px; background: repeating-linear-gradient(0deg, transparent 0 27px, rgb(16 24 40 / 4%) 27px 28px), var(--pencil-surface-muted); overflow: hidden; touch-action: pan-y; }
+.sticky-card { position: absolute; display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; transform: none !important; cursor: default; outline-offset: 3px; }
+.sticky-card::before { display: none; }
+.sticky-card.is-dragging { z-index: 20; box-shadow: 0 16px 28px rgb(16 24 40 / 28%); opacity: .95; }
+.sticky-card:focus-visible { outline: 3px solid #C49A6C; }
+.sticky-bar { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 4px 4px 0 0; background: rgb(0 0 0 / 7%); cursor: grab; touch-action: none; user-select: none; }
+.sticky-card.is-dragging .sticky-bar { cursor: grabbing; }
+.sticky-due { flex: 1 1 auto; font-size: 12px; font-weight: 700; }
+.sticky-icon { display: grid; width: 26px; height: 26px; place-items: center; padding: 0; border: 0; border-radius: 999px; background: rgb(255 255 255 / 55%); color: inherit; cursor: pointer; }
+.sticky-icon:hover { background: #fff; }
+.sticky-dot { width: 12px; height: 12px; border: 2px solid rgb(0 0 0 / 35%); border-radius: 999px; }
+.sticky-title-input { margin: 0 12px; padding: 4px 6px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 16px; font-weight: 700; }
+.sticky-title-input:hover, .sticky-title-input:focus { border-color: rgb(0 0 0 / 22%); background: rgb(255 255 255 / 50%); outline: 0; }
+.sticky-card .plan-block-note { margin: 0 12px; width: calc(100% - 24px); }
+.note-colors { display: flex; gap: 8px; margin: 0 12px; }
+.note-color { width: 22px; height: 22px; padding: 0; border: 2px solid rgb(0 0 0 / 22%); border-radius: 999px; cursor: pointer; }
+.note-color.is-selected { box-shadow: 0 0 0 2px #0B0B45; }
+.note-color.color-yellow { background: #fff3a8; } .note-color.color-pink { background: #ffd6e0; } .note-color.color-green { background: #cdeed9; }
+.note-color.color-blue { background: #cfe3fb; } .note-color.color-purple { background: #e5d9fb; } .note-color.color-orange { background: #ffddb8; }
+.sticky-dot.color-yellow { background: #fff3a8; } .sticky-dot.color-pink { background: #ffd6e0; } .sticky-dot.color-green { background: #cdeed9; }
+.sticky-dot.color-blue { background: #cfe3fb; } .sticky-dot.color-purple { background: #e5d9fb; } .sticky-dot.color-orange { background: #ffddb8; }
+.sticky-remove { display: flex; flex-direction: row; gap: 8px; margin: 0 12px; }
+.sticky-remove button { flex: 1 1 0; padding: 6px 8px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 65%); color: inherit; font-weight: 700; cursor: pointer; }
+.sticky-remove button.is-danger, .sticky-archive button.is-danger { color: #b42318; }
+.sticky-archive { margin: 12px 4px 0; font-size: 14px; }
+.sticky-archive summary { cursor: pointer; font-weight: 700; color: var(--pencil-navy); }
+.sticky-archive ul { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.sticky-archive li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); }
+.sticky-archive li span { flex: 1 1 auto; }
+.sticky-archive li button { padding: 4px 12px; border: 1px solid var(--pencil-border); border-radius: 999px; background: transparent; font-weight: 600; cursor: pointer; }
+.today-quick-note { position: relative; display: flex; flex-direction: column; gap: 8px; width: min(100%, 420px); margin: 20px 0; padding: 18px 18px 14px; transform: rotate(-.6deg); }
+.today-quick-note header { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.today-quick-note .quick-note-status { font-size: 12px; opacity: .7; }
+.today-quick-note .quick-note-text { margin: 0; min-height: 120px; max-height: 280px; font-size: 15px; line-height: 1.5; }
+.today-quick-note footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.quick-note-clear { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 55%); color: inherit; font-weight: 600; cursor: pointer; }
+.quick-note-clear:disabled { opacity: .4; cursor: default; }
+
+/* Zuri's message list scrolls without a visible scrollbar. */
+.ai-chat-messages, .ai-page .ai-chat-messages { scrollbar-width: none; -ms-overflow-style: none; scrollbar-gutter: auto; }
+.ai-chat-messages::-webkit-scrollbar, .ai-page .ai-chat-messages::-webkit-scrollbar { display: none; width: 0; height: 0; }
