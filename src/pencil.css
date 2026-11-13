@@ -10091,3 +10091,11 @@ aside[class*='bg-navy'] nav { overflow-x: hidden; }
 .timeline-span-select.app-select-trigger { width: 140px; }
 .timeline-pager { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
 .settings-workspace-name { padding-inline: clamp(16px, 3vw, 38px); }
+
+.timeline-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; border: 1px solid var(--pencil-border); border-radius: 14px; background: var(--pencil-surface); }
+.timeline-filters input[type="search"] { flex: 1 1 200px; max-width: 280px; min-height: 36px; padding: 0 12px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); font-size: 13px; }
+.timeline-filter-select.app-select-trigger { width: 150px; min-height: 36px; }
+.timeline-filter-count { margin-left: auto; font-size: 12px; color: var(--pencil-text-muted); }
+.timeline-filter-clear { padding: 4px 12px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); font-size: 12px; font-weight: 700; color: #0B0B45; cursor: pointer; }
+.timeline-bar-outside { position: absolute; left: calc(100% + 16px); top: 50%; transform: translateY(-50%); max-width: 260px; overflow: hidden; font-size: 12px; font-weight: 600; color: var(--pencil-text); text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.timeline-bar-outside.is-left { left: auto; right: calc(100% + 8px); }

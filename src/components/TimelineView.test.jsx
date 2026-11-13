@@ -139,6 +139,33 @@ describe('TimelineView', () => {
     expect(range()).toBe(first)
   })
 
+  it('filters the timeline by search, status, person and milestone, and clears them', async () => {
+    const all = [
+      task(1, 'Write brief', { start_date: '2026-11-09', due_date: '2026-11-10', status: 'in_progress', assignee_ids: [5], milestone_id: 7 }),
+      task(2, 'Ship it', { start_date: '2026-11-11', due_date: '2026-11-12', status: 'done', assignee_ids: [6] }),
+      task(3, 'Stuck thing', { start_date: '2026-11-11', due_date: '2026-11-12', status: 'blocked' }),
+    ]
+    mockApi({ '/milestones/': { milestones: [milestone(7, 'Beta', '2026-11-20')] } })
+    const user = (await import('@testing-library/user-event')).default.setup()
+    render(<TimelineView workspaceId={4} tasks={all} members={[{ id: 5, name: 'Ada' }, { id: 6, name: 'Bo' }]} currentUserId={5} onOpenTask={() => {}} />)
+    expect(await screen.findByText('Showing 3 of 3 tasks')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Find a task on the timeline'), { target: { value: 'ship' } })
+    expect(screen.getByText('Showing 1 of 3 tasks')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText('Showing 3 of 3 tasks')).toBeTruthy()
+    await user.click(screen.getByRole('combobox', { name: 'Status' }))
+    await user.click(await screen.findByRole('option', { name: 'Blocked' }))
+    expect(screen.getByText('Showing 1 of 3 tasks')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await user.click(screen.getByRole('combobox', { name: 'Person' }))
+    await user.click(await screen.findByRole('option', { name: 'Me' }))
+    expect(screen.getByText('Showing 1 of 3 tasks')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await user.click(screen.getByRole('combobox', { name: 'Milestone filter' }))
+    await user.click(await screen.findByRole('option', { name: 'No milestone' }))
+    expect(screen.getByText('Showing 2 of 3 tasks')).toBeTruthy()
+  })
+
   it('remembers the zoom', async () => {
     mockApi(api)
     render(<TimelineView workspaceId={4} tasks={tasks} onOpenTask={() => {}} />)

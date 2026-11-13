@@ -821,7 +821,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     {createPanel}
     {(bucketError || workstreamError) && <p className="auth-error" role="alert">{bucketError || workstreamError}</p>}
 
-    {boardView === 'timeline' ? <TimelineView workspaceId={workspaceId} defaultGroup={isOperations ? 'workstream' : 'milestone'} tasks={visibleTasks} isLeader={Boolean(canManageBuckets)} canEdit={Boolean(canManageTasks)} projectFilter={projectFilter} onOpenTask={onOpenTask} onTaskPatched={onTaskPatched} /> : <>
+    {boardView === 'timeline' ? <TimelineView workspaceId={workspaceId} defaultGroup={isOperations ? 'workstream' : 'milestone'} members={members} currentUserId={currentUserId} tasks={visibleTasks} isLeader={Boolean(canManageBuckets)} canEdit={Boolean(canManageTasks)} projectFilter={projectFilter} onOpenTask={onOpenTask} onTaskPatched={onTaskPatched} /> : <>
     <div
       ref={boardRef}
       className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`}

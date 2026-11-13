@@ -4,7 +4,7 @@ import { AlertTriangle, Diamond, Link2, Pencil, Plus, Trash2 } from 'lucide-reac
 import { Button } from './ui/button.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { workspaceCall } from '../lib/workspace-api.js'
-import { getCsrfToken } from '../lib/workspace-format.js'
+import { getCsrfToken, taskIsAssignedTo } from '../lib/workspace-format.js'
 
 // The plan on a calendar: every task with dates is a bar from its start to its due
 // date, grouped under the milestone it belongs to. Bars can be dragged to move them or
@@ -28,6 +28,13 @@ export const SPANS = [
 const MIN_DRAG = 4
 
 const statusOf = task => String(task.status || '').replace('_', ' ')
+const STATUS_FILTERS = [
+  ['all', 'Any status'], ['open', 'Not finished'], ['todo', 'Not started'], ['in progress', 'In progress'],
+  ['review', 'In review'], ['blocked', 'Blocked'], ['late', 'Late'], ['done', 'Done'],
+]
+const memberName = member => [member.first_name, member.last_name].filter(Boolean).join(' ') || member.name || member.email || 'Member'
+const NO_FILTERS = { q: '', status: 'all', assignee: 'all', milestone: 'all' }
+
 export const barSpan = task => {
   const start = dayNumber(task.start_date || task.due_date)
   const end = dayNumber(task.due_date || task.start_date)
@@ -105,18 +112,21 @@ function MilestonesPanel({ milestones, isLeader, onAdd, onChange, onDelete }) {
   )
 }
 
-export default function TimelineView({ workspaceId, tasks, isLeader = false, canEdit = false, projectFilter = 'all', defaultGroup = 'milestone', onOpenTask, onTaskPatched }) {
+export default function TimelineView({ workspaceId, tasks, isLeader = false, canEdit = false, projectFilter = 'all', defaultGroup = 'milestone', members = [], currentUserId = null, onOpenTask, onTaskPatched }) {
   const [milestones, setMilestones] = useState([])
   const [zoom, setZoom] = useState(() => { try { return localStorage.getItem('timeline-zoom') === 'month' ? 'month' : 'week' } catch { return 'week' } })
   // Rows are grouped under milestones, or under the workstream a task belongs to; the choice is remembered.
   const [group, setGroup] = useState(() => { try { return localStorage.getItem('timeline-group-' + defaultGroup) || defaultGroup } catch { return defaultGroup } })
   const chooseGroup = next => { setGroup(next); try { localStorage.setItem('timeline-group-' + defaultGroup, next) } catch { /* not remembered */ } }
+  const [filters, setFilters] = useState(NO_FILTERS)
   const [error, setError] = useState('')
   const [linking, setLinking] = useState(null)
   const [pickedLink, setPickedLink] = useState(null)
   const [drag, setDrag] = useState(null)
   const scroller = useRef(null)
   const dragRef = useRef(null)
+  const scrolledByHand = useRef(false)
+  const setByCode = useRef(false)
   const [span, setSpan] = useState(() => { try { const saved = localStorage.getItem('timeline-span'); return SPANS.some(([key]) => key === saved) ? saved : 'auto' } catch { return 'auto' } })
   const [anchor, setAnchor] = useState(null)
   const [viewWidth, setViewWidth] = useState(900)
@@ -137,7 +147,23 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
   const chooseSpan = next => { setSpan(next); setAnchor(null); try { localStorage.setItem('timeline-span', next) } catch { /* not remembered */ } }
   const chooseZoom = next => { setZoom(next); try { localStorage.setItem('timeline-zoom', next) } catch { /* not remembered */ } }
 
-  const live = useMemo(() => tasks.filter(task => task.state !== 'archived' && statusOf(task) !== 'cancelled'), [tasks])
+  const hasAssignee = task => Boolean((task.assignee_ids || []).length || task.assignee_id)
+  const matches = useCallback(task => {
+    const status = statusOf(task)
+    if (filters.q.trim() && !String(task.title).toLowerCase().includes(filters.q.trim().toLowerCase())) return false
+    if (filters.status === 'open' && status === 'done') return false
+    if (filters.status === 'late') { if (status === 'done' || !task.due_date || dayNumber(task.due_date) >= localToday) return false }
+    else if (!['all', 'open'].includes(filters.status) && status !== filters.status) return false
+    if (filters.assignee === 'me' && !taskIsAssignedTo(task, currentUserId)) return false
+    if (filters.assignee === 'none' && hasAssignee(task)) return false
+    if (!['all', 'me', 'none'].includes(filters.assignee) && !taskIsAssignedTo(task, filters.assignee)) return false
+    if (filters.milestone === 'none' && task.milestone_id) return false
+    if (!['all', 'none'].includes(filters.milestone) && String(task.milestone_id) !== String(filters.milestone)) return false
+    return true
+  }, [filters, localToday, currentUserId])
+  const everything = useMemo(() => tasks.filter(task => task.state !== 'archived' && statusOf(task) !== 'cancelled'), [tasks])
+  const live = useMemo(() => everything.filter(matches), [everything, matches])
+  const filtering = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS)
   // A window of a week or two starts on a Monday so the weeks line up; longer ones start where you are looking.
   const windowStart = (() => {
     const at = anchor ?? localToday
@@ -201,9 +227,17 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
   const x = day => (day - range.first) * pxPerDay
   const width = range.days * pxPerDay
 
-  useEffect(() => {
-    if (!windowed && scroller.current) scroller.current.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 160)
-  }, [zoom, span]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Open on today, a little in from the left. The tasks may arrive after the chart first draws, which
+  // moves where today sits, so the position is set again until the person scrolls by themselves.
+  const showToday = () => {
+    const node = scroller.current
+    if (!node) return
+    setByCode.current = true
+    node.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 120)
+    requestAnimationFrame(() => { setByCode.current = false })
+  }
+  useEffect(() => { scrolledByHand.current = false }, [zoom, span])
+  useEffect(() => { if (!windowed && !scrolledByHand.current) showToday() }, [zoom, span, range.first, range.days]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const node = scroller.current
     if (!node) return undefined
@@ -338,8 +372,27 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
           <button type="button" aria-pressed={group === 'milestone'} className={group === 'milestone' ? 'is-active' : ''} onClick={() => chooseGroup('milestone')}>By milestone</button>
           <button type="button" aria-pressed={group === 'workstream'} className={group === 'workstream' ? 'is-active' : ''} onClick={() => chooseGroup('workstream')}>By workstream</button>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => { setAnchor(null); if (scroller.current) scroller.current.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 160) }}>Today</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => { setAnchor(null); scrolledByHand.current = false; showToday() }}>Today</Button>
         <span className="timeline-legend"><i className="is-todo" /> Not started <i className="is-in-progress" /> In progress <i className="is-done" /> Done <i className="is-blocked" /> Blocked</span>
+      </div>
+      <div className="timeline-filters" role="search" aria-label="Filter the timeline">
+        <input type="search" aria-label="Find a task on the timeline" placeholder="Find a task" value={filters.q} onChange={event => setFilters({ ...filters, q: event.target.value })} />
+        <AppSelect className="timeline-filter-select chip-select" value={filters.status} aria-label="Status" onChange={event => setFilters({ ...filters, status: event.target.value })}>
+          {STATUS_FILTERS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </AppSelect>
+        <AppSelect className="timeline-filter-select chip-select" value={filters.assignee} aria-label="Person" onChange={event => setFilters({ ...filters, assignee: event.target.value })}>
+          <option value="all">Everyone</option>
+          {currentUserId != null && <option value="me">Me</option>}
+          <option value="none">Unassigned</option>
+          {members.filter(member => member.id !== currentUserId).map(member => <option key={member.id} value={String(member.id)}>{memberName(member)}</option>)}
+        </AppSelect>
+        <AppSelect className="timeline-filter-select chip-select" value={filters.milestone} aria-label="Milestone filter" onChange={event => setFilters({ ...filters, milestone: event.target.value })}>
+          <option value="all">Any milestone</option>
+          <option value="none">No milestone</option>
+          {shownMilestones.map(milestone => <option key={milestone.id} value={String(milestone.id)}>{milestone.title}</option>)}
+        </AppSelect>
+        <span className="timeline-filter-count" aria-live="polite">Showing {live.length} of {everything.length} tasks</span>
+        {filtering && <button type="button" className="timeline-filter-clear" onClick={() => setFilters(NO_FILTERS)}>Clear filters</button>}
       </div>
       {error && <p className="memo-error" role="alert">{error}</p>}
       {linking && <p className="timeline-banner" role="status">Select the task that must wait for <strong>{linking.title}</strong>. Press Esc to cancel. <button type="button" onClick={() => setLinking(null)}>Cancel</button></p>}
@@ -371,7 +424,7 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
                 </div>
               ))}
             </div>
-            <div className="timeline-scroll" ref={scroller}>
+            <div className="timeline-scroll" ref={scroller} onScroll={() => { if (setByCode.current) setByCode.current = false; else scrolledByHand.current = true }}>
               <div className={`timeline-canvas${windowed ? ' is-windowed' : ''}`} style={{ width, height: HEAD + height }}>
                 <div className="timeline-head" style={{ height: HEAD, width }}>
                   {months.map(month => <span key={month.day} className="timeline-month" style={{ left: x(month.day) }}>{month.label}</span>)}
@@ -430,7 +483,8 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
                         onKeyDown={event => { if (event.key === 'Enter') { if (linking && linking.id !== task.id) addLink(linking, task); else if (!linking) onOpenTask?.(task) } }}
                       >
                         <i className="timeline-bar-fill" style={{ width: `${Math.min(100, task.progress_percent || 0)}%` }} />
-                        <span className="timeline-bar-title">{task.title}</span>
+                        {barWidth >= 150 && <span className="timeline-bar-title">{task.title}</span>}
+                        {barWidth < 150 && <span className={`timeline-bar-outside${x(span.start) + barWidth > width - 220 ? ' is-left' : ''}`}>{task.title}</span>}
                         {canEdit && <span className="timeline-grip is-start" onPointerDown={event => { event.stopPropagation(); startDrag(task, 'start', event) }} onPointerMove={moveDrag} onPointerUp={event => { event.stopPropagation(); endDrag(task, event) }} aria-hidden="true" />}
                         {canEdit && <span className="timeline-grip is-end" onPointerDown={event => { event.stopPropagation(); startDrag(task, 'end', event) }} onPointerMove={moveDrag} onPointerUp={event => { event.stopPropagation(); endDrag(task, event) }} aria-hidden="true" />}
                         {canEdit && <button type="button" className="timeline-link-button" aria-label={`Link from ${task.title}`} title="Another task must wait for this one" onClick={event => { event.stopPropagation(); setLinking(task); setPickedLink(null) }}><Link2 size={12} aria-hidden="true" /></button>}
