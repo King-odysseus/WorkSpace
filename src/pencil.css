@@ -10082,3 +10082,7 @@ aside[class*='bg-navy'] nav { overflow-x: hidden; }
 .followup-detail .drawer-comment-form { display: flex; align-items: flex-end; gap: 10px; }
 .followup-detail .drawer-comment-form textarea { flex: 1; min-width: 0; }
 .followup-detail .drawer-comment-form .primary-button { flex: none; white-space: nowrap; }
+
+.timeline-group-label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--pencil-navy); }
+.timeline-group-label small { padding: 0 8px; border-radius: 999px; background: var(--pencil-surface-muted); font-size: 11px; color: var(--pencil-text-muted); }
+.timeline-label.is-group { background: var(--pencil-surface-muted); }

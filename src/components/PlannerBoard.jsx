@@ -809,10 +809,10 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       {buckets.map(bucket => <button type="button" role="tab" aria-selected={activeMobileBucketId === bucket.id} className={activeMobileBucketId === bucket.id ? 'is-active' : ''} key={bucket.id} onClick={() => { setMobileBucketPinned(true); setMobileBucketId(bucket.id) }}>{bucket.name}</button>)}
     </div>
 
-    {!isOperations && <div className="plan-view-toggle planner-view-toggle" role="group" aria-label="Planner view">
+    <div className="plan-view-toggle planner-view-toggle" role="group" aria-label="Planner view">
       <button type="button" aria-pressed={boardView === 'board'} className={boardView === 'board' ? 'is-active' : ''} onClick={() => chooseBoardView('board')}>Board</button>
       <button type="button" aria-pressed={boardView === 'timeline'} className={boardView === 'timeline' ? 'is-active' : ''} onClick={() => chooseBoardView('timeline')}>Timeline</button>
-    </div>}
+    </div>
     <div className="planner-scope-summary mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">
       <span aria-live="polite">{scopeLine}</span>
       {filtersHiding && <button type="button" className="text-caption font-medium text-navy underline underline-offset-2" onClick={clearHiddenFilters}>Clear filters</button>}
@@ -821,7 +821,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     {createPanel}
     {(bucketError || workstreamError) && <p className="auth-error" role="alert">{bucketError || workstreamError}</p>}
 
-    {boardView === 'timeline' && !isOperations ? <TimelineView workspaceId={workspaceId} tasks={visibleTasks} isLeader={Boolean(canManageBuckets)} canEdit={Boolean(canManageTasks)} projectFilter={projectFilter} onOpenTask={onOpenTask} onTaskPatched={onTaskPatched} /> : <>
+    {boardView === 'timeline' ? <TimelineView workspaceId={workspaceId} defaultGroup={isOperations ? 'workstream' : 'milestone'} tasks={visibleTasks} isLeader={Boolean(canManageBuckets)} canEdit={Boolean(canManageTasks)} projectFilter={projectFilter} onOpenTask={onOpenTask} onTaskPatched={onTaskPatched} /> : <>
     <div
       ref={boardRef}
       className={`planner-board mt-[17px] flex gap-4 overflow-x-auto pb-2${draggedBucketId ? ' is-bucket-dragging' : ''}`}

@@ -99,9 +99,12 @@ function MilestonesPanel({ milestones, isLeader, onAdd, onChange, onDelete }) {
   )
 }
 
-export default function TimelineView({ workspaceId, tasks, isLeader = false, canEdit = false, projectFilter = 'all', onOpenTask, onTaskPatched }) {
+export default function TimelineView({ workspaceId, tasks, isLeader = false, canEdit = false, projectFilter = 'all', defaultGroup = 'milestone', onOpenTask, onTaskPatched }) {
   const [milestones, setMilestones] = useState([])
   const [zoom, setZoom] = useState(() => { try { return localStorage.getItem('timeline-zoom') === 'month' ? 'month' : 'week' } catch { return 'week' } })
+  // Rows are grouped under milestones, or under the workstream a task belongs to; the choice is remembered.
+  const [group, setGroup] = useState(() => { try { return localStorage.getItem('timeline-group-' + defaultGroup) || defaultGroup } catch { return defaultGroup } })
+  const chooseGroup = next => { setGroup(next); try { localStorage.setItem('timeline-group-' + defaultGroup, next) } catch { /* not remembered */ } }
   const [error, setError] = useState('')
   const [linking, setLinking] = useState(null)
   const [pickedLink, setPickedLink] = useState(null)
@@ -134,20 +137,31 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
   // Rows: each milestone with its tasks, then everything that belongs to none.
   const rows = useMemo(() => {
     const result = []
+    const orderTasks = list => [...list].sort((a, b) => barSpan(a).start - barSpan(b).start || a.id - b.id)
+    if (group === 'workstream') {
+      const byWorkstream = new Map()
+      scheduled.forEach(task => { const key = task.workstream || ''; byWorkstream.set(key, [...(byWorkstream.get(key) || []), task]) })
+      const names = [...byWorkstream.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
+      names.forEach(name => {
+        const list = orderTasks(byWorkstream.get(name))
+        result.push({ type: 'group', key: 'w' + name, label: name || 'No workstream', count: list.length })
+        list.forEach(task => result.push({ type: 'task', key: `t${task.id}`, task }))
+      })
+      return result
+    }
     const byMilestone = new Map()
     scheduled.forEach(task => { const key = task.milestone_id ?? 'none'; byMilestone.set(key, [...(byMilestone.get(key) || []), task]) })
-    const orderTasks = list => [...list].sort((a, b) => barSpan(a).start - barSpan(b).start || a.id - b.id)
     shownMilestones.forEach(milestone => {
       result.push({ type: 'milestone', key: `m${milestone.id}`, milestone })
       orderTasks(byMilestone.get(milestone.id) || []).forEach(task => result.push({ type: 'task', key: `t${task.id}`, task }))
     })
     const loose = orderTasks([...(byMilestone.get('none') || []), ...[...byMilestone.entries()].filter(([key]) => key !== 'none' && !shownMilestones.some(milestone => milestone.id === key)).flatMap(([, list]) => list)])
     if (loose.length) {
-      if (shownMilestones.length) result.push({ type: 'group', key: 'none' })
+      if (shownMilestones.length) result.push({ type: 'group', key: 'none', label: 'No milestone' })
       loose.forEach(task => result.push({ type: 'task', key: `t${task.id}`, task }))
     }
     return result
-  }, [scheduled, shownMilestones])
+  }, [scheduled, shownMilestones, group])
 
   const range = useMemo(() => {
     const spans = scheduled.map(barSpan)
@@ -272,6 +286,10 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
           <button type="button" aria-pressed={zoom === 'week'} className={zoom === 'week' ? 'is-active' : ''} onClick={() => chooseZoom('week')}>Days</button>
           <button type="button" aria-pressed={zoom === 'month'} className={zoom === 'month' ? 'is-active' : ''} onClick={() => chooseZoom('month')}>Weeks</button>
         </div>
+        <div className="plan-view-toggle" role="group" aria-label="Group rows by">
+          <button type="button" aria-pressed={group === 'milestone'} className={group === 'milestone' ? 'is-active' : ''} onClick={() => chooseGroup('milestone')}>By milestone</button>
+          <button type="button" aria-pressed={group === 'workstream'} className={group === 'workstream' ? 'is-active' : ''} onClick={() => chooseGroup('workstream')}>By workstream</button>
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={() => { if (scroller.current) scroller.current.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 160) }}>Today</Button>
         <span className="timeline-legend"><i className="is-todo" /> Not started <i className="is-in-progress" /> In progress <i className="is-done" /> Done <i className="is-blocked" /> Blocked</span>
       </div>
@@ -290,7 +308,7 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
               {rows.map(row => (
                 <div className={`timeline-label is-${row.type}`} style={{ height: ROW }} key={row.key}>
                   {row.type === 'milestone' && <span className={`timeline-label-ms${row.milestone.complete ? ' is-complete' : ''}${row.milestone.is_late ? ' is-late' : ''}`}><Diamond size={14} aria-hidden="true" /> <strong>{row.milestone.title}</strong> <small>{row.milestone.done_count}/{row.milestone.task_count}</small></span>}
-                  {row.type === 'group' && <span className="team-day-muted">No milestone</span>}
+                  {row.type === 'group' && <span className="timeline-group-label"><strong>{row.label}</strong>{row.count ? <small>{row.count}</small> : null}</span>}
                   {row.type === 'task' && (
                     <>
                       <button type="button" className="timeline-task-name" onClick={() => onOpenTask?.(row.task)} title={row.task.title}>{row.task.title}</button>

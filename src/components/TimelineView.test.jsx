@@ -108,6 +108,18 @@ describe('TimelineView', () => {
     await waitFor(() => expectRequest(fetchMock, '/milestones/7/', 'DELETE'))
   })
 
+  it('groups the rows by workstream, and remembers that', async () => {
+    const ws = [task(1, 'Send newsletter', { start_date: '2026-11-09', due_date: '2026-11-10', workstream: 'Marketing' }), task(2, 'Reconcile', { start_date: '2026-11-11', due_date: '2026-11-12', workstream: 'Finance' }), task(3, 'Odd job', { due_date: '2026-11-13' })]
+    mockApi({ '/milestones/': { milestones: [] } })
+    render(<TimelineView workspaceId={4} tasks={ws} defaultGroup="workstream" onOpenTask={() => {}} />)
+    expect(await screen.findByText('Finance')).toBeTruthy()
+    expect(screen.getByText('Marketing')).toBeTruthy()
+    expect(screen.getByText('No workstream')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'By milestone' }))
+    expect(localStorage.getItem('timeline-group-workstream')).toBe('milestone')
+    expect(screen.queryByText('Finance')).toBeNull()
+  })
+
   it('remembers the zoom', async () => {
     mockApi(api)
     render(<TimelineView workspaceId={4} tasks={tasks} onOpenTask={() => {}} />)
