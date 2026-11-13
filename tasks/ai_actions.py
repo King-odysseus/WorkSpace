@@ -83,7 +83,7 @@ ACTION_FIELDS = {
     'project.create': {'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.update': {'project_id', 'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.delete': {'project_id'},
-    'memo.create': {'title', 'body', 'banner_days'},
+    'memo.create': {'title', 'body', 'banner_days', 'kind', 'due_date'},
 }
 
 # Deletes are permanent, so they are held to a stricter rule than every other
@@ -485,6 +485,7 @@ def action_instructions(snapshot):
         'A spreadsheet to load in bulk with its own columns belongs in Import data, which previews every row before anything is written. '
         'Allowed action kinds are task.create, task.update, task.archive, task.delete, project.create, project.update, project.delete, and memo.create. '
         'memo.create writes a company memo with title (short), body (plain text, no markdown) and optional banner_days (0 to 60, default 7; 0 means no banner). '
+        'Set kind to "request" (with an optional due_date, YYYY-MM-DD) when the user wants to ask the team for something they must answer; otherwise leave kind out. '
         'Only owners and managers can post memos; when the user asks for a memo, draft it in full in "answer" and also return the memo.create action so they can confirm or change it. '
         'A memo goes to everyone, so never put private data, salaries or personal details in it. '
         'task.archive uses task_id: it takes a task off the board but keeps it, and an owner or manager may ask for it. '
@@ -654,6 +655,9 @@ def _normalize_action(action):
         raw_arguments = {}
     arguments = dict(raw_arguments)
     for field in allowed_fields:
+        # An action's own "kind" names the action; it is never the memo's kind.
+        if field == 'kind':
+            continue
         if field in action and (field not in arguments or arguments[field] in (None, '')):
             arguments[field] = action[field]
     return {**action, 'arguments': arguments}
@@ -696,6 +700,10 @@ def _validate_action(action, registry, workspace_id, actor):
         elif field == 'assignee_ref':
             cleaned[field] = str(value or '').strip()
             registry.user_id_for_ref(cleaned[field])
+        elif field == 'kind':
+            if value not in ('memo', 'request'):
+                raise ActionValidationError('A memo kind must be memo or request.')
+            cleaned[field] = value
         elif field == 'banner_days':
             if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 60:
                 raise ActionValidationError('Banner days must be a whole number from 0 to 60.')
@@ -845,7 +853,9 @@ def _action_summary(kind, payload, registry):
     if kind == 'memo.create':
         days = payload.get('banner_days', 7)
         banner = f' It shows as a banner for {days} day{"" if days == 1 else "s"}.' if days else ' It will not show as a banner.'
-        return f'Post memo "{registry.expand(payload.get("title") or "Untitled memo")[:140]}" to everyone in the workspace.{banner}'
+        noun = 'request memo' if payload.get('kind') == 'request' else 'memo'
+        due = f' Answers needed by {payload["due_date"]}.' if payload.get('kind') == 'request' and payload.get('due_date') else ''
+        return f'Post {noun} "{registry.expand(payload.get("title") or "Untitled memo")[:120]}" to everyone in the workspace.{due}{banner}'
     if kind == 'project.delete':
         project = Project.objects.filter(id=payload.get('project_id')).only('name').first()
         name = registry.expand(project.name if project else 'Unknown project')[:120]

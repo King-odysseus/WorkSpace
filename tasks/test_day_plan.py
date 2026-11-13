@@ -61,3 +61,20 @@ class DayPlanTests(TestCase):
         self.put('A plan')
         self.assertEqual(PersonalTask.objects.count(), 1)
         self.assertEqual(self.client.get(reverse('personal-planner-list', args=[self.workspace.id])).json()['tasks'].__len__(), 1)
+
+
+class DayPlanLeaveTests(TestCase):
+    def test_the_read_says_how_much_of_the_day_is_leave(self):
+        from datetime import timedelta
+        from .models import LeaveRequest
+        user = User.objects.create_user('lv@example.com', 'lv@example.com', 'password')
+        workspace = Workspace.objects.create(name='Leave plans', slug='leave-plans')
+        Membership.objects.create(workspace=workspace, user=user, role='member')
+        today = timezone.localdate()
+        monday = today - timedelta(days=today.weekday())
+        LeaveRequest.objects.create(workspace=workspace, user=user, start_date=monday, end_date=monday + timedelta(days=4), status='approved')
+        self.client.force_login(user)
+        url = reverse('personal-day-plan', args=[workspace.id]) + f'?date={monday.isoformat()}'
+        self.assertEqual(self.client.get(url).json()['leave_share'], 1.0)
+        saturday = monday + timedelta(days=5)
+        self.assertEqual(self.client.get(reverse('personal-day-plan', args=[workspace.id]) + f'?date={saturday.isoformat()}').json()['leave_share'], 0)

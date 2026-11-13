@@ -45,3 +45,15 @@ class ZuriMemoTests(TestCase):
         for arguments in ({'banner_days': 99}, {'banner_days': 'a'}, {'body': ''}, {'title': ''}, {'title': 'x' * 161}):
             with self.assertRaises(ActionValidationError, msg=arguments):
                 self.propose(self.owner, **arguments)
+
+    def test_zuri_can_draft_a_request_memo(self):
+        proposal = self.propose(self.owner, kind='request', due_date='2030-01-04')
+        self.assertIn('request memo', proposal.summary)
+        self.assertIn('2030-01-04', proposal.summary)
+        execute_action(proposal, self.owner)
+        memo = Memo.objects.get()
+        self.assertEqual((memo.kind, str(memo.due_date)), ('request', '2030-01-04'))
+
+    def test_an_unknown_kind_is_refused(self):
+        with self.assertRaises(ActionValidationError):
+            self.propose(self.owner, kind='poll')

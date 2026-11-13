@@ -19,6 +19,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
+from .leave_views import approved_leave_by_user
 from .models import PersonalPlanner, PersonalTask, PlannerDayNote
 from .views import require_workspace_member
 
@@ -372,6 +373,7 @@ def personal_day_plan(request, workspace_id):
         return JsonResponse({
             'note': note.as_dict() if note else None,
             'daily_minutes': membership.daily_capacity_minutes,
+            'leave_share': approved_leave_by_user(workspace_id, day, day).get(request.user.id, {}).get(day, 0),
             'working_days': membership.working_days,
         })
     if request.method == 'DELETE':
