@@ -922,6 +922,38 @@ class FollowUpComment(models.Model):
         }
 
 
+class Milestone(models.Model):
+    """A dated checkpoint on a plan. Tasks are attached to it; it is reached when every
+    task on it is done, or when a leader marks it reached by hand."""
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='milestones')
+    project = models.ForeignKey('Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='milestones')
+    title = models.CharField(max_length=200)
+    due_date = models.DateField()
+    notes = models.TextField(blank=True, default='')
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_milestones')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['due_date', 'id']
+
+    def as_dict(self, task_count=0, done_count=0, today=None):
+        complete = bool(self.completed_at) or (task_count > 0 and done_count >= task_count)
+        return {
+            'id': self.id,
+            'workspace_id': self.workspace_id,
+            'project_id': self.project_id,
+            'title': self.title,
+            'due_date': self.due_date.isoformat(),
+            'notes': self.notes,
+            'task_count': task_count,
+            'done_count': done_count,
+            'complete': complete,
+            'manually_completed': bool(self.completed_at),
+            'is_late': bool(today and not complete and self.due_date < today),
+        }
+
+
 class Task(models.Model):
     STATUS_CHOICES = [
         ('todo', 'To do'),
@@ -984,6 +1016,7 @@ class Task(models.Model):
     assignees = models.ManyToManyField(User, through='TaskAssignee', through_fields=('task', 'user'), related_name='assigned_task_roles', blank=True)
     recurrence = models.CharField(max_length=20, choices=RECURRENCE_CHOICES, default='none')
     blocked_by = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='blocks')
+    milestone = models.ForeignKey('Milestone', on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1088,6 +1121,7 @@ class Task(models.Model):
             'recurrence': self.recurrence,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'milestone_id': self.milestone_id,
             'blocked_by_ids': [task.id for task in blocked_by],
             'blocking_ids': [task.id for task in blocking],
             'is_blocked_by_dependency': any(task.status != 'done' for task in blocked_by),

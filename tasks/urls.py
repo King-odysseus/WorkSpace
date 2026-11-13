@@ -2,6 +2,7 @@ from django.urls import path
 
 from .auth_views import auth_csrf, auth_google, auth_login, auth_logout, auth_me, push_public_key, push_subscription_list, user_avatar, user_avatar_download, user_presence, user_profile, workspace_create
 from .request_views import work_request_detail, work_request_list
+from .milestone_views import milestone_detail, milestones, task_milestone
 from .team_day_views import team_day, team_day_member, team_week
 from .leave_views import leave_detail, leave_list
 from .location_views import office_days_policy, work_location_pattern, work_locations
@@ -125,6 +126,9 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/locations/', work_locations, name='work-locations'),
     path('workspaces/<int:workspace_id>/location-pattern/', work_location_pattern, name='work-location-pattern'),
     path('workspaces/<int:workspace_id>/office-days/', office_days_policy, name='office-days'),
+    path('workspaces/<int:workspace_id>/milestones/', milestones, name='milestones'),
+    path('workspaces/<int:workspace_id>/milestones/<int:milestone_id>/', milestone_detail, name='milestone-detail'),
+    path('tasks/<int:task_id>/milestone/', task_milestone, name='task-milestone'),
     path('workspaces/<int:workspace_id>/team-day/', team_day, name='team-day'),
     path('workspaces/<int:workspace_id>/team-day/<int:user_id>/', team_day_member, name='team-day-member'),
     path('workspaces/<int:workspace_id>/team-week/', team_week, name='team-week'),
