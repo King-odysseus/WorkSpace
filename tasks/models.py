@@ -102,7 +102,7 @@ PERMISSION_KEYS = (
     'create_projects', 'manage_projects',
     'create_workstreams', 'manage_workstreams',
     'use_ai', 'manage_ai_access', 'manage_ai_providers', 'comment_check_ins',
-    'view_reports', 'post_memos',
+    'view_reports', 'post_memos', 'manage_requests', 'approve_leave',
 )
 
 # The manager default mirrors every capability the old coarse owner-or-manager
@@ -134,6 +134,9 @@ class Membership(models.Model):
     # check_in_preference), and it takes them out of the pending list, the daily
     # reminder and the check-in counts. A member never has this set.
     skips_check_ins = models.BooleanField(default=False)
+    # Where this person usually works, by weekday: {"0": "office", "1": "home"}.
+    # A day set by hand (WorkLocation) wins over it.
+    default_locations = models.JSONField(default=dict, blank=True)
     # Capacity is workspace-scoped: the same person can work different hours in
     # different teams, and a manager's setting must not leak into another
     # workspace's workload calculations.
@@ -1465,6 +1468,9 @@ class WorkspaceSetting(models.Model):
     screen_sharing_policy = models.TextField(default='Screen sharing is optional and starts only after the employee accepts a request and chooses a screen or window in the browser. WorkSpace captures screenshots only while sharing is active, never captures audio or webcam data, and lets the employee stop at any time. Authorised workspace leaders can view, download, or delete captures; every such action is audited. Captures expire automatically after the configured retention period.')
     screen_sharing_policy_version = models.PositiveIntegerField(default=1)
     check_in_reminder_hour = models.PositiveSmallIntegerField(default=9)
+    # Optional hybrid policy: weekdays (Monday=0) people are expected in the office.
+    # Empty means no policy. It is also what an unset day is assumed to be.
+    office_days = models.JSONField(default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def as_dict(self):
@@ -2109,6 +2115,10 @@ class Memo(models.Model):
     # The banner stops showing at this moment; null means it never shows as a banner.
     banner_until = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
+    # 'request' memos ask the team for something: each person answers once and the
+    # author sees who has and who has not.
+    kind = models.CharField(max_length=10, default='memo')
+    due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2129,7 +2139,19 @@ class Memo(models.Model):
             'banner_until': self.banner_until.isoformat() if self.banner_until else None,
             'banner_active': self.banner_active(), 'dismissed': self.id in dismissed_ids,
             'archived': self.archived_at is not None,
+            'kind': self.kind, 'due_date': self.due_date.isoformat() if self.due_date else None,
         }
+
+
+class MemoResponse(models.Model):
+    """One person's answer to a request memo."""
+    memo = models.ForeignKey(Memo, on_delete=models.CASCADE, related_name='responses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memo_responses')
+    note = models.TextField(blank=True, max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['memo', 'user'], name='unique_memo_response')]
 
 
 class MemoDismissal(models.Model):
@@ -2140,3 +2162,105 @@ class MemoDismissal(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['memo', 'user'], name='unique_memo_dismissal')]
+
+
+def _person_name(user):
+    return (user.get_full_name() or user.email) if user else ''
+
+
+class WorkRequest(models.Model):
+    """A request from a member to the people who run the workspace."""
+    STATUS_CHOICES = [('pending', 'Pending'), ('approved', 'Approved'), ('declined', 'Declined'), ('cancelled', 'Cancelled')]
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='work_requests')
+    requester = models.ForeignKey(User, on_delete=models.CASCADE, related_name='work_requests')
+    title = models.CharField(max_length=160)
+    details = models.TextField(blank=True, max_length=3000)
+    needed_by = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    reviewer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_work_requests')
+    review_note = models.TextField(blank=True, max_length=1000)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['workspace', 'status', '-created_at'])]
+
+    def as_dict(self):
+        return {
+            'id': self.id, 'workspace_id': self.workspace_id, 'requester_id': self.requester_id,
+            'requester_name': _person_name(self.requester), 'title': self.title, 'details': self.details,
+            'needed_by': self.needed_by.isoformat() if self.needed_by else None, 'status': self.status,
+            'reviewer_name': _person_name(self.reviewer), 'review_note': self.review_note,
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+class LeaveRequest(models.Model):
+    """Leave or an absence. Approved leave takes the person out of capacity."""
+    KIND_CHOICES = [('annual', 'Annual leave'), ('sick', 'Sick leave'), ('other', 'Other absence')]
+    STATUS_CHOICES = [('pending', 'Pending'), ('approved', 'Approved'), ('declined', 'Declined'), ('cancelled', 'Cancelled')]
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='leave_requests')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='leave_requests')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='annual')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    # Half days: the first day starts at midday, the last day ends at midday.
+    start_half = models.BooleanField(default=False)
+    end_half = models.BooleanField(default=False)
+    note = models.TextField(blank=True, max_length=1000)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    reviewer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_leave_requests')
+    review_note = models.TextField(blank=True, max_length=1000)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['start_date', 'id']
+        indexes = [
+            models.Index(fields=['workspace', 'status', 'start_date']),
+            models.Index(fields=['workspace', 'user', 'start_date']),
+        ]
+
+    def day_fractions(self, working_days=(0, 1, 2, 3, 4)):
+        """{date: share of the day that is off} over the person's working days."""
+        from datetime import timedelta as _delta
+        days = {}
+        day = self.start_date
+        while day <= self.end_date:
+            if day.weekday() in working_days:
+                share = 1.0
+                if self.start_half and day == self.start_date:
+                    share -= 0.5
+                if self.end_half and day == self.end_date:
+                    share -= 0.5
+                days[day] = max(share, 0.5)
+            day += _delta(days=1)
+        return days
+
+    def as_dict(self, detail=True):
+        data = {
+            'id': self.id, 'workspace_id': self.workspace_id, 'user_id': self.user_id,
+            'user_name': _person_name(self.user),
+            'start_date': self.start_date.isoformat(), 'end_date': self.end_date.isoformat(),
+            'start_half': self.start_half, 'end_half': self.end_half, 'status': self.status,
+        }
+        if detail:
+            data.update({
+                'kind': self.kind, 'note': self.note, 'reviewer_name': _person_name(self.reviewer),
+                'review_note': self.review_note, 'created_at': self.created_at.isoformat(),
+            })
+        return data
+
+
+class WorkLocation(models.Model):
+    """Where someone works on one day, when it differs from their usual pattern."""
+    LOCATION_CHOICES = [('office', 'Office'), ('home', 'Home'), ('other', 'Other')]
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='work_locations')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='work_locations')
+    date = models.DateField()
+    location = models.CharField(max_length=10, choices=LOCATION_CHOICES)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'user', 'date'], name='unique_work_location_day')]

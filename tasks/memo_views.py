@@ -7,19 +7,20 @@ permission, which owners and managers have by default and members do not.
 """
 
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .models import Membership, Memo, MemoDismissal
+from .models import Membership, Memo, MemoDismissal, MemoResponse
 from .views import create_notification, require_workspace_member
 
 MEMO_TITLE_LIMIT = 160
 MEMO_BODY_LIMIT = 5000
 DEFAULT_BANNER_DAYS = 7
 MAX_BANNER_DAYS = 60
+RESPONSE_LIMIT = 2000
 
 
 def _json_body(request):
@@ -47,6 +48,19 @@ def _clean_fields(payload, require_all):
         if len(body) > MEMO_BODY_LIMIT:
             return None, JsonResponse({'error': f'The memo must be {MEMO_BODY_LIMIT} characters or fewer.'}, status=400)
         cleaned['body'] = body
+    if require_all and payload.get('kind', 'memo') not in ('memo', 'request'):
+        return None, JsonResponse({'error': 'kind must be memo or request.'}, status=400)
+    if require_all:
+        cleaned['kind'] = payload.get('kind', 'memo')
+    if 'due_date' in payload:
+        raw = payload['due_date']
+        if raw in (None, ''):
+            cleaned['due_date'] = None
+        else:
+            try:
+                cleaned['due_date'] = date.fromisoformat(str(raw))
+            except ValueError:
+                return None, JsonResponse({'error': 'due_date must use YYYY-MM-DD format.'}, status=400)
     if 'banner_days' in payload:
         try:
             days = int(payload['banner_days'])
@@ -70,18 +84,37 @@ def _memo_for(request, workspace_id, memo_id):
     return Memo.objects.filter(id=memo_id, workspace_id=workspace_id, archived_at__isnull=True).select_related('author').first()
 
 
+def decorate(memo, user, can_post, dismissed_ids=frozenset()):
+    """The memo as the signed-in person sees it. A request memo carries that person's
+    own answer; people who can post also see everyone's answers and who is still owed."""
+    data = memo.as_dict(dismissed_ids)
+    if memo.kind != 'request':
+        return data
+    answers = list(memo.responses.select_related('user'))
+    mine = next((a for a in answers if a.user_id == user.id), None)
+    data['my_response'] = {'note': mine.note, 'created_at': mine.created_at.isoformat()} if mine else None
+    data['response_count'] = len(answers)
+    if can_post:
+        answered = {a.user_id for a in answers}
+        data['responses'] = [{'user_id': a.user_id, 'name': a.user.get_full_name() or a.user.email, 'note': a.note, 'created_at': a.created_at.isoformat()} for a in answers]
+        waiting = Membership.objects.filter(workspace_id=memo.workspace_id).exclude(user_id=memo.author_id).exclude(user_id__in=answered).select_related('user')
+        data['waiting'] = [{'user_id': m.user_id, 'name': m.user.get_full_name() or m.user.email} for m in waiting]
+    return data
+
+
 def notify_memo(memo, author):
     """Tell everyone else in the workspace, in the app and by push where they use it."""
+    label = 'Request' if memo.kind == 'request' else 'Memo'
     for membership in Membership.objects.filter(workspace_id=memo.workspace_id).exclude(user=author).select_related('user'):
         create_notification(
-            memo.workspace_id, membership.user, 'memo', f'Memo: {memo.title}'[:200], memo.body[:200],
+            memo.workspace_id, membership.user, 'memo', f'{label}: {memo.title}'[:200], memo.body[:200],
             target_type='memo', target_id=memo.id, notify_webhooks=False,
         )
 
 
-def create_memo(workspace_id, author, title, body, banner_days=DEFAULT_BANNER_DAYS):
+def create_memo(workspace_id, author, title, body, banner_days=DEFAULT_BANNER_DAYS, kind='memo', due_date=None):
     """The one place a memo is made, so the page and Zuri post it the same way."""
-    memo = Memo.objects.create(workspace_id=workspace_id, author=author, title=title, body=body, banner_until=_banner_until(banner_days))
+    memo = Memo.objects.create(workspace_id=workspace_id, author=author, title=title, body=body, banner_until=_banner_until(banner_days), kind=kind, due_date=due_date)
     notify_memo(memo, author)
     return memo
 
@@ -95,7 +128,7 @@ def memo_list(request, workspace_id):
     if request.method == 'GET':
         memos = list(Memo.objects.filter(workspace_id=workspace_id, archived_at__isnull=True).select_related('author')[:100])
         dismissed = _dismissed_ids(request.user, memos)
-        return JsonResponse({'memos': [memo.as_dict(dismissed) for memo in memos], 'can_post': can_post})
+        return JsonResponse({'memos': [decorate(memo, request.user, can_post, dismissed) for memo in memos], 'can_post': can_post})
     if not can_post:
         return JsonResponse({'error': 'You do not have permission to post memos.'}, status=403)
     payload, error = _json_body(request)
@@ -104,8 +137,8 @@ def memo_list(request, workspace_id):
     cleaned, error = _clean_fields(payload, require_all=True)
     if error:
         return error
-    memo = create_memo(workspace_id, request.user, cleaned['title'], cleaned['body'], cleaned.get('banner_days', DEFAULT_BANNER_DAYS))
-    return JsonResponse({'memo': memo.as_dict()}, status=201)
+    memo = create_memo(workspace_id, request.user, cleaned['title'], cleaned['body'], cleaned.get('banner_days', DEFAULT_BANNER_DAYS), cleaned['kind'], cleaned.get('due_date'))
+    return JsonResponse({'memo': decorate(memo, request.user, True)}, status=201)
 
 
 @require_http_methods(['GET', 'PATCH', 'DELETE'])
@@ -117,7 +150,7 @@ def memo_detail(request, workspace_id, memo_id):
     if memo is None:
         return JsonResponse({'error': 'Memo was not found.'}, status=404)
     if request.method == 'GET':
-        return JsonResponse({'memo': memo.as_dict(_dismissed_ids(request.user, [memo]))})
+        return JsonResponse({'memo': decorate(memo, request.user, membership.has_permission('post_memos'), _dismissed_ids(request.user, [memo]))})
     # Changing or removing a memo is for people who can post, and only their own
     # unless they are an owner.
     if not membership.has_permission('post_memos') or (memo.author_id != request.user.id and membership.role != 'owner'):
@@ -137,18 +170,48 @@ def memo_detail(request, workspace_id, memo_id):
             setattr(memo, field, cleaned[field])
     if 'banner_days' in cleaned:
         memo.banner_until = _banner_until(cleaned['banner_days'])
+    if 'due_date' in cleaned:
+        memo.due_date = cleaned['due_date']
     memo.save()
-    return JsonResponse({'memo': memo.as_dict(_dismissed_ids(request.user, [memo]))})
+    return JsonResponse({'memo': decorate(memo, request.user, True, _dismissed_ids(request.user, [memo]))})
 
 
 @require_http_methods(['POST'])
 def memo_dismiss(request, workspace_id, memo_id):
     """Close this memo's banner for the signed-in member only. Repeating it is harmless."""
-    _, error = require_workspace_member(request, workspace_id)
+    membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
     memo = _memo_for(request, workspace_id, memo_id)
     if memo is None:
         return JsonResponse({'error': 'Memo was not found.'}, status=404)
     MemoDismissal.objects.get_or_create(memo=memo, user=request.user)
-    return JsonResponse({'memo': memo.as_dict({memo.id})})
+    return JsonResponse({'memo': decorate(memo, request.user, membership.has_permission('post_memos'), {memo.id})})
+
+
+@require_http_methods(['POST', 'DELETE'])
+def memo_respond(request, workspace_id, memo_id):
+    """Answer a request memo (once; answering again replaces the earlier answer)."""
+    _, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    memo = _memo_for(request, workspace_id, memo_id)
+    if memo is None or memo.kind != 'request':
+        return JsonResponse({'error': 'Request memo was not found.'}, status=404)
+    if request.method == 'DELETE':
+        MemoResponse.objects.filter(memo=memo, user=request.user).delete()
+        return JsonResponse({'memo': decorate(memo, request.user, False)})
+    payload, error = _json_body(request)
+    if error:
+        return error
+    note = str(payload.get('note', '')).strip()
+    if len(note) > RESPONSE_LIMIT:
+        return JsonResponse({'error': f'The answer must be {RESPONSE_LIMIT} characters or fewer.'}, status=400)
+    _, created = MemoResponse.objects.update_or_create(memo=memo, user=request.user, defaults={'note': note})
+    if created and memo.author_id and memo.author_id != request.user.id:
+        who = request.user.get_full_name() or request.user.email
+        create_notification(
+            memo.workspace_id, memo.author, 'memo', f'{who} answered: {memo.title}'[:200], (note or 'Done')[:200],
+            target_type='memo', target_id=memo.id, notify_webhooks=False,
+        )
+    return JsonResponse({'memo': decorate(memo, request.user, False)})

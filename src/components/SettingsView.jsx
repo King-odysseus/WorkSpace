@@ -64,6 +64,8 @@ const PERMISSION_LABELS = [
   ["manage_workstreams", "Manage workstreams"],
   ["comment_check_ins", "Comment on check-ins"],
   ["post_memos", "Post company memos"],
+  ["manage_requests", "Answer team requests"],
+  ["approve_leave", "Approve leave"],
   ["use_ai", "Use Zuri"],
   ["manage_ai_access", "Manage Zuri member access"],
   ["manage_ai_providers", "Manage Zuri providers"],
