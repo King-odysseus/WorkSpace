@@ -9392,3 +9392,13 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
 
 /* Shown while a pasted or attached file is uploading, so a blocked send has a reason. */
 .chat-workspace-view .chat-uploading { margin: 0 0 8px; padding: 6px 14px; border-radius: 999px; background: var(--color-info-soft); color: var(--color-info); font-size: 12px; font-weight: 600; }
+
+/* Zuri: scrolling its messages must never move the page behind it. The message list
+   keeps its own scroll, passes none on, and the app behind is frozen while the
+   window is open (on a phone it is a bottom sheet over the page). */
+.ai-chat-messages { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+[data-slot='dialog-content'].ai-chat-window { overflow: hidden; overscroll-behavior: contain; }
+body:has([data-slot='dialog-content'].ai-chat-window) .main-content { overflow: hidden; }
+.ai-chat-overlay, [data-slot='dialog-overlay'] { overscroll-behavior: contain; touch-action: none; }
+.ai-chat-menu { z-index: 120; min-width: 190px; }
+.ai-chat-menu [role='menuitem'] { display: flex; align-items: center; gap: 10px; }

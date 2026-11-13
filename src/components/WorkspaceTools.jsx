@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, Maximize2, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
+import { MoreHorizontal, AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, Code, Download, FileText, Grid3X3, HelpCircle, Highlighter, History, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, Maximize2, MessageSquare, Minus, Paperclip, Plus, Presentation, Redo2, RemoveFormatting, Save, Search, Send, Share2, Sparkles, Strikethrough, Table2, Trash2, Underline, Undo2, Upload, UserRound, X } from 'lucide-react'
 import { Card } from './ui/card.jsx'
 import { Alert } from './ui/alert.jsx'
 import { Button } from './ui/button.jsx'
 import { Skeleton, SkeletonGroup } from './ui/skeleton.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog.jsx'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
 import LinkedText from './LinkedText.jsx'
 import MentionPicker from './MentionPicker.jsx'
 import Avatar from './Avatar.jsx'
@@ -1605,11 +1606,21 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize, onExpand }) 
             </div>
           </div>
           <div className="ai-chat-actions">
-            <button type="button" className="ai-chat-action-button" onClick={conversation.newChat} disabled={!conversation.canStartNew} aria-label="New chat" title="New chat - the current one is kept in history"><Plus size={14} /></button>
-            <button type="button" className="ai-chat-action-button" onClick={() => conversation.setHistoryOpen(open => !open)} aria-label="Chat history" aria-pressed={conversation.historyOpen} title="Chat history"><History size={14} /></button>
-            <button type="button" className="ai-chat-action-button is-clear" onClick={clearConversation} disabled={!canClear} aria-label="Clear conversation" title="Clear conversation"><Trash2 size={14} /></button>
-            {onExpand && <button type="button" className="ai-chat-action-button" onClick={onExpand} aria-label="Expand Zuri" title="Open Zuri as a full page"><Maximize2 size={14} /></button>}
-            {onMinimize && <button type="button" className="ai-chat-action-button" onClick={onMinimize} aria-label="Minimize Zuri" title="Minimize Zuri"><Minus size={14} /></button>}
+            {/* Five actions used to sit in a row; they live in one menu now, and only Close
+                stays on the bar. Every action is still here, with the same names. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="ai-chat-action-button" aria-label="Zuri options" title="Zuri options"><MoreHorizontal size={14} /></button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="ai-chat-menu">
+                <DropdownMenuItem disabled={!conversation.canStartNew} onSelect={conversation.newChat}><Plus size={14} /> <span>New chat</span></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => conversation.setHistoryOpen(open => !open)}><History size={14} /> <span>Chat history</span></DropdownMenuItem>
+                <DropdownMenuItem disabled={!canClear} onSelect={clearConversation}><Trash2 size={14} /> <span>Clear conversation</span></DropdownMenuItem>
+                {(onExpand || onMinimize) && <DropdownMenuSeparator />}
+                {onExpand && <DropdownMenuItem onSelect={onExpand}><Maximize2 size={14} /> <span>Expand Zuri</span></DropdownMenuItem>}
+                {onMinimize && <DropdownMenuItem onSelect={onMinimize}><Minus size={14} /> <span>Minimize Zuri</span></DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button type="button" className="ai-chat-action-button is-close" onClick={onClose} aria-label="Close Zuri" title="Close Zuri"><X size={14} /></button>
           </div>
         </div>}

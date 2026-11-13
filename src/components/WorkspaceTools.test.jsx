@@ -1,7 +1,19 @@
+import userEvent from '@testing-library/user-event'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AssistantFlyout, AssistantPage, FilesWorkspaceView, describeDocument } from './WorkspaceTools.jsx'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
+
+// Zuri's window keeps only Close on its bar; every other action lives in the
+// "Zuri options" menu. The full-page version still shows its own buttons, so a
+// control is taken directly when it is on screen and from the menu when it is not.
+const zuriControl = async name => {
+  const direct = screen.queryByRole('button', { name })
+  if (direct) return direct
+  await userEvent.click(await screen.findByRole('button', { name: 'Zuri options' }))
+  return screen.findByRole('menuitem', { name })
+}
+
 
 afterEach(() => {
   vi.useRealTimers()
@@ -127,7 +139,7 @@ it('minimizes the assistant without hiding its launcher', async () => {
     />,
   )
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Minimize Zuri' }))
+  fireEvent.click(await zuriControl('Minimize Zuri'))
 
   expect(onMinimize).toHaveBeenCalledTimes(1)
   expect(onClose).not.toHaveBeenCalled()
@@ -153,7 +165,7 @@ it('presents the assistant as opposing chat bubbles and exposes window controls'
     />,
   )
 
-  expect(await screen.findByRole('button', { name: 'Minimize Zuri' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Zuri options' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Close Zuri' })).toBeInTheDocument()
   const dialog = screen.getByRole('dialog')
   expect(dialog).not.toHaveClass('top-1/2', 'left-1/2', '-translate-x-1/2', '-translate-y-1/2')
@@ -528,7 +540,7 @@ it('offers the conversation a page of its own', async () => {
 
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} onExpand={onExpand} />)
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Expand Zuri' }))
+  fireEvent.click(await zuriControl('Expand Zuri'))
 
   expect(onExpand).toHaveBeenCalledTimes(1)
 })
@@ -553,7 +565,8 @@ it('carries the same conversation onto the Zuri page', async () => {
   // The page owns the composer, the same one the dock shows.
   const input = screen.getByLabelText('Message to Zuri')
   expect(input.closest('.ai-chat-composer')).not.toBeNull()
-  expect(screen.getByRole('button', { name: 'Clear conversation' })).toBeEnabled()
+  expect((await zuriControl('Clear conversation')).hasAttribute('data-disabled')).toBe(false)
+  await userEvent.keyboard('{Escape}')
 })
 
 it('stays open when the user clicks somewhere else in the app', async () => {
@@ -573,7 +586,7 @@ it('stays open when the user clicks somewhere else in the app', async () => {
       <AssistantFlyout workspaceId={4} onClose={onClose} onMinimize={vi.fn()} />
     </>,
   )
-  await screen.findByRole('button', { name: 'Minimize Zuri' })
+  await screen.findByRole('button', { name: 'Zuri options' })
 
   const navTab = screen.getByRole('button', { name: 'My tasks' })
   // A click outside is a pointerdown followed by a click; Radix listens for
@@ -584,7 +597,7 @@ it('stays open when the user clicks somewhere else in the app', async () => {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
 
   expect(onClose).not.toHaveBeenCalled()
-  expect(screen.getByRole('button', { name: 'Minimize Zuri' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Zuri options' })).toBeInTheDocument()
 })
 
 it('still closes the assistant on Escape', async () => {
@@ -597,7 +610,7 @@ it('still closes the assistant on Escape', async () => {
   const onClose = vi.fn()
 
   render(<AssistantFlyout workspaceId={4} onClose={onClose} onMinimize={vi.fn()} />)
-  await screen.findByRole('button', { name: 'Minimize Zuri' })
+  await screen.findByRole('button', { name: 'Zuri options' })
 
   // Escape is read by Radix off the dialog's own document, which in this
   // environment is not the stub bound to the global `document`.
@@ -627,7 +640,7 @@ it('clears the stored transcript and any waiting proposal after a confirmation',
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
 
   expect(await screen.findByText('Create a task called Launch notes.')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Clear conversation' }))
+  fireEvent.click(await zuriControl('Clear conversation'))
 
   // Nothing is wiped until the confirmation is answered.
   const clear = await screen.findByRole('button', { name: 'Clear' })
@@ -642,7 +655,8 @@ it('clears the stored transcript and any waiting proposal after a confirmation',
   expect(window.localStorage.getItem('workspace-ai-chat:4')).toBe('[]')
   expect(window.localStorage.getItem('workspace-ai-action:4')).toBeNull()
   // With nothing left to clear, the control is inert rather than hidden.
-  expect(screen.getByRole('button', { name: 'Clear conversation' })).toBeDisabled()
+  expect((await zuriControl('Clear conversation')).hasAttribute('data-disabled')).toBe(true)
+  await userEvent.keyboard('{Escape}')
 })
 
 it('keeps the transcript when the clear confirmation is declined', async () => {
@@ -659,7 +673,7 @@ it('keeps the transcript when the clear confirmation is declined', async () => {
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} onMinimize={vi.fn()} />)
 
   expect(await screen.findByText('Create a task called Launch notes.')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Clear conversation' }))
+  fireEvent.click(await zuriControl('Clear conversation'))
   fireEvent.click(await screen.findByRole('button', { name: 'Keep' }))
 
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Keep' })).not.toBeInTheDocument())
@@ -728,11 +742,11 @@ it('starts a new chat and keeps the old one in history', async () => {
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
 
   expect(await screen.findByText('What is due Friday?')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
+  fireEvent.click(await zuriControl('New chat'))
   expect(screen.queryByText('What is due Friday?')).not.toBeInTheDocument()
   expect(screen.getByText('Start a conversation')).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Chat history' }))
+  fireEvent.click(await zuriControl('Chat history'))
   fireEvent.click(await screen.findByRole('button', { name: /^What is due Friday\?/ }))
   expect(await screen.findByText('Two tasks.')).toBeInTheDocument()
 })
@@ -743,14 +757,14 @@ it('files past chats into folders and lists them by folder', async () => {
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
 
   await screen.findByText('Plan the launch')
-  fireEvent.click(screen.getByRole('button', { name: 'Chat history' }))
+  fireEvent.click(await zuriControl('Chat history'))
   fireEvent.change(screen.getByLabelText('New folder name'), { target: { value: 'Website project' } })
   fireEvent.click(screen.getByRole('button', { name: /Add folder/ }))
   // The chat on screen is filed under the folder, then a new chat archives it there.
   fireEvent.change(screen.getByLabelText("This chat's folder"), { target: { value: 'Website project' } })
   fireEvent.click(screen.getByRole('button', { name: 'Back to chat' }))
-  fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Chat history' }))
+  fireEvent.click(await zuriControl('New chat'))
+  fireEvent.click(await zuriControl('Chat history'))
 
   fireEvent.click(screen.getByRole('button', { name: 'Unfiled' }))
   expect(screen.getByText('No chats in this folder.')).toBeInTheDocument()
@@ -797,7 +811,7 @@ it('merges this browser\'s chats into the server copy once, then lets the server
   })
   render(<AssistantFlyout workspaceId={4} onClose={vi.fn()} />)
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Chat history' }))
+  fireEvent.click(await zuriControl('Chat history'))
   expect(await screen.findByText('Saved on another device')).toBeInTheDocument()
   expect(screen.getByText('Old local chat')).toBeInTheDocument()
   // The merged set is written back, and the browser remembers it has synced.
