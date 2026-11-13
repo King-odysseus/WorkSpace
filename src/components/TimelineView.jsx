@@ -19,6 +19,12 @@ const ROW = 40
 const HEAD = 52
 const LABEL = 270
 const ZOOMS = { week: 34, month: 14 }
+// How much of the calendar to show at once. Anything but Auto zooms the chart so that the
+// whole stretch fits across the screen, and shows only the tasks that fall inside it.
+export const SPANS = [
+  ['auto', 'All dates', 0], ['7', '1 week', 7], ['14', '2 weeks', 14], ['30', '1 month', 30],
+  ['90', '3 months', 90], ['180', '6 months', 180], ['270', '9 months', 270], ['365', '1 year', 365],
+]
 const MIN_DRAG = 4
 
 const statusOf = task => String(task.status || '').replace('_', ' ')
@@ -111,7 +117,11 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
   const [drag, setDrag] = useState(null)
   const scroller = useRef(null)
   const dragRef = useRef(null)
-  const pxPerDay = ZOOMS[zoom]
+  const [span, setSpan] = useState(() => { try { const saved = localStorage.getItem('timeline-span'); return SPANS.some(([key]) => key === saved) ? saved : 'auto' } catch { return 'auto' } })
+  const [anchor, setAnchor] = useState(null)
+  const [viewWidth, setViewWidth] = useState(900)
+  const spanDays = SPANS.find(([key]) => key === span)[2]
+  const windowed = spanDays > 0
   const localToday = (() => { const now = new Date(); return Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / DAY) })()
 
   const loadMilestones = useCallback(async () => {
@@ -124,10 +134,22 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const chooseSpan = next => { setSpan(next); setAnchor(null); try { localStorage.setItem('timeline-span', next) } catch { /* not remembered */ } }
   const chooseZoom = next => { setZoom(next); try { localStorage.setItem('timeline-zoom', next) } catch { /* not remembered */ } }
 
   const live = useMemo(() => tasks.filter(task => task.state !== 'archived' && statusOf(task) !== 'cancelled'), [tasks])
-  const scheduled = useMemo(() => live.filter(task => task.start_date || task.due_date), [live])
+  // A window of a week or two starts on a Monday so the weeks line up; longer ones start where you are looking.
+  const windowStart = (() => {
+    const at = anchor ?? localToday
+    return spanDays > 0 && spanDays <= 14 ? at - ((((at + 4) % 7) + 6) % 7) : at
+  })()
+  const windowEnd = windowStart + spanDays - 1
+  const scheduled = useMemo(() => live.filter(task => {
+    if (!task.start_date && !task.due_date) return false
+    if (!windowed) return true
+    const taskSpan = barSpan(task)
+    return taskSpan.end >= windowStart && taskSpan.start <= windowEnd
+  }), [live, windowed, windowStart, windowEnd])
   const unscheduled = useMemo(() => live.filter(task => !task.start_date && !task.due_date && statusOf(task) !== 'done'), [live])
   const shownMilestones = useMemo(
     () => milestones.filter(milestone => projectFilter === 'all' || projectFilter === 'operations' || !milestone.project_id || String(milestone.project_id) === String(projectFilter)),
@@ -149,35 +171,49 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
       })
       return result
     }
+    // In a window, only milestones that fall in it, or have a task in it, take a row.
+    const rowMilestones = windowed ? shownMilestones.filter(milestone => { const due = dayNumber(milestone.due_date); return (due >= windowStart && due <= windowEnd) || scheduled.some(task => task.milestone_id === milestone.id) }) : shownMilestones
     const byMilestone = new Map()
     scheduled.forEach(task => { const key = task.milestone_id ?? 'none'; byMilestone.set(key, [...(byMilestone.get(key) || []), task]) })
-    shownMilestones.forEach(milestone => {
+    rowMilestones.forEach(milestone => {
       result.push({ type: 'milestone', key: `m${milestone.id}`, milestone })
       orderTasks(byMilestone.get(milestone.id) || []).forEach(task => result.push({ type: 'task', key: `t${task.id}`, task }))
     })
-    const loose = orderTasks([...(byMilestone.get('none') || []), ...[...byMilestone.entries()].filter(([key]) => key !== 'none' && !shownMilestones.some(milestone => milestone.id === key)).flatMap(([, list]) => list)])
+    const loose = orderTasks([...(byMilestone.get('none') || []), ...[...byMilestone.entries()].filter(([key]) => key !== 'none' && !rowMilestones.some(milestone => milestone.id === key)).flatMap(([, list]) => list)])
     if (loose.length) {
-      if (shownMilestones.length) result.push({ type: 'group', key: 'none', label: 'No milestone' })
+      if (rowMilestones.length) result.push({ type: 'group', key: 'none', label: 'No milestone' })
       loose.forEach(task => result.push({ type: 'task', key: `t${task.id}`, task }))
     }
     return result
-  }, [scheduled, shownMilestones, group])
+  }, [scheduled, shownMilestones, group, windowed, windowStart, windowEnd])
 
   const range = useMemo(() => {
+    if (windowed) return { first: windowStart, last: windowEnd, days: spanDays }
     const spans = scheduled.map(barSpan)
-    const dates = [localToday, ...spans.flatMap(span => [span.start, span.end]), ...shownMilestones.map(milestone => dayNumber(milestone.due_date))]
+    const dates = [localToday, ...spans.flatMap(item => [item.start, item.end]), ...shownMilestones.map(milestone => dayNumber(milestone.due_date))]
     let first = Math.min(...dates) - 4
     let last = Math.max(...dates) + 10
     if (last - first < 28) last = first + 28
     first -= (((first + 4) % 7) + 6) % 7 // start the grid on a Monday
     return { first, last, days: last - first + 1 }
-  }, [scheduled, shownMilestones, localToday])
+  }, [scheduled, shownMilestones, localToday, windowed, windowStart, windowEnd, spanDays])
+  const pxPerDay = windowed ? Math.max(2, viewWidth / range.days) : ZOOMS[zoom]
   const x = day => (day - range.first) * pxPerDay
   const width = range.days * pxPerDay
 
   useEffect(() => {
-    if (scroller.current) scroller.current.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 160)
-  }, [zoom]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!windowed && scroller.current) scroller.current.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 160)
+  }, [zoom, span]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const node = scroller.current
+    if (!node) return undefined
+    const measure = () => { if (node.clientWidth > 0) setViewWidth(node.clientWidth) }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  })
 
   const patchTask = async (task, body) => {
     try {
@@ -273,24 +309,36 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
   for (let day = range.first; day <= range.last; day += 1) {
     const date = new Date(day * DAY)
     const weekday = date.getUTCDay()
-    if (zoom === 'week' || weekday === 1) ticks.push({ day, label: String(date.getUTCDate()), weekend: weekday === 0 || weekday === 6 })
+    const everyDay = windowed ? pxPerDay >= 22 : zoom === 'week'
+    const everyWeek = windowed ? pxPerDay >= 6 : true
+    if (everyDay || (everyWeek && weekday === 1)) ticks.push({ day, label: String(date.getUTCDate()), weekend: weekday === 0 || weekday === 6 })
   }
   const weekends = []
-  for (let day = range.first; day <= range.last; day += 1) { const weekday = new Date(day * DAY).getUTCDay(); if (weekday === 0 || weekday === 6) weekends.push(day) }
+  for (let day = range.first; day <= range.last && pxPerDay >= 6; day += 1) { const weekday = new Date(day * DAY).getUTCDay(); if (weekday === 0 || weekday === 6) weekends.push(day) }
   const height = Math.max(rows.length, 1) * ROW
 
   return (
     <section className="timeline" aria-label="Timeline">
       <div className="timeline-toolbar">
-        <div className="plan-view-toggle" role="group" aria-label="Timeline zoom">
+        <AppSelect className="timeline-span-select chip-select" value={span} aria-label="Time range" onChange={event => chooseSpan(event.target.value)}>
+          {SPANS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </AppSelect>
+        {windowed && (
+          <span className="timeline-pager" role="group" aria-label="Move the time range">
+            <Button type="button" variant="outline" size="sm" aria-label="Earlier" onClick={() => setAnchor(windowStart - spanDays)}>&lsaquo;</Button>
+            <strong>{isoFromDay(windowStart)} to {isoFromDay(windowEnd)}</strong>
+            <Button type="button" variant="outline" size="sm" aria-label="Later" onClick={() => setAnchor(windowStart + spanDays)}>&rsaquo;</Button>
+          </span>
+        )}
+        {!windowed && <div className="plan-view-toggle" role="group" aria-label="Timeline zoom">
           <button type="button" aria-pressed={zoom === 'week'} className={zoom === 'week' ? 'is-active' : ''} onClick={() => chooseZoom('week')}>Days</button>
           <button type="button" aria-pressed={zoom === 'month'} className={zoom === 'month' ? 'is-active' : ''} onClick={() => chooseZoom('month')}>Weeks</button>
-        </div>
+        </div>}
         <div className="plan-view-toggle" role="group" aria-label="Group rows by">
           <button type="button" aria-pressed={group === 'milestone'} className={group === 'milestone' ? 'is-active' : ''} onClick={() => chooseGroup('milestone')}>By milestone</button>
           <button type="button" aria-pressed={group === 'workstream'} className={group === 'workstream' ? 'is-active' : ''} onClick={() => chooseGroup('workstream')}>By workstream</button>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => { if (scroller.current) scroller.current.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 160) }}>Today</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => { setAnchor(null); if (scroller.current) scroller.current.scrollLeft = Math.max(0, (localToday - range.first) * pxPerDay - 160) }}>Today</Button>
         <span className="timeline-legend"><i className="is-todo" /> Not started <i className="is-in-progress" /> In progress <i className="is-done" /> Done <i className="is-blocked" /> Blocked</span>
       </div>
       {error && <p className="memo-error" role="alert">{error}</p>}
@@ -324,10 +372,10 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
               ))}
             </div>
             <div className="timeline-scroll" ref={scroller}>
-              <div className="timeline-canvas" style={{ width, height: HEAD + height }}>
+              <div className={`timeline-canvas${windowed ? ' is-windowed' : ''}`} style={{ width, height: HEAD + height }}>
                 <div className="timeline-head" style={{ height: HEAD, width }}>
                   {months.map(month => <span key={month.day} className="timeline-month" style={{ left: x(month.day) }}>{month.label}</span>)}
-                  {ticks.map(tick => <span key={tick.day} className={`timeline-tick${tick.weekend ? ' is-weekend' : ''}${tick.day === localToday ? ' is-today' : ''}`} style={{ left: x(tick.day), width: zoom === 'week' ? pxPerDay : pxPerDay * 7 }}>{tick.label}</span>)}
+                  {ticks.map(tick => <span key={tick.day} className={`timeline-tick${tick.weekend ? ' is-weekend' : ''}${tick.day === localToday ? ' is-today' : ''}`} style={{ left: x(tick.day), width: windowed ? (pxPerDay >= 22 ? pxPerDay : pxPerDay * 7) : zoom === 'week' ? pxPerDay : pxPerDay * 7 }}>{tick.label}</span>)}
                 </div>
                 <div className="timeline-body" style={{ top: HEAD, height, width }}>
                   {weekends.map(day => <i key={day} className="timeline-weekend" style={{ left: x(day), width: pxPerDay }} />)}

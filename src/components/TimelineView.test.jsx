@@ -120,6 +120,25 @@ describe('TimelineView', () => {
     expect(screen.queryByText('Finance')).toBeNull()
   })
 
+  it('zooms to a chosen stretch of time, showing only the tasks inside it, and pages through it', async () => {
+    const wide = [task(1, 'Soon', { start_date: '2026-11-13', due_date: '2026-11-14' }), task(2, 'Far off', { start_date: '2027-03-01', due_date: '2027-03-05' })]
+    mockApi({ '/milestones/': { milestones: [] } })
+    render(<TimelineView workspaceId={4} tasks={wide} onOpenTask={() => {}} />)
+    expect(await screen.findByRole('button', { name: /^Far off,/ })).toBeTruthy()
+    const user = (await import('@testing-library/user-event')).default.setup()
+    await user.click(screen.getByRole('combobox', { name: 'Time range' }))
+    await user.click(await screen.findByRole('option', { name: '1 week' }))
+    expect(localStorage.getItem('timeline-span')).toBe('7')
+    expect(screen.queryByRole('button', { name: /^Far off,/ })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Move the time range' })).toBeTruthy()
+    const range = () => screen.getByRole('group', { name: 'Move the time range' }).querySelector('strong').textContent
+    const first = range()
+    fireEvent.click(screen.getByRole('button', { name: 'Later' }))
+    expect(range()).not.toBe(first)
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier' }))
+    expect(range()).toBe(first)
+  })
+
   it('remembers the zoom', async () => {
     mockApi(api)
     render(<TimelineView workspaceId={4} tasks={tasks} onOpenTask={() => {}} />)
