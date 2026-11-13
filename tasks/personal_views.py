@@ -20,7 +20,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .leave_views import approved_leave_by_user
-from .models import PersonalPlanner, PersonalTask, PlannerDayNote
+from .models import PersonalPlanner, PersonalTask, PlannerDayNote, QuickNote
 from .views import require_workspace_member
 
 
@@ -133,10 +133,12 @@ def personal_planner_list(request, workspace_id):
         return error
     if request.method == 'GET':
         planners = _planners_for(membership.user, workspace_id).order_by('position', 'id')
-        tasks = PersonalTask.objects.filter(owner=membership.user, planner__workspace_id=workspace_id).order_by('position', 'id')
+        everything = PersonalTask.objects.filter(owner=membership.user, planner__workspace_id=workspace_id).order_by('position', 'id')
+        tasks = everything.filter(archived_at__isnull=True)
         return JsonResponse({
             'planners': [planner.as_dict() for planner in planners],
             'tasks': [task.as_dict() for task in tasks],
+            'archived_tasks': [task.as_dict() for task in everything.filter(archived_at__isnull=False)],
         })
 
     payload, error = _payload(request)
@@ -331,6 +333,25 @@ def personal_task_detail(request, workspace_id, task_id):
         except (TypeError, ValueError):
             return JsonResponse({'error': 'position must be a number.'}, status=400)
         fields.append('position')
+    if 'color' in payload:
+        if payload['color'] not in NOTE_COLORS and payload['color'] != '':
+            return JsonResponse({'error': 'Choose one of the note colours.'}, status=400)
+        task.color = payload['color']
+        fields.append('color')
+    for axis in ('pos_x', 'pos_y'):
+        if axis in payload:
+            value = payload[axis]
+            if value is not None:
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= MAX_BOARD_COORD:
+                    return JsonResponse({'error': f'{axis} must be a position on the board.'}, status=400)
+                value = int(value)
+            setattr(task, axis, value)
+            fields.append(axis)
+    if 'archived' in payload:
+        if not isinstance(payload['archived'], bool):
+            return JsonResponse({'error': 'archived must be true or false.'}, status=400)
+        task.archived_at = timezone.now() if payload['archived'] else None
+        fields.append('archived_at')
     if 'planner_id' in payload:
         planner = _owned_planner(membership.user, workspace_id, payload.get('planner_id'))
         if planner is None:
@@ -345,6 +366,9 @@ def personal_task_detail(request, workspace_id, task_id):
 
 
 MAX_DAY_NOTE = 6000
+NOTE_COLORS = ('yellow', 'pink', 'green', 'blue', 'purple', 'orange')
+MAX_BOARD_COORD = 6000
+MAX_QUICK_NOTE = 2000
 MAX_BLOCK_NOTES = 60
 MAX_BLOCK_NOTE_LENGTH = 500
 
@@ -405,4 +429,34 @@ def personal_day_plan(request, workspace_id):
     note, _ = PlannerDayNote.objects.update_or_create(
         workspace_id=workspace_id, owner=request.user, date=day, defaults=defaults,
     )
+    return JsonResponse({'note': note.as_dict()})
+
+
+@require_http_methods(['GET', 'PUT', 'DELETE'])
+def personal_quick_note(request, workspace_id):
+    """The signed-in member's one note on Today. Only theirs; never read by anyone else."""
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    mine = QuickNote.objects.filter(workspace_id=workspace_id, owner=request.user)
+    if request.method == 'GET':
+        note = mine.first()
+        return JsonResponse({'note': note.as_dict() if note else {'body': '', 'color': 'yellow', 'updated_at': None}})
+    if request.method == 'DELETE':
+        mine.delete()
+        return JsonResponse({'note': {'body': '', 'color': 'yellow', 'updated_at': None}})
+    payload, error = _payload(request)
+    if error:
+        return error
+    defaults = {}
+    if 'body' in payload:
+        body = str(payload['body'])
+        if len(body) > MAX_QUICK_NOTE:
+            return JsonResponse({'error': f'A note can be {MAX_QUICK_NOTE} characters at most.'}, status=400)
+        defaults['body'] = body
+    if 'color' in payload:
+        if payload['color'] not in NOTE_COLORS:
+            return JsonResponse({'error': 'Choose one of the note colours.'}, status=400)
+        defaults['color'] = payload['color']
+    note, _ = QuickNote.objects.update_or_create(workspace_id=workspace_id, owner=request.user, defaults=defaults)
     return JsonResponse({'note': note.as_dict()})

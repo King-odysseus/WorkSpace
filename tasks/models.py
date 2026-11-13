@@ -2045,6 +2045,12 @@ class PersonalTask(models.Model):
     # when it is ticked, the same rule Task keeps for team work.
     progress_percent = models.PositiveSmallIntegerField(default=0)
     position = models.PositiveSmallIntegerField(default=0)
+    # As a sticky note: its colour, where it sits on the board (null until it is
+    # first moved, when the board lays it out), and whether it was put away.
+    color = models.CharField(max_length=10, blank=True, default='')
+    pos_x = models.IntegerField(null=True, blank=True)
+    pos_y = models.IntegerField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2069,7 +2075,27 @@ class PersonalTask(models.Model):
             'completed_at': self.completed_at.isoformat() if self.completed_at else '',
             'progress_percent': self.progress_percent,
             'position': self.position,
+            'color': self.color,
+            'pos_x': self.pos_x,
+            'pos_y': self.pos_y,
+            'is_archived': self.archived_at is not None,
         }
+
+
+class QuickNote(models.Model):
+    """The one sticky note on a member's Today page, for jotting things down.
+    Private: reachable only through owner=request.user."""
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='quick_notes')
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quick_notes')
+    body = models.TextField(blank=True, max_length=2000)
+    color = models.CharField(max_length=10, default='yellow')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'owner'], name='unique_quick_note')]
+
+    def as_dict(self):
+        return {'body': self.body, 'color': self.color, 'updated_at': self.updated_at.isoformat()}
 
 
 class Reminder(models.Model):
