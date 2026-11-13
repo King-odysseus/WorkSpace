@@ -1630,3 +1630,70 @@ it('leaves a reply inert when the message it quotes was deleted', async () => {
   expect(screen.queryByRole('button', { name: /Go to the message from/ })).not.toBeInTheDocument()
   expect(screen.getByText('Original message was deleted.')).toBeInTheDocument()
 })
+
+describe('a request that never answers', () => {
+  afterEach(() => { vi.useRealTimers() })
+
+  // A POST that only ends when the caller gives up on it.
+  const hang = (url, init) => new Promise((_, reject) => {
+    init.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+  })
+
+  it('times a stuck send out with a message and unlocks the composer', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const base = mockApi({
+      '/documents/': { documents: [] },
+      '/files/': { files: [] },
+      '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+      '/notifications/': { status: 200, body: {} },
+    })
+    const passThrough = base.getMockImplementation()
+    base.mockImplementation(async (input, init = {}) => {
+      const url = typeof input === 'string' ? input : input?.url
+      if (url.includes('/direct-conversations/11/messages/') && init.method === 'POST') return hang(url, init)
+      return passThrough(input, init)
+    })
+
+    renderChat(dataFor())
+    await openConversation()
+    const box = screen.getByRole('textbox', { name: /message/i })
+    fireEvent.change(box, { target: { value: 'hello there' } })
+    fireEvent.submit(box.closest('form'))
+
+    // While the request is out the composer is locked.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled())
+    await vi.advanceTimersByTimeAsync(31000)
+
+    expect(await screen.findByText('That took too long. Check your connection and try again.')).toBeInTheDocument()
+    // The draft is kept and sending is possible again.
+    expect(box).toHaveValue('hello there')
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+  })
+
+  it('says why a send is blocked while a file is still uploading', async () => {
+    const base = mockApi({
+      '/documents/': { documents: [] },
+      '/files/': { files: [] },
+      '/direct-conversations/11/messages/': { messages: [{ id: 1, author_name: 'Dana Reed', message: 'See you then.', created_at: '2026-09-12T10:00:00Z' }] },
+      '/notifications/': { status: 200, body: {} },
+    })
+    const passThrough = base.getMockImplementation()
+    base.mockImplementation(async (input, init = {}) => {
+      const url = typeof input === 'string' ? input : input?.url
+      if (url.includes(`/workspaces/${workspaceId}/files/`) && init.method === 'POST') return hang(url, init)
+      return passThrough(input, init)
+    })
+
+    renderChat(dataFor())
+    await openConversation()
+    const box = screen.getByRole('textbox', { name: /message/i })
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', { value: { files: [new File(['x'], 'image.png', { type: 'image/png' })], getData: () => '' } })
+    box.dispatchEvent(paste)
+
+    expect(await screen.findByText('Uploading your file...')).toBeInTheDocument()
+    fireEvent.change(box, { target: { value: 'sending while it uploads' } })
+    fireEvent.submit(box.closest('form'))
+    expect(await screen.findByText('A file is still uploading. Send again when it has finished.')).toBeInTheDocument()
+  })
+})

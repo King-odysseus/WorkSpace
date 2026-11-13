@@ -9389,3 +9389,6 @@ select { padding-inline: 16px; border-color: transparent; border-radius: 999px; 
   [data-column='today-main'] > :last-child { display: flex; flex: 1 1 auto; flex-direction: column; }
   [data-column='today-main'] > :last-child > :last-child { flex: 1 1 auto; }
 }
+
+/* Shown while a pasted or attached file is uploading, so a blocked send has a reason. */
+.chat-workspace-view .chat-uploading { margin: 0 0 8px; padding: 6px 14px; border-radius: 999px; background: var(--color-info-soft); color: var(--color-info); font-size: 12px; font-weight: 600; }

@@ -8,6 +8,25 @@ import '../chat-mobile.css'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import RemindMenu from './RemindMenu.jsx'
+
+// Sending a message and uploading a file both lock the composer while they run. A
+// request that never answers used to leave it locked for good: Enter did nothing
+// and pasted files were ignored, with no message saying why. Every one of those
+// requests now gives up after a fixed time and says so.
+const SEND_TIMEOUT_MS = 30000
+const UPLOAD_TIMEOUT_MS = 90000
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('That took too long. Check your connection and try again.')
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
 import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CheckCheck, ChevronDown, ChevronLeft, Compass, Download, FileText, FolderOpen, Hash, Info, Lock, MessageSquare, MoreVertical, Paperclip, Pencil, Pin, Plus, Search, Smile, Star, Trash2, Users, X } from 'lucide-react'
 import { Badge } from './ui/badge.jsx'
 import Avatar from './Avatar.jsx'
@@ -544,15 +563,16 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     event.preventDefault()
     const hasAttachments = sharedDocumentIds.length > 0 || sharedFileIds.length > 0
     const messageText = draft.trim() || (hasAttachments ? 'Shared an attachment' : '')
+    if (uploadingFile && messageText) { setError('A file is still uploading. Send again when it has finished.'); return }
     if (!messageText || submitting || uploadingFile) return
     setSubmitting(true)
     setError('')
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/chat-messages/`, {
+      const response = await fetchWithTimeout(`/api/workspaces/${workspaceId}/chat-messages/`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) },
         body: JSON.stringify({ channel: selectedChannel, message: messageText, parent_id: replyTo?.id || null, document_ids: sharedDocumentIds, file_ids: sharedFileIds }),
-      })
+      }, SEND_TIMEOUT_MS)
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Message could not be sent.')
       setChannelMessages(current => channelMessageName === selectedChannel ? [...current, payload.message] : [payload.message])
@@ -576,15 +596,16 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
     event.preventDefault()
     const hasAttachments = sharedDocumentIds.length > 0 || sharedFileIds.length > 0
     const messageText = draft.trim() || (hasAttachments ? 'Shared an attachment' : '')
+    if (uploadingFile && messageText) { setError('A file is still uploading. Send again when it has finished.'); return }
     if (!selectedConversation || !messageText || submitting || uploadingFile) return
     setSubmitting(true)
     setError('')
     try {
-      const response = await fetch(`/api/direct-conversations/${selectedConversation.id}/messages/`, {
+      const response = await fetchWithTimeout(`/api/direct-conversations/${selectedConversation.id}/messages/`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() },
         body: JSON.stringify({ message: messageText, parent_id: replyTo?.id || null, document_ids: sharedDocumentIds, file_ids: sharedFileIds }),
-      })
+      }, SEND_TIMEOUT_MS)
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Message could not be sent.')
       setDirectMessages(current => [...current, payload.message])
@@ -1434,7 +1455,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
       for (const file of queue) {
         const body = new FormData()
         body.append('file', file)
-        const response = await fetch(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body })
+        const response = await fetchWithTimeout(`/api/workspaces/${workspaceId}/files/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': await getCsrfToken(), 'X-Workspace-Id': String(workspaceId) }, body }, UPLOAD_TIMEOUT_MS)
         const payload = await response.json()
         if (!response.ok) throw new Error(payload.error || `${file.name} could not be uploaded.`)
         uploaded.push(payload.file)
@@ -1485,6 +1506,7 @@ function ChatWorkspaceView({ viewType, data, workspaceId, currentUserId, onRefre
           {editingMessageId !== null && <div className="reply-context"><span>Editing message</span><button type="button" disabled={savingEdit} onClick={cancelEditing}>Cancel</button></div>}
           {editingMessageId === null && replyTo && <div className="reply-context"><span>Replying to <strong>{replyTo.author_name}</strong>: {replyTo.message.slice(0, 100)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
           {editingMessageId === null && attachmentCount > 0 && <div className="chat-pending-attachments" aria-label={`Attachments on this message: ${attachmentCount} of ${MAX_CHAT_ATTACHMENTS}`}>{sharedDocumentIds.map(id => { const document = workspaceDocuments.find(item => item.id === id); const name = document?.title || 'Document'; return renderAttachmentChip({ key: `pending-document-${id}`, name, kind: 'document', onRemove: () => setSharedDocumentIds(current => current.filter(value => value !== id)), removeLabel: `Remove ${name}` }) })}{sharedFileIds.map(id => { const file = workspaceFiles.find(item => item.id === id); const name = file?.original_name || 'File'; return renderAttachmentChip({ key: `pending-file-${id}`, name, size: formatAttachmentSize(file?.size), src: isImageFileName(name) ? previewSrc(file?.url) : '', kind: 'file', onRemove: () => setSharedFileIds(current => current.filter(value => value !== id)), removeLabel: `Remove ${name}` }) })}</div>}
+          {editingMessageId === null && uploadingFile && <p className="chat-uploading" role="status">Uploading your file...</p>}
           <div className="chat-compose-surface">
             <div className="chat-compose-input">
               <textarea ref={messageInputRef} rows={1} value={composerDraft} readOnly={savingEdit} onPaste={pasteChatFiles} onChange={event => { const nextDraft = event.target.value; setComposerDraft(nextDraft); const context = getMentionContext(nextDraft, event.target.selectionStart ?? nextDraft.length); mentionTypedRef.current = Boolean(context); setMentionOpen(Boolean(context)); setMentionQuery(context?.query || ''); if (context) { setEmojiOpen(false); setShareOpen(false) } }} onKeyDown={event => { if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setMentionQuery(''); return } if (event.key === 'Enter' && !event.shiftKey && mentionOpen && mentionMembers.length) { event.preventDefault(); insertMention(mentionMembers[0]); return } if (event.key === 'Escape' && editingMessageId !== null && !savingEdit) { event.preventDefault(); cancelEditing(); return } if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder={mode === 'channels' ? `Message #${selectedChannel}` : selectedConversation?.is_self ? 'Message yourself' : `Message ${selectedConversation?.title}`} maxLength="4000" aria-label={editingMessageId !== null ? 'Edit message' : 'Message'} />
