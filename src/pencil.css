@@ -9969,3 +9969,19 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .chat-mention-picker[aria-label="Mention suggestions"] button:hover, .chat-mention-picker[aria-label="Mention suggestions"] button.is-active { background: var(--pencil-surface-muted); box-shadow: inset 3px 0 0 #C49A6C; }
 .chat-mention-picker[aria-label="Mention suggestions"] strong { font-size: 13px; font-weight: 600; }
 .chat-mention-picker[aria-label="Mention suggestions"] span { color: var(--pencil-text-muted); font-size: 12px; }
+
+.team-day-task-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.team-day-delete { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); color: #b42318; cursor: pointer; }
+.team-day-delete:hover { background: #fee4e2; border-color: #fda29b; }
+.team-day-confirm { display: inline-flex; gap: 6px; }
+.team-day-more { margin-top: 10px; }
+
+/* Sidebar: when the rail opens, the group labels wait for the width to arrive instead of
+   showing clipped ("CO", "WO") while it grows. */
+@keyframes rail-heading-in { from { opacity: 0; } to { opacity: 1; } }
+aside[class*='bg-navy'] nav p.text-overline { overflow: hidden; white-space: nowrap; animation: rail-heading-in .16s ease .18s both; }
+aside[class*='bg-navy'] nav { overflow-x: hidden; }
+@media (prefers-reduced-motion: reduce) { aside[class*='bg-navy'] nav p.text-overline { animation: none; } }
+
+/* Team: the rings sit at the top of their cards instead of stretching them. */
+.team-day-top { align-items: start; }

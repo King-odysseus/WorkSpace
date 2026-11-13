@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlertTriangle, Building2, ChevronLeft, ChevronRight, Home, Plane, X } from 'lucide-react'
+import { AlertTriangle, Building2, ChevronLeft, ChevronRight, Home, Plane, Trash2, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { AppSelect } from './ui/select.jsx'
 import { fmtDate, isoDate, workspaceCall } from '../lib/workspace-api.js'
@@ -58,6 +58,7 @@ const FILTERS = [
   ['away', 'Away', row => row.leave_share >= 1],
 ]
 
+const UNASSIGNED_SHOWN = 8
 const RING_COLOURS = { ok: '#12b76a', full: '#f79009', over: '#d92d20', empty: '#98a2b3', off: '#98a2b3', navy: '#0B0B45' }
 
 // A circle that fills with a share of a whole; the words sit in the middle so it never needs a legend.
@@ -85,16 +86,27 @@ function LocationChip({ row }) {
   return null
 }
 
-function TaskLine({ task, members, ownerId, onReassign }) {
+function TaskLine({ task, members, ownerId, onReassign, onDelete }) {
+  const [confirming, setConfirming] = useState(false)
   return (
     <li className="team-day-task">
       <span><strong>{task.title}</strong>{task.due_date ? ` - due ${task.due_date}` : ''}{task.estimate_minutes ? ` - ${hours(task.estimate_minutes)}` : ' - no estimate'}</span>
-      {onReassign && (
-        <AppSelect className="team-day-reassign" value="" aria-label={`Reassign ${task.title}`} onChange={event => event.target.value && onReassign(task, event.target.value)}>
-          <option value="">Reassign...</option>
-          {members.filter(member => member.id !== ownerId).map(member => <option key={member.id} value={String(member.id)}>{member.name}</option>)}
-        </AppSelect>
-      )}
+      <span className="team-day-task-actions">
+        {onReassign && (
+          <AppSelect className="team-day-reassign" value="" aria-label={`Reassign ${task.title}`} onChange={event => event.target.value && onReassign(task, event.target.value)}>
+            <option value="">Reassign...</option>
+            {members.filter(member => member.id !== ownerId).map(member => <option key={member.id} value={String(member.id)}>{member.name}</option>)}
+          </AppSelect>
+        )}
+        {onDelete && (confirming
+          ? (
+            <span className="team-day-confirm" role="group" aria-label={`Delete ${task.title}?`}>
+              <Button type="button" variant="destructive" size="sm" onClick={() => { setConfirming(false); onDelete(task) }}>Delete</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(false)}>Keep</Button>
+            </span>
+          )
+          : <button type="button" className="team-day-delete" aria-label={`Delete ${task.title}`} title="Delete this task" onClick={() => setConfirming(true)}><Trash2 size={15} aria-hidden="true" /></button>)}
+      </span>
     </li>
   )
 }
@@ -108,7 +120,7 @@ function Sparkline({ values }) {
   )
 }
 
-function PersonDetail({ workspaceId, row, members, date, onReassign, onNudge }) {
+function PersonDetail({ workspaceId, row, members, date, onReassign, onDelete, onNudge }) {
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -134,7 +146,7 @@ function PersonDetail({ workspaceId, row, members, date, onReassign, onNudge }) 
       {sections.map(([title, items, canMove]) => items.length > 0 && (
         <section key={title}>
           <h4>{title} ({items.length})</h4>
-          <ul>{items.map(task => <TaskLine key={task.id} task={task} members={members} ownerId={row.id} onReassign={canMove ? onReassign : null} />)}</ul>
+          <ul>{items.map(task => <TaskLine key={task.id} task={task} members={members} ownerId={row.id} onReassign={canMove ? onReassign : null} onDelete={onDelete} />)}</ul>
         </section>
       ))}
       {sections.every(([, items]) => !items.length) && <p className="team-day-muted">No tasks for this person today.</p>}
@@ -151,6 +163,7 @@ export default function TeamDayPanel({ workspaceId, isLeader, onNavigate }) {
   const [filter, setFilter] = useState('all')
   const [expanded, setExpanded] = useState(null)
   const [cellOpen, setCellOpen] = useState(null)
+  const [showAllUnassigned, setShowAllUnassigned] = useState(false)
   const today = isoDate(new Date())
 
   const loadDay = useCallback(async () => {
@@ -174,6 +187,24 @@ export default function TeamDayPanel({ workspaceId, isLeader, onNavigate }) {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || 'That task could not be reassigned.')
       toast.success('Task reassigned.')
+      setExpanded(null)
+      setCellOpen(null)
+      await Promise.all([loadDay(), mode === 'week' ? loadWeek() : null])
+    } catch (failure) {
+      setError(failure.message)
+    }
+  }
+
+  const deleteTask = async task => {
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'X-Workspace-Id': String(workspaceId), 'X-CSRFToken': await getCsrfToken() },
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'That task could not be deleted.')
+      toast.success('Task deleted.')
       setExpanded(null)
       setCellOpen(null)
       await Promise.all([loadDay(), mode === 'week' ? loadWeek() : null])
@@ -303,7 +334,7 @@ export default function TeamDayPanel({ workspaceId, isLeader, onNavigate }) {
                   <h3>{expandedRow.name}</h3>
                   <button type="button" className="team-day-expand" aria-label="Close" onClick={() => setExpanded(null)}><X size={16} aria-hidden="true" /></button>
                 </div>
-                <PersonDetail workspaceId={workspaceId} row={expandedRow} members={rows} date={today} onReassign={reassign} onNudge={() => onNavigate?.('Chats')} />
+                <PersonDetail workspaceId={workspaceId} row={expandedRow} members={rows} date={today} onReassign={reassign} onDelete={deleteTask} onNudge={() => onNavigate?.('Chats')} />
               </aside>
             )}
           </div>
@@ -346,7 +377,7 @@ export default function TeamDayPanel({ workspaceId, isLeader, onNavigate }) {
           {openCell && (
             <div className="team-day-cell-tasks">
               <h4>{week.members.find(member => member.id === cellOpen.id)?.name} on {fmtDate(cellOpen.day)}</h4>
-              <ul>{openCell.tasks.map(task => <TaskLine key={task.id} task={{ ...task, estimate_minutes: task.estimated ? task.minutes : null }} members={week.members} ownerId={cellOpen.id} onReassign={reassign} />)}</ul>
+              <ul>{openCell.tasks.map(task => <TaskLine key={task.id} task={{ ...task, estimate_minutes: task.estimated ? task.minutes : null }} members={week.members} ownerId={cellOpen.id} onReassign={reassign} onDelete={deleteTask} />)}</ul>
             </div>
           )}
           {hints.length > 0 && (
@@ -367,8 +398,13 @@ export default function TeamDayPanel({ workspaceId, isLeader, onNavigate }) {
         <section className="team-day-unassigned" id="team-day-unassigned" aria-label="Work nobody owns">
           <h3>Nobody owns these yet ({summary.unassigned})</h3>
           <ul>
-            {day.unassigned.map(task => <TaskLine key={task.id} task={task} members={rows} ownerId={null} onReassign={reassign} />)}
+            {(showAllUnassigned ? day.unassigned : day.unassigned.slice(0, UNASSIGNED_SHOWN)).map(task => <TaskLine key={task.id} task={task} members={rows} ownerId={null} onReassign={reassign} onDelete={deleteTask} />)}
           </ul>
+          {day.unassigned.length > UNASSIGNED_SHOWN && (
+            <Button type="button" variant="outline" size="sm" className="team-day-more" onClick={() => setShowAllUnassigned(current => !current)}>
+              {showAllUnassigned ? 'Show fewer' : `Show all ${day.unassigned.length} listed`}
+            </Button>
+          )}
         </section>
       )}
     </section>

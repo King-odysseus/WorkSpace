@@ -101,6 +101,27 @@ describe('TeamDayPanel', () => {
     expect(JSON.parse(expectRequest(fetchMock, '/api/tasks/90/', 'PATCH')[1].body)).toEqual({ assignee_id: 3 })
   })
 
+  it('deletes an unassigned task only after a second press, and keeps it on Keep', async () => {
+    const fetchMock = mockApi({ '/api/tasks/90/': { deleted: 90 }, '/team-day/': dayPayload })
+    render(<TeamDayPanel workspaceId={4} isLeader />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete Nobody owns this' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Delete Nobody owns this?' })).getByRole('button', { name: 'Keep' }))
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes('/api/tasks/90/') && init?.method === 'DELETE')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Nobody owns this' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Delete Nobody owns this?' })).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expectRequest(fetchMock, '/api/tasks/90/', 'DELETE'))
+  })
+
+  it('lists the first few unassigned tasks and the rest on request', async () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({ id: 100 + index, title: `Orphan ${index}`, due_date: null, estimate_minutes: null }))
+    mockApi({ '/team-day/': { ...dayPayload, unassigned: many, summary: { ...summary, unassigned: 12 } } })
+    render(<TeamDayPanel workspaceId={4} isLeader />)
+    await screen.findByText('Orphan 0')
+    expect(screen.queryByText('Orphan 11')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 12 listed' }))
+    expect(screen.getByText('Orphan 11')).toBeTruthy()
+  })
+
   it('shows the week grid with a move suggestion, and the move reassigns the task', async () => {
     localStorage.setItem('team-day-mode', 'week')
     const cell = (planned, capacity, tasks = []) => ({ planned_minutes: planned, capacity_minutes: capacity, leave_share: 0, location: null, source: 'none', task_count: tasks.length, tasks })
