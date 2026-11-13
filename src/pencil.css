@@ -9482,3 +9482,17 @@ body:has([data-slot='dialog-content'].ai-chat-window) .main-content { overflow: 
 .day-plan-edit-form textarea { width: 100%; margin: 12px 0 8px; padding: 10px 12px; border: 1px solid var(--pencil-border); border-radius: 12px; font: inherit; font-size: 14px; }
 .day-plan-status, .day-plan-empty { margin: 12px 0 0; font-size: 13px; color: var(--pencil-text-muted); }
 .day-plan-error { margin: 12px 0 0; font-size: 13px; color: #b42318; }
+
+/* The minimised Zuri bubble must stay a plain 56px circle: generic button rules
+   (min sizes, light fills, pill radius) used to turn it into a wide chip. */
+.ai-minimized-bubble .ai-minimized-open {
+  width: 56px !important; height: 56px !important; min-width: 56px !important; min-height: 56px !important;
+  padding: 0 !important; border-radius: 50% !important; background: var(--pencil-navy) !important;
+  color: #C49A6C !important; box-shadow: 0 6px 18px rgb(0 22 102 / 30%) !important;
+}
+.ai-minimized-bubble .ai-minimized-close {
+  width: 22px !important; height: 22px !important; min-width: 22px !important; min-height: 22px !important;
+  padding: 0 !important; border-radius: 50% !important;
+}
+.ai-minimized-bubble .ai-minimized-open svg { color: #C49A6C !important; stroke: #C49A6C !important; opacity: 1 !important; }
+.day-plan-note { align-self: start; height: auto; }
