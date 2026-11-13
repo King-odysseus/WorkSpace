@@ -9983,5 +9983,6 @@ aside[class*='bg-navy'] nav p.text-overline { overflow: hidden; white-space: now
 aside[class*='bg-navy'] nav { overflow-x: hidden; }
 @media (prefers-reduced-motion: reduce) { aside[class*='bg-navy'] nav p.text-overline { animation: none; } }
 
-/* Team: the rings sit at the top of their cards instead of stretching them. */
-.team-day-top { align-items: start; }
+/* Team: the gauges sit in the middle of their cards. */
+.team-day-top { align-items: stretch; }
+.team-day-ringcard { align-content: center; justify-items: center; }
