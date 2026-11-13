@@ -2,6 +2,7 @@ from django.urls import path
 
 from .auth_views import auth_csrf, auth_google, auth_login, auth_logout, auth_me, push_public_key, push_subscription_list, user_avatar, user_avatar_download, user_presence, user_profile, workspace_create
 from .request_views import work_request_detail, work_request_list
+from .team_day_views import team_day, team_day_member, team_week
 from .leave_views import leave_detail, leave_list
 from .location_views import office_days_policy, work_location_pattern, work_locations
 from .memo_views import memo_respond, memo_detail, memo_dismiss, memo_list
@@ -124,6 +125,9 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/locations/', work_locations, name='work-locations'),
     path('workspaces/<int:workspace_id>/location-pattern/', work_location_pattern, name='work-location-pattern'),
     path('workspaces/<int:workspace_id>/office-days/', office_days_policy, name='office-days'),
+    path('workspaces/<int:workspace_id>/team-day/', team_day, name='team-day'),
+    path('workspaces/<int:workspace_id>/team-day/<int:user_id>/', team_day_member, name='team-day-member'),
+    path('workspaces/<int:workspace_id>/team-week/', team_week, name='team-week'),
     path('workspaces/<int:workspace_id>/check-in-preference/', check_in_preference, name='check-in-preference'),
     path('workspaces/<int:workspace_id>/memos/<int:memo_id>/', memo_detail, name='memo-detail'),
     path('workspaces/<int:workspace_id>/memos/<int:memo_id>/dismiss/', memo_dismiss, name='memo-dismiss'),

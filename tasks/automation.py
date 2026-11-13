@@ -84,6 +84,10 @@ def _digest_body(scope_label, open_count, overdue_count, blocked_count, due_soon
     return f'{scope_label}: {", ".join(parts)}, {detail}'
 
 
+# The hour (workspace local time) the end-of-day digest goes out.
+DAY_DIGEST_HOUR = 18
+
+
 def run_workspace_automation(workspace_id):
     """Run all reminder/digest automation for one workspace.
 
@@ -106,7 +110,7 @@ def run_workspace_automation(workspace_id):
     counts = {
         'due_soon': 0, 'overdue': 0, 'blocked': 0, 'stale': 0,
         'operations_digest': 0, 'project_digest': 0,
-        'check_in_reminders': 0, 'check_in_summary': 0,
+        'check_in_reminders': 0, 'check_in_summary': 0, 'day_digest': 0,
     }
 
     setting = WorkspaceSetting.objects.filter(workspace_id=workspace_id).first()
@@ -136,6 +140,27 @@ def run_workspace_automation(workspace_id):
                 dedup_key=f'check_in_summary:{today.isoformat()}:{leader.user_id}',
             ):
                 counts['check_in_summary'] += 1
+
+    # Once a day, near the end of it, owners and managers get what was planned against
+    # what was done, who has not checked in, and how much carries over.
+    if timezone.localtime(now).hour == DAY_DIGEST_HOUR:
+        from .team_day_views import build_day
+        rows, summary, _unassigned = build_day(workspace_id, today)
+        carried = sum(row['planned_count'] for row in rows)  # planned work still open
+        missing_check_ins = summary['expected_check_ins'] - summary['checked_in']
+        title = f"Today: {summary['done_today']} done, {carried} carry over"
+        body = (
+            f"{summary['done_today']} task(s) done today. "
+            f"{missing_check_ins} of {summary['expected_check_ins']} expected check-ins are missing. "
+            f"{summary['blocked']} blocked, {summary['overdue']} overdue."
+        )
+        for leader in _leaders(workspace_id):
+            if deliver_once(
+                workspace_id, leader.user, 'day_digest', title, body,
+                target_type='workspace', target_id=workspace_id,
+                dedup_key=f'day_digest:{today.isoformat()}:{leader.user_id}',
+            ):
+                counts['day_digest'] += 1
 
     for task in due_soon:
         if _deliver_task_reminder(
