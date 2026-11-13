@@ -9674,3 +9674,10 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .plan-row .plan-block-note { margin-top: 8px; background: var(--pencil-surface-muted); border-color: var(--pencil-border); }
 @media (max-width: 640px) { .plan-row { grid-template-columns: 1fr; gap: 6px; } .plan-row-time { display: flex; gap: 6px; align-items: baseline; } }
 @media (prefers-reduced-motion: reduce) { .plan-sticky { transition: none; } }
+
+/* Day plan header: room around the toggle and buttons. */
+.day-plan-note { padding: 24px 26px !important; }
+.day-plan-header { align-items: center !important; gap: 16px !important; }
+.day-plan-actions { gap: 16px !important; flex-wrap: wrap; }
+.day-plan-actions .plan-view-toggle { margin-right: 4px; }
+.day-plan-delete { width: 38px !important; height: 38px !important; }
