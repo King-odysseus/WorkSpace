@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from .board_access import is_board_member, visible_buckets, visible_projects, visible_tasks, visible_workstreams
 from .models import AiAction, LookupValue, Membership, PlanBucket, Project, Task, TaskComment, WorkspaceDocument
+from .memo_views import memo_list
 from .views import task_detail, task_list, project_detail, project_list
 
 
@@ -82,6 +83,7 @@ ACTION_FIELDS = {
     'project.create': {'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.update': {'project_id', 'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.delete': {'project_id'},
+    'memo.create': {'title', 'body', 'banner_days'},
 }
 
 # Deletes are permanent, so they are held to a stricter rule than every other
@@ -481,7 +483,10 @@ def action_instructions(snapshot):
         'When a request needs more than that, propose the first batch as actions, then say in "answer" how many are left and that the user can reply "continue" for the next batch. '
         'On "continue", skip every task whose title already appears in the snapshot or in your earlier replies and propose the next batch; never propose the same task twice. '
         'A spreadsheet to load in bulk with its own columns belongs in Import data, which previews every row before anything is written. '
-        'Allowed action kinds are task.create, task.update, task.archive, task.delete, project.create, project.update, and project.delete. '
+        'Allowed action kinds are task.create, task.update, task.archive, task.delete, project.create, project.update, project.delete, and memo.create. '
+        'memo.create writes a company memo with title (short), body (plain text, no markdown) and optional banner_days (0 to 60, default 7; 0 means no banner). '
+        'Only owners and managers can post memos; when the user asks for a memo, draft it in full in "answer" and also return the memo.create action so they can confirm or change it. '
+        'A memo goes to everyone, so never put private data, salaries or personal details in it. '
         'task.archive uses task_id: it takes a task off the board but keeps it, and an owner or manager may ask for it. '
         'Prefer task.archive when the user says archive, clear, or take something off; use task.delete only when they ask to delete or remove it for good. '
         'Work lives in a project or in an operations workstream such as Daily operations, never both. The snapshot lists "workstreams" and "buckets"; '
@@ -691,8 +696,16 @@ def _validate_action(action, registry, workspace_id, actor):
         elif field == 'assignee_ref':
             cleaned[field] = str(value or '').strip()
             registry.user_id_for_ref(cleaned[field])
+        elif field == 'banner_days':
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 60:
+                raise ActionValidationError('Banner days must be a whole number from 0 to 60.')
+            cleaned[field] = value
+        elif field == 'body':
+            cleaned[field] = _clean_string(value, registry, field, 4000)
+            if not cleaned[field]:
+                raise ActionValidationError('Memo text is required.')
         elif field in {'title', 'name'}:
-            cleaned[field] = _clean_string(value, registry, field, 200 if field == 'title' else 160)
+            cleaned[field] = _clean_string(value, registry, field, 160 if kind == 'memo.create' or field == 'name' else 200)
             if not cleaned[field]:
                 raise ActionValidationError(f'{field.title()} is required.')
         elif field in {'description', 'blocker_details'}:
@@ -725,6 +738,8 @@ def _validate_action(action, registry, workspace_id, actor):
 
     if kind == 'task.create' and not cleaned.get('title'):
         raise ActionValidationError('Task title is required.')
+    if kind == 'memo.create' and not (cleaned.get('title') and cleaned.get('body')):
+        raise ActionValidationError('A memo needs a title and text.')
     if kind == 'task.update':
         if not cleaned.get('task_id'):
             raise ActionValidationError('Task is required.')
@@ -753,6 +768,10 @@ def _validate_action(action, registry, workspace_id, actor):
                 raise ActionValidationError('Task was not found in this workspace.')
         elif not _seen_projects(workspace_id, actor).filter(id=cleaned['project_id']).exists():
             raise ActionValidationError('Project was not found in this workspace.')
+        return kind, cleaned
+    if kind == 'memo.create':
+        if not membership.has_permission('post_memos'):
+            raise ActionValidationError('You do not have permission to post memos. Ask an owner or manager.')
         return kind, cleaned
     if kind == 'task.archive':
         # The same rule the archive endpoint applies, said here so a refusal
@@ -823,6 +842,10 @@ def _action_summary(kind, payload, registry):
         task = Task.objects.filter(id=payload.get('task_id')).only('title').first()
         title = registry.expand(task.title if task else 'Unknown task')[:140]
         return f'Permanently delete task "{title}". Its comments, history and attachments are removed for good; the task itself can be put back for 24 hours.'
+    if kind == 'memo.create':
+        days = payload.get('banner_days', 7)
+        banner = f' It shows as a banner for {days} day{"" if days == 1 else "s"}.' if days else ' It will not show as a banner.'
+        return f'Post memo "{registry.expand(payload.get("title") or "Untitled memo")[:140]}" to everyone in the workspace.{banner}'
     if kind == 'project.delete':
         project = Project.objects.filter(id=payload.get('project_id')).only('name').first()
         name = registry.expand(project.name if project else 'Unknown project')[:120]
@@ -937,6 +960,10 @@ def execute_action(action, actor):
         request = factory.delete(f'/api/workspaces/{action.workspace_id}/projects/{project_id}/')
         request.user = actor
         return _call_view(project_detail, request, workspace_id=action.workspace_id, project_id=project_id)
+    if action.kind == 'memo.create':
+        request = factory.post(f'/api/workspaces/{action.workspace_id}/memos/', data=json.dumps(action.payload), content_type='application/json')
+        request.user = actor
+        return _call_view(memo_list, request, workspace_id=action.workspace_id)
     if action.kind == 'task.create':
         request = factory.post('/api/tasks/', data=json.dumps(action.payload), content_type='application/json')
         request.user = actor
