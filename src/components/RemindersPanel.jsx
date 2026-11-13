@@ -56,7 +56,7 @@ export default function RemindersPanel({ workspaceId }) {
   }
 
   return (
-    <section data-panel="reminders" className="rounded-card border border-border bg-card px-[19px] pb-5 pt-[19px]" aria-label="Reminders">
+    <section data-panel="reminders" className="min-w-0 overflow-hidden rounded-card border border-border bg-card px-[19px] pb-5 pt-[19px]" aria-label="Reminders">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-[16px] font-semibold leading-[19px] text-text-primary"><Bell size={16} aria-hidden="true" /> Reminders</h2>
         {reminders && reminders.length > 0 && <span className="text-[12px] text-text-muted">{reminders.length} pending</span>}
@@ -64,11 +64,11 @@ export default function RemindersPanel({ workspaceId }) {
       {error && <p className="mt-3 text-[12px] text-danger" role="alert">{error}</p>}
       {reminders === null && !error ? <p className="mt-4 text-body-small text-text-muted" role="status">Loading...</p>
         : reminders && reminders.length ? (
-          <ul className="mt-4 grid gap-1">
+          <ul className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-1">
             {reminders.slice(0, 5).map(reminder => (
-              <li key={reminder.id} className="reminder-row flex items-center gap-3 rounded-2xl px-3 py-2.5">
+              <li key={reminder.id} className="reminder-row flex min-w-0 items-center gap-3 rounded-2xl px-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-body-small font-medium text-text-primary">{reminder.label || 'Reminder'}</p>
+                  <p className="reminder-label text-body-small font-medium text-text-primary">{reminder.label || 'Reminder'}</p>
                   <p className="truncate text-[12px] text-text-muted">{whenLabel(reminder.remind_at)}{reminder.note ? ` · ${reminder.note}` : ''}</p>
                 </div>
                 <button type="button" className="reminder-cancel" onClick={() => cancel(reminder)} aria-label={`Cancel reminder: ${reminder.label || 'Reminder'}`} title="Cancel reminder"><X size={14} aria-hidden="true" /></button>

@@ -9841,3 +9841,26 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .followup-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
 .followup-detail-hint { font-size: 13px; color: var(--pencil-text-muted); }
 .followup-detail-comments h3 { margin: 0 0 8px; font-size: 15px; }
+
+/* Chat fills the screen below the header. When an announcement banner is showing
+   above it, the chat gives up that much height, so the message box stays on screen
+   instead of being pushed off the bottom. */
+.page-content:has(> .chat-workspace-view) { min-height: 0; }
+.page-content:has(> .chat-workspace-view) > .memo-banner { margin: 12px 24px; }
+.chat-workspace-view, .chat-workspace-view .chat-layout { min-height: calc(100dvh - var(--shell-header-h, 64px) - var(--memo-banner-h, 0px)); }
+.chat-workspace-view .chat-conversation-list, .chat-workspace-view .chat-feed { height: calc(100dvh - var(--shell-header-h, 64px) - var(--memo-banner-h, 0px)); }
+@media (max-width: 1023px) {
+  .page-content:has(> .chat-workspace-view) > .memo-banner { margin: 10px 12px; }
+  .chat-workspace-view, .chat-workspace-view .chat-layout { min-height: calc(100dvh - 56px - var(--memo-banner-h, 0px)); }
+  .chat-workspace-view .chat-conversation-list, .chat-workspace-view .chat-feed { height: calc(100dvh - 56px - var(--memo-banner-h, 0px)); }
+}
+
+/* The message box is pinned to the bottom of the visible screen, with a hairline
+   above it, and never scrolls away with the messages. */
+.chat-workspace-view .chat-inline-composer { position: sticky; bottom: 0; z-index: 6; flex: 0 0 auto; border-top: 0.5px solid var(--pencil-border); box-shadow: 0 -1px 0 rgb(16 24 40 / 4%); background: var(--pencil-canvas); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+
+/* Reminders: a long task name wraps to two lines and ends in an ellipsis; it never
+   pushes the row, or the cancel button, out of the card. */
+.reminder-row { min-width: 0; max-width: 100%; }
+.reminder-label { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.reminder-row .reminder-cancel { flex: 0 0 auto; }
