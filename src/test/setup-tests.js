@@ -52,7 +52,8 @@ export function mockApi(routes) {
   // Every mutating call funnels through getCsrfToken(), which fetches this
   // endpoint when the cookie is absent. Stubbing it here keeps that plumbing out
   // of individual tests; a test may still override it by naming it explicitly.
-  const withDefaults = { '/api/auth/csrf/': { status: 'ok' }, ...routes }
+  // My planner also loads the day-plan note; most tests do not care about it.
+  const withDefaults = { '/api/auth/csrf/': { status: 'ok' }, '/personal/day-plan/': { note: null }, ...routes }
   const patterns = Object.keys(withDefaults).sort((a, b) => b.length - a.length)
   const fetchMock = vi.fn(async (input, init = {}) => {
     const url = typeof input === 'string' ? input : input.url

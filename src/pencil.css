@@ -9468,3 +9468,17 @@ body:has([data-slot='dialog-content'].ai-chat-window) .main-content { overflow: 
 .ai-chat-composer .ai-chat-attach,
 .ai-chat-composer .ai-chat-send { border-radius: 999px; }
 .ai-chat-composer-row { align-items: center; }
+
+/* Zuri's day plan: a note under My planner, outside every count. */
+.day-plan-note { margin-top: 16px; padding: 18px 20px; }
+.day-plan-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.day-plan-header h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 16px; color: var(--pencil-navy); }
+.day-plan-header p { margin: 4px 0 0; font-size: 13px; color: var(--pencil-text-muted); }
+.day-plan-actions { display: flex; align-items: center; gap: 8px; }
+.day-plan-delete { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 999px; background: transparent; color: var(--pencil-text-muted); cursor: pointer; }
+.day-plan-delete:hover { background: var(--pencil-selected); color: var(--pencil-navy); }
+.day-plan-body { margin: 14px 0 6px; padding: 12px 14px; border-radius: 12px; background: var(--pencil-surface-muted); font: inherit; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.day-plan-edit { border: 0; background: transparent; color: var(--pencil-navy); font-weight: 600; cursor: pointer; padding: 0; }
+.day-plan-edit-form textarea { width: 100%; margin: 12px 0 8px; padding: 10px 12px; border: 1px solid var(--pencil-border); border-radius: 12px; font: inherit; font-size: 14px; }
+.day-plan-status, .day-plan-empty { margin: 12px 0 0; font-size: 13px; color: var(--pencil-text-muted); }
+.day-plan-error { margin: 12px 0 0; font-size: 13px; color: #b42318; }

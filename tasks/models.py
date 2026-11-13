@@ -1992,6 +1992,28 @@ class PersonalPlanner(models.Model):
         }
 
 
+class PlannerDayNote(models.Model):
+    """A member's plan for one day, kept as a note under their planner.
+
+    Not a PersonalTask on purpose: the Today ring and every planner count read
+    tasks, and a note has to leave them alone. Private the same way the planner
+    is - reachable only through ``owner=request.user``.
+    """
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='planner_day_notes')
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='planner_day_notes')
+    date = models.DateField()
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['workspace', 'owner', 'date'], name='unique_planner_day_note')]
+
+    def as_dict(self):
+        return {'date': self.date.isoformat(), 'body': self.body, 'updated_at': self.updated_at.isoformat()}
+
+
 class PersonalTask(models.Model):
     """One line on a member's planner."""
 

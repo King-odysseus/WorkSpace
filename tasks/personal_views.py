@@ -19,7 +19,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .models import PersonalPlanner, PersonalTask
+from .models import PersonalPlanner, PersonalTask, PlannerDayNote
 from .views import require_workspace_member
 
 
@@ -341,3 +341,43 @@ def personal_task_detail(request, workspace_id, task_id):
     with transaction.atomic():
         task.save(update_fields=fields + ['updated_at'])
     return JsonResponse({'task': task.as_dict()})
+
+
+MAX_DAY_NOTE = 6000
+
+
+@require_http_methods(['GET', 'PUT', 'DELETE'])
+def personal_day_plan(request, workspace_id):
+    """The caller's plan note for one day (?date=YYYY-MM-DD, default today).
+
+    A note, not a task: nothing that counts planner work reads it.
+    """
+    membership, error = require_workspace_member(request, workspace_id)
+    if error:
+        return error
+    payload = {}
+    if request.method == 'PUT':
+        payload, error = _payload(request)
+        if error:
+            return error
+    raw_date = payload.get('date') if request.method == 'PUT' else request.GET.get('date')
+    try:
+        day = date.fromisoformat(str(raw_date)) if raw_date else timezone.localdate()
+    except ValueError:
+        return JsonResponse({'error': 'Date must use YYYY-MM-DD format.'}, status=400)
+    notes = PlannerDayNote.objects.filter(workspace_id=workspace_id, owner=request.user, date=day)
+    if request.method == 'GET':
+        note = notes.first()
+        return JsonResponse({'note': note.as_dict() if note else None})
+    if request.method == 'DELETE':
+        notes.delete()
+        return JsonResponse({'note': None})
+    body = str(payload.get('body', '')).strip()
+    if not body:
+        return JsonResponse({'error': 'A plan cannot be empty. Delete it instead.'}, status=400)
+    if len(body) > MAX_DAY_NOTE:
+        return JsonResponse({'error': f'A plan must be {MAX_DAY_NOTE} characters or fewer.'}, status=400)
+    note, _ = PlannerDayNote.objects.update_or_create(
+        workspace_id=workspace_id, owner=request.user, date=day, defaults={'body': body},
+    )
+    return JsonResponse({'note': note.as_dict()})

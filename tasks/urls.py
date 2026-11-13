@@ -11,7 +11,7 @@ from .quality_views import import_commit, import_preview, project_health_report,
 from .import_templates import import_template
 from .workspace_logo import workspace_logo
 from .workspace_tools import workspace_ai_usage, workspace_ai_library, workspace_ai_action, workspace_ai_chat, workspace_ai_settings, workspace_check_in_settings, workspace_document_revision_list, workspace_document_revision_restore, workspace_file_detail, workspace_document_comment_detail, workspace_document_comment_list, workspace_document_detail, workspace_document_export, workspace_document_list, workspace_document_share_detail, workspace_document_share_list, workspace_file_download, workspace_file_list, workspace_spreadsheet_import
-from .personal_views import personal_planner_detail, personal_planner_list, personal_task_detail, personal_task_list
+from .personal_views import personal_day_plan, personal_planner_detail, personal_planner_list, personal_task_detail, personal_task_list
 
 urlpatterns = [
     path('notifications/summary/', notification_summary, name='notification-summary'),
@@ -157,5 +157,6 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/personal/planners/', personal_planner_list, name='personal-planner-list'),
     path('workspaces/<int:workspace_id>/personal/planners/<int:planner_id>/', personal_planner_detail, name='personal-planner-detail'),
     path('workspaces/<int:workspace_id>/personal/tasks/', personal_task_list, name='personal-task-list'),
+    path('workspaces/<int:workspace_id>/personal/day-plan/', personal_day_plan, name='personal-day-plan'),
     path('workspaces/<int:workspace_id>/personal/tasks/<int:task_id>/', personal_task_detail, name='personal-task-detail'),
 ]

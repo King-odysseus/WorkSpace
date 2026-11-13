@@ -2,6 +2,7 @@
 // dashboard, and the panels they embed (project progress, risks/issues,
 // stakeholders and resources, and the time clock).
 
+import { requestDayPlan } from "../lib/day-plan-navigation.js";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import {
@@ -6149,7 +6150,7 @@ function TodayDashboard({
             <Button type="button" size="page" variant="gold" onClick={onAddTask}>
               <Plus size={18} strokeWidth={2} aria-hidden="true" /> New task
             </Button>
-            <Button type="button" size="page" variant="ghost" aria-label="Plan my day" onClick={() => onNavigate("My planner")}>
+            <Button type="button" size="page" variant="ghost" aria-label="Plan my day" onClick={() => { requestDayPlan(); onNavigate("My planner"); }}>
               <Sparkles size={18} aria-hidden="true" /> Plan my day
             </Button>
             <Button type="button" size="page" variant="ghost" aria-label="Open calendar" onClick={() => onNavigate("Calendar")}>

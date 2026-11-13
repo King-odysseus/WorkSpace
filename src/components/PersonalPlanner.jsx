@@ -10,6 +10,7 @@ import { Card } from './ui/card.jsx'
 import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import { TaskProgressBar, progressOptions, taskProgressValue } from './TaskProgressBar.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
+import DayPlanNote from './DayPlanNote.jsx'
 import { formatDay, getCsrfToken, readJsonResponse, toDateKey } from '../lib/workspace-format.js'
 
 // A due time is the reason the field exists, so a task that named one is late the
@@ -443,6 +444,7 @@ function PersonalPlanner({ workspaceId }) {
                   : <div className="personal-task-empty"><NotebookPen size={22} aria-hidden="true" /><strong>Nothing here yet</strong><p>Add your first item above.</p></div>}
               </>}
         </Card>
+        {!loading && <DayPlanNote workspaceId={workspaceId} openPersonalTitles={tasks.filter(task => !task.is_done).map(task => task.title)} />}
       </div>
     </div>
   </section>
