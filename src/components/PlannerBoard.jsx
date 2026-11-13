@@ -1,3 +1,4 @@
+import BoardDateFilter from './BoardDateFilter.jsx'
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Archive, ArrowDown, Bell, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronRight, FolderInput, GripVertical, ListChecks, MoreHorizontal, MoveHorizontal, Pencil, Plus, RotateCcw, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.jsx'
@@ -138,6 +139,10 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
   const [staleOnly, setStaleOnly] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [datePreset, setDatePreset] = useState('any')
+  const applyDate = ({ preset, from, to, due }) => { setDatePreset(preset); setDateFrom(from); setDateTo(to); setDueFilter(due) }
+  // The overdue chip on a phone sets the due filter directly; the date filter shows it too.
+  const shownPreset = datePreset === 'any' && dueFilter === 'overdue' ? 'overdue' : datePreset
   const [draggedTaskId, setDraggedTaskId] = useState(null)
   const [draggedBucketId, setDraggedBucketId] = useState(null)
   const [dropBucketId, setDropBucketId] = useState(null)
@@ -631,7 +636,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     unassigned: tasks.filter(task => !taskHasAssignee(task)).length,
   }
   const filtersHiding = status !== 'all' || priority !== 'all' || assignee !== 'all' || supporter !== 'all' || phase !== 'all' || bucketFilter !== 'all' || dueFilter !== 'all' || Boolean(dateFrom) || Boolean(dateTo) || staleOnly
-  const clearHiddenFilters = () => { setStatus('all'); setPriority('all'); setAssignee('all'); setSupporter('all'); setPhase('all'); setBucketFilter('all'); setDueFilter('all'); setDateFrom(''); setDateTo(''); setStaleOnly(false) }
+  const clearHiddenFilters = () => { setStatus('all'); setPriority('all'); setAssignee('all'); setSupporter('all'); setPhase('all'); setBucketFilter('all'); setDueFilter('all'); setDateFrom(''); setDateTo(''); setDatePreset('any'); setStaleOnly(false) }
   // The design's scope line names the scope, the lane count and what the board
   // does with them. A drill-through from Reports sets filters this toolbar has no
   // control for, so when one is in force the line says so and offers the way out.
@@ -756,15 +761,17 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
         <option value="all">{isOperations ? 'All workstreams' : 'All workstreams'}</option>
         {workstreams.map(value => <option key={value} value={value}>{value}</option>)}
       </AppSelect>
+      <BoardDateFilter className="planner-desktop-control" today={today} preset={shownPreset} from={dateFrom} to={dateTo} onChange={applyDate} />
       {workspaceId && <SavedViewsMenu
         workspaceId={workspaceId}
         currentUserId={currentUserId}
-        filters={{ status, priority, assignee, workstream, bucketFilter, dueFilter, staleOnly }}
+        filters={{ status, priority, assignee, workstream, bucketFilter, dueFilter, staleOnly, datePreset, dateFrom, dateTo }}
         search={searchQuery}
         projectScope={projectFilter}
         onApply={view => {
           setStatus(view.status); setPriority(view.priority); setAssignee(view.assignee); setWorkstream(view.workstream)
           setBucketFilter(view.bucketFilter); setDueFilter(view.dueFilter); setStaleOnly(view.staleOnly)
+          setDatePreset(view.datePreset || 'any'); setDateFrom(view.dateFrom || ''); setDateTo(view.dateTo || '')
           onSearchChange?.(view.search)
           if (view.projectScope !== projectFilter) onProjectFilterChange?.(view.projectScope)
         }}
@@ -781,6 +788,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       <label className="planner-mobile-filter-field"><span>Work scope</span><AppSelect value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} disabled={scopeMode === 'projects'}><option value="all">All work</option><option value="operations">Daily operations</option></AppSelect></label>
       {!isOperations && <label className="planner-mobile-filter-field"><span>Project</span><AppSelect value={projectFilter === 'operations' ? 'all' : projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)}><option value="all">All projects</option>{projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}</AppSelect></label>}
       <label className="planner-mobile-filter-field"><span>Workstream</span><AppSelect value={workstream} onChange={event => setWorkstream(event.target.value)}><option value="all">All workstreams</option>{workstreams.map(value => <option key={value} value={value}>{value}</option>)}</AppSelect></label>
+      <div className="planner-mobile-filter-field"><span>Due date</span><BoardDateFilter today={today} preset={shownPreset} from={dateFrom} to={dateTo} onChange={applyDate} /></div>
       {canManageBuckets && <div className="planner-mobile-filter-actions">
         <Button type="button" variant="outline" onClick={onToggleBucketArchive} aria-pressed={bucketArchiveOpen}><Archive size={18} aria-hidden="true" /> Archived</Button>
         {!isOperations && <Button type="button" onClick={() => setCreating(current => !current)} aria-expanded={creating}><Plus size={18} aria-hidden="true" /> New bucket</Button>}

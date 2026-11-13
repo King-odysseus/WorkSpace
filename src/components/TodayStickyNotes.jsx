@@ -8,8 +8,9 @@ import { workspaceCall, isoDate } from '../lib/workspace-api.js'
 // A board (or list) on Today: the blocks of today's day plan if there is one (the
 // block you are in right now is marked), then the tasks assigned to you that are
 // wanted now, then your open planner items. Tasks and planner items can be ticked
-// off and given a percentage right here; plan blocks are time slots, not tasks, so
-// they have neither. Selecting a note opens My planner.
+// off and given a percentage right here. Plan blocks are time slots, not tasks: they
+// can be ticked done (saved on the plan) but have no percentage. Selecting a note
+// opens My planner.
 const MAX_NOTES = 8
 const UNDO_MS = 8000
 const minutes = time => { const [h, m] = time.split(':').map(Number); return h * 60 + m }
@@ -65,7 +66,23 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
     }
   }
 
+  // A plan block ticked done is kept on the plan itself, not as a task.
+  const togglePlanBlock = async note => {
+    const key = note.id.replace('plan-', '')
+    const current = plan?.done || []
+    const next = current.includes(key) ? current.filter(item => item !== key) : [...current, key]
+    setPlan(existing => ({ ...existing, done: next }))
+    try {
+      const saved = (await workspaceCall(workspaceId, 'personal/day-plan/', 'PUT', { date: isoDate(new Date()), done: next })).note
+      setPlan(saved)
+    } catch (failure) {
+      setPlan(existing => ({ ...existing, done: current }))
+      setError(failure.message || 'That did not save.')
+    }
+  }
+
   const finish = async note => {
+    if (note.kind === 'plan') return togglePlanBlock(note)
     if (note.kind === 'team') {
       rememberDone({ key: note.id, title: note.title, undo: () => onCompleteTask?.(note.raw.id) })
       await onCompleteTask?.(note.raw.id)
@@ -94,8 +111,10 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
       tone: block.kind,
       active: minutes(block.start) <= nowMinutes && nowMinutes < minutes(block.end),
       past: minutes(block.end) <= nowMinutes,
+      isDone: (plan.done || []).includes(block.key),
     }))
-    const planNotes = [...fromPlan.filter(note => !note.past), ...fromPlan.filter(note => note.past)]
+    // What is still to do comes first; past and ticked-off blocks go to the back.
+    const planNotes = [...fromPlan.filter(note => !note.past && !note.isDone), ...fromPlan.filter(note => note.past || note.isDone)]
     const fromTeam = teamTasks
       .filter(task => task.status !== 'done' && task.status !== 'cancelled')
       .map(task => ({
@@ -128,7 +147,8 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
 
   if (!loaded) return null
   const shown = notes.slice(0, MAX_NOTES)
-  const canTick = note => note.kind === 'team' || note.kind === 'personal'
+  const canTick = note => note.kind === 'team' || note.kind === 'personal' || note.kind === 'plan'
+  const hasPercent = note => note.kind === 'team' || note.kind === 'personal'
   const progressFor = note => (
     <TaskProgressBar
       className="sticky-progress"
@@ -138,7 +158,7 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
     />
   )
   const tickFor = note => (
-    <button type="button" className="sticky-tick" onClick={() => finish(note)} aria-label={`Mark ${note.title} complete`} aria-pressed={false}>
+    <button type="button" className={`sticky-tick${note.isDone ? ' is-checked' : ''}`} onClick={() => finish(note)} aria-label={note.kind === 'plan' ? (note.isDone ? `Mark ${note.title} not done` : `Mark ${note.title} done`) : `Mark ${note.title} complete`} aria-pressed={Boolean(note.isDone)}>
       <Check size={12} aria-hidden="true" />
     </button>
   )
@@ -173,7 +193,7 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
           ? view === 'list'
             ? <ol className="plan-list" aria-label="Sticky notes as a list">
               {shown.map(note => (
-                <li key={note.id} className={`plan-row is-${note.tone === 'break' ? 'break' : 'work'}${canTick(note) ? ' has-actions' : ''}`}>
+                <li key={note.id} className={`plan-row is-${note.tone === 'break' ? 'break' : 'work'}${hasPercent(note) ? ' has-actions' : ''}${note.isDone ? ' is-done' : ''}`}>
                   <div className="plan-row-time">
                     {canTick(note) && tickFor(note)}
                     <strong>{note.header}</strong>
@@ -182,7 +202,7 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
                     <div className="plan-row-title"><strong>{note.title}</strong>{note.chip && <em>{note.chip}</em>}</div>
                     {note.detail && <p>{note.detail}</p>}
                   </div>
-                  {canTick(note) && <div className="plan-row-actions">{progressFor(note)}</div>}
+                  {hasPercent(note) && <div className="plan-row-actions">{progressFor(note)}</div>}
                 </li>
               ))}
             </ol>
@@ -194,14 +214,14 @@ export default function TodayStickyNotes({ workspaceId, teamTasks = [], onComple
                   chip={note.chip}
                   title={note.title}
                   detail={note.detail}
-                  tone={note.tone}
+                  tone={note.isDone ? 'done' : note.tone}
                   tilt={index}
                   active={note.active}
                   leading={canTick(note) ? tickFor(note) : undefined}
                   onClick={onOpenPlanner}
                   label={`Open planner: ${note.title}`}
                 >
-                  {canTick(note) && progressFor(note)}
+                  {hasPercent(note) && progressFor(note)}
                 </StickyNote>
               ))}
             </div>

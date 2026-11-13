@@ -318,6 +318,18 @@ const HELP_TOPICS = [
     ],
   },
   {
+    title: 'Filter the board by date',
+    icon: CalendarDays,
+    group: 'planner',
+    intro: 'See only the work due on a day, in a week or between two dates.',
+    steps: [
+      'On Planner or Daily operations, open the Due date menu beside the other filters. On a phone it is inside Filter.',
+      'Choose Today, Tomorrow, This week, Next week, This month, Overdue or No due date. Weeks run Monday to Sunday.',
+      'Choose Pick dates to set your own From and To days. Choose Any date to see everything again.',
+      'You can save a date filter in a view along with your other filters.',
+    ],
+  },
+  {
     title: 'Plan your day with Zuri',
     icon: Sparkles,
     group: 'planner',

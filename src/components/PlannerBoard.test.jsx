@@ -753,7 +753,7 @@ it('opens the mobile filter panel and switches the active bucket tab', async () 
   })
 
   await user.click(screen.getByRole('button', { name: 'Filter' }))
-  expect(document.getElementById('planner-mobile-filters').querySelectorAll('[role="combobox"]')).toHaveLength(3)
+  expect(document.getElementById('planner-mobile-filters').querySelectorAll('[role="combobox"]')).toHaveLength(4)
 
   await user.click(screen.getByRole('tab', { name: 'Review' }))
   expect(container.querySelectorAll('.planner-column.is-mobile-active')).toHaveLength(1)
@@ -1228,4 +1228,25 @@ it('keeps Routines off the project planner', () => {
   const routine = { id: 5, title: 'Morning stand-up', bucket: 'Backlog', status: 'todo', priority: 'normal', recurrence: 'daily', due_date: toDateKey(new Date()), project_id: null, assignee_ids: [], position: 0 }
   renderPlanner({ workspaceId: 1, scopeMode: 'projects', currentUserId: 7, tasks: [routine] })
   expect(screen.queryByRole('region', { name: 'Routines' })).toBeNull()
+})
+
+it('filters the board to the tasks due in a chosen week', async () => {
+  const user = userEvent.setup()
+  const today = new Date()
+  const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 15)
+  renderPlanner({
+    buckets: [{ id: 2, name: 'Backlog', project_id: null }],
+    tasks: [
+      { id: 1, title: 'Due today task', bucket: 'Backlog', status: 'todo', due_date: iso(today) },
+      { id: 2, title: 'Due much later task', bucket: 'Backlog', status: 'todo', due_date: iso(nextMonth) },
+      { id: 3, title: 'No date task', bucket: 'Backlog', status: 'todo', due_date: '' },
+    ],
+  })
+  expect(screen.getAllByText('Due much later task').length).toBeGreaterThan(0)
+  await user.click(screen.getAllByRole('combobox', { name: 'Due date' })[0])
+  await user.click(await screen.findByRole('option', { name: 'This week' }))
+  await waitFor(() => expect(screen.queryAllByText('Due much later task')).toHaveLength(0))
+  expect(screen.getAllByText('Due today task').length).toBeGreaterThan(0)
+  expect(screen.queryAllByText('No date task')).toHaveLength(0)
 })

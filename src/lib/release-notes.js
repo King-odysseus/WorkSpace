@@ -12,6 +12,14 @@ const SEEN_KEY = 'workspace-whats-new-seen-v1'
 const RELEASE_NOTES = [
   {
     date: '2026-11-13',
+    title: 'Filter boards by date',
+    items: [
+      'Planner and Daily operations have a Due date filter: today, tomorrow, this week, next week, this month, overdue, no due date, or two dates you pick.',
+      'Day plan blocks can now be dragged anywhere on the board and ticked off as done, from My planner or from Today.',
+    ],
+  },
+  {
+    date: '2026-11-13',
     title: 'Sticky notes',
     items: [
       'Your day plan is now a board of sticky notes, one per block with its time and length, or a list. Add your own note to any block.',

@@ -13,7 +13,7 @@ import { getCsrfToken } from '../lib/workspace-format.js'
 // small JSON object in the filter token. Anything missing or unreadable falls
 // back to "all", so an old or hand-made view can never break the board.
 
-export const DEFAULT_PLANNER_VIEW = { status: 'all', priority: 'all', assignee: 'all', workstream: 'all', bucketFilter: 'all', dueFilter: 'all', staleOnly: false }
+export const DEFAULT_PLANNER_VIEW = { status: 'all', priority: 'all', assignee: 'all', workstream: 'all', bucketFilter: 'all', dueFilter: 'all', staleOnly: false, datePreset: 'any', dateFrom: '', dateTo: '' }
 
 // A view carries the screen it was saved on, so My tasks and the Planner each list
 // only their own. Older views have no scope and belong to the Planner.

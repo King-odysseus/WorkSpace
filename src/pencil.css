@@ -9794,3 +9794,23 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .today-sticky { padding: 16px 20px 16px 12px !important; }
 .today-sticky-toggle { gap: 6px; }
 .today-sticky-toggle > svg { flex: 0 0 auto; }
+
+/* Plan blocks that are ticked off go quiet; the tick shows once it is set. */
+.plan-sticky.is-done { background: #e4e7ec !important; color: #667085 !important; }
+.plan-sticky.is-done .sticky-block-title, .plan-row.is-done .plan-row-title strong { text-decoration: line-through; }
+.plan-row.is-done { opacity: .65; }
+.sticky-tick.is-checked { color: #067647; background: #fff; border-color: #067647; }
+.sticky-chip { padding: 1px 8px; border-radius: 999px; background: rgb(11 11 69 / 10%); font-size: 12px; font-weight: 700; }
+.sticky-block-title { margin: 0 12px; font-size: 16px; font-weight: 700; line-height: 1.3; }
+.sticky-block-detail { margin: 0 12px; font-size: 13px; line-height: 1.45; opacity: .85; }
+.plan-row-time > div { display: grid; }
+.plan-row-time { grid-auto-flow: column; }
+
+/* Date filter on the kanban boards. */
+.board-date-filter { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.board-date-select.app-select-trigger { min-width: 150px; }
+.board-date-range { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); font-size: 13px; color: var(--pencil-text-muted); }
+.board-date-range input { border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--pencil-text); }
+.planner-mobile-filter-field .board-date-filter { display: flex; width: 100%; }
+/* Notes may overlap once moved; the one you point at or focus comes to the front. */
+.sticky-card:hover, .sticky-card:focus-within { z-index: 10; }

@@ -180,13 +180,17 @@ describe('Today sticky notes: finishing tasks', () => {
     await waitFor(() => expect(patchBodies(fetchMock)).toContainEqual({ is_done: false }))
   })
 
-  it('gives plan blocks no tick or percentage, because they are not tasks', async () => {
+  it('lets a plan block be ticked done, but gives it no percentage', async () => {
     localStorage.setItem('today-sticky-open', 'true')
-    mockApi({ '/personal/day-plan/': { note: { date: '2026-11-13', body: '23:00-23:59 Late block (1h)', notes: {} } }, '/personal/planners/': { planners: [], tasks: [] } })
+    const fetchMock = mockApi({
+      '/personal/day-plan/': { note: { date: '2026-11-13', body: '23:00-23:59 Late block (1h)', notes: {}, done: [], layout: {} } },
+      '/personal/planners/': { planners: [], tasks: [] },
+    })
     render(<TodayStickyNotes workspaceId={4} teamTasks={[]} onOpenPlanner={() => {}} />)
     expect(await screen.findByText('Late block')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /complete/ })).toBeNull()
     expect(screen.queryByLabelText(/Percent complete/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Late block done' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes('/day-plan/') && init?.method === 'PUT' && JSON.parse(init.body).done?.[0] === '23:00')).toBe(true))
   })
 })
 

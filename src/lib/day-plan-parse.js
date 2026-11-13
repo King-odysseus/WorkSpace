@@ -21,7 +21,7 @@ export function parsePlan(text) {
       return
     }
     const [, start, end, rest] = match
-    const [first, ...others] = rest.split(/\s+[-–]\s+/)
+    const [first, ...others] = rest.split(/\s+[-–—]\s+/)
     const durationMatch = first.match(DURATION)
     const duration = durationMatch && durationMatch[1].trim() ? durationMatch[1].trim() : ''
     const title = (durationMatch ? first.slice(0, durationMatch.index) : first).trim()

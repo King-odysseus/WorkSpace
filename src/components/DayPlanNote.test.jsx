@@ -6,7 +6,7 @@ import { requestDayPlan } from '../lib/day-plan-navigation.js'
 import { parsePlan } from '../lib/day-plan-parse.js'
 import { expectRequest, mockApi } from '../test/setup-tests.js'
 
-afterEach(() => { vi.restoreAllMocks() })
+afterEach(() => { vi.restoreAllMocks(); try { localStorage.clear() } catch { /* nothing to clear */ } })
 
 describe('DayPlanNote', () => {
   it('shows a saved plan as a note and deletes it on request', async () => {
@@ -94,3 +94,49 @@ describe('day plan blocks', () => {
     expect(screen.queryByRole('group', { name: 'Plan view' })).toBeNull()
   })
 })
+
+describe('day plan blocks: moving and ticking off', () => {
+  const planWithState = { date: '2026-11-13', body: PLAN, notes: {}, done: [], layout: {} }
+  // A server that keeps what it is sent: a PUT changes the note a later read returns.
+  const echoServer = fetchMock => {
+    let current = planWithState
+    fetchMock.mockImplementation(async (url, init = {}) => {
+      if (String(url).includes('/personal/day-plan/') && init.method === 'PUT') current = { ...current, ...JSON.parse(init.body) }
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ note: current }), text: async () => '{}' }
+    })
+  }
+  const putBodies = fetchMock => fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/personal/day-plan/') && init?.method === 'PUT').map(([, init]) => JSON.parse(init.body))
+
+  it('reads a detail joined with an em dash', () => {
+    const dash = String.fromCharCode(0x2014)
+    const { blocks } = parsePlan(`09:00-09:30 Finalise offers (30m) ${dash} highest priority, no due date`)
+    expect(blocks[0]).toMatchObject({ title: 'Finalise offers', duration: '30m', detail: 'highest priority, no due date' })
+  })
+
+  it('ticks a block done and back, and the plan remembers it', async () => {
+    const fetchMock = mockApi({ '/personal/day-plan/': { note: planWithState } })
+    echoServer(fetchMock)
+    render(<DayPlanNote workspaceId={4} openPersonalTitles={[]} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark Finalise offers done' }))
+    await waitFor(() => expect(putBodies(fetchMock)).toContainEqual({ date: expect.any(String), done: ['09:00'] }))
+    expect(await screen.findByRole('button', { name: 'Mark Finalise offers not done' })).toBeTruthy()
+  })
+
+  it('moves a block by dragging its bar and with the arrow keys, saving where it sits', async () => {
+    const fetchMock = mockApi({ '/personal/day-plan/': { note: planWithState } })
+    echoServer(fetchMock)
+    render(<DayPlanNote workspaceId={4} openPersonalTitles={[]} />)
+    const card = await screen.findByLabelText(/Plan block: Finalise offers/)
+    const bar = card.querySelector('.sticky-bar')
+    fireEvent.pointerDown(bar, { pointerId: 1, clientX: 50, clientY: 50 })
+    fireEvent.pointerMove(bar, { pointerId: 1, clientX: 200, clientY: 130 })
+    fireEvent.pointerUp(bar, { pointerId: 1, clientX: 200, clientY: 130 })
+    await waitFor(() => expect(putBodies(fetchMock).some(body => body.layout?.['09:00'])).toBe(true))
+    const first = putBodies(fetchMock).find(body => body.layout?.['09:00']).layout['09:00']
+    expect(first[0]).toBeGreaterThan(0)
+    fireEvent.keyDown(screen.getByLabelText(/Plan block: Finalise offers/), { key: 'ArrowRight' })
+    await waitFor(() => expect(putBodies(fetchMock).filter(body => body.layout).length).toBe(2))
+    expect(putBodies(fetchMock).filter(body => body.layout)[1].layout['09:00'][0]).toBe(first[0] + 16)
+  })
+})
+

@@ -35,7 +35,7 @@ const NOTE_W = 248
 const NOTE_H = 232
 const GAP = 16
 
-function StickyCard({ task, x, y, today, nowTime, dragging, onToggle, onPatch, onArchive, onDelete, onDragStart, onDragMove, onDragEnd, onNudge }) {
+function StickyCard({ task, x, y, today, nowTime, dragging, raised, onRaise, onToggle, onPatch, onArchive, onDelete, onDragStart, onDragMove, onDragEnd, onNudge }) {
   const [palette, setPalette] = React.useState(false)
   const [removing, setRemoving] = React.useState(false)
   const color = task.color || 'blue'
@@ -46,7 +46,8 @@ function StickyCard({ task, x, y, today, nowTime, dragging, onToggle, onPatch, o
       role="listitem"
       tabIndex={0}
       aria-label={`Sticky note: ${task.title}. Use the arrow keys to move it.`}
-      style={{ left: x, top: y, width: NOTE_W, minHeight: NOTE_H }}
+      style={{ left: x, top: y, width: NOTE_W, minHeight: NOTE_H, zIndex: raised ? 15 : undefined }}
+      onFocus={onRaise}
       onKeyDown={event => {
         if (event.target !== event.currentTarget) return
         const step = event.shiftKey ? 48 : 16
@@ -101,6 +102,7 @@ function PersonalStickyBoard({ tasks, archived, today, nowTime, onToggle, onPatc
   const boardRef = React.useRef(null)
   const [width, setWidth] = React.useState(900)
   const [drag, setDrag] = React.useState(null)
+  const [topId, setTopId] = React.useState(null)
   React.useLayoutEffect(() => {
     const element = boardRef.current
     if (!element) return undefined
@@ -126,6 +128,7 @@ function PersonalStickyBoard({ tasks, archived, today, nowTime, onToggle, onPatc
   const height = Math.max(520, ...tasks.map(task => where(task).y + NOTE_H + GAP))
 
   const dragStart = (task, event) => {
+    setTopId(task.id)
     const spot = spots.get(task.id)
     setDrag({ id: task.id, x: spot.x, y: spot.y, startX: event.clientX, startY: event.clientY, originX: spot.x, originY: spot.y })
   }
@@ -149,7 +152,8 @@ function PersonalStickyBoard({ tasks, archived, today, nowTime, onToggle, onPatc
   return (
     <>
       <div className="sticky-canvas" ref={boardRef} role="list" aria-label="My planner as sticky notes" style={{ height }}>
-        {tasks.map(task => {
+        {/* Notes that were moved are drawn last, so they sit above the ones still in the grid. */}
+        {[...tasks.filter(task => task.pos_x == null || task.pos_y == null), ...tasks.filter(task => task.pos_x != null && task.pos_y != null)].map(task => {
           const spot = where(task)
           return (
             <StickyCard
@@ -160,6 +164,8 @@ function PersonalStickyBoard({ tasks, archived, today, nowTime, onToggle, onPatc
               today={today}
               nowTime={nowTime}
               dragging={drag?.id === task.id}
+              raised={topId === task.id}
+              onRaise={() => setTopId(task.id)}
               onToggle={onToggle}
               onPatch={onPatch}
               onArchive={onArchive}
