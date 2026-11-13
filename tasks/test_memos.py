@@ -127,3 +127,24 @@ class MemoTests(TestCase):
         memo = self.post_memo().json()['memo']
         wrong = self.client.get(reverse('memo-detail', args=[other.id, memo['id']]))
         self.assertEqual(wrong.status_code, 404)
+
+
+class MemoHistoryTests(MemoTests):
+    def test_archived_memos_are_history_and_can_be_restored(self):
+        memo_id = self.post_memo().json()['memo']['id']
+        self.client.delete(reverse('memo-detail', args=[self.workspace.id, memo_id]))
+        url = reverse('memo-list', args=[self.workspace.id])
+        self.assertEqual(self.client.get(url).json()['memos'], [])
+        history = self.client.get(url + '?archived=1').json()['memos']
+        self.assertEqual([m['id'] for m in history], [memo_id])
+        self.assertTrue(history[0]['archived'])
+        restored = self.client.patch(reverse('memo-detail', args=[self.workspace.id, memo_id]), data=json.dumps({'archived': False}), content_type='application/json')
+        self.assertEqual(restored.status_code, 200)
+        self.assertEqual(len(self.client.get(url).json()['memos']), 1)
+
+    def test_a_member_cannot_restore_a_memo(self):
+        memo_id = self.post_memo().json()['memo']['id']
+        self.client.delete(reverse('memo-detail', args=[self.workspace.id, memo_id]))
+        self.client.force_login(self.member)
+        response = self.client.patch(reverse('memo-detail', args=[self.workspace.id, memo_id]), data=json.dumps({'archived': False}), content_type='application/json')
+        self.assertEqual(response.status_code, 403)

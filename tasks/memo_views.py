@@ -80,8 +80,11 @@ def _dismissed_ids(user, memos):
     return set(MemoDismissal.objects.filter(user=user, memo__in=memos).values_list('memo_id', flat=True))
 
 
-def _memo_for(request, workspace_id, memo_id):
-    return Memo.objects.filter(id=memo_id, workspace_id=workspace_id, archived_at__isnull=True).select_related('author').first()
+def _memo_for(request, workspace_id, memo_id, include_archived=False):
+    found = Memo.objects.filter(id=memo_id, workspace_id=workspace_id).select_related('author')
+    if not include_archived:
+        found = found.filter(archived_at__isnull=True)
+    return found.first()
 
 
 def decorate(memo, user, can_post, dismissed_ids=frozenset()):
@@ -126,7 +129,9 @@ def memo_list(request, workspace_id):
         return error
     can_post = membership.has_permission('post_memos')
     if request.method == 'GET':
-        memos = list(Memo.objects.filter(workspace_id=workspace_id, archived_at__isnull=True).select_related('author')[:100])
+        # ?archived=1 is the history: memos that were put away, newest first.
+        history = request.GET.get('archived') in {'1', 'true'}
+        memos = list(Memo.objects.filter(workspace_id=workspace_id, archived_at__isnull=not history).select_related('author').order_by('-archived_at' if history else '-created_at')[:100])
         dismissed = _dismissed_ids(request.user, memos)
         return JsonResponse({'memos': [decorate(memo, request.user, can_post, dismissed) for memo in memos], 'can_post': can_post})
     if not can_post:
@@ -146,7 +151,7 @@ def memo_detail(request, workspace_id, memo_id):
     membership, error = require_workspace_member(request, workspace_id)
     if error:
         return error
-    memo = _memo_for(request, workspace_id, memo_id)
+    memo = _memo_for(request, workspace_id, memo_id, include_archived=request.method == 'PATCH')
     if memo is None:
         return JsonResponse({'error': 'Memo was not found.'}, status=404)
     if request.method == 'GET':
@@ -162,6 +167,13 @@ def memo_detail(request, workspace_id, memo_id):
     payload, error = _json_body(request)
     if error:
         return error
+    if payload.get('archived') is False:
+        # Put a memo back from the history. It is not shown as a banner again.
+        memo.archived_at = None
+        memo.save(update_fields=['archived_at', 'updated_at'])
+        return JsonResponse({'memo': decorate(memo, request.user, True, _dismissed_ids(request.user, [memo]))})
+    if memo.archived_at is not None:
+        return JsonResponse({'error': 'Restore this memo before changing it.'}, status=409)
     cleaned, error = _clean_fields(payload, require_all=False)
     if error:
         return error
