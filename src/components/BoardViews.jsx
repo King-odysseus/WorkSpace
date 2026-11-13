@@ -2,6 +2,7 @@
 // dashboard, and the panels they embed (project progress, risks/issues,
 // stakeholders and resources, and the time clock).
 
+import TodayQuickNote from "./TodayQuickNote.jsx";
 import { workspaceCall } from "../lib/workspace-api.js";
 import { requestDayPlan } from "../lib/day-plan-navigation.js";
 import React, { useEffect, useState } from "react";
@@ -6420,6 +6421,8 @@ function TodayDashboard({
             onSubmitShift={onSubmitShift}
             onChangePresence={onChangePresence}
           />
+
+          {workspaceId ? <TodayQuickNote key={`quick:${currentUserId}:${workspaceId}`} workspaceId={workspaceId} /> : null}
 
           {workspaceId ? <RemindersPanel workspaceId={workspaceId} /> : null}
 
