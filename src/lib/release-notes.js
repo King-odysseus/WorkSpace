@@ -12,6 +12,15 @@ const SEEN_KEY = 'workspace-whats-new-seen-v1'
 const RELEASE_NOTES = [
   {
     date: '2026-11-13',
+    title: 'Sticky notes',
+    items: [
+      'Your day plan is now a board of sticky notes, one per block with its time and length, or a list. Add your own note to any block.',
+      'My planner can show your items as sticky notes too. Drag them into a new order, or use the arrows. The order is saved.',
+      'Today has a Sticky notes widget: the blocks of your plan (the one you are in is marked) and your open planner items.',
+    ],
+  },
+  {
+    date: '2026-11-13',
     title: 'Time off, requests and where we work',
     items: [
       'Time off: request annual leave, sick leave or another absence, with half days. Managers approve leave for members, and owners approve leave for managers. Everyone can see who is away.',

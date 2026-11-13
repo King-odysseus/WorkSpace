@@ -4,13 +4,14 @@
 // remember to filter it out.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Check, Clock, MoreHorizontal, NotebookPen, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock, LayoutGrid, List, MoreHorizontal, NotebookPen, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Button } from './ui/button.jsx'
 import { Card } from './ui/card.jsx'
 import { CollapsibleSection } from './ui/collapsible-section.jsx'
 import { TaskProgressBar, progressOptions, taskProgressValue } from './TaskProgressBar.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import DayPlanNote from './DayPlanNote.jsx'
+import StickyNote from './StickyNote.jsx'
 import { formatDay, getCsrfToken, readJsonResponse, toDateKey } from '../lib/workspace-format.js'
 
 // A due time is the reason the field exists, so a task that named one is late the
@@ -22,6 +23,66 @@ function isOverdue(task, today, nowTime) {
   if (!task.due_date || task.is_done) return false
   if (task.due_date !== today) return task.due_date < today
   return Boolean(task.due_time) && task.due_time < nowTime
+}
+
+// Open planner items as sticky notes. They can be dragged into a new order (or
+// moved with the arrows, for anyone not using a mouse); the order is saved on each
+// item's position, so it is the same on every device.
+function PersonalStickyBoard({ tasks, today, nowTime, onToggle, onReorder, onNotes }) {
+  const [dragId, setDragId] = React.useState(null)
+  const [overId, setOverId] = React.useState(null)
+  const move = (id, targetId) => {
+    if (id === targetId) return
+    const ids = tasks.map(task => task.id)
+    const from = ids.indexOf(id)
+    const to = ids.indexOf(targetId)
+    if (from < 0 || to < 0) return
+    ids.splice(to, 0, ids.splice(from, 1)[0])
+    onReorder(ids)
+  }
+  const step = (id, delta) => {
+    const index = tasks.findIndex(task => task.id === id)
+    const target = tasks[index + delta]
+    if (target) move(id, target.id)
+  }
+  return (
+    <div className="plan-board" role="list" aria-label="My planner as sticky notes">
+      {tasks.map((task, index) => (
+        <StickyNote
+          key={task.id}
+          tone="task"
+          tilt={index}
+          header={task.due_date ? `Due ${formatDay(task.due_date)}${task.due_time ? ` ${task.due_time}` : ''}` : 'No due date'}
+          chip={task.progress_percent ? `${task.progress_percent}%` : ''}
+          title={task.title}
+          leading={<button type="button" className="sticky-tick" onClick={() => onToggle(task)} aria-label={`Finish ${task.title}`} aria-pressed={false} />}
+          active={isOverdue(task, today, nowTime)}
+          articleProps={{
+            draggable: true,
+            className: `${dragId === task.id ? 'is-dragging' : ''}${overId === task.id && dragId !== task.id ? ' is-drop-target' : ''}`,
+            onDragStart: event => { setDragId(task.id); event.dataTransfer.effectAllowed = 'move'; try { event.dataTransfer.setData('text/plain', String(task.id)) } catch { /* some browsers refuse */ } },
+            onDragOver: event => { event.preventDefault(); setOverId(task.id) },
+            onDragLeave: () => setOverId(current => (current === task.id ? null : current)),
+            onDrop: event => { event.preventDefault(); move(dragId, task.id); setDragId(null); setOverId(null) },
+            onDragEnd: () => { setDragId(null); setOverId(null) },
+          }}
+        >
+          <textarea
+            className="plan-block-note"
+            aria-label={`Notes for ${task.title}`}
+            placeholder="Add a note"
+            rows={2}
+            defaultValue={task.notes}
+            onBlur={event => onNotes(task, event.target)}
+          />
+          <div className="sticky-move" role="group" aria-label={`Move ${task.title}`}>
+            <button type="button" onClick={() => step(task.id, -1)} disabled={index === 0} aria-label={`Move ${task.title} earlier`} title="Move earlier"><ChevronLeft size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => step(task.id, 1)} disabled={index === tasks.length - 1} aria-label={`Move ${task.title} later`} title="Move later"><ChevronRight size={14} aria-hidden="true" /></button>
+          </div>
+        </StickyNote>
+      ))}
+    </div>
+  )
 }
 
 function PersonalPlanner({ workspaceId }) {
@@ -40,6 +101,8 @@ function PersonalPlanner({ workspaceId }) {
   const [confirmingPlannerId, setConfirmingPlannerId] = useState(null)
   const [confirmingTaskId, setConfirmingTaskId] = useState(null)
   const [openNotesId, setOpenNotesId] = useState(null)
+  const [view, setView] = useState(() => { try { return localStorage.getItem('planner-view') === 'board' ? 'board' : 'list' } catch { return 'list' } })
+  const chooseView = next => { setView(next); try { localStorage.setItem('planner-view', next) } catch { /* not remembered */ } }
   const now = new Date()
   const today = toDateKey(now)
   // The clock half of "is this late", in the same HH:MM the server writes a due
@@ -213,6 +276,15 @@ function PersonalPlanner({ workspaceId }) {
   }
 
   const commitNotes = (task, input) => patchTask(task, { notes: input.value })
+  // New order for the open items: each one's place becomes its position.
+  const reorderOpen = ids => {
+    const positions = new Map(ids.map((id, index) => [id, index]))
+    setTasks(current => current.map(item => (positions.has(item.id) ? { ...item, position: positions.get(item.id) } : item)))
+    ids.forEach((id, index) => {
+      const original = tasks.find(item => item.id === id)
+      if (original && original.position !== index) patchTask({ ...original }, { position: index }, false)
+    })
+  }
   const isManaging = Boolean(addingPlanner || managingPlannerId || renamingId || confirmingPlannerId)
   const compactLayout = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches
 
@@ -421,6 +493,10 @@ function PersonalPlanner({ workspaceId }) {
                   </div>
                   <div className="personal-planner-header-actions">
                     {saving && <span className="personal-planner-saving">Saving</span>}
+                    <div className="plan-view-toggle" role="group" aria-label="Planner view">
+                      <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'is-active' : ''} onClick={() => chooseView('list')}><List size={14} aria-hidden="true" /> List</button>
+                      <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'is-active' : ''} onClick={() => chooseView('board')}><LayoutGrid size={14} aria-hidden="true" /> Notes</button>
+                    </div>
                     <NotebookPen size={20} aria-hidden="true" />
                   </div>
                 </header>
@@ -431,7 +507,9 @@ function PersonalPlanner({ workspaceId }) {
                 </form>
                 {activeTasks.length
                   ? <>
-                    {openTasks.length > 0 && <ul className="personal-task-list">{openTasks.map(renderPersonalTask)}</ul>}
+                    {openTasks.length > 0 && (view === 'board'
+                      ? <PersonalStickyBoard tasks={[...openTasks].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id)} today={today} nowTime={nowTime} onToggle={toggleTask} onReorder={reorderOpen} onNotes={commitNotes} />
+                      : <ul className="personal-task-list">{openTasks.map(renderPersonalTask)}</ul>)}
                     {doneTasks.length > 0 && <CollapsibleSection
                       className="personal-planner-done"
                       title="Done"

@@ -9681,3 +9681,25 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .day-plan-actions { gap: 16px !important; flex-wrap: wrap; }
 .day-plan-actions .plan-view-toggle { margin-right: 4px; }
 .day-plan-delete { width: 38px !important; height: 38px !important; }
+
+/* Sticky notes that can be picked up and moved (My planner), and the Today widget. */
+.plan-sticky[draggable="true"] { cursor: grab; }
+.plan-sticky.is-dragging { opacity: .45; transform: rotate(2deg) scale(.98); cursor: grabbing; }
+.plan-sticky.is-drop-target { outline: 3px dashed #C49A6C; outline-offset: 4px; }
+.plan-sticky.is-task { background: #cfe3fb; color: #12305c; }
+.plan-sticky.is-done { background: #e4e7ec; color: #475467; }
+.plan-sticky.is-active { box-shadow: 0 0 0 3px #C49A6C, 0 6px 14px rgb(16 24 40 / 14%); }
+.plan-sticky .sticky-open { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.plan-sticky header { justify-content: flex-start; }
+.plan-sticky header strong { flex: 1 1 auto; }
+.sticky-tick { flex: 0 0 18px; width: 18px; height: 18px; border: 2px solid currentColor; border-radius: 6px; background: rgb(255 255 255 / 60%); cursor: pointer; }
+.sticky-tick:hover { background: #fff; }
+.sticky-move { display: flex; justify-content: flex-end; gap: 6px; }
+.sticky-move button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 999px; background: rgb(255 255 255 / 60%); color: inherit; cursor: pointer; }
+.sticky-move button:disabled { opacity: .35; cursor: default; }
+.personal-planner-header-actions { display: flex; align-items: center; gap: 12px; }
+.today-sticky { margin: 20px 0; padding: 22px 24px; border: 1px solid var(--pencil-border); border-radius: 20px; background: var(--pencil-surface); }
+.today-sticky-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.today-sticky-head h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 17px; font-weight: 700; color: var(--pencil-navy); }
+.today-sticky-head p, .today-sticky-empty { margin: 4px 0 0; font-size: 13px; color: var(--pencil-text-muted); }
+.today-sticky .plan-board { margin-bottom: 4px; }

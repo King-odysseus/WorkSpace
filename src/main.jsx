@@ -97,6 +97,7 @@ import WhereWeWorkView from "./components/WhereWeWorkView.jsx";
 import { requestMemo } from "./lib/memo-navigation.js";
 import { Button } from "./components/ui/button.jsx";
 import TodayPrivatePlan from "./components/TodayPrivatePlan.jsx";
+import TodayStickyNotes from "./components/TodayStickyNotes.jsx";
 import FirstSessionChecklist from "./components/FirstSessionChecklist.jsx";
 import { Badge } from "./components/ui/badge.jsx";
 import { Alert } from "./components/ui/alert.jsx";
@@ -4634,6 +4635,11 @@ function App() {
                 onComplete={completeTask}
                 onStatusChange={changeTaskStatus}
                 >
+                  <TodayStickyNotes
+                    key={`notes:${session.user.id}:${activeWorkspaceId}`}
+                    workspaceId={activeWorkspaceId}
+                    onOpenPlanner={() => setActive("My planner")}
+                  />
                   <TodayPrivatePlan
                     key={`${session.user.id}:${activeWorkspaceId}`}
                     workspaceId={activeWorkspaceId}
