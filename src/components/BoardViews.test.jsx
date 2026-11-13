@@ -925,3 +925,65 @@ it('reads 100% only when nothing that wants attention is left open', () => {
   renderDashboard([done])
   expect(screen.getByRole('img', { name: '1 of 1 tasks done today (100%)' })).toBeInTheDocument()
 })
+
+it('counts only my own work on the Today ring, not teammates', () => {
+  const mineDone = { id: 1, title: 'Shipped', status: 'done', completed_at: '2026-09-12T09:00:00', assignee_id: 7, due_date: '2026-09-12', priority: 'normal', tag: 'Ops' }
+  const theirsOverdue = { id: 2, title: 'Their late task', status: 'todo', assignee_id: 9, due_date: '2026-09-01', priority: 'normal', tag: 'Ops' }
+  renderDashboard([mineDone, theirsOverdue])
+  // A teammate's overdue task is theirs to carry; it does not drag my ring down.
+  expect(screen.getByRole('img', { name: '1 of 1 tasks done today (100%)' })).toBeInTheDocument()
+})
+
+it('adds my private planner items that are due to the Today ring, and shows none of them', async () => {
+  mockApi({
+    '/api/workspaces/1/personal/planners/': {
+      planners: [{ id: 1, name: 'My day' }],
+      tasks: [
+        { id: 1, title: 'Secret open item', is_done: false, due_date: '2026-09-12', completed_at: null },
+        { id: 2, title: 'Secret done item', is_done: true, due_date: '2026-09-12', completed_at: '2026-09-12T08:00:00' },
+        { id: 3, title: 'Secret later item', is_done: false, due_date: '2026-12-01', completed_at: null },
+        { id: 4, title: 'Secret undated item', is_done: false, due_date: null, completed_at: null },
+      ],
+    },
+  })
+  renderDashboard([], noop, [], { workspaceId: 1 })
+
+  // One due and open, one finished today: 1 of 2. The later and undated items are not today's work.
+  expect(await screen.findByRole('img', { name: '1 of 2 tasks done today (50%)' })).toBeInTheDocument()
+  expect(document.body.textContent).not.toContain('Secret')
+})
+
+it('combines assigned tasks from any planner with private planner items in one ring', async () => {
+  mockApi({
+    '/api/workspaces/1/personal/planners/': {
+      planners: [], tasks: [{ id: 1, title: 'x', is_done: false, due_date: '2026-09-12', completed_at: null }],
+    },
+  })
+  const assignedDone = { id: 1, title: 'Done in a workstream', status: 'done', completed_at: '2026-09-12T10:00:00', assignee_id: 7, project_id: null, workstream: 'Finance', due_date: '2026-09-12', priority: 'normal', tag: 'Ops' }
+  const assignedDue = { id: 2, title: 'Due in a project planner', status: 'todo', assignee_id: 7, project_id: 3, due_date: '2026-09-12', priority: 'normal', tag: 'Ops' }
+  renderDashboard([assignedDone, assignedDue], noop, [], { workspaceId: 1 })
+  // 1 done of: 1 done + 1 due task + 1 due private item.
+  expect(await screen.findByRole('img', { name: '1 of 3 tasks done today (33%)' })).toBeInTheDocument()
+})
+
+it('does not call someone Available on the Team page unless they are actually online and free', () => {
+  const now = new Date().toISOString()
+  const members = [
+    { id: 11, first_name: 'Olive', last_name: 'Online', role: 'member', presence: 'available', last_seen_at: now },
+    { id: 12, first_name: 'Ned', last_name: 'Neverseen', role: 'member', presence: 'available', last_seen_at: '' },
+    { id: 13, first_name: 'Ana', last_name: 'Away', role: 'member', presence: 'away', last_seen_at: now },
+    { id: 14, first_name: 'Bo', last_name: 'Busy', role: 'member', presence: 'busy', last_seen_at: now },
+  ]
+  renderBoard({ tasks: [], members })
+
+  // Only the person who is online and free counts as Available capacity.
+  expect(screen.getByRole('tab', { name: 'All 4' })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Available 1' })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Busy 1' })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Away 1' })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Offline 1' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Offline 1' }))
+  expect(screen.getByRole('button', { name: 'Open Ned Neverseen profile' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Open Olive Online profile' })).not.toBeInTheDocument()
+})

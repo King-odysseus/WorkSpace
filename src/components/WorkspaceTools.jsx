@@ -1608,12 +1608,12 @@ export function AssistantFlyout({ workspaceId, onClose, onMinimize, onExpand }) 
           <div className="ai-chat-actions">
             {/* Five actions used to sit in a row; they live in one menu now, and only Close
                 stays on the bar. Every action is still here, with the same names. */}
+            <button type="button" className="ai-chat-action-button" onClick={conversation.newChat} disabled={!conversation.canStartNew} aria-label="New chat" title="New chat - the current one is kept in history"><Plus size={15} /></button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="ai-chat-action-button" aria-label="Zuri options" title="Zuri options"><MoreHorizontal size={14} /></button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="ai-chat-menu">
-                <DropdownMenuItem disabled={!conversation.canStartNew} onSelect={conversation.newChat}><Plus size={14} /> <span>New chat</span></DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => conversation.setHistoryOpen(open => !open)}><History size={14} /> <span>Chat history</span></DropdownMenuItem>
                 <DropdownMenuItem disabled={!canClear} onSelect={clearConversation}><Trash2 size={14} /> <span>Clear conversation</span></DropdownMenuItem>
                 {(onExpand || onMinimize) && <DropdownMenuSeparator />}

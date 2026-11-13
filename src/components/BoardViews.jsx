@@ -952,7 +952,13 @@ function TeamBoardView({
         : 0;
     if (workloadPercent > 100) return "Overloaded";
     if (workloadPercent >= 90) return "At capacity";
-    if (effectivePresence(item.member) === "away") return "Away";
+    // Workload outranks presence for capacity planning. Past that, only someone who
+    // is actually online and free reads as Available: a person who has not been seen
+    // recently is Offline, not free capacity.
+    const presence = effectivePresence(item.member);
+    if (presence === "offline") return "Offline";
+    if (presence === "away") return "Away";
+    if (presence === "busy") return "Busy";
     return "Available";
   };
   const availabilityCounts = visibleMemberStats.reduce((counts, item) => {
@@ -963,8 +969,11 @@ function TeamBoardView({
   const availabilityTabs = [
     { id: "all", label: "All", count: visibleMemberStats.length },
     { id: "available", label: "Available", count: availabilityCounts.available || 0 },
+    { id: "busy", label: "Busy", count: availabilityCounts.busy || 0 },
     { id: "at-capacity", label: "At capacity", count: availabilityCounts["at-capacity"] || 0 },
     { id: "overloaded", label: "Overloaded", count: availabilityCounts.overloaded || 0 },
+    { id: "away", label: "Away", count: availabilityCounts.away || 0 },
+    { id: "offline", label: "Offline", count: availabilityCounts.offline || 0 },
   ];
   const matchingMembers = visibleMemberStats
     .filter(
@@ -1055,7 +1064,7 @@ function TeamBoardView({
           </section>
           <section className="pencil-team-card">
             <h2>Availability</h2>
-            {[['Available', 'available'], ['At capacity', 'at-capacity'], ['Overloaded', 'overloaded'], ['Away', 'away']].map(([label, key]) => <div className="pencil-team-breakdown" key={key}><span><i className={key} />{label}</span><b style={{ width: `${members.length ? ((availabilityCounts[key] || 0) / members.length) * 108 : 0}px` }} /> <em>{availabilityCounts[key] || 0}</em></div>)}
+            {[['Available', 'available'], ['Busy', 'busy'], ['At capacity', 'at-capacity'], ['Overloaded', 'overloaded'], ['Away', 'away'], ['Offline', 'offline']].map(([label, key]) => <div className="pencil-team-breakdown" key={key}><span><i className={key} />{label}</span><b style={{ width: `${members.length ? ((availabilityCounts[key] || 0) / members.length) * 108 : 0}px` }} /> <em>{availabilityCounts[key] || 0}</em></div>)}
             <small>Capacity is measured in hours allocated this week.</small>
           </section>
           {canManageMembers && <section className="pencil-team-card pencil-team-invites"><h2>Pending invitations</h2>{invitations.filter((item) => item.status === 'pending').slice(0, 2).map((item) => <div key={item.id}><span>{item.email}<small>Invited as {item.role}</small></span><button type="button" onClick={() => onResendInvitation(item)}>Resend</button></div>)}<button type="button" className="pencil-team-invite-button" onClick={onInvite}><Users size={16} /> Invite someone</button></section>}
@@ -5661,6 +5670,22 @@ function TodayDashboard({
   onChangePresence,
 }) {
   const [profileMember, setProfileMember] = useState(null);
+  // Items from the member's own private planner, kept only to count them in the
+  // Today ring. They are never rendered from here.
+  const [personalPlan, setPersonalPlan] = useState([]);
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    const controller = new AbortController();
+    fetch(`/api/workspaces/${workspaceId}/personal/planners/`, {
+      credentials: "include",
+      signal: controller.signal,
+      headers: { "X-Workspace-Id": String(workspaceId) },
+    })
+      .then((response) => (response.ok ? response.json() : { tasks: [] }))
+      .then((payload) => setPersonalPlan(Array.isArray(payload.tasks) ? payload.tasks : []))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [workspaceId]);
   // The title-first capture: what has been typed, whether it is being saved, and
   // what came back if it was not.
   const [quickTask, setQuickTask] = useState("");
@@ -5776,7 +5801,12 @@ function TodayDashboard({
   const recentMembers = membersByActivity
     .filter((member) => effectivePresence(member) === "offline")
     .slice(0, 4);
-  const missingCheckInMembers = members.filter(
+  // Owners and managers can opt out of checking in. They are left out of the
+  // pending list and the totals, unless they checked in anyway.
+  const checkInMembers = members.filter(
+    (member) => !member.skips_check_ins || checkedInMemberIds.has(String(member.id)),
+  );
+  const missingCheckInMembers = checkInMembers.filter(
     (member) => !checkedInMemberIds.has(String(member.id)),
   );
   const myAgendaTasks = myTasks
@@ -5886,7 +5916,7 @@ function TodayDashboard({
         b.id - a.id,
     );
   const checkedInCount = checkedInMemberIds.size;
-  const memberCount = members.length;
+  const memberCount = checkInMembers.length;
   const pendingCheckIns = missingCheckInMembers.length;
   const checkInPercent = memberCount
     ? Math.round((checkedInCount / memberCount) * 100)
@@ -5904,15 +5934,30 @@ function TodayDashboard({
   const firstName = String(currentUserName || "").trim().split(/\s+/)[0] || "";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  // Today's workload is everything still open that wants attention now - due today,
-  // overdue, or already under way (in progress or in review, in any planner or
-  // workstream) - plus what was finished today. Counting only what was due today
-  // read 100% while overdue work sat untouched.
-  const openToday = new Map();
-  [...dueToday, ...overdue, ...tasks.filter((task) => isOpen(task) && (task.status === "in progress" || task.status === "review"))]
-    .forEach((task) => openToday.set(task.id, task));
-  const plannedToday = openToday.size + completedToday.length;
-  const donePercent = plannedToday ? Math.round((completedToday.length / plannedToday) * 100) : 0;
+  // The ring is about the person looking at it, not the whole workspace. Their
+  // workload today is what is still open and wants attention now - due today,
+  // overdue, or already under way - across every planner and workstream they are
+  // assigned to, plus the items on their own private planner that are due. What
+  // they finished today counts on both sides. Only counts come from the private
+  // planner; none of its items are shown here.
+  const myWantedNow = myTasks.filter(
+    (task) =>
+      isOpen(task) &&
+      (Boolean(task.due_date && task.due_date <= today) ||
+        task.status === "in progress" ||
+        task.status === "review"),
+  );
+  const myDoneToday = myTasks.filter(
+    (task) =>
+      task.status === "done" &&
+      Boolean(task.completed_at) &&
+      toDateKey(task.completed_at) === today,
+  );
+  const personalOpen = personalPlan.filter((item) => !item.is_done && item.due_date && item.due_date <= today);
+  const personalDone = personalPlan.filter((item) => item.is_done && item.completed_at && toDateKey(item.completed_at) === today);
+  const doneTodayCount = myDoneToday.length + personalDone.length;
+  const plannedToday = myWantedNow.length + personalOpen.length + doneTodayCount;
+  const donePercent = plannedToday ? Math.round((doneTodayCount / plannedToday) * 100) : 0;
   const metrics = [
     {
       key: "due-today",
@@ -6117,7 +6162,7 @@ function TodayDashboard({
           size={132}
           stroke={12}
           caption={plannedToday ? "done today" : "nothing due"}
-          label={`${completedToday.length} of ${plannedToday} tasks done today (${donePercent}%)`}
+          label={`${doneTodayCount} of ${plannedToday} tasks done today (${donePercent}%)`}
           className="today-ring"
         />
       </header>
@@ -6291,7 +6336,7 @@ function TodayDashboard({
                 />
               </div>
               <div className="mt-6 grid min-w-0 grid-cols-1">
-                {members.slice(0, 4).map((member) => {
+                {checkInMembers.slice(0, 4).map((member) => {
                   const submitted = checkedInMemberIds.has(String(member.id));
                   return (
                     <div key={member.id} className="flex h-9 min-w-0 items-center gap-3 pr-[25px]">

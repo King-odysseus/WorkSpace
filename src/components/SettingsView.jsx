@@ -50,6 +50,7 @@ import { effectivePresence, formatDate, getCsrfToken } from "../lib/workspace-fo
 import { NOTIFICATION_SOUND_OPTIONS, playNotificationSound } from "../lib/notification-sounds.js";
 import { persistWorkspaceTheme } from "../lib/theme.js";
 import "../settings.css";
+import CheckInOptOut from "./CheckInOptOut.jsx";
 
 // Mirrors tasks/models.py PERMISSION_KEYS - keep in sync with the backend list.
 const PERMISSION_LABELS = [
@@ -62,6 +63,7 @@ const PERMISSION_LABELS = [
   ["create_workstreams", "Create workstreams"],
   ["manage_workstreams", "Manage workstreams"],
   ["comment_check_ins", "Comment on check-ins"],
+  ["post_memos", "Post company memos"],
   ["use_ai", "Use Zuri"],
   ["manage_ai_access", "Manage Zuri member access"],
   ["manage_ai_providers", "Manage Zuri providers"],
@@ -3046,6 +3048,7 @@ function SettingsView({
                   </AppSelect>
                 </span>
               </div>
+              <CheckInOptOut workspaceId={workspaceId} role={currentWorkspace?.role} onChanged={onRefresh} />
               {presenceError && (
                 <SettingsAlert
                   title="Availability could not be updated"

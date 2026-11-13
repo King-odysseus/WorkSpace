@@ -87,6 +87,9 @@ import { ThemeInit } from "../.flowbite-react/init.jsx";
 import { ThemeProvider } from "flowbite-react";
 import { TaskProgressActions } from "./components/TaskProgressBar.jsx";
 import { flowbiteTheme } from "./lib/flowbite-theme.js";
+import MemoBanner from "./components/MemoBanner.jsx";
+import MemosView from "./components/MemosView.jsx";
+import { requestMemo } from "./lib/memo-navigation.js";
 import { Button } from "./components/ui/button.jsx";
 import TodayPrivatePlan from "./components/TodayPrivatePlan.jsx";
 import FirstSessionChecklist from "./components/FirstSessionChecklist.jsx";
@@ -443,7 +446,7 @@ function NotificationIndicator({
 // a corrupted workspace-last-page on the very next load.
 const KNOWN_PAGES = new Set([
   "Today", "My tasks", "My planner", "Daily operations", "Team",
-  "Channels", "Chats", "Follow-up", "Check-ins",
+  "Channels", "Chats", "Follow-up", "Check-ins", "Memos",
   "Planner", "Projects", "Calendar", "Import data",
   "Reports", "Activity",
   "Settings", "Notifications", "Screen sharing", "What's new",
@@ -2648,6 +2651,11 @@ function App() {
       setActive("Screen sharing");
       return;
     }
+    if (targetType === "memo") {
+      requestMemo(targetId);
+      setActive("Memos");
+      return;
+    }
     if (targetType === "check_in") {
       setPendingCheckInId(targetId);
       setActive("Check-ins");
@@ -3238,6 +3246,7 @@ function App() {
           badgeTone: "warning",
         },
         { label: "Check-ins", icon: Check },
+        { label: "Memos", icon: Megaphone },
       ],
     },
     {
@@ -4343,6 +4352,15 @@ function App() {
         >
           {/* Bottom padding clears the fixed mobile TabBar; desktop has none. */}
           <div className="page-content pb-24 lg:pb-0">
+            {activeWorkspaceId && (
+              <MemoBanner
+                workspaceId={activeWorkspaceId}
+                onOpen={(memo) => {
+                  requestMemo(memo.id);
+                  setActive("Memos");
+                }}
+              />
+            )}
             {session.user.pending_invitations?.map((invitation) => (
               <div className="workspace-status" key={invitation.id}>
                 <span>
@@ -4644,21 +4662,28 @@ function App() {
         </button>
       )}
       {aiMinimized && !aiLauncherHidden && activeWorkspaceId && (
-        <div className="ai-minimized-toast" role="status" aria-live="polite">
-          <span className="ai-minimized-icon"><Sparkles size={17} /></span>
-          <span className="ai-minimized-copy">
-            <strong>Zuri</strong>
-            <small>Conversation minimized</small>
-          </span>
+        <div className="ai-minimized-bubble">
           <button
             type="button"
+            className="ai-minimized-open"
+            aria-label="Open Zuri"
+            title="Open Zuri"
             onClick={() => {
               setAiMinimized(false);
               setAiLauncherVisibility(false);
               setAiFlyoutOpen(true);
             }}
           >
-            Open
+            <Sparkles size={22} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="ai-minimized-close"
+            aria-label="Close minimized Zuri"
+            title="Close"
+            onClick={() => setAiMinimized(false)}
+          >
+            <X size={12} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -8100,6 +8125,7 @@ function WorkspaceView({
         calendar_updated: "Calendar updated",
         calendar_reminder: "Calendar reminder",
         reminder: "Reminder",
+        memo: "Memo",
         risk_issue_assigned: "Risk assigned",
         manager_activity: "Manager activity",
         membership_change: "Member update",
@@ -9116,6 +9142,16 @@ function WorkspaceView({
     );
   }
 
+  if (active === "Memos") {
+    return (
+      <MemosView
+        workspaceId={workspaceId}
+        currentUserId={currentUserId}
+        role={currentWorkspace?.role}
+      />
+    );
+  }
+
   if (active === "Check-ins") {
     const checkInRangeOptions = ["all", "today", "week", "month"]
       .map((value) => CHECK_IN_RANGES.find((range) => range.value === value))
@@ -9140,6 +9176,13 @@ function WorkspaceView({
       today,
     ).filter(
       (item) => checkInPerson === "all" || String(item.user_id) === checkInPerson,
+    );
+    // Owners and managers who opted out of checking in are not expected, so they
+    // stay out of the "still to submit" list and the total, unless they checked in.
+    const checkInMembers = localData.members.filter(
+      (member) =>
+        !member.skips_check_ins ||
+        visibleCheckIns.some((item) => String(item.user_id) === String(member.id)),
     );
     // Ten cards to a page under whichever range is chosen. The range counts and the
     // summary cards beside the list keep reading the whole range, not the page.
@@ -9341,7 +9384,7 @@ function WorkspaceView({
           )}
         </div>
         <aside className="pencil-checkin-side">
-          <section className="pencil-checkin-card"><h2>Today&apos;s check-ins</h2><strong>{visibleCheckIns.length} of {localData.members.length}<small>received</small></strong><div className="pencil-checkin-progress"><i style={{ width: `${localData.members.length ? Math.min(100, Math.round((visibleCheckIns.length / localData.members.length) * 100)) : 0}%` }} /></div><p>{Math.max(0, localData.members.length - visibleCheckIns.length)} members still to submit</p><div className="pencil-checkin-missing">{localData.members.filter((member) => !visibleCheckIns.some((item) => String(item.user_id) === String(member.id))).slice(0, 4).map((member) => { const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email; return <div key={member.id}><Avatar name={memberName} avatarUrl={member.avatar_url} className="pencil-checkin-missing-avatar" /><span>{memberName}</span><button type="button" onClick={() => onNavigate("Chats")}>Nudge</button></div>; })}</div></section>
+          <section className="pencil-checkin-card"><h2>Today&apos;s check-ins</h2><strong>{visibleCheckIns.length} of {checkInMembers.length}<small>received</small></strong><div className="pencil-checkin-progress"><i style={{ width: `${checkInMembers.length ? Math.min(100, Math.round((visibleCheckIns.length / checkInMembers.length) * 100)) : 0}%` }} /></div><p>{Math.max(0, checkInMembers.length - visibleCheckIns.length)} members still to submit</p><div className="pencil-checkin-missing">{checkInMembers.filter((member) => !visibleCheckIns.some((item) => String(item.user_id) === String(member.id))).slice(0, 4).map((member) => { const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email; return <div key={member.id}><Avatar name={memberName} avatarUrl={member.avatar_url} className="pencil-checkin-missing-avatar" /><span>{memberName}</span><button type="button" onClick={() => onNavigate("Chats")}>Nudge</button></div>; })}</div></section>
           <section className="pencil-checkin-card"><h2>Blockers raised today</h2>{visibleCheckIns.filter((item) => item.blockers).slice(0, 3).map((item) => <div className="pencil-checkin-blocker" key={item.id}><i /> <span>{item.blockers}<small>{item.user_name}</small></span></div>)}{!visibleCheckIns.some((item) => item.blockers) && <p>No blockers reported today.</p>}</section>
         </aside>
         </div>
