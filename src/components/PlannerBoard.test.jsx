@@ -1250,3 +1250,12 @@ it('filters the board to the tasks due in a chosen week', async () => {
   expect(screen.getAllByText('Due today task').length).toBeGreaterThan(0)
   expect(screen.queryAllByText('No date task')).toHaveLength(0)
 })
+
+it('embedded in a project page hides the page header and the scope and project pickers but keeps the board toggle', () => {
+  renderPlanner({ embedded: true, scopeMode: 'projects', projectFilter: '7', projects: [{ id: 7, name: 'Saffron' }] })
+
+  expect(screen.queryByRole('heading', { name: 'Planner' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('combobox', { name: 'Work scope' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('combobox', { name: 'Project' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Timeline' })).toBeInTheDocument()
+})

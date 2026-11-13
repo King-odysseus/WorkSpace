@@ -9690,6 +9690,7 @@ function WorkspaceView({
           <div className="project-detail-divider" />
           <div className="project-detail-tabs" role="tablist" aria-label="Project sections">
             <button type="button" className={!projectOperation ? "active" : ""} role="tab" aria-selected={!projectOperation} onClick={() => setProjectOperation("")}>Overview</button>
+            <button type="button" className={projectOperation === "planner" ? "active" : ""} role="tab" aria-selected={projectOperation === "planner"} onClick={() => openOperation("planner")}>Planner</button>
             <button type="button" className={projectOperation === "kanban" ? "active" : ""} role="tab" aria-selected={projectOperation === "kanban"} onClick={() => openOperation("kanban")}>Kanban</button>
             <button type="button" className={projectOperation === "tasks" ? "active" : ""} role="tab" aria-selected={projectOperation === "tasks"} onClick={() => openOperation("tasks")}>Tasks</button>
             <button type="button" className={projectOperation === "risks" ? "active" : ""} role="tab" aria-selected={projectOperation === "risks"} onClick={() => openOperation("risks")}>Risks</button>
@@ -9755,6 +9756,64 @@ function WorkspaceView({
               canManage={canManageMembers}
               design="p32"
             />
+          )}
+          {projectOperation === "planner" && (
+            <section className="project-operation-surface project-planner-surface">
+              <PlannerBoard
+                embedded
+                workspaceId={currentWorkspace?.id}
+                buckets={(() => {
+                  const configured = localData.buckets.some((bucket) => bucket.name === "Backlog")
+                    ? [...localData.buckets]
+                    : [{ id: "backlog", name: "Backlog" }, ...localData.buckets];
+                  const names = new Set(configured.map((bucket) => bucket.name));
+                  return [
+                    ...configured,
+                    ...[...new Set(tasks.map((task) => task.bucket || "Backlog"))]
+                      .filter((name) => !names.has(name))
+                      .map((name) => ({ id: `legacy-${name}`, name })),
+                  ];
+                })()}
+                tasks={tasks}
+                projects={localData.projects}
+                lookupValues={localData.lookupValues || []}
+                projectFilter={String(selectedProjectWorkspace.id)}
+                scopeMode="projects"
+                onBoardMembersChanged={updateBoardMembers}
+                onSearchChange={onSearchChange}
+                members={(localData.members || []).filter((member) => member.id)}
+                searchQuery={searchQuery}
+                canManageTasks={canManageTasks}
+                canManageBuckets={canManageMembers}
+                currentUserId={currentUserId}
+                onStatusChange={onStatusChange}
+                onOpenTask={onOpenTask}
+                onDeleteTask={onDelete}
+                onDeletePermanently={onDeletePermanently}
+                canDeletePermanently={currentWorkspace?.role === "owner"}
+                onBulkArchive={onBulkArchive}
+                onBulkDelete={onBulkDelete}
+                onBulkMove={onBulkMoveToBucket}
+                onAddTask={() => onAddTask(null, { projectId: selectedProjectWorkspace.id })}
+                onTaskPatched={onTaskPatched}
+                onTaskMove={onBucketChange}
+                onBucketReorder={reorderBuckets}
+                newBucketName={newBucketName}
+                setNewBucketName={setNewBucketName}
+                bucketSubmitting={bucketSubmitting}
+                bucketError={bucketError}
+                onCreateBucket={createBucket}
+                onArchiveBucket={archiveBucket}
+                onRenameBucket={renameBucket}
+                onDeleteBucket={deleteBucket}
+                onRestoreBucket={restoreBucket}
+                onToggleBucketArchive={toggleBucketArchive}
+                bucketArchiveOpen={bucketArchiveOpen}
+                archivedBuckets={archivedBuckets}
+                bucketArchiveLoading={bucketArchiveLoading}
+                bucketArchiveError={bucketArchiveError}
+              />
+            </section>
           )}
           {projectOperation === "kanban" && (
             <section className="project-operation-surface project-kanban-surface">

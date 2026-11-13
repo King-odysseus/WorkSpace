@@ -127,7 +127,7 @@ function taskHasAssignee(task) {
   return Boolean((task.assignee_ids || []).length || task.assignee_id || task.assignee?.id || task.member)
 }
 
-export default function PlannerBoard({ workspaceId, onBoardMembersChanged, buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all', onBulkArchive, onBulkDelete, onBulkMove, onTaskPatched }) {
+export default function PlannerBoard({ workspaceId, onBoardMembersChanged, buckets, tasks, members, projects = [], lookupValues = [], scopeMode = 'switch', searchQuery, onSearchChange, canManageTasks, canManageBuckets, currentUserId, onStatusChange, onOpenTask, onDeleteTask, onDeletePermanently, canDeletePermanently, onAddTask, onTaskMove, onBucketReorder, newBucketName, setNewBucketName, bucketSubmitting, bucketError, onCreateBucket, externalFilter = 'all', projectFilter = 'operations', onProjectFilterChange, newWorkstreamName, setNewWorkstreamName, workstreamSubmitting, workstreamError, onCreateWorkstream, onArchiveWorkstream, onArchiveBucket, onRenameBucket, onDeleteBucket, onRestoreBucket, onToggleBucketArchive, bucketArchiveOpen = false, archivedBuckets = [], bucketArchiveLoading = false, bucketArchiveError = '', initialWorkstream = 'all', onBulkArchive, onBulkDelete, onBulkMove, onTaskPatched, embedded = false }) {
   const [status, setStatus] = useState('all')
   const [peopleOpen, setPeopleOpen] = useState(false)
   const [priority, setPriority] = useState('all')
@@ -703,7 +703,9 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
   const createPanel = canManageBuckets && creating && <div className="mt-3 flex flex-wrap items-end gap-3 rounded-control border border-border bg-card p-3">
     <label className="grid flex-1 gap-1.5">
       <span className="text-caption font-medium text-text-secondary">{isOperations ? 'Workstream' : 'Project'}</span>
-      {isOperations
+      {embedded
+        ? <span className="text-body-small text-text-primary">{projects.find(project => String(project.id) === String(projectFilter))?.name || 'This project'}</span>
+        : isOperations
         ? <AppSelect className="chip-select" value={workstream} onChange={event => setWorkstream(event.target.value)} aria-label="Workstream for the new bucket"><option value="all">Unassigned</option>{workstreams.map(value => <option key={value} value={value}>{value}</option>)}</AppSelect>
         : <AppSelect className="chip-select" value={projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Project for the new bucket"><option value="all">All projects</option>{projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}</AppSelect>}
     </label>
@@ -726,8 +728,8 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     {isOperations && activeWorkstreams.length > 0 && <div className="flex w-full flex-wrap items-center gap-2">{activeWorkstreams.map(value => <span className="planner-manage-chip" key={value.id}>{value.name}<button type="button" onClick={() => onArchiveWorkstream?.(value)} aria-label={`Archive ${value.name}`}><Archive size={12} /></button></span>)}</div>}
   </div>
 
-  return <section className="workspace-view planner-view">
-    <header className="planner-header flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
+  return <section className={`workspace-view planner-view${embedded ? ' planner-view-embedded' : ''}`}>
+    {!embedded && <header className="planner-header flex flex-wrap items-start justify-between gap-4 border-b border-border pb-[18px]">
       <div className="min-w-0">
         <p className={`text-overline uppercase ${isOperations ? 'text-text-muted' : 'text-navy'}`}>Work planning</p>
         <h1 className="mt-1 text-page-heading text-text-primary">{isOperations ? 'Daily operations' : 'Planner'}</h1>
@@ -738,7 +740,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
       {isOperations
         ? canManageBuckets && <Button size="page" type="button" onClick={() => setCreating(current => !current)} aria-expanded={creating}><Plus size={20} strokeWidth={1.75} /> New bucket</Button>
         : <Button size="page" type="button" onClick={onAddTask}><Plus size={20} strokeWidth={1.75} /> Create task</Button>}
-    </header>
+    </header>}
 
     {bucketArchiveOpen ? archiveContent : <>
     {isOperations && <RoutinesPanel tasks={tasks} today={today} onOpenTask={onOpenTask} onStatusChange={onStatusChange} />}
@@ -754,11 +756,11 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
         <SlidersHorizontal size={18} aria-hidden="true" /> Filter
       </button>
       {canManageTasks && <button type="button" className={`planner-desktop-control planner-select-toggle${selectMode ? ' is-active' : ''}`} onClick={toggleSelectMode} aria-label={selectMode ? 'Done selecting' : 'Select'} title={selectMode ? 'Done selecting' : 'Select'} aria-pressed={selectMode}><ListChecks size={18} aria-hidden="true" /></button>}
-      <AppSelect className="planner-desktop-control planner-work-scope chip-select w-full sm:w-[170px]" value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Work scope" disabled={scopeMode === 'projects'}>
+      {!embedded && <AppSelect className="planner-desktop-control planner-work-scope chip-select w-full sm:w-[170px]" value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Work scope" disabled={scopeMode === 'projects'}>
         <option value="all">All work</option>
         <option value="operations">Daily operations</option>
-      </AppSelect>
-      {!isOperations && <AppSelect className="planner-desktop-control planner-project-filter chip-select w-full sm:w-[170px]" value={projectFilter === 'operations' ? 'all' : projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Project">
+      </AppSelect>}
+      {!isOperations && !embedded && <AppSelect className="planner-desktop-control planner-project-filter chip-select w-full sm:w-[170px]" value={projectFilter === 'operations' ? 'all' : projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)} aria-label="Project">
         <option value="all">All projects</option>
         {projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}
       </AppSelect>}
@@ -781,7 +783,7 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
           if (view.projectScope !== projectFilter) onProjectFilterChange?.(view.projectScope)
         }}
       />}
-      {workspaceId && <BoardPeople target={boardTarget} members={members} canManage={Boolean(canManageBuckets)} scopeNoun={isOperations ? 'workstream' : 'project'} onOpen={() => setPeopleOpen(true)} />}
+      {workspaceId && !embedded && <BoardPeople target={boardTarget} members={members} canManage={Boolean(canManageBuckets)} scopeNoun={isOperations ? 'workstream' : 'project'} onOpen={() => setPeopleOpen(true)} />}
       {peopleOpen && boardTarget && <BoardMembersDialog workspaceId={workspaceId} kind={boardTarget.kind} board={boardTarget.board} members={members} onSaved={ids => onBoardMembersChanged?.(boardTarget.kind, boardTarget.board.id, ids)} onClose={() => setPeopleOpen(false)} />}
       {canManageBuckets && <Button type="button" variant="outline" className={`planner-desktop-control planner-archive-button gap-2.5 ${bucketArchiveOpen ? 'border-navy' : ''}`} onClick={onToggleBucketArchive} aria-pressed={bucketArchiveOpen}>
         <Archive size={20} aria-hidden="true" /> Archived
@@ -790,8 +792,8 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     </div>
 
     {mobileFiltersOpen && <div id="planner-mobile-filters" className="planner-mobile-filter-panel">
-      <label className="planner-mobile-filter-field"><span>Work scope</span><AppSelect value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} disabled={scopeMode === 'projects'}><option value="all">All work</option><option value="operations">Daily operations</option></AppSelect></label>
-      {!isOperations && <label className="planner-mobile-filter-field"><span>Project</span><AppSelect value={projectFilter === 'operations' ? 'all' : projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)}><option value="all">All projects</option>{projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}</AppSelect></label>}
+      {!embedded && <label className="planner-mobile-filter-field"><span>Work scope</span><AppSelect value={isOperations ? 'operations' : 'all'} onChange={event => onProjectFilterChange?.(event.target.value)} disabled={scopeMode === 'projects'}><option value="all">All work</option><option value="operations">Daily operations</option></AppSelect></label>}
+      {!isOperations && !embedded && <label className="planner-mobile-filter-field"><span>Project</span><AppSelect value={projectFilter === 'operations' ? 'all' : projectFilter} onChange={event => onProjectFilterChange?.(event.target.value)}><option value="all">All projects</option>{projects.map(project => <option key={project.id} value={String(project.id)}>{project.name}</option>)}</AppSelect></label>}
       <label className="planner-mobile-filter-field"><span>Workstream</span><AppSelect value={workstream} onChange={event => setWorkstream(event.target.value)}><option value="all">All workstreams</option>{workstreams.map(value => <option key={value} value={value}>{value}</option>)}</AppSelect></label>
       <div className="planner-mobile-filter-field"><span>Due date</span><BoardDateFilter today={today} preset={shownPreset} from={dateFrom} to={dateTo} onChange={applyDate} /></div>
       {canManageBuckets && <div className="planner-mobile-filter-actions">
