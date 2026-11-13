@@ -286,3 +286,32 @@ class LocationTests(Base):
         self.client.force_login(self.member)
         url = self.url('work-locations') + '?start=2030-01-01&end=2031-01-01'
         self.assertEqual(self.client.get(url).status_code, 400)
+
+
+class LeaveViewByRoleTests(Base):
+    def decide(self, approver, item, decision='approved'):
+        self.client.force_login(approver)
+        return self.send('patch', self.url('leave-detail', item.id), {'decision': decision})
+
+    def test_approvers_see_recent_decisions_for_people_they_decide_for(self):
+        start = monday_after()
+        member_leave = LeaveRequest.objects.create(workspace=self.workspace, user=self.member, kind='sick', start_date=start, end_date=start)
+        manager_leave = LeaveRequest.objects.create(workspace=self.workspace, user=self.manager, kind='annual', start_date=start + timedelta(days=7), end_date=start + timedelta(days=7))
+        self.decide(self.other_manager, member_leave)
+        self.decide(self.owner, manager_leave)
+        self.client.force_login(self.owner)
+        owner_view = self.client.get(self.url('leave-list')).json()
+        self.assertEqual(owner_view['role'], 'owner')
+        self.assertEqual({r['user_name'] for r in owner_view['recent']}, {'Mia', 'Max'})
+        self.assertIn('kind', owner_view['recent'][0])
+        self.client.force_login(self.other_manager)
+        manager_view = self.client.get(self.url('leave-list')).json()
+        self.assertEqual([r['user_name'] for r in manager_view['recent']], ['Mia'])
+
+    def test_staff_get_no_decision_history(self):
+        start = monday_after()
+        item = LeaveRequest.objects.create(workspace=self.workspace, user=self.member, start_date=start, end_date=start)
+        self.decide(self.manager, item)
+        self.client.force_login(self.member2)
+        view = self.client.get(self.url('leave-list')).json()
+        self.assertEqual((view['recent'], view['to_decide'], view['can_approve']), ([], [], False))

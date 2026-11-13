@@ -1113,6 +1113,20 @@ def time_clock_summary(workspace_id, report_range, today, user_id=None, page=1, 
     }
 
 
+DONE_ARCHIVE_AFTER = timedelta(days=60)
+
+
+def archive_old_done_tasks(workspace_id, now=None):
+    """Move tasks finished more than 60 days ago to Archived, where they can still be
+    viewed and restored. Keeps the Done list to recent work. Returns how many moved."""
+    now = now or timezone.now()
+    cutoff = now - DONE_ARCHIVE_AFTER
+    old = Task.objects.filter(workspace_id=workspace_id, status='done').exclude(state='archived').filter(
+        Q(completed_at__lt=cutoff) | Q(completed_at__isnull=True, updated_at__lt=cutoff),
+    )
+    return old.update(state='archived', archived_at=now)
+
+
 @require_http_methods(['GET', 'POST'])
 def task_list(request, workspace_id=None):
     auth_error = require_authenticated(request)
@@ -1127,6 +1141,7 @@ def task_list(request, workspace_id=None):
         return error
 
     if request.method == 'GET':
+        archive_old_done_tasks(workspace_id)
         tasks = Task.objects.filter(workspace_id=workspace_id).select_related('assignee', 'project_ref', 'workstream_ref', 'phase_ref').prefetch_related('supporters', 'assignee_links', 'blocked_by', 'blocks')
         tasks = visible_tasks(tasks, workspace_id, request.user, membership_for(request.user, workspace_id))
         today = timezone.localdate()

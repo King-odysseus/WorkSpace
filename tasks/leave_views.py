@@ -75,13 +75,23 @@ def leave_list(request, workspace_id):
             .order_by('start_date')[:500]
         ]
         decidable = []
+        recent = []
         if membership.has_permission('approve_leave'):
             members = {m.user_id: m for m in Membership.objects.filter(workspace_id=workspace_id)}
+            # What was decided lately, for the people this approver is allowed to decide.
+            since = timezone.now() - timedelta(days=60)
+            for item in base.filter(status__in=('approved', 'declined'), reviewed_at__gte=since).exclude(user=request.user).order_by('-reviewed_at')[:60]:
+                person = members.get(item.user_id)
+                if person is not None and can_decide(membership, person):
+                    recent.append(item.as_dict())
             for item in base.filter(status='pending').exclude(user=request.user).order_by('start_date')[:100]:
                 person = members.get(item.user_id)
                 if person is not None and can_decide(membership, person):
                     decidable.append({**item.as_dict(), 'overlapping': _overlapping(item)})
-        return JsonResponse({'mine': mine, 'team': team, 'to_decide': decidable, 'can_approve': membership.has_permission('approve_leave')})
+        return JsonResponse({
+            'mine': mine, 'team': team, 'to_decide': decidable, 'recent': recent,
+            'can_approve': membership.has_permission('approve_leave'), 'role': membership.role,
+        })
 
     payload, error = json_body(request)
     if error:

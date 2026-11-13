@@ -78,3 +78,20 @@ class DayPlanLeaveTests(TestCase):
         self.assertEqual(self.client.get(url).json()['leave_share'], 1.0)
         saturday = monday + timedelta(days=5)
         self.assertEqual(self.client.get(reverse('personal-day-plan', args=[workspace.id]) + f'?date={saturday.isoformat()}').json()['leave_share'], 0)
+
+
+class DayPlanBlockNoteTests(DayPlanTests):
+    def test_notes_are_kept_per_block_and_survive_a_new_plan(self):
+        self.put('09:00-10:00 Report (1h)')
+        response = self.put(None, notes={'09:00': 'Ask Sam for the figures', '10:00': ''}) if False else self.client.put(
+            self.url, data=json.dumps({'notes': {'09:00': 'Ask Sam for the figures', '10:00': ''}}), content_type='application/json')
+        self.assertEqual(response.json()['note']['notes'], {'09:00': 'Ask Sam for the figures'})
+        self.assertEqual(response.json()['note']['body'], '09:00-10:00 Report (1h)')
+        self.put('09:00-10:30 Report (1h 30m)')
+        self.assertEqual(self.client.get(self.url).json()['note']['notes'], {'09:00': 'Ask Sam for the figures'})
+
+    def test_bad_notes_are_refused_and_a_note_alone_needs_a_plan(self):
+        self.assertEqual(self.client.put(self.url, data=json.dumps({'notes': {'09:00': 'x'}}), content_type='application/json').status_code, 400)
+        self.put('09:00-10:00 Report')
+        for bad in ('text', {'09:00': 'x' * 501}):
+            self.assertEqual(self.client.put(self.url, data=json.dumps({'notes': bad}), content_type='application/json').status_code, 400)

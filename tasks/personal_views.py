@@ -345,6 +345,8 @@ def personal_task_detail(request, workspace_id, task_id):
 
 
 MAX_DAY_NOTE = 6000
+MAX_BLOCK_NOTES = 60
+MAX_BLOCK_NOTE_LENGTH = 500
 
 
 @require_http_methods(['GET', 'PUT', 'DELETE'])
@@ -379,12 +381,28 @@ def personal_day_plan(request, workspace_id):
     if request.method == 'DELETE':
         notes.delete()
         return JsonResponse({'note': None})
-    body = str(payload.get('body', '')).strip()
-    if not body:
-        return JsonResponse({'error': 'A plan cannot be empty. Delete it instead.'}, status=400)
-    if len(body) > MAX_DAY_NOTE:
-        return JsonResponse({'error': f'A plan must be {MAX_DAY_NOTE} characters or fewer.'}, status=400)
+    existing = notes.first()
+    defaults = {}
+    if 'body' in payload or existing is None:
+        body = str(payload.get('body', '')).strip()
+        if not body:
+            return JsonResponse({'error': 'A plan cannot be empty. Delete it instead.'}, status=400)
+        if len(body) > MAX_DAY_NOTE:
+            return JsonResponse({'error': f'A plan must be {MAX_DAY_NOTE} characters or fewer.'}, status=400)
+        defaults['body'] = body
+    if 'notes' in payload:
+        raw = payload['notes']
+        if not isinstance(raw, dict) or len(raw) > MAX_BLOCK_NOTES:
+            return JsonResponse({'error': 'Notes must be a set of notes, one per block of the plan.'}, status=400)
+        cleaned = {}
+        for key, text in raw.items():
+            text = str(text or '').strip()
+            if len(str(key)) > 8 or len(text) > MAX_BLOCK_NOTE_LENGTH:
+                return JsonResponse({'error': f'A note must be {MAX_BLOCK_NOTE_LENGTH} characters or fewer.'}, status=400)
+            if text:
+                cleaned[str(key)] = text
+        defaults['notes'] = cleaned
     note, _ = PlannerDayNote.objects.update_or_create(
-        workspace_id=workspace_id, owner=request.user, date=day, defaults={'body': body},
+        workspace_id=workspace_id, owner=request.user, date=day, defaults=defaults,
     )
     return JsonResponse({'note': note.as_dict()})
