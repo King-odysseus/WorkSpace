@@ -58,22 +58,23 @@ describe('TeamDayPanel', () => {
   it('shows the strip, planned against capacity, done, logged and check-in for each person', async () => {
     mockApi({ '/team-day/': dayPayload })
     render(<TeamDayPanel workspaceId={4} isLeader onNavigate={() => {}} />)
-    expect(await screen.findByText('1 of 3 checked in')).toBeTruthy()
-    expect(screen.getByText('4 done today')).toBeTruthy()
-    expect(screen.getByText(/8h \/ 7.5h/)).toBeTruthy()
-    expect(screen.getByText('Checked in')).toBeTruthy()
-    expect(screen.getByText('clocked in')).toBeTruthy()
+    expect(await screen.findByRole('img', { name: '1 of 3 checked in' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /4 done today/ })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Team load 50%/ })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Ada Lovelace: 8h planned of 7.5h/ })).toBeTruthy()
+    expect(screen.getByText('Checked in', { selector: 'span.team-day-yes' })).toBeTruthy()
+    expect(screen.getByText(/clocked in/, { selector: 'small' })).toBeTruthy()
     expect(screen.getAllByText('On leave').length).toBeGreaterThan(0)
-    expect(screen.getByText(/5 open tasks have no estimate/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /5 open tasks have no estimate/ })).toBeTruthy()
   })
 
-  it('filters the list from the strip, and clears the filter on a second press', async () => {
+  it('filters the list from Needs attention, and Everyone clears it', async () => {
     mockApi({ '/team-day/': dayPayload })
     render(<TeamDayPanel workspaceId={4} isLeader />)
-    fireEvent.click(await screen.findByRole('button', { name: '2 overdue' }))
+    fireEvent.click(await screen.findByRole('button', { name: /2 overdue/ }))
     expect(screen.getByText('Bo Peep')).toBeTruthy()
     expect(screen.queryByText('Ada Lovelace')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '2 overdue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Everyone' }))
     expect(screen.getByText('Ada Lovelace')).toBeTruthy()
   })
 

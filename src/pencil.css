@@ -9915,3 +9915,50 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .team-day-cell-tasks, .team-day-hints, .team-day-unassigned { margin-top: 16px; }
 .team-day-hints p { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: var(--pencil-surface-muted); font-size: 13px; }
 .team-day-reassign.app-select-trigger { min-width: 130px; min-height: 30px; border-radius: 999px; font-size: 12px; }
+
+/* Today: notes can be dragged into a new order. */
+.today-sticky .plan-sticky[draggable="true"], .today-sticky .plan-row[draggable="true"] { cursor: grab; }
+.today-sticky .plan-sticky.is-dragging, .today-sticky .plan-row.is-dragging { opacity: .45; cursor: grabbing; }
+.today-sticky .plan-sticky.is-over, .today-sticky .plan-row.is-over { outline: 3px dashed #C49A6C; outline-offset: 3px; }
+.today-sticky .plan-sticky:focus-visible, .today-sticky .plan-row:focus-visible { outline: 3px solid #C49A6C; outline-offset: 3px; }
+.today-sticky-hint { margin: 6px 4px 0; }
+
+/* Team: the daily picture, rings and people list. */
+.team-ring { position: relative; display: inline-grid; flex: none; place-items: center; }
+.team-ring svg { position: absolute; inset: 0; }
+.team-ring-text { position: relative; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--pencil-navy); }
+.team-ring-text strong { font-size: 17px; }
+.team-day-top { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr); gap: 16px; margin: 16px 0 6px; }
+.team-day-rings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.team-day-ringcard { display: grid; justify-items: center; align-content: start; gap: 4px; padding: 16px 10px; border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface); text-align: center; }
+.team-day-ringcard > span:not(.team-ring) { margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--pencil-navy); }
+.team-day-ringcard small { font-size: 12px; color: var(--pencil-text-muted); }
+.team-day-attention { padding: 16px; border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface); }
+.team-day-attention h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
+.team-day-attention ul { display: grid; gap: 4px; margin: 0 0 10px; padding: 0; list-style: none; }
+.team-day-attention li button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 10px; background: transparent; color: #93370d; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.team-day-attention li button:hover { background: #fef0c7; }
+.team-day-attention p { margin: 0; }
+.team-day-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 10px; padding: 4px; width: fit-content; max-width: 100%; border-radius: 999px; background: var(--pencil-surface-muted); }
+.team-day-filters button { padding: 6px 14px; border: 0; border-radius: 999px; background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
+.team-day-filters button.is-active { background: #0B0B45; color: #fff; }
+.team-day-body { display: grid; gap: 14px; }
+@media (min-width: 1100px) { .team-day-body.has-side { grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr); align-items: start; } }
+.team-day-people { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.team-day-person { display: grid; grid-template-columns: 36px minmax(120px, 1.2fr) 52px minmax(90px, 1fr) minmax(90px, 1fr) minmax(90px, .8fr) 30px; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--pencil-border); border-radius: 14px; background: var(--pencil-surface); }
+.team-day-person.is-open { border-color: #C49A6C; background: var(--pencil-selected); }
+.team-day-avatar { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 999px; background: #0B0B45; color: #fff; font-size: 12px; font-weight: 700; }
+.team-day-who, .team-day-load, .team-day-done, .team-day-status { display: grid; gap: 3px; min-width: 0; font-size: 13px; }
+.team-day-person small { color: var(--pencil-text-muted); font-size: 12px; }
+.team-day-person .team-ring-text { font-size: 11px; }
+.team-day-side { padding: 14px 16px; border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface-muted); }
+.team-day-side-head { display: flex; align-items: center; justify-content: space-between; }
+.team-day-side-head h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--pencil-navy); }
+.team-day-side .team-day-detail { padding: 8px 0 0; }
+.team-day-empty { padding: 14px; }
+@media (max-width: 760px) {
+  .team-day-top { grid-template-columns: 1fr; }
+  .team-day-rings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .team-day-person { grid-template-columns: 36px minmax(0, 1fr) 52px 30px; }
+  .team-day-load, .team-day-done, .team-day-status { grid-column: 2 / -1; }
+}
