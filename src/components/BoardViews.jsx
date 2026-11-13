@@ -2,6 +2,7 @@
 // dashboard, and the panels they embed (project progress, risks/issues,
 // stakeholders and resources, and the time clock).
 
+import TeamDayPanel from "./TeamDayPanel.jsx";
 import TodayQuickNote from "./TodayQuickNote.jsx";
 import { workspaceCall } from "../lib/workspace-api.js";
 import { requestDayPlan } from "../lib/day-plan-navigation.js";
@@ -1043,6 +1044,7 @@ function TeamBoardView({
         icon={Users}
         onAction={onInvite}
       />
+      <TeamDayPanel workspaceId={workspaceId} isLeader={workspaceRole === "owner" || workspaceRole === "manager"} onNavigate={onNavigate} />
       <SearchInput
         className="mb-4 w-full sm:w-[320px]"
         label="Find a teammate"

@@ -318,6 +318,19 @@ const HELP_TOPICS = [
     ],
   },
   {
+    title: 'See what the team did today',
+    icon: Users,
+    group: 'insights',
+    intro: 'The Daily picture on Team shows the day of each person, for owners and managers.',
+    steps: [
+      'Open Team. At the top, Today shows planned hours for each person against their day, tasks done, time clocked in and check-in. Leave and half days are taken off their capacity.',
+      'Use the strip of counts to filter: who has not checked in, who is clocked in, who has blocked or overdue work, who is on leave or at home.',
+      'Select the arrow on a row to open a day, see their check-in and four-week trend, and reassign a task.',
+      'Choose This week for a grid of planned hours against capacity. Red days are over capacity; Suggested moves offers a free teammate, and you confirm each one.',
+      'Tasks with no estimate count as 3 hours and are flagged, so add estimates for a true picture. Owners and managers also get a summary notification at 6pm.',
+    ],
+  },
+  {
     title: 'Filter the board by date',
     icon: CalendarDays,
     group: 'planner',

@@ -9864,3 +9864,54 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .reminder-row { min-width: 0; max-width: 100%; }
 .reminder-label { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .reminder-row .reminder-cancel { flex: 0 0 auto; }
+
+/* Team: the daily picture. */
+.team-day { margin: 8px 0 24px; padding: 20px 22px; border: 1px solid var(--pencil-border); border-radius: 20px; background: var(--pencil-surface); }
+.team-day-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.team-day-header h2 { margin: 0; font-size: 17px; font-weight: 700; color: var(--pencil-navy); }
+.team-day-header p { margin: 4px 0 0; font-size: 13px; color: var(--pencil-text-muted); }
+.team-day-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
+.team-day-strip button { padding: 6px 14px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface-muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+.team-day-strip button.is-active { background: #0B0B45; border-color: #0B0B45; color: #fff; }
+.team-day-warning { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; padding: 9px 12px; border-radius: 12px; background: #fef0c7; color: #93370d; font-size: 13px; }
+.team-day-warning button { margin-left: auto; padding: 3px 12px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
+.team-day-scroll { margin-top: 14px; overflow-x: auto; border: 1px solid var(--pencil-border); border-radius: 14px; }
+.team-day-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
+.team-day-table th, .team-day-table td { padding: 10px 14px; border-bottom: 1px solid var(--pencil-border); text-align: left; vertical-align: middle; }
+.team-day-table thead th { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--pencil-text-muted); background: var(--pencil-surface-muted); }
+.team-day-table tbody tr:last-child th, .team-day-table tbody tr:last-child td { border-bottom: 0; }
+.team-day-table tbody th { font-weight: 400; }
+.team-day-table tbody th strong { display: block; margin-bottom: 4px; }
+.team-day-table td small { display: block; margin-top: 3px; color: var(--pencil-text-muted); font-size: 12px; }
+.team-day-table tr.is-open > * { background: var(--pencil-selected); }
+.team-day-bar { display: block; width: 100%; max-width: 180px; height: 7px; overflow: hidden; border-radius: 999px; background: var(--pencil-border); }
+.team-day-bar i { display: block; height: 100%; border-radius: 999px; background: #12b76a; }
+.team-day-bar.is-full i { background: #f79009; } .team-day-bar.is-over i { background: #d92d20; } .team-day-bar.is-empty i, .team-day-bar.is-off i { background: #98a2b3; }
+.team-day-chip { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 1px 8px; border-radius: 999px; background: var(--pencil-surface-muted); font-size: 11px; font-weight: 600; color: var(--pencil-text-muted); }
+.team-day-chip.is-leave { background: #fef0c7; color: #93370d; }
+.team-day-yes { color: #067647; font-weight: 700; } .team-day-no { color: #b42318; font-weight: 700; } .team-day-muted { color: var(--pencil-text-muted); font-size: 13px; }
+.team-day-expand { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
+.team-day-expand[aria-expanded="true"] svg { transform: rotate(180deg); }
+.team-day-open-row td { padding: 0 !important; background: var(--pencil-surface-muted); }
+.team-day-detail { display: grid; gap: 10px; padding: 14px 18px 18px; }
+.team-day-detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; justify-content: space-between; }
+.team-day-detail h4, .team-day-cell-tasks h4, .team-day-hints h3, .team-day-unassigned h3 { margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.team-day-detail ul, .team-day-cell-tasks ul, .team-day-unassigned ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.team-day-task { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--pencil-border); border-radius: 12px; background: var(--pencil-surface); }
+.team-day-checkin { margin: 0; font-size: 13px; }
+.team-day-spark-label { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--pencil-text-muted); }
+.team-day-spark { display: inline-flex; align-items: flex-end; gap: 3px; width: 44px; height: 22px; }
+.team-day-spark i { flex: 1; border-radius: 2px; background: #0B0B45; }
+.team-week-table td { padding: 6px; text-align: center; }
+.team-week-table thead th { text-align: center; }
+.team-week-table thead th.is-today { box-shadow: inset 0 -2px 0 #C49A6C; color: #0B0B45; }
+.team-week-cell { display: grid; width: 100%; min-width: 72px; justify-items: center; gap: 1px; padding: 6px 4px; border: 0; border-radius: 10px; font: inherit; cursor: pointer; }
+.team-week-cell:disabled { cursor: default; }
+.team-week-cell small { font-size: 11px; opacity: .75; }
+.team-week-cell.is-ok { background: #dcfae6; color: #067647; } .team-week-cell.is-full { background: #fef0c7; color: #93370d; }
+.team-week-cell.is-over { background: #fee4e2; color: #b42318; } .team-week-cell.is-empty { background: var(--pencil-surface-muted); color: var(--pencil-text-muted); }
+.team-week-cell.is-off { background: transparent; color: var(--pencil-text-muted); }
+.team-day-legend { margin: 8px 2px 0; }
+.team-day-cell-tasks, .team-day-hints, .team-day-unassigned { margin-top: 16px; }
+.team-day-hints p { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; padding: 10px 12px; border-radius: 12px; background: var(--pencil-surface-muted); font-size: 13px; }
+.team-day-reassign.app-select-trigger { min-width: 130px; min-height: 30px; border-radius: 999px; font-size: 12px; }

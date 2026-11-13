@@ -12,6 +12,17 @@ const SEEN_KEY = 'workspace-whats-new-seen-v1'
 const RELEASE_NOTES = [
   {
     date: '2026-11-13',
+    title: 'The team day at a glance',
+    items: [
+      'For owners and managers, Team now opens with a Daily picture: planned hours for each person against their day, tasks done today, time logged, and whether they have checked in.',
+      'A strip across the top counts who has checked in, who is clocked in, what is done, blocked, overdue, on leave and at home. Select a number to filter the list.',
+      'Open a person to see their day: tasks done, under way, blocked and overdue, their check-in, the last thing they finished and a four-week trend. Reassign a task from there.',
+      'This week shows a grid of planned hours against capacity for each person and day, with suggested moves from overbooked days to people with room, and a list of work nobody owns yet.',
+      'A warning says when open tasks have no estimate, because workload is understated until they do. Owners and managers also get an end-of-day summary notification at 6pm.',
+    ],
+  },
+  {
+    date: '2026-11-13',
     title: 'Follow-ups you can open, and a banner that steps through memos',
     items: [
       'Select a follow-up to open it: read the whole note, see who it is for, comment, and mark it complete or reopen it.',
