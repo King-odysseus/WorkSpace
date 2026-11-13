@@ -426,6 +426,25 @@ def personal_day_plan(request, workspace_id):
             if text:
                 cleaned[str(key)] = text
         defaults['notes'] = cleaned
+    if 'done' in payload:
+        raw = payload['done']
+        if not isinstance(raw, list) or len(raw) > MAX_BLOCK_NOTES or any(not isinstance(key, str) or len(key) > 8 for key in raw):
+            return JsonResponse({'error': 'done must be a list of block start times.'}, status=400)
+        defaults['done'] = sorted(set(raw))
+    if 'layout' in payload:
+        raw = payload['layout']
+        if not isinstance(raw, dict) or len(raw) > MAX_BLOCK_NOTES:
+            return JsonResponse({'error': 'layout must say where each block sits.'}, status=400)
+        layout = {}
+        for key, spot in raw.items():
+            valid = (
+                len(str(key)) <= 8 and isinstance(spot, list) and len(spot) == 2
+                and all(not isinstance(v, bool) and isinstance(v, (int, float)) and 0 <= v <= MAX_BOARD_COORD for v in spot)
+            )
+            if not valid:
+                return JsonResponse({'error': 'layout must say where each block sits.'}, status=400)
+            layout[str(key)] = [int(spot[0]), int(spot[1])]
+        defaults['layout'] = layout
     note, _ = PlannerDayNote.objects.update_or_create(
         workspace_id=workspace_id, owner=request.user, date=day, defaults=defaults,
     )

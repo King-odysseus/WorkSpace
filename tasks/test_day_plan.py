@@ -95,3 +95,29 @@ class DayPlanBlockNoteTests(DayPlanTests):
         self.put('09:00-10:00 Report')
         for bad in ('text', {'09:00': 'x' * 501}):
             self.assertEqual(self.client.put(self.url, data=json.dumps({'notes': bad}), content_type='application/json').status_code, 400)
+
+
+class DayPlanDoneAndLayoutTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('dl@example.com', 'dl@example.com', 'password')
+        self.workspace = Workspace.objects.create(name='Done layout', slug='done-layout')
+        Membership.objects.create(workspace=self.workspace, user=self.user, role='member')
+        self.url = reverse('personal-day-plan', args=[self.workspace.id])
+        self.client.force_login(self.user)
+        self.client.put(self.url, data=json.dumps({'body': '09:00-10:00 Report (1h)'}), content_type='application/json')
+
+    def put(self, **data):
+        return self.client.put(self.url, data=json.dumps(data), content_type='application/json')
+
+    def test_blocks_can_be_ticked_done_and_moved_and_it_is_kept(self):
+        response = self.put(done=['09:00'], layout={'09:00': [320, 140]})
+        self.assertEqual(response.status_code, 200)
+        note = self.client.get(self.url).json()['note']
+        self.assertEqual((note['done'], note['layout'], note['body']), (['09:00'], {'09:00': [320, 140]}, '09:00-10:00 Report (1h)'))
+        self.put(done=[])
+        self.assertEqual(self.client.get(self.url).json()['note']['done'], [])
+        self.assertEqual(self.client.get(self.url).json()['note']['layout'], {'09:00': [320, 140]})
+
+    def test_bad_done_and_layout_are_refused(self):
+        for data in ({'done': 'all'}, {'done': [1]}, {'layout': []}, {'layout': {'09:00': [1]}}, {'layout': {'09:00': [-1, 5]}}, {'layout': {'09:00': [10, 99999]}}, {'layout': {'09:00': [True, 5]}}):
+            self.assertEqual(self.put(**data).status_code, 400, data)

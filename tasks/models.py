@@ -2013,6 +2013,10 @@ class PlannerDayNote(models.Model):
     # The person's own notes on each block of the plan, keyed by the block's start
     # time ("09:00"), so a note stays with its block when the plan is edited.
     notes = models.JSONField(default=dict, blank=True)
+    # Blocks ticked off as done (their start times), and where each block was moved
+    # to on the board: {"09:00": [x, y]}. Neither counts as planner work.
+    done = models.JSONField(default=list, blank=True)
+    layout = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2020,7 +2024,10 @@ class PlannerDayNote(models.Model):
         constraints = [models.UniqueConstraint(fields=['workspace', 'owner', 'date'], name='unique_planner_day_note')]
 
     def as_dict(self):
-        return {'date': self.date.isoformat(), 'body': self.body, 'notes': self.notes or {}, 'updated_at': self.updated_at.isoformat()}
+        return {
+            'date': self.date.isoformat(), 'body': self.body, 'notes': self.notes or {},
+            'done': self.done or [], 'layout': self.layout or {}, 'updated_at': self.updated_at.isoformat(),
+        }
 
 
 class PersonalTask(models.Model):
