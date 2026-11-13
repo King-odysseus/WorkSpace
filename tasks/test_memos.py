@@ -148,3 +148,21 @@ class MemoHistoryTests(MemoTests):
         self.client.force_login(self.member)
         response = self.client.patch(reverse('memo-detail', args=[self.workspace.id, memo_id]), data=json.dumps({'archived': False}), content_type='application/json')
         self.assertEqual(response.status_code, 403)
+
+
+class MemoBellTests(MemoTests):
+    def test_a_new_memo_shows_in_everyone_elses_notification_list_and_unread_count(self):
+        self.post_memo()
+        self.client.force_login(self.member)
+        payload = self.client.get(reverse('notification-list', args=[self.workspace.id])).json()
+        memo_items = [n for n in payload['notifications'] if n['target_type'] == 'memo']
+        self.assertEqual(len(memo_items), 1)
+        self.assertFalse(memo_items[0]['read'])
+        self.assertTrue(memo_items[0]['title'].startswith('Memo:'))
+
+    def test_two_memos_give_two_unread_notifications(self):
+        self.post_memo(title='One')
+        self.post_memo(title='Two')
+        self.client.force_login(self.member)
+        payload = self.client.get(reverse('notification-list', args=[self.workspace.id])).json()
+        self.assertEqual(len([n for n in payload['notifications'] if n['target_type'] == 'memo' and not n['read']]), 2)
