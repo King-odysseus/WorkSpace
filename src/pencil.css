@@ -9200,7 +9200,9 @@ header.shell-header { flex-basis: 84px; height: 84px !important; padding: 0 32px
 .my-task-group:nth-child(2) > .grid > .my-task-row + .my-task-row { margin-top: 0; }
 
 /* Phone top bar: the same round, shadowed icon buttons as the desktop header. */
-.shell-appbar-controls button:not(.shell-appbar-avatar-button) { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; padding: 0; border-radius: 50%; background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
+/* Only the bar's own icon buttons: the notification and message panels open inside
+   these controls, and their rows and footer buttons must keep their normal shape. */
+.shell-appbar-controls button:not(.shell-appbar-avatar-button):not(.workspace-popup-panel *) { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; padding: 0; border-radius: 50%; background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
 .shell-appbar-controls { gap: 8px !important; }
 
 
