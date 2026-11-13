@@ -182,6 +182,7 @@ const HELP_TOPICS = [
       'Switch between All, Today, Past week and Past month, and use Everyone to look at one teammate.',
       'The panel on the right shows who has not checked in yet, with a Nudge button.',
       'Blockers raised today are listed beside the updates.',
+      'Owners and managers who do not need to check in can turn on Skip my daily check-ins in Settings > Profile. They are then left out of the pending list, the reminder and the totals.',
     ],
   },
   {
@@ -314,6 +315,29 @@ const HELP_TOPICS = [
       'Select Assistant in the top bar, or open Zuri from the sidebar. An owner must switch on AI in Settings first.',
       'Ask a question, or ask for something like a task to be created. You can attach a file or an image.',
       'When Zuri proposes a change, it shows exactly what it will do and waits for you to confirm it.',
+    ],
+  },
+  {
+    title: 'Plan your day with Zuri',
+    icon: Sparkles,
+    group: 'planner',
+    intro: 'Zuri can suggest what to do today, how long each piece should take, and when to rest.',
+    steps: [
+      'Select Plan my day on Today, or Plan my day with Zuri at the bottom of My planner. An owner must switch on Zuri in Settings first.',
+      'Zuri looks at the tasks assigned to you and your private planner items, then writes a short schedule with times and breaks.',
+      'The plan is saved as a note under My planner. Edit it, ask for a new one with Plan again, or delete it. It never counts in your progress ring.',
+    ],
+  },
+  {
+    title: 'Read and post company memos',
+    icon: Megaphone,
+    group: 'messaging',
+    intro: 'A memo is an announcement for the whole workspace. It shows as a banner and stays on the Memos page.',
+    steps: [
+      'The newest memo you have not dismissed shows as a banner across the top. Select it to read the whole memo, or the X to hide it for yourself.',
+      'Open Memos in the sidebar to read every memo, including ones you dismissed. Memos also arrive as a notification.',
+      'Owners and managers can select New memo, write a title and text, and choose how many days it shows as a banner. Archive a memo to take it off the page.',
+      'You can also ask Zuri to draft one. Zuri shows the memo and posts it only after you confirm.',
     ],
   },
   {
