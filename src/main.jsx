@@ -197,6 +197,11 @@ const CheckInEditDialog = lazyRoute("CheckInEditDialog", () =>
     default: module.CheckInEditDialog,
   })),
 );
+const FollowUpDetailDialog = lazyRoute("FollowUpDetailDialog", () =>
+  import("./components/RecordDialogs.jsx").then((module) => ({
+    default: module.FollowUpDetailDialog,
+  })),
+);
 const FollowUpEditDialog = lazyRoute("FollowUpEditDialog", () =>
   import("./components/RecordDialogs.jsx").then((module) => ({
     default: module.FollowUpEditDialog,
@@ -5111,6 +5116,7 @@ function WorkspaceView({
 }) {
   const today = toDateKey(new Date());
   const [localData, setLocalData] = useState(data);
+  const [viewFollowUp, setViewFollowUp] = useState(null);
   const [calendarView, setCalendarView] = useState(() =>
     window.matchMedia?.("(max-width: 760px)").matches ? "day" : "month",
   );
@@ -10152,7 +10158,7 @@ function WorkspaceView({
                 followUp.assigned_to === currentUserId;
               return <article className={`pencil-followup-row ${followUp.status}`} key={followUp.id}>
                   <button type="button" className={`pencil-followup-check ${followUp.status === "completed" ? "done" : ""}`} onClick={() => completeFollowUp(followUp)} aria-label={`${followUp.status === "completed" ? "Reopen" : "Complete"} ${followUp.note}`}><Check size={13} /></button>
-                  <div className="pencil-followup-copy"><strong>{followUp.note}</strong><small>{followUp.status === "completed" ? "Completed" : "Needs a response or later action."}</small></div>
+                  <button type="button" className="pencil-followup-copy pencil-followup-open" onClick={() => setViewFollowUp(followUp)} aria-label={`Open follow-up: ${followUp.note}`}><strong>{followUp.note}</strong><small>{followUp.status === "completed" ? "Completed" : "Needs a response or later action."}</small></button>
                   <span className="pencil-followup-assignee">{followUp.assigned_to_name || "Unassigned"}</span>
                   <span className="pencil-followup-task">{linkedTask?.title || "No linked task"}</span>
                   <span className={`pencil-followup-due ${isOverdueFollowUp(followUp) ? "overdue" : ""}`}>{followUp.due_date ? (isOverdueFollowUp(followUp) ? `${Math.abs(Math.round((new Date(today) - new Date(followUp.due_date)) / 86400000))} days over` : followUp.due_date === today ? "Due today" : formatDay(followUp.due_date)) : "No date"}</span>
@@ -10204,6 +10210,36 @@ function WorkspaceView({
             onSubmit={submitComposer}
             members={localData.members}
             tasks={tasks}
+          />
+        )}
+        {viewFollowUp && (
+          <FollowUpDetailDialog
+            followUp={viewFollowUp}
+            linkedTaskTitle={tasks.find((task) => task.id === viewFollowUp.task_id)?.title}
+            canUpdate={
+              canManageMembers ||
+              viewFollowUp.created_by === currentUserId ||
+              viewFollowUp.assigned_to === currentUserId
+            }
+            canEdit={
+              canManageMembers ||
+              viewFollowUp.created_by === currentUserId ||
+              viewFollowUp.assigned_to === currentUserId
+            }
+            onClose={() => setViewFollowUp(null)}
+            onChanged={(updatedFollowUp) => {
+              setLocalData((current) => ({
+                ...current,
+                followUps: current.followUps.map((item) =>
+                  item.id === updatedFollowUp.id ? updatedFollowUp : item,
+                ),
+              }));
+              onRefresh();
+            }}
+            onEdit={() => {
+              setSelectedFollowUp(viewFollowUp);
+              setViewFollowUp(null);
+            }}
           />
         )}
         {selectedFollowUp && (

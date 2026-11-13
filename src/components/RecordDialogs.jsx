@@ -130,6 +130,101 @@ function FollowUpEditDialog({ followUp, members, tasks, workspaceId, canManageMe
   return <div className="modal-backdrop" onMouseDown={onClose}><form className="modal composer-modal" role="dialog" aria-modal="true" aria-labelledby="follow-up-edit-title" onSubmit={save} onMouseDown={event => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Follow-up management</p><h2 id="follow-up-edit-title">Edit follow-up</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Close follow-up editor"><X size={18} /></button></div><label>Follow-up note<textarea name="note" value={form.note} onChange={update} maxLength="500" required disabled={!canEditAssignment} /></label><DateField label="Due date" name="due_date" value={form.due_date} onChange={update} disabled={!canEditAssignment} /><SelectField label="Status" name="status" value={form.status} onChange={update} options={[['open', 'Open'], ['completed', 'Completed']]} />{canEditAssignment && <><label>Assign to<AppSelect name="assigned_to" value={form.assigned_to} onChange={update}><option value="">Unassigned</option>{members.map(member => <option key={member.id} value={member.id}>{[member.first_name, member.last_name].filter(Boolean).join(' ') || member.email}</option>)}</AppSelect></label><label>Link to task<AppSelect name="task_id" value={form.task_id} onChange={update}><option value="">No linked task</option>{tasks.map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</AppSelect></label></>}<section className="checkin-comments" aria-label="Follow-up comments"><div className="drawer-section-heading"><h3>Discussion</h3><span>{comments.length}</span></div>{comments.length ? <div className="checkin-comment-list">{comments.map(comment => <article className="drawer-comment" key={comment.id}><strong>{comment.author_name}</strong><time>{formatDateTime(comment.created_at)}</time><p><LinkedText text={comment.body} /></p></article>)}</div> : <p className="drawer-muted">No comments yet.</p>}<label>Add a comment<MentionPicker members={members} value={commentBody} onChange={setCommentBody} currentUserId={currentUserId}>{inputRef => <textarea ref={inputRef} value={commentBody} onChange={event => setCommentBody(event.target.value)} maxLength="2000" placeholder="Share an update or response." />}</MentionPicker></label><Button type="button" variant="secondary" onClick={postComment} disabled={commenting || !commentBody.trim()}>{commenting ? 'Posting...' : 'Post comment'}</Button></section>{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-button modal-submit" disabled={saving}>{saving ? 'Saving...' : 'Save follow-up'} <ArrowUpRight size={16} /></button></form></div>
 }
 
+// A follow-up opened to read: the whole note, who and when, a thread of comments
+// anyone in the workspace can add to, and (for the creator, the assignee and leaders)
+// a button to mark it complete or reopen it. Editing its details is a separate step.
+function FollowUpDetailDialog({ followUp, linkedTaskTitle, canUpdate, canEdit, onClose, onChanged, onEdit }) {
+  const [comments, setComments] = useState([])
+  const [commentBody, setCommentBody] = useState('')
+  const [commenting, setCommenting] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [status, setStatus] = useState(followUp.status)
+  useEffect(() => {
+    let current = true
+    fetch(`/api/follow-ups/${followUp.id}/comments/`, { credentials: 'include' })
+      .then(response => readJsonResponse(response, 'Follow-up comments could not be loaded.'))
+      .then(data => { if (current) setComments(data.comments || []) })
+      .catch(loadError => { if (current) setError(loadError.message || 'Follow-up comments could not be loaded.') })
+    return () => { current = false }
+  }, [followUp.id])
+  const postComment = async event => {
+    event.preventDefault()
+    const body = commentBody.trim()
+    if (!body || commenting) return
+    setCommenting(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/follow-ups/${followUp.id}/comments/`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ body }) })
+      const data = await readJsonResponse(response, 'Comment could not be added.')
+      if (!response.ok) throw new Error(data.error || 'Comment could not be added.')
+      setComments(current => [...current, data.comment])
+      setCommentBody('')
+      toast.success('Comment added.')
+    } catch (commentError) {
+      setError(commentError.message || 'Comment could not be added.')
+    } finally {
+      setCommenting(false)
+    }
+  }
+  const toggleStatus = async () => {
+    if (saving) return
+    const next = status === 'completed' ? 'open' : 'completed'
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/follow-ups/${followUp.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify({ status: next }) })
+      const data = await readJsonResponse(response, 'Follow-up could not be updated.')
+      if (!response.ok) throw new Error(data.error || 'Follow-up could not be updated.')
+      setStatus(next)
+      onChanged(data.follow_up)
+      toast.success(next === 'completed' ? 'Marked complete.' : 'Reopened.')
+    } catch (saveError) {
+      setError(saveError.message || 'Follow-up could not be updated.')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal composer-modal followup-detail" role="dialog" aria-modal="true" aria-labelledby="follow-up-detail-title" onMouseDown={event => event.stopPropagation()}>
+        <div className="modal-header">
+          <div><p className="eyebrow">Follow-up</p><h2 id="follow-up-detail-title">{status === 'completed' ? 'Completed follow-up' : 'Follow-up'}</h2></div>
+          <button type="button" className="close-button" onClick={onClose} aria-label="Close follow-up"><X size={18} /></button>
+        </div>
+        <p className="followup-detail-note">{followUp.note}</p>
+        <dl className="followup-detail-meta">
+          <div><dt>Assigned to</dt><dd>{followUp.assigned_to_name || 'Unassigned'}</dd></div>
+          <div><dt>Linked task</dt><dd>{linkedTaskTitle || 'No linked task'}</dd></div>
+          <div><dt>Due</dt><dd>{followUp.due_date || 'No due date'}</dd></div>
+          <div><dt>Status</dt><dd>{status === 'completed' ? 'Completed' : 'Open'}</dd></div>
+        </dl>
+        <div className="followup-detail-actions">
+          {canUpdate
+            ? <button type="button" className="primary-button" onClick={toggleStatus} disabled={saving}>{status === 'completed' ? 'Reopen' : 'Mark complete'}</button>
+            : <span className="followup-detail-hint">Only the person who made it, the person it is assigned to, or an owner or manager can mark it complete.</span>}
+          {canEdit && <button type="button" className="secondary-button" onClick={onEdit}>Edit details</button>}
+        </div>
+        <section className="followup-detail-comments" aria-label="Comments">
+          <h3>Comments ({comments.length})</h3>
+          {!comments.length && <p className="followup-detail-hint">No comments yet.</p>}
+          {comments.map(comment => (
+            <article className="drawer-comment" key={comment.id}>
+              <strong>{comment.author_name}</strong>
+              <p>{comment.body}</p>
+            </article>
+          ))}
+          <form className="drawer-comment-form" onSubmit={postComment}>
+            <textarea value={commentBody} onChange={event => setCommentBody(event.target.value)} placeholder="Write a comment" aria-label="Write a comment" maxLength={2000} />
+            <button type="submit" className="primary-button" disabled={commenting || !commentBody.trim()}>Post comment</button>
+          </form>
+        </section>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
 function CheckInEditDialog({ checkIn, workspaceId, onClose, onUpdated }) {
   const [form, setForm] = useState({ date: checkIn.date, completed: checkIn.completed || '', next_steps: checkIn.next_steps || '', blockers: checkIn.blockers || '' })
   const [error, setError] = useState('')
@@ -293,4 +388,4 @@ function ProjectEditDialog({ project, workspaceId, onClose, onUpdated }) {
   </Dialog>
 }
 
-export { CalendarEventEditDialog, FollowUpEditDialog, CheckInDetailDialog, CheckInEditDialog, ProjectEditDialog }
+export { CalendarEventEditDialog, FollowUpDetailDialog, FollowUpEditDialog, CheckInDetailDialog, CheckInEditDialog, ProjectEditDialog }

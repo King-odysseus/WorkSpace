@@ -9814,3 +9814,30 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .planner-mobile-filter-field .board-date-filter { display: flex; width: 100%; }
 /* Notes may overlap once moved; the one you point at or focus comes to the front. */
 .sticky-card:hover, .sticky-card:focus-within { z-index: 10; }
+
+/* Several announcements: arrows and an "n of N" counter on the banner. */
+.memo-banner-pager { display: inline-flex; flex: none; align-items: center; gap: 2px; margin-right: 4px; padding: 2px; border-radius: 999px; background: rgb(255 255 255 / 14%); color: #fff; font-size: 12px; font-weight: 700; }
+.memo-banner-pager span { min-width: 44px; text-align: center; }
+.memo-banner-pager button { display: grid; width: 26px; height: 26px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.memo-banner-pager button:hover, .memo-banner-pager button:focus-visible { background: rgb(255 255 255 / 24%); outline: 0; }
+
+/* Sticky notes: more room inside, left and right. */
+.sticky-bar { padding: 10px 16px; }
+.sticky-card .sticky-title-input, .sticky-card .sticky-block-title, .sticky-card .sticky-block-detail, .sticky-card .note-colors, .sticky-card .sticky-remove { margin-left: 16px; margin-right: 16px; }
+.sticky-card .sticky-title-input { width: calc(100% - 32px); }
+.sticky-card .plan-block-note { margin-left: 16px; margin-right: 16px; width: calc(100% - 32px); }
+.plan-sticky:not(.sticky-card) { padding-left: 20px; padding-right: 20px; }
+.today-quick-note { padding-left: 22px; padding-right: 22px; }
+
+/* Follow-up opened to read. */
+.pencil-followup-open { display: grid; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pencil-followup-open:hover strong { text-decoration: underline; }
+.pencil-followup-open:focus-visible { outline: 2px solid #C49A6C; outline-offset: 3px; border-radius: 8px; }
+.followup-detail { max-width: 640px; }
+.followup-detail-note { margin: 12px 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.followup-detail-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; margin: 0 0 14px; }
+.followup-detail-meta dt { font-size: 12px; font-weight: 700; color: var(--pencil-text-muted); }
+.followup-detail-meta dd { margin: 2px 0 0; font-size: 14px; }
+.followup-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.followup-detail-hint { font-size: 13px; color: var(--pencil-text-muted); }
+.followup-detail-comments h3 { margin: 0 0 8px; font-size: 15px; }

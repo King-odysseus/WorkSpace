@@ -12,6 +12,15 @@ const SEEN_KEY = 'workspace-whats-new-seen-v1'
 const RELEASE_NOTES = [
   {
     date: '2026-11-13',
+    title: 'Follow-ups you can open, and a banner that steps through memos',
+    items: [
+      'Select a follow-up to open it: read the whole note, see who it is for, comment, and mark it complete or reopen it.',
+      'When several memos are showing in the banner, arrows and an "n of N" counter step through them. Memos also show in the notification bell with a megaphone icon.',
+      'Sticky notes have more room inside, left and right.',
+    ],
+  },
+  {
+    date: '2026-11-13',
     title: 'Filter boards by date',
     items: [
       'Planner and Daily operations have a Due date filter: today, tomorrow, this week, next week, this month, overdue, no due date, or two dates you pick.',
