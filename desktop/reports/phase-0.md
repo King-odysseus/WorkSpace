@@ -78,13 +78,13 @@ what may be written there.
 | File | What it does |
 | --- | --- |
 | `desktop/scripts/verify-web-unchanged.mjs` | The section 5 proof as a script: protected-path diff, build, asset comparison, dist scan, mockup-input check |
-| `desktop/scripts/verify-web-unchanged.test.mjs` | 58 tests for the decisions that proof rests on |
+| `desktop/scripts/verify-web-unchanged.test.mjs` | 64 tests for the decisions that proof rests on |
 | `desktop/reports/phase-0.md` | This report, restructured to the section 22 headings |
 
 The proof is a script rather than a set of remembered commands because a proof that is
 re-typed from memory each phase is a proof that eventually gets re-typed wrong.
 
-Three of its defaults are strict on purpose, because review found each one was a way for a run
+Four of its defaults are strict on purpose, because review found each one was a way for a run
 to report success while the web output had moved:
 
 - The untracked mockups are exempt from check 1 by seven exact paths, never by a folder rule.
@@ -92,6 +92,10 @@ to report success while the web output had moved:
   production stylesheet, so an unrecorded file could change the shipped CSS while check 1
   called the tree clean. A new file now fails check p4, and a content fingerprint proves the
   pinned files are still the ones recorded at phase start.
+- A pinned mockup file whose content changed, or which went missing, fails check p6. It has no
+  opt-out: a warning would leave `--record-baseline` free to seal a tree nobody re-reviewed,
+  because the write is gated on the same failing list as the exit code. Re-pinning is a
+  deliberate edit to the script, reviewed like any other change.
 - Check m5 fails, rather than warns, when a mockup-only class ships in the app CSS. This is
   why the full proof currently exits 1 (section 3, output 6).
 - `--record-baseline` runs every check first and writes nothing if one fails, so a baseline
@@ -159,10 +163,11 @@ and its tests. No log, screenshot, database file or build artifact is staged.
 | Backend tests | `python manage.py test` | 838 tests, OK, exit 0, 1917.29s |
 | Desktop spike, mocked | `cd desktop && node --test features/copilot` | 86 tests, 86 passed, exit 0 |
 | Live-run helpers | `node --test desktop/tests/spike/live-verify/` | 65 tests, 65 passed, exit 0 |
-| Unchanged-web proof, helpers | `node --test desktop/scripts/` | 58 tests, 58 passed, exit 0 |
+| Unchanged-web proof, helpers | `node --test desktop/scripts/` | 64 tests, 64 passed, exit 0 |
 | Unchanged-web proof, full | `node desktop/scripts/verify-web-unchanged.mjs` | 14 checks, 13 pass, 1 fail (m5), exit 1 |
 | Unchanged-web proof, m5 allowed | `node desktop/scripts/verify-web-unchanged.mjs --skip-build --allow-mockup-css` | 13 checks, 12 pass, 1 warning, exit 0 |
 | Baseline write refused on a failing tree | `node desktop/scripts/verify-web-unchanged.mjs --skip-build --record-baseline --baseline .tmp-phase0/baseline-probe.txt` | refused, no file written, exit 1 |
+| Drifted mockup pin refuses the run and the baseline | one pinned mockup file temporarily edited, then `--skip-build --allow-mockup-css --record-baseline --baseline .tmp-phase0/baseline-probe.txt` | p6 failed, `REFUSED baseline ... 1 check failed (p6)`, no file written, exit 1; file restored byte-identically |
 | Live verification, end to end | `node desktop/tests/spike/live-verify/run.mjs --serve=preview --sign-in=manual` | 6 of 6 checks pass, exit 0 |
 
 No model inference is involved anywhere in Phase 0: this is a Django server, a Vite build and
@@ -296,6 +301,11 @@ The default run currently exits `1`: every check passes except m5, which fails o
 selectors described in output 6. That is the intended result for this tree until the owner
 rules on section 5, question 2.
 
+Check p6 is a hard failure with no flag to soften it. It passes on the committed tree
+(`639650acd9138e5d`); if a pinned mockup file is edited or deleted, the run stops reporting
+success and `--record-baseline` refuses to write, so drift cannot be blessed into a new
+baseline. Section 3, output 7 shows that refusal as it actually ran.
+
 ### Output 1: the protected-path diff is empty
 
 Section 5 asks for `src`, `tasks`, `backend`, root `package.json`, `package-lock.json` and
@@ -325,8 +335,9 @@ Two honest notes on that output:
   report, and were left exactly as they were. They are pinned by exact path in the script, not
   by a folder rule: a file added to that folder later is an unrecorded change and fails p4,
   because Tailwind scans the folder into the production stylesheet. The fingerprint line is
-  what stops the pin from being a claim about files nobody re-read; 58 helper tests cover it,
-  including one that rejects a new file inside the mockup folder.
+  what stops the pin from being a claim about files nobody re-read; 64 helper tests cover it,
+  including one that rejects a new file inside the mockup folder and two that prove a drifted
+  pin fails the run and refuses the baseline. Section 3, output 7 is the same refusal run.
 - The only modified tracked file in the repository is `DesignSystem.md`, which a concurrent
   session rewrote. It is outside the protected paths, is not part of this phase, and was left
   unstaged.
@@ -485,6 +496,37 @@ recorded before those checks ran:
 - `--record-baseline --allow-mockup-css` ran every check first, then wrote the baseline (27
   assets) and exited 0.
 
+### Output 7: a drifted pin fails the run and is refused a baseline
+
+Review round 2 found that p6 only warned, so `--record-baseline` could still write a baseline
+from files that no longer matched the pin. That was the same class of hole as the earlier m5
+default: a check that reports the problem but does not stop the blessing. p6 is now a hard
+failure with no opt-out, and this is the run that proves it. One pinned mockup file was edited
+by a single appended comment, then restored from a copy:
+
+```
+1. Protected paths
+  FAIL  the pinned mockup files no longer match the phase-start fingerprint (639650acd9138e5d -> 650a8948e8371e74)
+        those files feed the production stylesheet, so this tree is not the one pinned at phase start
+        review the change, then re-pin by updating PINNED_UNTRACKED_FINGERPRINT in this file
+
+  REFUSED baseline .tmp-phase0\baseline-probe.txt: 1 check failed (p6)
+
+RESULT: FAIL - 1 of 12 checks failed: p6
+```
+
+Exit `1`, and `.tmp-phase0/baseline-probe.txt` was not created. `--allow-mockup-css` was passed
+in that run, so m5 could not mask the result: the point of the test is that no flag reaches p6.
+The edited file was then restored byte-identically (`cmp` reported no difference) and the next
+run reported the pin at `639650acd9138e5d` again with `RESULT: PASS`.
+
+The same proof is repeated without the filesystem in the helper tests: a changed or deleted
+pinned file produces a p6 failure, `failingChecks` keeps it, and `mayRecordBaseline` returns
+false, so the write is refused on the same list the exit code uses.
+
+On the committed tree the full run reports `p6 PASS, m5 FAIL`, exit `1`, which is the intended
+state until section 5, question 2 is decided.
+
 ---
 
 ## 4. Deviations from this plan, with reasons
@@ -512,11 +554,12 @@ recorded before those checks ran:
 6. **This report was restructured** from seven sections to the five section 22 headings, and the
    three review tracks were merged into it. No fact from the earlier version was dropped; the
    isolation rules moved into section 1 and the numbers into sections 2 and 3.
-7. **Three proof defaults were made strict after review.** The untracked exemption is now seven
+7. **Four proof defaults were made strict after review.** The untracked exemption is now seven
    exact paths plus a content fingerprint, instead of the folder `src/mockups/copilot/`, which
-   accepted any file added to it later. `--record-baseline` now runs every check and refuses to
-   write when one fails, instead of writing before the dist and mockup checks. Check m5 now
-   fails instead of warning. The consequence is that the full proof exits 1 on m5 today; that
+   accepted any file added to it later. A changed or missing pinned file now fails p6 instead of
+   warning, so it cannot be recorded into a baseline. `--record-baseline` now runs every check and
+   refuses to write when one fails, instead of writing before the dist and mockup checks. Check m5
+   now fails instead of warning. The consequence is that the full proof exits 1 on m5 today; that
    is the honest result for this tree, and `--allow-mockup-css` records the coupling explicitly
    when a phase has to proceed with it.
 

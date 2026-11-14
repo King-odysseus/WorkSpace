@@ -30,6 +30,7 @@ import {
   mayRecordBaseline,
   mockupCssOutcome,
   parseBaselineContext,
+  pinnedOutcome,
   serialiseBaseline,
 } from './verify-web-unchanged.mjs'
 
@@ -280,6 +281,65 @@ describe('mockupCssOutcome: m5 fails by default', () => {
   it('passes when the stylesheet is clean, with or without the flag', () => {
     assert.equal(mockupCssOutcome(0), 'pass')
     assert.equal(mockupCssOutcome(0, { allowMockupCss: true }), 'pass')
+  })
+})
+
+describe('pinnedOutcome: p6 fails by default', () => {
+  it('passes only when the files reproduce the pin', () => {
+    assert.equal(pinnedOutcome(true), 'pass')
+  })
+
+  it('fails on drift, and no option downgrades it to a warning', () => {
+    assert.equal(pinnedOutcome(false), 'fail')
+    assert.equal(pinnedOutcome(false, {}), 'fail')
+    assert.equal(pinnedOutcome(false, { strict: true }), 'fail')
+    assert.equal(pinnedOutcome(false, { allowMockupCss: true }), 'fail')
+  })
+
+  it('fails rather than passing when the comparison returned nothing', () => {
+    assert.equal(pinnedOutcome(undefined), 'fail')
+    assert.equal(pinnedOutcome(null), 'fail')
+  })
+})
+
+describe('fingerprint drift blocks a passing run and a baseline write', () => {
+  const recorded = [{ name: 'a.jsx', content: 'one' }, { name: 'b.jsx', content: 'two' }]
+  const pin = { fingerprint: fingerprintFiles(recorded), files: ['a.jsx', 'b.jsx'] }
+
+  /*
+   * The same composition main() uses: compare the pin, report p6, collect the
+   * failures, then gate the baseline write on that list. Built here so the
+   * decision can be proven without running git, npm or a build.
+   */
+  function runAgainst (files) {
+    const pinned = comparePinnedFingerprint(files, pin)
+    const checks = [
+      { id: 'p4', pass: true, warning: false },
+      { id: 'p6', pass: pinnedOutcome(pinned.matches) === 'pass', warning: false },
+    ]
+    const failures = failingChecks(checks)
+    return { failures, mayWrite: mayRecordBaseline(failures) }
+  }
+
+  it('fails the run and refuses the baseline after a pinned file is edited', () => {
+    const result = runAgainst([{ name: 'a.jsx', content: 'one edited' }, { name: 'b.jsx', content: 'two' }])
+
+    assert.deepEqual(result.failures.map(check => check.id), ['p6'])
+    assert.equal(result.mayWrite, false, 'a changed pin must not be blessed into a new baseline')
+  })
+
+  it('fails the run and refuses the baseline after a pinned file is deleted', () => {
+    const result = runAgainst([{ name: 'a.jsx', content: 'one' }])
+
+    assert.deepEqual(result.failures.map(check => check.id), ['p6'])
+    assert.equal(result.mayWrite, false, 'a missing pin file must not be blessed into a new baseline')
+  })
+
+  it('still passes and allows the write while the pin holds', () => {
+    const result = runAgainst(recorded)
+
+    assert.deepEqual(result.failures, [])
+    assert.equal(result.mayWrite, true, 'an unchanged pin must not block a legitimate baseline')
   })
 })
 

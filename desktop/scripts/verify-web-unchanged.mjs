@@ -30,6 +30,12 @@
  * - Check m5 fails, not warns, when a mockup-only class ships in the app CSS.
  *   `--allow-mockup-css` records the coupling as a warning instead, and the run
  *   then says plainly that it has not proved independence from the mockups.
+ * - Check p6 fails, not warns, when a pinned mockup file changed or went missing.
+ *   The pin is what turns "only the pinned files" into a statement about their
+ *   content, and those files feed the production stylesheet. It has no opt-out:
+ *   a warning would leave `--record-baseline` free to seal a tree nobody
+ *   re-reviewed, because the write is gated on the same failing list as the exit
+ *   code. Re-pinning is a deliberate edit to this file.
  * - `--record-baseline` runs every check first and writes nothing if one fails,
  *   so a baseline can never bless a tree that the proof just rejected.
  *
@@ -312,6 +318,19 @@ export function mockupCssOutcome (hitCount, options = {}) {
   return options.allowMockupCss === true ? 'warn' : 'fail'
 }
 
+/**
+ * How check p6 should be reported.
+ *
+ * Pass or fail, never warn, and no flag changes that. The pin is the claim that
+ * the mockup files are the ones recorded at phase start. They feed the
+ * production stylesheet, so a changed or missing file makes that claim false,
+ * and a warning would still leave `--record-baseline` free to seal the tree,
+ * because the write is gated on the same failing list the exit code uses.
+ */
+export function pinnedOutcome (matches) {
+  return matches === true ? 'pass' : 'fail'
+}
+
 /** The checks that decide the exit code. `--strict` promotes warnings too. */
 export function failingChecks (checks, options = {}) {
   return (Array.isArray(checks) ? checks : [])
@@ -481,7 +500,10 @@ Usage: node desktop/scripts/verify-web-unchanged.mjs [options]
   --strict                 Treat warnings as failures too, including an allowed m5.
   --help                   This text.
 
-Exit codes: 0 passed, 1 a check failed, 2 the proof could not run.`
+Exit codes: 0 passed, 1 a check failed, 2 the proof could not run.
+
+Check p6 has no opt-out. A pinned mockup file that changed or went missing fails the
+run and blocks --record-baseline until the pin in this script is updated on review.`
 
 function printCheck (checks, id, pass, detail) {
   checks.push({ id, pass, detail, warning: false })
@@ -613,14 +635,15 @@ function main () {
     .map(file => ({ name: file, content: readText(path.join(REPO_ROOT, file)) }))
     .filter(file => file.content !== null)
   const pinned = comparePinnedFingerprint(pinnedFilesPresent)
-  if (pinned.matches) {
+  if (pinnedOutcome(pinned.matches) === 'pass') {
     printCheck(checks, 'p6', true,
       `the ${pinnedFilesPresent.length} pinned mockup files match the fingerprint taken at phase start (${pinned.current})`)
   } else {
     const missingNote = pinned.missing.length === 0 ? '' : `; not on disk: ${pinned.missing.join(', ')}`
-    printWarning(checks, 'p6',
+    printCheck(checks, 'p6', false,
       `the pinned mockup files no longer match the phase-start fingerprint (${pinned.pinned} -> ${pinned.current})${missingNote}`)
-    console.log('        check m5 shows whether that changed the production stylesheet; re-pin after review')
+    console.log('        those files feed the production stylesheet, so this tree is not the one pinned at phase start')
+    console.log('        review the change, then re-pin by updating PINNED_UNTRACKED_FINGERPRINT in this file')
   }
 
   const variants = UNEXPECTED_CONFIG_VARIANTS.filter(file => existsSync(path.join(REPO_ROOT, file)))
