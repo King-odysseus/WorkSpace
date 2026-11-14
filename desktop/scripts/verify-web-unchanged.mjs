@@ -10,14 +10,28 @@
  *
  * 1. No protected path changed - committed, staged, unstaged or untracked.
  *    Untracked files need their own check because `git diff` cannot see them, and
- *    `src/mockups/copilot/` is exactly the kind of untracked work that a plain
- *    diff would report as clean.
+ *    the untracked mockups are exactly the kind of work a plain diff would report
+ *    as clean. The exemption is one exact path per file that was recorded at
+ *    phase start, never a folder, so a new file cannot slip in behind the old
+ *    ones and reach the production stylesheet unseen.
  * 2. `npm run build` succeeds and produces the baseline asset filenames.
  *    Vite content-hashes those names, so an identical set means identical output.
  * 3. No Copilot content in `dist/`, by file name or file text.
  * 4. Mockups stay outside the build inputs: the Vite config still takes the
- *    default single `index.html` entry, that page loads `/src/main.jsx`, and no
- *    mockup marker or mockup page reaches the output.
+ *    default single `index.html` entry, that page loads `/src/main.jsx`, no
+ *    mockup marker or mockup page reaches the output, and no mockup-only class
+ *    reaches the production stylesheet.
+ *
+ * Three defaults are deliberately strict, because each one was a way for a run
+ * to report success while the web output had moved:
+ *
+ * - A new untracked file under a protected path fails check p4 unless it is one
+ *   of the pinned paths above it in this file.
+ * - Check m5 fails, not warns, when a mockup-only class ships in the app CSS.
+ *   `--allow-mockup-css` records the coupling as a warning instead, and the run
+ *   then says plainly that it has not proved independence from the mockups.
+ * - `--record-baseline` runs every check first and writes nothing if one fails,
+ *   so a baseline can never bless a tree that the proof just rejected.
  *
  * Exit codes: 0 every check passed, 1 a check failed, 2 the proof could not run
  * (no baseline, build failed, git or npm unavailable).
@@ -55,7 +69,26 @@ export const UNEXPECTED_CONFIG_VARIANTS = ['vite.config.ts', 'vite.config.mjs', 
 // desktop/reports/phase-0.md section 1. They are mockups, they are not build
 // inputs, and check 4 proves the second point. Anything else untracked under a
 // protected path is a real change and fails check 1.
-export const KNOWN_UNTRACKED = ['src/mockups/copilot/']
+//
+// These are pinned paths, not a folder rule. `src/mockups/copilot/` as a folder
+// entry accepts any file dropped into it later, and Tailwind scans that folder
+// into the production stylesheet, so a new mockup file could change the shipped
+// CSS while the proof still reported the tree clean. A new file now fails check
+// p4 and has to be reviewed and pinned here on purpose.
+export const PINNED_UNTRACKED = [
+  'src/mockups/copilot/Chat.jsx',
+  'src/mockups/copilot/CopilotMockup.jsx',
+  'src/mockups/copilot/Dashboard.jsx',
+  'src/mockups/copilot/WeeklyPlan.jsx',
+  'src/mockups/copilot/WorkspaceMode.jsx',
+  'src/mockups/copilot/main.jsx',
+  'src/mockups/copilot/parts.jsx',
+]
+
+// Content fingerprint of exactly those files, taken with fingerprintFiles() when
+// they were recorded. Check p6 compares it, so a later run can say whether the
+// pinned files still describe the tree instead of assuming they do.
+export const PINNED_UNTRACKED_FINGERPRINT = '639650acd9138e5d'
 
 // A phrase that exists only in src/mockups/copilot/CopilotMockup.jsx. It is the
 // marker for "the mockup got bundled"; the file-name scan in check 3 would not
@@ -266,6 +299,35 @@ export function findMockupClassesInCss (cssText, appTokens, mockupTokens) {
   return hits.sort()
 }
 
+/**
+ * How check m5 should be reported.
+ *
+ * Fails by default, because a run whose output carries mockup-only selectors has
+ * not shown the app's CSS is independent of the mockups. `--allow-mockup-css`
+ * is the only way to downgrade it, and the caller then says plainly what the run
+ * no longer proves.
+ */
+export function mockupCssOutcome (hitCount, options = {}) {
+  if (!(hitCount > 0)) return 'pass'
+  return options.allowMockupCss === true ? 'warn' : 'fail'
+}
+
+/** The checks that decide the exit code. `--strict` promotes warnings too. */
+export function failingChecks (checks, options = {}) {
+  return (Array.isArray(checks) ? checks : [])
+    .filter(check => !check.pass && (check.warning !== true || options.strict === true))
+}
+
+/**
+ * Whether `--record-baseline` may write.
+ *
+ * The caller passes the same failing list the exit code uses, so a baseline can
+ * never be blessed from a tree the proof just rejected.
+ */
+export function mayRecordBaseline (failures) {
+  return (Array.isArray(failures) ? failures : []).length === 0
+}
+
 /** A stable fingerprint of the mockup files, so a baseline drift can be attributed. */
 export function fingerprintFiles (files) {
   const digest = createHash('sha256')
@@ -275,15 +337,42 @@ export function fingerprintFiles (files) {
   return digest.digest('hex').slice(0, 16)
 }
 
-/** Whether an untracked path sits under a recorded exception. */
-export function isKnownUntracked (file, known = KNOWN_UNTRACKED) {
-  const normalised = String(file).replace(/\\/g, '/').replace(/\/$/, '')
-  // The recorded entries end in a slash so a sibling folder such as
-  // `copilot-extra/` cannot match by sharing a prefix.
-  return (known || []).some(entry => {
-    const allowed = String(entry).replace(/\\/g, '/').replace(/\/$/, '')
-    return allowed !== '' && (normalised === allowed || normalised.startsWith(`${allowed}/`))
-  })
+/** One path in the form used for comparison: forward slashes, no trailing slash. */
+export function normalisePath (file) {
+  return String(file == null ? '' : file).replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+/**
+ * Whether an untracked path is one of the exact files pinned at phase start.
+ *
+ * Exact comparison, never a folder prefix: the prefix form accepted any file
+ * added to the folder later, and those files reach the production stylesheet
+ * through Tailwind's scan.
+ */
+export function isKnownUntracked (file, known = PINNED_UNTRACKED) {
+  const normalised = normalisePath(file)
+  return (known || []).some(entry => normalisePath(entry) === normalised)
+}
+
+/**
+ * Compare the pinned mockup files with the fingerprint taken at phase start.
+ *
+ * `currentFiles` is `[{ name, content }]` read from disk under the pinned names.
+ * A pinned file that has gone missing is listed, because a deletion changes the
+ * stylesheet's inputs as much as an edit does.
+ */
+export function comparePinnedFingerprint (currentFiles, pinned = {}) {
+  const files = Array.isArray(currentFiles) ? currentFiles : []
+  const expectedNames = [...(pinned.files || PINNED_UNTRACKED)]
+  const expected = String(pinned.fingerprint || PINNED_UNTRACKED_FINGERPRINT)
+  const present = files.map(file => normalisePath(file && file.name))
+  const current = fingerprintFiles(files)
+  return {
+    pinned: expected,
+    current,
+    missing: expectedNames.filter(name => !present.includes(normalisePath(name))),
+    matches: current === expected,
+  }
 }
 
 function readText (file) {
@@ -351,6 +440,7 @@ function parseArgs (argv) {
     baseline: DEFAULT_BASELINE,
     build: true,
     recordBaseline: false,
+    allowMockupCss: false,
     strict: false,
     help: false,
   }
@@ -367,6 +457,7 @@ function parseArgs (argv) {
     else if (flag === '--baseline') options.baseline = path.resolve(REPO_ROOT, value())
     else if (flag === '--skip-build') options.build = false
     else if (flag === '--record-baseline') options.recordBaseline = true
+    else if (flag === '--allow-mockup-css') options.allowMockupCss = true
     else if (flag === '--strict') options.strict = true
     else if (flag === '--help' || flag === '-h') options.help = true
     else throw new Error(`unknown option ${arg}`)
@@ -382,8 +473,12 @@ Usage: node desktop/scripts/verify-web-unchanged.mjs [options]
   --baseline <file>        Asset-name baseline. Default ${path.relative(REPO_ROOT, DEFAULT_BASELINE)}.
   --skip-build             Compare the existing dist/ instead of running npm run build.
   --record-baseline        Write the asset list as the new baseline, with the commit and
-                           the mockup fingerprint in a comment header.
-  --strict                 Treat warnings as failures.
+                           the mockup fingerprint in a comment header. Every check runs
+                           first and nothing is written if one of them fails.
+  --allow-mockup-css       Record the mockup-to-stylesheet coupling as a warning instead
+                           of a failure. Required to record a baseline while that
+                           coupling is unresolved.
+  --strict                 Treat warnings as failures too, including an allowed m5.
   --help                   This text.
 
 Exit codes: 0 passed, 1 a check failed, 2 the proof could not run.`
@@ -505,10 +600,27 @@ function main () {
   const knownUntracked = untracked.filter(file => isKnownUntracked(file))
   printCheck(checks, 'p4', unexpectedUntracked.length === 0,
     unexpectedUntracked.length === 0
-      ? `untracked files under those paths: ${knownUntracked.length === 0 ? 'none' : `only the recorded mockups (${knownUntracked.length})`}`
+      ? `untracked files under those paths: ${knownUntracked.length === 0 ? 'none' : `only the ${knownUntracked.length} pinned files`}`
       : `unrecorded untracked files: ${unexpectedUntracked.join(', ')}`)
   for (const file of knownUntracked) {
-    console.log(`        recorded at phase start and left in place: ${file}`)
+    console.log(`        pinned at phase start and left in place: ${file}`)
+  }
+
+  // p6: the pinned paths are a list of names, so this adds the content. A pinned
+  // file that changed still passes p4 but no longer describes the tree, and a
+  // reviewer reading "only the pinned files" deserves to know that.
+  const pinnedFilesPresent = PINNED_UNTRACKED
+    .map(file => ({ name: file, content: readText(path.join(REPO_ROOT, file)) }))
+    .filter(file => file.content !== null)
+  const pinned = comparePinnedFingerprint(pinnedFilesPresent)
+  if (pinned.matches) {
+    printCheck(checks, 'p6', true,
+      `the ${pinnedFilesPresent.length} pinned mockup files match the fingerprint taken at phase start (${pinned.current})`)
+  } else {
+    const missingNote = pinned.missing.length === 0 ? '' : `; not on disk: ${pinned.missing.join(', ')}`
+    printWarning(checks, 'p6',
+      `the pinned mockup files no longer match the phase-start fingerprint (${pinned.pinned} -> ${pinned.current})${missingNote}`)
+    console.log('        check m5 shows whether that changed the production stylesheet; re-pin after review')
   }
 
   const variants = UNEXPECTED_CONFIG_VARIANTS.filter(file => existsSync(path.join(REPO_ROOT, file)))
@@ -553,41 +665,38 @@ function main () {
     return 2
   }
 
+  // The baseline is deliberately not written here. A baseline recorded before
+  // the dist and mockup checks would bless a tree those checks are about to
+  // reject as the reference every later phase is compared against. The write
+  // happens at the very end, after check m5.
   if (options.recordBaseline) {
-    mkdirSync(path.dirname(options.baseline), { recursive: true })
-    writeFileSync(options.baseline, serialiseBaseline(actualAssets, {
-      recorded: new Date().toISOString(),
-      commit: headCommit() || 'unknown',
-      mockups: mockupFingerprint(),
-    }))
-    console.log(`  WROTE baseline ${path.relative(REPO_ROOT, options.baseline)} (${actualAssets.length} assets)`)
-    return checks.every(check => check.pass) ? 0 : 1
-  }
-
-  const baselineText = readText(options.baseline)
-  if (baselineText === null) {
-    console.error(`  ERROR  no baseline at ${path.relative(REPO_ROOT, options.baseline)}`)
-    console.error('        record one from a known-good build: --record-baseline')
-    return 2
-  }
-  const comparison = compareAssetLists(baselineText, actualAssets)
-  printCheck(checks, 'b2', comparison.matches,
-    comparison.matches
-      ? `dist/assets holds the same ${comparison.expected.length} hashed names as the baseline`
-      : `asset list changed: ${comparison.missing.length} missing, ${comparison.added.length} added`)
-  for (const name of comparison.missing) console.log(`        missing from the build: ${name}`)
-  for (const name of comparison.added) console.log(`        added by the build: ${name}`)
-  if (!comparison.matches) {
-    // Tailwind scans the mockups, so editing a mockup changes the production
-    // stylesheet and every JS chunk that references it. Without this note a
-    // reviewer would read the drift as a web-app change.
-    const recorded = parseBaselineContext(baselineText)
-    const current = { mockups: mockupFingerprint(), commit: headCommit() }
-    if (recorded.mockups && recorded.mockups !== 'unknown' && recorded.mockups !== current.mockups) {
-      console.log(`        cause: the mockup files changed since the baseline was recorded (${recorded.mockups} -> ${current.mockups})`)
-      console.log('        they feed the production stylesheet, see check m5; re-record with --record-baseline')
-    } else if (recorded.commit && recorded.commit !== 'unknown' && current.commit && recorded.commit !== current.commit) {
-      console.log(`        cause: the working tree is on ${current.commit.slice(0, 7)}, the baseline was recorded on ${recorded.commit.slice(0, 7)}`)
+    console.log(`  NOTE  recording ${path.relative(REPO_ROOT, options.baseline)} after checks 3 and 4 run; there is nothing to compare against yet`)
+  } else {
+    const baselineText = readText(options.baseline)
+    if (baselineText === null) {
+      console.error(`  ERROR  no baseline at ${path.relative(REPO_ROOT, options.baseline)}`)
+      console.error('        record one from a known-good build: --record-baseline')
+      return 2
+    }
+    const comparison = compareAssetLists(baselineText, actualAssets)
+    printCheck(checks, 'b2', comparison.matches,
+      comparison.matches
+        ? `dist/assets holds the same ${comparison.expected.length} hashed names as the baseline`
+        : `asset list changed: ${comparison.missing.length} missing, ${comparison.added.length} added`)
+    for (const name of comparison.missing) console.log(`        missing from the build: ${name}`)
+    for (const name of comparison.added) console.log(`        added by the build: ${name}`)
+    if (!comparison.matches) {
+      // Tailwind scans the mockups, so editing a mockup changes the production
+      // stylesheet and every JS chunk that references it. Without this note a
+      // reviewer would read the drift as a web-app change.
+      const recorded = parseBaselineContext(baselineText)
+      const current = { mockups: mockupFingerprint(), commit: headCommit() }
+      if (recorded.mockups && recorded.mockups !== 'unknown' && recorded.mockups !== current.mockups) {
+        console.log(`        cause: the mockup files changed since the baseline was recorded (${recorded.mockups} -> ${current.mockups})`)
+        console.log('        they feed the production stylesheet, see check m5; re-record with --record-baseline')
+      } else if (recorded.commit && recorded.commit !== 'unknown' && current.commit && recorded.commit !== current.commit) {
+        console.log(`        cause: the working tree is on ${current.commit.slice(0, 7)}, the baseline was recorded on ${recorded.commit.slice(0, 7)}`)
+      }
     }
   }
   console.log('')
@@ -655,25 +764,50 @@ function main () {
     for (const token of extractSourceTokens(file.content)) appTokens.add(token)
   }
   const mockupCssHits = findMockupClassesInCss(cssText, appTokens, mockupTokens())
-  if (mockupCssHits.length === 0) {
+  const mockupCssDetail = `${mockupCssHits.length} mockup-only classes reach the production stylesheet: ${mockupCssHits.slice(0, 8).join(', ')}`
+  const m5 = mockupCssOutcome(mockupCssHits.length, options)
+  if (m5 === 'pass') {
     printCheck(checks, 'm5', true, 'no mockup-only class reaches the production stylesheet')
-  } else if (options.strict) {
-    printCheck(checks, 'm5', false, `${mockupCssHits.length} mockup-only classes reach the production stylesheet: ${mockupCssHits.slice(0, 8).join(', ')}`)
+  } else if (m5 === 'warn') {
+    printWarning(checks, 'm5', `${mockupCssDetail} (allowed by --allow-mockup-css)`)
+    console.log('        this run does not prove the app stylesheet is independent of the mockups')
   } else {
-    printWarning(checks, 'm5', `${mockupCssHits.length} mockup-only classes reach the production stylesheet: ${mockupCssHits.slice(0, 8).join(', ')}`)
+    printCheck(checks, 'm5', false, mockupCssDetail)
     console.log('        the mockups are not build inputs, but Tailwind scans them and their selectors ship')
+    console.log('        exclude the mockup folder from the Tailwind sources, or pass --allow-mockup-css to record the coupling')
   }
   console.log('')
 
   const warnings = checks.filter(check => check.warning)
-  const failed = checks.filter(check => !check.pass && !check.warning)
-  if (failed.length === 0) {
+  const failures = failingChecks(checks, options)
+
+  let baselineWritten = false
+  if (options.recordBaseline) {
+    if (!mayRecordBaseline(failures)) {
+      console.log(`  REFUSED baseline ${path.relative(REPO_ROOT, options.baseline)}: ` +
+        `${failures.length} check${failures.length === 1 ? '' : 's'} failed (${failures.map(check => check.id).join(', ')})`)
+      console.log('        fix them, or pass --allow-mockup-css to record the m5 coupling deliberately')
+    } else {
+      mkdirSync(path.dirname(options.baseline), { recursive: true })
+      writeFileSync(options.baseline, serialiseBaseline(actualAssets, {
+        recorded: new Date().toISOString(),
+        commit: headCommit() || 'unknown',
+        mockups: mockupFingerprint(),
+      }))
+      baselineWritten = true
+      console.log(`  WROTE baseline ${path.relative(REPO_ROOT, options.baseline)} (${actualAssets.length} assets)`)
+    }
+    console.log('')
+  }
+
+  if (failures.length === 0) {
     console.log(`RESULT: PASS - ${checks.length} checks, ${buildSummary}` +
+      (baselineWritten ? ', baseline recorded' : '') +
       (warnings.length === 0 ? '' : `; ${warnings.length} warning${warnings.length === 1 ? '' : 's'} (${warnings.map(check => check.id).join(', ')})`))
   } else {
-    console.log(`RESULT: FAIL - ${failed.length} of ${checks.length} checks failed: ${failed.map(check => check.id).join(', ')}`)
+    console.log(`RESULT: FAIL - ${failures.length} of ${checks.length} checks failed: ${failures.map(check => check.id).join(', ')}`)
   }
-  return failed.length === 0 ? 0 : 1
+  return failures.length === 0 ? 0 : 1
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)

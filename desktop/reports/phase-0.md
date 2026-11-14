@@ -78,11 +78,24 @@ what may be written there.
 | File | What it does |
 | --- | --- |
 | `desktop/scripts/verify-web-unchanged.mjs` | The section 5 proof as a script: protected-path diff, build, asset comparison, dist scan, mockup-input check |
-| `desktop/scripts/verify-web-unchanged.test.mjs` | 43 tests for the decisions that proof rests on |
+| `desktop/scripts/verify-web-unchanged.test.mjs` | 58 tests for the decisions that proof rests on |
 | `desktop/reports/phase-0.md` | This report, restructured to the section 22 headings |
 
 The proof is a script rather than a set of remembered commands because a proof that is
 re-typed from memory each phase is a proof that eventually gets re-typed wrong.
+
+Three of its defaults are strict on purpose, because review found each one was a way for a run
+to report success while the web output had moved:
+
+- The untracked mockups are exempt from check 1 by seven exact paths, never by a folder rule.
+  A folder entry accepts any file added to it later, and Tailwind scans that folder into the
+  production stylesheet, so an unrecorded file could change the shipped CSS while check 1
+  called the tree clean. A new file now fails check p4, and a content fingerprint proves the
+  pinned files are still the ones recorded at phase start.
+- Check m5 fails, rather than warns, when a mockup-only class ships in the app CSS. This is
+  why the full proof currently exits 1 (section 3, output 6).
+- `--record-baseline` runs every check first and writes nothing if one fails, so a baseline
+  can never bless a tree the proof just rejected.
 
 ### The isolated test workspace these runs use
 
@@ -124,6 +137,7 @@ staged):
 | --- | --- |
 | `.tmp-phase0/live-verify/<stamp>/` | One live run: `evidence.json`, `summary.md`, screenshot, server and Electron logs |
 | `.tmp-phase0/verify-web-unchanged.log` | The section 3 proof output |
+| `.tmp-phase0/verify-web-unchanged-round2.log` | The proof run after the strict defaults were added, including the m5 failure and exit 1 |
 | `.tmp-phase0/final-vitest.log`, `.tmp-phase0/final-django.log` | This round's suite output with exit status |
 | `.tmp-phase0/dist-assets-baseline.txt` | The current baseline, with its comment header |
 | `.tmp-phase0/dist-assets-baseline-original-2026-11-14T1525.txt` | The original baseline, unchanged |
@@ -145,8 +159,10 @@ and its tests. No log, screenshot, database file or build artifact is staged.
 | Backend tests | `python manage.py test` | 838 tests, OK, exit 0, 1917.29s |
 | Desktop spike, mocked | `cd desktop && node --test features/copilot` | 86 tests, 86 passed, exit 0 |
 | Live-run helpers | `node --test desktop/tests/spike/live-verify/` | 65 tests, 65 passed, exit 0 |
-| Unchanged-web proof, helpers | `node --test desktop/scripts/` | 43 tests, 43 passed, exit 0 |
-| Unchanged-web proof, full | `node desktop/scripts/verify-web-unchanged.mjs` | 13 checks, 12 pass, 1 warning, exit 0 |
+| Unchanged-web proof, helpers | `node --test desktop/scripts/` | 58 tests, 58 passed, exit 0 |
+| Unchanged-web proof, full | `node desktop/scripts/verify-web-unchanged.mjs` | 14 checks, 13 pass, 1 fail (m5), exit 1 |
+| Unchanged-web proof, m5 allowed | `node desktop/scripts/verify-web-unchanged.mjs --skip-build --allow-mockup-css` | 13 checks, 12 pass, 1 warning, exit 0 |
+| Baseline write refused on a failing tree | `node desktop/scripts/verify-web-unchanged.mjs --skip-build --record-baseline --baseline .tmp-phase0/baseline-probe.txt` | refused, no file written, exit 1 |
 | Live verification, end to end | `node desktop/tests/spike/live-verify/run.mjs --serve=preview --sign-in=manual` | 6 of 6 checks pass, exit 0 |
 
 No model inference is involved anywhere in Phase 0: this is a Django server, a Vite build and
@@ -219,7 +235,9 @@ reads `?permanent=true` and nothing else.
    `index.html` as its only input. The consequences are that the app's stylesheet changes
    whenever the mockups change, and that the asset baseline in section 3 slid three times
    during the phase for exactly this reason. It is reported, not fixed, because the fix is the
-   first change to `src/` and needs the owner's decision.
+   first change to `src/` and needs the owner's decision. Since the review, check m5 fails
+   rather than warns, so the default proof run exits 1 until the coupling is fixed or a run
+   explicitly records it with `--allow-mockup-css`.
 
 ### 2.4 The decision tree in section 4.2
 
@@ -269,9 +287,14 @@ node desktop/scripts/verify-web-unchanged.mjs
 
 Exit codes: `0` every check passed, `1` a check failed, `2` the proof could not run (no
 baseline, build failed, git or npm unavailable). `--phase-start <commit>` points it at a later
-phase, `--skip-build` compares the existing `dist/`, `--record-baseline` writes a new baseline
-with the commit and the mockup fingerprint in its header, and `--strict` turns the warning in
-output 6 into a failure.
+phase and `--skip-build` compares the existing `dist/`. `--record-baseline` writes a new
+baseline with the commit and the mockup fingerprint in its header, but only after every check
+has run and none has failed. `--allow-mockup-css` records the coupling in output 6 as a warning
+instead of a failure. `--strict` treats warnings as failures too.
+
+The default run currently exits `1`: every check passes except m5, which fails on the mockup
+selectors described in output 6. That is the intended result for this tree until the owner
+rules on section 5, question 2.
 
 ### Output 1: the protected-path diff is empty
 
@@ -284,22 +307,26 @@ cannot see the last two.
   PASS  committed diff 1e67a94..HEAD is empty for src, tasks, backend, package.json, package-lock.json, vite.config.js
   PASS  staged changes are empty for the same paths
   PASS  unstaged changes are empty for the same paths
-  PASS  untracked files under those paths: only the recorded mockups (7)
-        recorded at phase start and left in place: src/mockups/copilot/Chat.jsx
-        recorded at phase start and left in place: src/mockups/copilot/CopilotMockup.jsx
-        recorded at phase start and left in place: src/mockups/copilot/Dashboard.jsx
-        recorded at phase start and left in place: src/mockups/copilot/WeeklyPlan.jsx
-        recorded at phase start and left in place: src/mockups/copilot/WorkspaceMode.jsx
-        recorded at phase start and left in place: src/mockups/copilot/main.jsx
-        recorded at phase start and left in place: src/mockups/copilot/parts.jsx
+  PASS  untracked files under those paths: only the 7 pinned files
+        pinned at phase start and left in place: src/mockups/copilot/Chat.jsx
+        pinned at phase start and left in place: src/mockups/copilot/CopilotMockup.jsx
+        pinned at phase start and left in place: src/mockups/copilot/Dashboard.jsx
+        pinned at phase start and left in place: src/mockups/copilot/WeeklyPlan.jsx
+        pinned at phase start and left in place: src/mockups/copilot/WorkspaceMode.jsx
+        pinned at phase start and left in place: src/mockups/copilot/main.jsx
+        pinned at phase start and left in place: src/mockups/copilot/parts.jsx
+  PASS  the 7 pinned mockup files match the fingerprint taken at phase start (639650acd9138e5d)
   PASS  no extra vite.config.* variant redirects the build
 ```
 
 Two honest notes on that output:
 
 - The seven untracked mockup files were already untracked at phase start, are recorded in this
-  report, and were left exactly as they were. They are allowed by name, not by a broad rule;
-  any other untracked file under a protected path fails the check.
+  report, and were left exactly as they were. They are pinned by exact path in the script, not
+  by a folder rule: a file added to that folder later is an unrecorded change and fails p4,
+  because Tailwind scans the folder into the production stylesheet. The fingerprint line is
+  what stops the pin from being a claim about files nobody re-read; 58 helper tests cover it,
+  including one that rejects a new file inside the mockup folder.
 - The only modified tracked file in the repository is `DesignSystem.md`, which a concurrent
   session rewrote. It is outside the protected paths, is not part of this phase, and was left
   unstaged.
@@ -429,8 +456,9 @@ development database itself is not migrated or written.
   PASS  index.html has exactly one module script, /src/main.jsx
   PASS  no file in dist/ carries the mockup-only marker text
   PASS  no mockup page is emitted (copilot-mockup.html, mockup.html)
-  WARN  121 mockup-only classes reach the production stylesheet: -mx-2, -right-1, -right-12, ...
+  FAIL  121 mockup-only classes reach the production stylesheet: -mx-2, -right-1, -right-12, ...
         the mockups are not build inputs, but Tailwind scans them and their selectors ship
+        exclude the mockup folder from the Tailwind sources, or pass --allow-mockup-css to record the coupling
 ```
 
 Read this as two statements. The plan's literal requirement holds: the build has one input, no
@@ -439,11 +467,23 @@ the plan assumes does not hold: the mockups do influence the app's stylesheet, t
 Tailwind's project scan (security finding 5 in 2.3). All 121 flagged classes were checked
 against the app's source: each one appears verbatim in the mockup files and in no app file, and
 the app side of the comparison is deliberately generous (any token anywhere in `src` outside
-the mockups counts as app-owned), so the warning understates rather than overstates.
+the mockups counts as app-owned), so the count understates rather than overstates.
 
-`RESULT: PASS - 13 checks, npm run build passed in 32.1s, 3172 modules transformed; 1 warning (m5)`.
-Twelve checks pass and one warns; the warning is the coupling described above, not a build
-problem.
+`RESULT: FAIL - 1 of 14 checks failed: m5`.
+
+That failure is deliberate. A run whose output carries mockup-only selectors has not shown that
+the app's CSS is independent of the mockups, so the proof must not report success while the
+coupling stands. The other thirteen checks pass. With `--allow-mockup-css` the same run reports
+`RESULT: PASS - 13 checks ...; 1 warning (m5)` and prints, in the output itself, that it has
+not proved independence.
+
+The baseline write was tested against this same state, because the risk was a baseline being
+recorded before those checks ran:
+
+- `--record-baseline` alone printed `REFUSED baseline .tmp-phase0/baseline-probe.txt: 1 check
+  failed (m5)`, wrote no file, and exited 1.
+- `--record-baseline --allow-mockup-css` ran every check first, then wrote the baseline (27
+  assets) and exited 0.
 
 ---
 
@@ -472,6 +512,13 @@ problem.
 6. **This report was restructured** from seven sections to the five section 22 headings, and the
    three review tracks were merged into it. No fact from the earlier version was dropped; the
    isolation rules moved into section 1 and the numbers into sections 2 and 3.
+7. **Three proof defaults were made strict after review.** The untracked exemption is now seven
+   exact paths plus a content fingerprint, instead of the folder `src/mockups/copilot/`, which
+   accepted any file added to it later. `--record-baseline` now runs every check and refuses to
+   write when one fails, instead of writing before the dist and mockup checks. Check m5 now
+   fails instead of warning. The consequence is that the full proof exits 1 on m5 today; that
+   is the honest result for this tree, and `--allow-mockup-css` records the coupling explicitly
+   when a phase has to proceed with it.
 
 Nothing in this round changed `src/`, `tasks/`, `backend/`, `package.json`,
 `package-lock.json` or `vite.config.js`. The one product-adjacent item that would need to
@@ -482,7 +529,10 @@ change to fix finding 5 is named in section 5.
 ## 5. Open questions and decisions needed from the owner
 
 **The gate.** Phase 1 is blocked until the owner accepts this report. Everything the plan asks
-Phase 0 to prove is proven, with the two open items below carried as known limitations.
+Phase 0 to prove is proven, with the open items below carried as known limitations. One of them
+now fails the proof on purpose: check m5 exits `1` while the mockups feed the production
+stylesheet, so a strict proof run stays red until decision 2 is made or a phase passes
+`--allow-mockup-css` and records that it has not proved independence.
 
 1. **Do you accept Phase 0 and unblock Phase 1?**
 2. **The first change to `src/` needs your approval.** To stop the mockups feeding the production
@@ -494,6 +544,7 @@ Phase 0 to prove is proven, with the two open items below carried as known limit
 
    Recommendation: the first. It is one line in one file, it removes 121 selectors from the
    shipped CSS, and it makes the section 3 proof hold again while mockups are being edited.
+   Until it is applied, the default proof run exits 1 on m5, as section 3, output 6 records.
 3. **Should Phase 1 apply the dev-server CSP fix** in `desktop/electron/windows.js` (deviation 1)?
    It is inside `desktop/`, so it needs no product approval, but it changes what the window
    permits and should be a deliberate decision rather than a side effect.
@@ -511,7 +562,7 @@ the whole report:
 | Criterion | Where it is met |
 | --- | --- |
 | The protected-path diff is empty for `src`, `tasks`, `backend`, root `package.json`, `package-lock.json` and `vite.config.js`, with uncommitted changes inspected too | Section 3, output 1: committed, staged, unstaged and untracked, plus the `vite.config.*` variant check |
-| `npm run build` run, asset filenames compared with the baseline, no Copilot content in `dist`, mockups outside the production build inputs | Section 3, outputs 2, 3 and 6, including the drift diagnosis and the re-recorded baseline |
+| `npm run build` run, asset filenames compared with the baseline, no Copilot content in `dist`, mockups outside the production build inputs | Section 3, outputs 2, 3 and 6: the build passes, the 27 names match the baseline, `dist/` carries no Copilot content, and the mockup-input checks (m1 to m4) pass. m5 fails by design and is the open decision in section 5 |
 | `npx vitest run --maxWorkers=2` and `python manage.py test` run, actual results recorded, baseline failures distinguished | Section 2.1 and section 3, outputs 4 and 5 |
 | The five section 22 headings, carrying sanitized headers, read/write/cleanup results, security findings, the decision-tree outcome and untested items | This report; the named content is in 2.2 to 2.5 |
 | Only relevant source and report files committed and pushed, with Phase 1 explicitly blocked pending owner acceptance | The first paragraph of this section, and the commits for this round |

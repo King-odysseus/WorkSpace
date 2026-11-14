@@ -12,18 +12,23 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
-  KNOWN_UNTRACKED,
   MOCKUP_MARKER,
+  PINNED_UNTRACKED,
+  PINNED_UNTRACKED_FINGERPRINT,
   baselineLines,
   compareAssetLists,
+  comparePinnedFingerprint,
   extractClassTokens,
   extractSourceTokens,
+  failingChecks,
   findCopilotMatches,
   findMockupClassesInCss,
   fingerprintFiles,
   inspectIndexHtmlInputs,
   inspectViteConfigInput,
   isKnownUntracked,
+  mayRecordBaseline,
+  mockupCssOutcome,
   parseBaselineContext,
   serialiseBaseline,
 } from './verify-web-unchanged.mjs'
@@ -176,26 +181,132 @@ describe('inspectIndexHtmlInputs', () => {
   })
 })
 
-describe('isKnownUntracked', () => {
-  it('accepts the mockup folder recorded at phase start and its files', () => {
-    assert.equal(isKnownUntracked('src/mockups/copilot'), true)
-    assert.equal(isKnownUntracked('src/mockups/copilot/CopilotMockup.jsx'), true)
-    assert.equal(isKnownUntracked('src/mockups/copilot/parts.jsx'), true)
+describe('isKnownUntracked: exact pinned paths', () => {
+  it('accepts each file pinned at phase start', () => {
+    for (const file of PINNED_UNTRACKED) {
+      assert.equal(isKnownUntracked(file), true, `${file} is pinned and must stay accepted`)
+    }
   })
 
   it('accepts Windows separators, which is what git prints here', () => {
     assert.equal(isKnownUntracked('src\\mockups\\copilot\\main.jsx'), true)
   })
 
+  it('rejects a new file dropped into the mockup folder', () => {
+    // The regression this pins down: a folder entry would accept this file, and
+    // Tailwind would scan it into the production stylesheet.
+    assert.equal(isKnownUntracked('src/mockups/copilot/BrandNew.jsx'), false)
+  })
+
+  it('rejects the folder itself, which is not a pinned file', () => {
+    assert.equal(isKnownUntracked('src/mockups/copilot'), false)
+    assert.equal(isKnownUntracked('src/mockups/copilot/'), false)
+  })
+
   it('rejects a new untracked file anywhere else under a protected path', () => {
     assert.equal(isKnownUntracked('src/components/CopilotPanel.jsx'), false)
     assert.equal(isKnownUntracked('tasks/copilot_views.py'), false)
-    // A sibling folder that shares a prefix is not the recorded folder.
     assert.equal(isKnownUntracked('src/mockups/copilot-extra/main.jsx'), false)
   })
+})
 
-  it('records only the mockup folder, not a broad rule', () => {
-    assert.deepEqual(KNOWN_UNTRACKED, ['src/mockups/copilot/'])
+describe('PINNED_UNTRACKED', () => {
+  it('pins the seven files recorded at phase start, by exact path', () => {
+    assert.equal(PINNED_UNTRACKED.length, 7)
+    for (const file of PINNED_UNTRACKED) {
+      assert.equal(file.startsWith('src/mockups/copilot/'), true)
+      assert.equal(file.endsWith('/'), false, 'a trailing slash would make it a folder rule')
+      assert.match(file, /\.jsx$/)
+    }
+    assert.deepEqual([...PINNED_UNTRACKED].sort(), PINNED_UNTRACKED, 'the pin is kept sorted')
+    assert.equal(new Set(PINNED_UNTRACKED).size, PINNED_UNTRACKED.length, 'no duplicate entries')
+  })
+
+  it('records a 16-character fingerprint of those files', () => {
+    assert.match(PINNED_UNTRACKED_FINGERPRINT, /^[0-9a-f]{16}$/)
+  })
+})
+
+describe('comparePinnedFingerprint', () => {
+  const files = [{ name: 'a.jsx', content: 'one' }, { name: 'b.jsx', content: 'two' }]
+  const pinned = { fingerprint: fingerprintFiles(files), files: ['a.jsx', 'b.jsx'] }
+
+  it('matches when the files reproduce the recorded fingerprint', () => {
+    const result = comparePinnedFingerprint(files, pinned)
+
+    assert.equal(result.matches, true)
+    assert.deepEqual(result.missing, [])
+  })
+
+  it('reports a pinned file whose content changed', () => {
+    const changed = [{ name: 'a.jsx', content: 'one ' }, { name: 'b.jsx', content: 'two' }]
+
+    assert.equal(comparePinnedFingerprint(changed, pinned).matches, false)
+  })
+
+  it('names a pinned file that is not on disk', () => {
+    const result = comparePinnedFingerprint([{ name: 'a.jsx', content: 'one' }], pinned)
+
+    assert.equal(result.matches, false)
+    assert.deepEqual(result.missing, ['b.jsx'])
+  })
+
+  it('compares against the recorded pin by default', () => {
+    const result = comparePinnedFingerprint(files)
+
+    assert.equal(result.pinned, PINNED_UNTRACKED_FINGERPRINT)
+    assert.equal(result.matches, false, 'made-up files must not match the recorded pin')
+  })
+
+  it('treats missing input as no files rather than crashing', () => {
+    const result = comparePinnedFingerprint(null, { fingerprint: 'x', files: [] })
+
+    assert.equal(result.matches, false)
+    assert.deepEqual(result.missing, [])
+  })
+})
+
+describe('mockupCssOutcome: m5 fails by default', () => {
+  it('fails when a mockup-only class reaches the stylesheet', () => {
+    assert.equal(mockupCssOutcome(121), 'fail')
+    assert.equal(mockupCssOutcome(121, {}), 'fail')
+    assert.equal(mockupCssOutcome(121, { strict: true }), 'fail')
+  })
+
+  it('only warns when the coupling is allowed on the command line', () => {
+    assert.equal(mockupCssOutcome(121, { allowMockupCss: true }), 'warn')
+  })
+
+  it('passes when the stylesheet is clean, with or without the flag', () => {
+    assert.equal(mockupCssOutcome(0), 'pass')
+    assert.equal(mockupCssOutcome(0, { allowMockupCss: true }), 'pass')
+  })
+})
+
+describe('failingChecks', () => {
+  const checks = [
+    { id: 'p1', pass: true, warning: false },
+    { id: 'b2', pass: false, warning: false },
+    { id: 'm5', pass: false, warning: true },
+  ]
+
+  it('counts a hard failure and ignores a warning', () => {
+    assert.deepEqual(failingChecks(checks).map(check => check.id), ['b2'])
+  })
+
+  it('counts warnings too under --strict', () => {
+    assert.deepEqual(failingChecks(checks, { strict: true }).map(check => check.id), ['b2', 'm5'])
+  })
+})
+
+describe('mayRecordBaseline', () => {
+  it('allows a write only when nothing failed', () => {
+    assert.equal(mayRecordBaseline([]), true)
+    assert.equal(mayRecordBaseline(undefined), true)
+  })
+
+  it('refuses a write after a failure, so a rejected tree is never blessed', () => {
+    assert.equal(mayRecordBaseline([{ id: 'm5' }]), false)
   })
 })
 
