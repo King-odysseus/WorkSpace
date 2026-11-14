@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!--
+    The probe view's only policy. A file:// response has no headers to rewrite, so
+    it travels with the page. One inline script and one inline style block are
+    allowed by hash and nothing else: no 'unsafe-inline', no 'unsafe-eval', no
+    remote source anywhere. connect-src 'none' is what stops this renderer making
+    a request of its own; every request goes through the main process instead.
+    frame-ancestors is omitted because Chromium ignores it in a meta tag; the
+    window is not framable anyway (no webview tag, no window.open).
+
+    debug-view.test.js recomputes both digests from this file, so an edit here
+    fails with the new value instead of silently dropping the view.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3u8UouYNA6mYDA98kVzwWKIn4JcL5k+zIyiP/CJQZtk='; style-src 'sha256-+ZixhKmZQHK3mZ076oKyG67Xi6iEVSrEvXAvxLVuQ2Q='; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <title>ZuriCopilot probe (spike)</title>
+  <style>
+    /* The only styling this throwaway view has, in the one place it is allowed.
+       Square corners, no border, no shadow, as elsewhere in this desktop shell. */
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #000d3d; color: #f8fafc; font-family: Inter, system-ui, sans-serif; }
+    main { max-width: 44rem; margin: 0 auto; padding: 2rem; }
+    h1 { margin: 0 0 0.5rem; font-size: 1.125rem; }
+    p { margin: 0 0 0.5rem; line-height: 1.6; font-size: 0.8125rem; color: #cbd5e1; }
+    .actions { display: flex; gap: 0.5rem; margin: 1rem 0 0.75rem; }
+    button { padding: 0.5rem 0.875rem; border: 0; border-radius: 0; box-shadow: none; background: #1e3a8a; color: #f8fafc; font: inherit; font-size: 0.8125rem; cursor: pointer; }
+    button:disabled { background: #1e293b; color: #94a3b8; cursor: default; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; font-size: 0.8125rem; }
+    th, td { padding: 0.25rem 0; text-align: left; vertical-align: top; }
+    th { width: 45%; font-weight: 500; color: #94a3b8; }
+    td { font-variant-numeric: tabular-nums; }
+    pre { margin: 1rem 0 0; padding: 0.75rem; background: #0b1230; color: #cbd5e1; font-size: 0.75rem; overflow: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ZuriCopilot probe</h1>
+    <p id="bridge-state">Checking the bridge...</p>
+
+    <div class="actions">
+      <button id="run-read" type="button">Read my workspaces</button>
+      <button id="run-write" type="button">Create then delete a probe task</button>
+    </div>
+
+    <p>The second button creates one temporarily marked task and deletes it permanently.
+      It is the only write this spike performs, and it lands in the one workspace named by
+      <code>ZURICOPILOT_PROBE_WORKSPACE_ID</code>.</p>
+
+    <p id="notice" hidden></p>
+
+    <table>
+      <caption class="visually-hidden" hidden>Last probe outcome</caption>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <pre id="raw"></pre>
+  </main>
+  <script>
+(function () {
+  'use strict'
+
+  // The fields the contract allows, in the order a person reads them. The view
+  // never guesses at a field name: anything not listed here cannot be shown,
+  // which is the same list the main process sanitizes against.
+  var FIELDS = [
+    ['Contract version', 'contractVersion'],
+    ['Action', 'action'],
+    ['Status', 'status'],
+    ['Error code', 'errorCode'],
+    ['Create HTTP status', 'httpStatus'],
+    ['Cleanup HTTP status', 'cleanupHttpStatus'],
+    ['Duration (ms)', 'durationMs'],
+    ['Checked at', 'checkedAt'],
+    ['Workspaces', 'workspaceCount'],
+    ['Workspace id', 'workspaceId'],
+    ['Task created', 'taskCreated'],
+    ['Task deleted', 'taskDeleted']
+  ]
+
+  var bridge = window.copilot && window.copilot.probe ? window.copilot.probe : null
+  var state = document.getElementById('bridge-state')
+  var notice = document.getElementById('notice')
+  var readButton = document.getElementById('run-read')
+  var writeButton = document.getElementById('run-write')
+  var rows = document.getElementById('rows')
+  var raw = document.getElementById('raw')
+  var cells = {}
+
+  FIELDS.forEach(function (field) {
+    var row = document.createElement('tr')
+    var label = document.createElement('th')
+    label.scope = 'row'
+    label.textContent = field[0]
+    var value = document.createElement('td')
+    value.textContent = 'n/a'
+    row.appendChild(label)
+    row.appendChild(value)
+    rows.appendChild(row)
+    cells[field[1]] = value
+  })
+
+  function setBusy (busy) {
+    readButton.disabled = busy || !bridge
+    writeButton.disabled = busy || !bridge
+  }
+
+  function say (text) {
+    notice.textContent = text
+    notice.hidden = false
+  }
+
+  function clearOutcome () {
+    FIELDS.forEach(function (field) { cells[field[1]].textContent = 'n/a' })
+    raw.textContent = ''
+  }
+
+  // textContent only. A probe result is data, so a value that looked like markup
+  // would still be shown as text and never become part of this document.
+  function render (result) {
+    clearOutcome()
+    if (result === null || result === undefined) {
+      say('The main process refused this request. Nothing was sent to the server.')
+      return
+    }
+    FIELDS.forEach(function (field) {
+      var value = result[field[1]]
+      cells[field[1]].textContent = value === null || value === undefined ? 'n/a' : String(value)
+    })
+    raw.textContent = JSON.stringify(result, null, 2)
+    say(result.status === 'ok'
+      ? 'The server answered, and the answer passed the sanitizing boundary.'
+      : 'The run failed. The code above comes from the fixed vocabulary; no server message is shown.')
+  }
+
+  function run (method, pending) {
+    if (!bridge || typeof bridge[method] !== 'function') return
+    setBusy(true)
+    say(pending)
+    bridge[method]().then(function (result) {
+      render(result)
+    }, function () {
+      // A rejected bridge call is a bridge problem, not a probe result: the
+      // main process never rejects one of these on its own.
+      clearOutcome()
+      say('The bridge refused the call. Nothing was sent to the server.')
+    }).then(function () {
+      setBusy(false)
+    })
+  }
+
+  if (!bridge) {
+    state.textContent = 'Bridge not available: this window was opened without the probe preload.'
+    setBusy(false)
+    return
+  }
+
+  state.textContent = 'Bridge ready. Every request goes through the main process on the shared session.'
+  setBusy(false)
+
+  readButton.addEventListener('click', function () {
+    run('read', 'Reading the signed-in user and their workspaces...')
+  })
+  writeButton.addEventListener('click', function () {
+    run('write', 'Creating one marked task in the isolated workspace, then deleting it permanently...')
+  })
+})()
+  </script>
+</body>
+</html>
