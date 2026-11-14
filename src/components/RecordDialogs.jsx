@@ -133,7 +133,7 @@ function FollowUpEditDialog({ followUp, members, tasks, workspaceId, canManageMe
 // A follow-up opened to read: the whole note, who and when, a thread of comments
 // anyone in the workspace can add to, and (for the creator, the assignee and leaders)
 // a button to mark it complete or reopen it. Editing its details is a separate step.
-function FollowUpDetailDialog({ followUp, linkedTaskTitle, canUpdate, canEdit, onClose, onChanged, onEdit }) {
+function FollowUpDetailDialog({ followUp, linkedTaskTitle, members = [], currentUserId, canUpdate, canEdit, onClose, onChanged, onEdit }) {
   const [comments, setComments] = useState([])
   const [commentBody, setCommentBody] = useState('')
   const [commenting, setCommenting] = useState(false)
@@ -214,10 +214,17 @@ function FollowUpDetailDialog({ followUp, linkedTaskTitle, canUpdate, canEdit, o
               <p>{comment.body}</p>
             </article>
           ))}
-          <form className="drawer-comment-form" onSubmit={postComment}>
-            <textarea value={commentBody} onChange={event => setCommentBody(event.target.value)} placeholder="Write a comment" aria-label="Write a comment" maxLength={2000} />
-            <button type="submit" className="primary-button" disabled={commenting || !commentBody.trim()}>Post comment</button>
-          </form>
+          <div className="checkin-detail-composer followup-detail-composer">
+            <form onSubmit={postComment}>
+              <label htmlFor="followup-comment">Add a comment</label>
+              <MentionPicker members={members} value={commentBody} onChange={setCommentBody} currentUserId={currentUserId}>
+                {inputRef => <textarea ref={inputRef} id="followup-comment" value={commentBody} onChange={event => setCommentBody(event.target.value)} maxLength={2000} placeholder="Share feedback, an update, or help with a blocker." />}
+              </MentionPicker>
+              <div className="checkin-detail-composer-action">
+                <button type="submit" className="primary-button" disabled={commenting || !commentBody.trim()}>{commenting ? 'Posting...' : 'Post comment'}</button>
+              </div>
+            </form>
+          </div>
         </section>
         {error && <p className="auth-error" role="alert">{error}</p>}
       </div>

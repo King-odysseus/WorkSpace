@@ -10300,6 +10300,8 @@ function WorkspaceView({
           <FollowUpDetailDialog
             followUp={viewFollowUp}
             linkedTaskTitle={tasks.find((task) => task.id === viewFollowUp.task_id)?.title}
+            members={localData.members}
+            currentUserId={currentUserId}
             canUpdate={
               canManageMembers ||
               viewFollowUp.created_by === currentUserId ||

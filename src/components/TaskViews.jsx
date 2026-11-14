@@ -540,14 +540,17 @@ function TaskDetailDrawer({ task, workspaceId, members = [], projects = [], buck
                       <p><LinkedText text={item.body} /></p>
                     </article>
                   )) : <p className="drawer-muted">No comments yet.</p>}
-                  <MentionPicker members={members} value={comment} onChange={setComment} currentUserId={currentUserId}>
-                    {inputRef => (
-                      <form className="drawer-comment-form" onSubmit={addComment}>
-                        <textarea ref={inputRef} value={comment} onChange={event => setComment(event.target.value)} placeholder="Write an update for the team" aria-label="Write a task comment" />
+                  <div className="checkin-detail-composer followup-detail-composer">
+                    <form className="drawer-comment-form" onSubmit={addComment}>
+                      <label htmlFor="task-comment">Add a comment</label>
+                      <MentionPicker members={members} value={comment} onChange={setComment} currentUserId={currentUserId}>
+                        {inputRef => <textarea ref={inputRef} id="task-comment" value={comment} onChange={event => setComment(event.target.value)} placeholder="Write an update for the team" aria-label="Write a task comment" />}
+                      </MentionPicker>
+                      <div className="checkin-detail-composer-action">
                         <button type="submit" className="primary-button">Post comment</button>
-                      </form>
-                    )}
-                  </MentionPicker>
+                      </div>
+                    </form>
+                  </div>
                 </section>
               </>
             )}

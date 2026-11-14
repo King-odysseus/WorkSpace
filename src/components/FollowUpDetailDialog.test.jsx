@@ -25,7 +25,7 @@ describe('follow-up detail', () => {
   it('adds a comment', async () => {
     const fetchMock = mockApi({ '/follow-ups/9/comments/': { comments: [], comment: { id: 2, author_name: 'Me', body: 'On it.' } } })
     show()
-    fireEvent.change(screen.getByLabelText('Write a comment'), { target: { value: 'On it.' } })
+    fireEvent.change(screen.getByLabelText('Add a comment'), { target: { value: 'On it.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post comment' }))
     expect(await screen.findByText('On it.')).toBeTruthy()
     expect(JSON.parse(expectRequest(fetchMock, '/follow-ups/9/comments/', 'POST')[1].body)).toEqual({ body: 'On it.' })
@@ -47,7 +47,7 @@ describe('follow-up detail', () => {
     expect(screen.queryByRole('button', { name: 'Mark complete' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Edit details' })).toBeNull()
     expect(screen.getByText(/Only the person who made it/)).toBeTruthy()
-    expect(screen.getByLabelText('Write a comment')).toBeTruthy()
+    expect(screen.getByLabelText('Add a comment')).toBeTruthy()
   })
 
   it('shows what the server refuses', async () => {
