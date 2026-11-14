@@ -7,7 +7,15 @@
 
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
+
+// Every test file runs in its own happy-dom worker, so a full-suite run puts
+// about a hundred React environments on one machine at once. A view that loads
+// three mocked endpoints before it paints can then need longer than the
+// library's 1s default to appear, which surfaced as a false "Unable to find
+// element" failure. The longer wait weakens nothing: the element still has to
+// arrive and the assertion is unchanged.
+configure({ asyncUtilTimeout: 5000 })
 
 afterEach(() => {
   cleanup()

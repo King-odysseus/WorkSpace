@@ -79,7 +79,10 @@ it('opens the exact document named by a notification history row', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Open Nate Foster shared "Launch brief" with you' }))
 
   expect(await screen.findByDisplayValue('Launch brief', {}, { timeout: 20000 })).toBeInTheDocument()
-  expect(screen.getByText('Ready for review.')).toBeInTheDocument()
+  // The editor paints its title once the file loads but fills the body from a
+  // later effect, so an immediate query here loses that race when the suite is
+  // busy. Waiting does not weaken the check: the text still has to be there.
+  expect(await screen.findByText('Ready for review.')).toBeInTheDocument()
   // Files has no navigation entry of its own, so before this the reader who
   // followed a document notification was left on a page with no way back to the
   // app they came from. The bell was opened from Notifications, so that is where

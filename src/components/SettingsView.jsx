@@ -401,6 +401,9 @@ function SettingsView({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileFieldErrors, setProfileFieldErrors] = useState({});
+  // Bumped whenever a save is rejected for the email, so the focus effect below
+  // runs even when the same message is shown twice in a row.
+  const [profileEmailFocusRequest, setProfileEmailFocusRequest] = useState(0);
   const [webhooks, setWebhooks] = useState([]);
   const [webhooksLoading, setWebhooksLoading] = useState(true);
   const [webhooksError, setWebhooksError] = useState(null);
@@ -1801,7 +1804,6 @@ function SettingsView({
         ?.focus();
       return;
     }
-    let focusEmailAfterSave = false;
     setProfileSaving(true);
     try {
       const response = await fetch("/api/auth/me/profile/", {
@@ -1818,7 +1820,7 @@ function SettingsView({
         setProfileFieldErrors({
           email: "That email address is already in use.",
         });
-        focusEmailAfterSave = true;
+        setProfileEmailFocusRequest((request) => request + 1);
         return;
       }
       if (!response.ok)
@@ -1832,13 +1834,17 @@ function SettingsView({
       setProfileError(error.message || "Profile could not be updated.");
     } finally {
       setProfileSaving(false);
-      if (focusEmailAfterSave) {
-        window.setTimeout(() => {
-          profileFormRef.current?.querySelector('[name="email"]')?.focus();
-        }, 0);
-      }
     }
   };
+  // Focus belongs to the render that shows the error, not to the request. This
+  // used to be queued from the request's `finally` with a 0ms timer, which raced
+  // React committing `profileSaving: false`. Focusing an input that is still
+  // disabled does nothing and never retried, so the field stayed unfocused
+  // whenever that render was slow, which only showed up under full-suite load.
+  useEffect(() => {
+    if (!profileEmailFocusRequest) return;
+    profileFormRef.current?.querySelector('[name="email"]')?.focus();
+  }, [profileEmailFocusRequest]);
   const [taskTemplateForm, setTaskTemplateForm] = useState({
     name: "",
     title: "",

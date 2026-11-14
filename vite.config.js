@@ -70,5 +70,11 @@ export default defineConfig({
     setupFiles: './src/test/setup-tests.js',
     include: ['src/**/*.test.{js,jsx}'],
     restoreMocks: true,
+    // The heaviest tests drive a whole view through user events and focus
+    // moves. Vitest's 5s default is enough on an idle machine but not while the
+    // whole suite runs in parallel, where it reported "Test timed out" for
+    // behaviour that passes on its own.
+    testTimeout: 20000,
+    hookTimeout: 20000,
   },
 })
