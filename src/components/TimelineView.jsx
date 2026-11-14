@@ -195,6 +195,12 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
         result.push({ type: 'group', key: 'w' + name, label: name || 'No workstream', count: list.length })
         list.forEach(task => result.push({ type: 'task', key: `t${task.id}`, task }))
       })
+      // Keep checkpoint rows visible even when tasks are grouped by workstream.
+      // Otherwise the chart silently drops every milestone marker in this mode.
+      shownMilestones.filter(milestone => !windowed || (() => {
+        const due = dayNumber(milestone.due_date)
+        return (due >= windowStart && due <= windowEnd) || scheduled.some(task => String(task.milestone_id) === String(milestone.id))
+      })()).forEach(milestone => result.push({ type: 'milestone', key: `m${milestone.id}`, milestone }))
       return result
     }
     // In a window, only milestones that fall in it, or have a task in it, take a row.
@@ -459,7 +465,10 @@ export default function TimelineView({ workspaceId, tasks, isLeader = false, can
                   {rows.map((row, index) => {
                     if (row.type === 'milestone') {
                       const left = x(dayNumber(row.milestone.due_date)) + pxPerDay / 2
-                      return <span key={row.key} className={`timeline-diamond${row.milestone.complete ? ' is-complete' : ''}${row.milestone.is_late ? ' is-late' : ''}`} style={{ left, top: index * ROW + ROW / 2 }} title={`${row.milestone.title} - ${row.milestone.due_date}`} role="img" aria-label={`Milestone ${row.milestone.title}, ${row.milestone.due_date}`} />
+                      return <span key={row.key} className="timeline-milestone-marker" style={{ left, top: index * ROW + ROW / 2 }} title={`${row.milestone.title} - ${row.milestone.due_date}`} role="img" aria-label={`Milestone ${row.milestone.title}, ${row.milestone.due_date}`}>
+                        <i className={`timeline-diamond${row.milestone.complete ? ' is-complete' : ''}${row.milestone.is_late ? ' is-late' : ''}`} aria-hidden="true" />
+                        <span className="timeline-milestone-marker-label" aria-hidden="true"><strong>{row.milestone.title}</strong><small>{row.milestone.due_date}</small></span>
+                      </span>
                     }
                     if (row.type !== 'task') return null
                     const task = row.task

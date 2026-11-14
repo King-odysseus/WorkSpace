@@ -9992,6 +9992,11 @@ aside[class*='bg-navy'] nav { overflow-x: hidden; }
 
 /* Planner timeline: tasks as bars on a calendar, milestones and links. */
 .planner-view-toggle { margin-top: 14px; width: fit-content; }
+.planner-add-milestone { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 6px 11px; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); color: var(--pencil-navy); font-size: 12px; font-weight: 600; cursor: pointer; }
+.planner-board-milestone-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--pencil-border); border-radius: 14px; background: var(--pencil-surface); }
+.planner-board-milestone-form input { min-height: 36px; padding: 0 10px; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); font-size: 13px; }
+.planner-board-milestone-form input:first-child { flex: 1 1 220px; }
+.planner-board-milestone-form [role="alert"] { flex-basis: 100%; margin: 0; }
 .timeline { display: grid; gap: 14px; margin-top: 14px; }
 .timeline-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .timeline-legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: auto; font-size: 12px; color: var(--pencil-text-muted); }
@@ -10057,7 +10062,11 @@ aside[class*='bg-navy'] nav { overflow-x: hidden; }
 .timeline-grip.is-start { left: 0; } .timeline-grip.is-end { right: 0; }
 .timeline-link-button { position: absolute; right: -11px; top: 50%; display: grid; width: 22px; height: 22px; place-items: center; padding: 0; transform: translateY(-50%); border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); color: #0B0B45; opacity: 0; cursor: pointer; }
 .timeline-bar:hover .timeline-link-button, .timeline-bar:focus-within .timeline-link-button, .timeline-bar.is-linking .timeline-link-button { opacity: 1; }
-.timeline-diamond { position: absolute; width: 16px; height: 16px; transform: translate(-50%, -50%) rotate(45deg); border-radius: 3px; background: #C49A6C; box-shadow: 0 1px 3px rgb(16 24 40 / 30%); }
+.timeline-milestone-marker { position: absolute; z-index: 3; display: flex; align-items: center; width: 0; height: 0; }
+.timeline-diamond { flex: none; width: 18px; height: 18px; transform: translate(-50%, -50%) rotate(45deg); border: 2px solid #fff; border-radius: 4px; background: #C49A6C; box-shadow: 0 1px 5px rgb(16 24 40 / 45%); }
+.timeline-milestone-marker-label { position: absolute; left: 15px; top: -17px; display: grid; gap: 1px; max-width: 220px; padding: 4px 8px; border: 1px solid #c49a6c; border-radius: 7px; background: var(--pencil-surface); color: var(--pencil-text); box-shadow: 0 2px 6px rgb(16 24 40 / 14%); font-size: 11px; line-height: 1.2; white-space: nowrap; }
+.timeline-milestone-marker-label strong { overflow: hidden; text-overflow: ellipsis; }
+.timeline-milestone-marker-label small { color: var(--pencil-text-muted); font-size: 10px; }
 .timeline-diamond.is-complete { background: #12b76a; } .timeline-diamond.is-late { background: #d92d20; }
 .timeline-unscheduled { padding: 14px 16px; border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface); }
 .timeline-unscheduled h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #93370d; }

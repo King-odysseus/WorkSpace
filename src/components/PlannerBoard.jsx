@@ -14,7 +14,7 @@ import SavedViewsMenu from './SavedViewsMenu.jsx'
 import RemindMenu from './RemindMenu.jsx'
 import RoutinesPanel from './RoutinesPanel.jsx'
 import { TaskProgressActions, TaskProgressBar, taskProgressValue } from './TaskProgressBar.jsx'
-import { formatEstimateMinutes, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
+import { formatEstimateMinutes, getCsrfToken, taskIsAssignedTo, toDateKey } from '../lib/workspace-format.js'
 import { taskMatchesScope } from './WorkScopeSelector.jsx'
 import TimelineView from './TimelineView.jsx'
 
@@ -154,6 +154,10 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
   const [dropTaskIndex, setDropTaskIndex] = useState(null)
   const [moveAnnouncement, setMoveAnnouncement] = useState('')
   const [creating, setCreating] = useState(false)
+  const [milestoneFormOpen, setMilestoneFormOpen] = useState(false)
+  const [milestoneDraft, setMilestoneDraft] = useState({ title: '', due_date: '' })
+  const [milestoneSubmitting, setMilestoneSubmitting] = useState(false)
+  const [milestoneError, setMilestoneError] = useState('')
   const [editingBucketId, setEditingBucketId] = useState(null)
   const [bucketNameDraft, setBucketNameDraft] = useState('')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
@@ -642,6 +646,25 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
   }
   const filtersHiding = status !== 'all' || priority !== 'all' || assignee !== 'all' || supporter !== 'all' || phase !== 'all' || bucketFilter !== 'all' || dueFilter !== 'all' || Boolean(dateFrom) || Boolean(dateTo) || staleOnly
   const clearHiddenFilters = () => { setStatus('all'); setPriority('all'); setAssignee('all'); setSupporter('all'); setPhase('all'); setBucketFilter('all'); setDueFilter('all'); setDateFrom(''); setDateTo(''); setDatePreset('any'); setStaleOnly(false) }
+  const submitBoardMilestone = async event => {
+    event.preventDefault()
+    const title = milestoneDraft.title.trim()
+    if (!title || !milestoneDraft.due_date || milestoneSubmitting) return
+    setMilestoneSubmitting(true)
+    setMilestoneError('')
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/milestones/`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-Workspace-Id': String(workspaceId), 'X-CSRFToken': await getCsrfToken() },
+        body: JSON.stringify({ title, due_date: milestoneDraft.due_date, project_id: projectFilter !== 'all' && projectFilter !== 'operations' ? Number(projectFilter) : undefined }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The milestone could not be added.')
+      setMilestoneDraft({ title: '', due_date: '' })
+      setMilestoneFormOpen(false)
+    } catch (error) { setMilestoneError(error.message || 'The milestone could not be added.') }
+    finally { setMilestoneSubmitting(false) }
+  }
   // The design's scope line names the scope, the lane count and what the board
   // does with them. A drill-through from Reports sets filters this toolbar has no
   // control for, so when one is in force the line says so and offers the way out.
@@ -814,7 +837,15 @@ export default function PlannerBoard({ workspaceId, onBoardMembersChanged, bucke
     <div className="plan-view-toggle planner-view-toggle" role="group" aria-label="Planner view">
       <button type="button" aria-pressed={boardView === 'board'} className={boardView === 'board' ? 'is-active' : ''} onClick={() => chooseBoardView('board')}>Board</button>
       <button type="button" aria-pressed={boardView === 'timeline'} className={boardView === 'timeline' ? 'is-active' : ''} onClick={() => chooseBoardView('timeline')}>Timeline</button>
+      {canManageBuckets && boardView === 'board' && <button type="button" className="planner-add-milestone" aria-expanded={milestoneFormOpen} onClick={() => setMilestoneFormOpen(value => !value)}><Plus size={14} aria-hidden="true" /> Add milestone</button>}
     </div>
+    {milestoneFormOpen && boardView === 'board' && <form className="planner-board-milestone-form" onSubmit={submitBoardMilestone}>
+      <input aria-label="Milestone title" placeholder="Milestone name" maxLength={200} required value={milestoneDraft.title} onChange={event => setMilestoneDraft({ ...milestoneDraft, title: event.target.value })} />
+      <input aria-label="Milestone date" type="date" required value={milestoneDraft.due_date} onChange={event => setMilestoneDraft({ ...milestoneDraft, due_date: event.target.value })} />
+      <Button type="submit" size="sm" disabled={milestoneSubmitting || !milestoneDraft.title.trim() || !milestoneDraft.due_date}>{milestoneSubmitting ? 'Adding...' : 'Save milestone'}</Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => setMilestoneFormOpen(false)}>Cancel</Button>
+      {milestoneError && <p className="auth-error" role="alert">{milestoneError}</p>}
+    </form>}
     <div className="planner-scope-summary mt-4 flex flex-wrap items-center gap-3 text-caption text-text-muted">
       <span aria-live="polite">{scopeLine}</span>
       {filtersHiding && <button type="button" className="text-caption font-medium text-navy underline underline-offset-2" onClick={clearHiddenFilters}>Clear filters</button>}
