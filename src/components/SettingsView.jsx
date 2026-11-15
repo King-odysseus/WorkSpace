@@ -1841,10 +1841,18 @@ function SettingsView({
   // React committing `profileSaving: false`. Focusing an input that is still
   // disabled does nothing and never retried, so the field stayed unfocused
   // whenever that render was slow, which only showed up under full-suite load.
+  //
+  // Those two renders can still commit in either order on a busy machine, so
+  // whether the field is editable belongs in the condition, and a request is
+  // only marked handled once focus has been attempted. That stops a later save
+  // from pulling the caret back to this field.
+  const handledProfileEmailFocus = useRef(0);
   useEffect(() => {
-    if (!profileEmailFocusRequest) return;
+    if (!profileEmailFocusRequest || profileSaving) return;
+    if (handledProfileEmailFocus.current === profileEmailFocusRequest) return;
+    handledProfileEmailFocus.current = profileEmailFocusRequest;
     profileFormRef.current?.querySelector('[name="email"]')?.focus();
-  }, [profileEmailFocusRequest]);
+  }, [profileEmailFocusRequest, profileSaving]);
   const [taskTemplateForm, setTaskTemplateForm] = useState({
     name: "",
     title: "",
