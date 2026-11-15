@@ -43,7 +43,38 @@ const DEFAULT_DEV_SERVER_URL = 'http://localhost:5183'
 // mailto). Anything else, including file:, javascript: and data:, is refused.
 const EXTERNAL_PROTOCOLS = Object.freeze(['http:', 'https:', 'mailto:'])
 
+// The one site allowed to open a popup, and the reason the shell needs a popup
+// at all: Google Identity Services finishes sign-in in a child window and hands
+// the credential back to the page that opened it through window.opener. A
+// blanket deny leaves the button dead, and sending the popup to the default
+// browser breaks the same link, because that tab has no opener. The caller is
+// src/components/AuthScreen.jsx renderButton.
+const AUTH_POPUP_ORIGIN = 'https://accounts.google.com'
+
 const CSP_HEADER = 'Content-Security-Policy'
+
+/**
+ * The hosts outside the configured server that the web app itself loads.
+ *
+ * The desktop window is meant to be the whole web app, not a cut-down viewer,
+ * so a host appears here only because app code needs it, never by wildcard and
+ * never to run arbitrary script:
+ * - accounts.google.com: the Google sign-in button. src/components/AuthScreen.jsx
+ *   injects gsi/client, which frames its own UI there and exchanges the
+ *   credential over fetch. Blocked, the sign-in screen reports it cannot load.
+ * - fonts.googleapis.com / fonts.gstatic.com: the Inter font src/pencil.css
+ *   imports. Without it every screen falls back to a system face.
+ * - res.cloudinary.com: signed delivery URLs for uploaded avatars and files
+ *   (tasks/cloud_storage.py), rendered in <img>.
+ */
+const THIRD_PARTY_SOURCES = Object.freeze({
+  'script-src': Object.freeze(['https://accounts.google.com']),
+  'style-src': Object.freeze(['https://fonts.googleapis.com', 'https://accounts.google.com']),
+  'font-src': Object.freeze(['https://fonts.gstatic.com']),
+  'img-src': Object.freeze(['https://res.cloudinary.com']),
+  'connect-src': Object.freeze(['https://accounts.google.com']),
+  'frame-src': Object.freeze(['https://accounts.google.com']),
+})
 
 // The only inline script the web app ships: the pre-paint theme bootstrap in
 // index.html. Allowing that one script by hash keeps every other inline script
@@ -176,6 +207,57 @@ function decideNavigation (targetUrl, config) {
   return Object.freeze({ action: 'deny', reason: 'unsupported_scheme' })
 }
 
+/**
+ * Whether a URL is the Google sign-in popup, the only popup this shell allows.
+ * Compared by origin, so a lookalike host is still refused.
+ */
+function isAuthPopupUrl (targetUrl) {
+  let target
+  try {
+    target = new URL(String(targetUrl))
+  } catch {
+    return false
+  }
+  return !target.username && !target.password &&
+    target.protocol === 'https:' && target.origin === AUTH_POPUP_ORIGIN
+}
+
+/**
+ * Decide what a window.open from the page means.
+ *
+ * load: a same-origin page, folded into this window rather than opened beside it.
+ * popup: the Google sign-in window, opened as a real child window so the
+ *   credential can come back through window.opener.
+ * external: an ordinary web link, handed to the default browser.
+ * deny: everything else, including script, file and data URLs.
+ */
+function decideWindowOpen (targetUrl, config) {
+  if (!config || typeof config.origin !== 'string') {
+    return Object.freeze({ action: 'deny', reason: 'no_config' })
+  }
+
+  let target
+  try {
+    target = new URL(String(targetUrl))
+  } catch {
+    return Object.freeze({ action: 'deny', reason: 'not_a_url' })
+  }
+
+  if (target.username || target.password) {
+    return Object.freeze({ action: 'deny', reason: 'credentials_in_url' })
+  }
+  if (target.origin === config.origin) {
+    return Object.freeze({ action: 'load', url: target.href })
+  }
+  if (isAuthPopupUrl(target.href)) {
+    return Object.freeze({ action: 'popup', url: target.href })
+  }
+  if (EXTERNAL_PROTOCOLS.includes(target.protocol)) {
+    return Object.freeze({ action: 'external', url: target.href })
+  }
+  return Object.freeze({ action: 'deny', reason: 'unsupported_scheme' })
+}
+
 function developmentSocketOrigin (origin) {
   // Vite's hot reload opens a websocket on the dev server itself, so the only
   // extra connect-src entry development needs is the ws:// form of the origin
@@ -199,15 +281,18 @@ function developmentSocketOrigin (origin) {
  *   form-action 'self' close the classic escapes: plugin embedding, <base>
  *   hijack, clickjacking of this window, and a form posting the session
  *   cookie elsewhere.
- * - connect-src stays 'self'. If a build enables Sentry (VITE_SENTRY_DSN) or
- *   Google sign-in (VITE_GOOGLE_CLIENT_ID), their hosts have to be added here
- *   on purpose: both are off by default, and manual sign-in is what this phase
- *   promises.
+ * - the only hosts outside the server are the ones THIRD_PARTY_SOURCES names,
+ *   each tied to app code that needs it. Sentry stays off unless a build sets
+ *   VITE_SENTRY_DSN, so its ingest host is not allowed.
  */
 function buildPolicyDirectives (config) {
   const development = Boolean(config && config.isDevelopment)
   const scriptSrc = ["'self'", ...quotedInlineScriptHashes()]
   const connectSrc = ["'self'"]
+  const styleSrc = ["'self'", "'unsafe-inline'"]
+  const imgSrc = ["'self'", 'data:']
+  const fontSrc = ["'self'", 'data:']
+  const frameSrc = ["'self'"]
 
   if (development) {
     // Vite injects the React Fast Refresh preamble as an inline script into the
@@ -218,14 +303,28 @@ function buildPolicyDirectives (config) {
     connectSrc.push(developmentSocketOrigin(config.origin))
   }
 
+  // Added after the origin's own sources, so these hosts are the only thing
+  // this widens, and a host listed twice is never written twice.
+  const sources = {
+    'script-src': scriptSrc,
+    'style-src': styleSrc,
+    'img-src': imgSrc,
+    'font-src': fontSrc,
+    'connect-src': connectSrc,
+    'frame-src': frameSrc,
+  }
+  for (const [directive, extra] of Object.entries(THIRD_PARTY_SOURCES)) {
+    sources[directive] = sources[directive].concat(extra.filter(source => !sources[directive].includes(source)))
+  }
+
   return Object.freeze([
     ['default-src', "'self'"],
-    ['script-src', scriptSrc.join(' ')],
-    ['style-src', "'self' 'unsafe-inline'"],
-    ['img-src', "'self' data:"],
-    ['font-src', "'self' data:"],
-    ['connect-src', connectSrc.join(' ')],
-    ['frame-src', "'self'"],
+    ['script-src', sources['script-src'].join(' ')],
+    ['style-src', sources['style-src'].join(' ')],
+    ['img-src', sources['img-src'].join(' ')],
+    ['font-src', sources['font-src'].join(' ')],
+    ['connect-src', sources['connect-src'].join(' ')],
+    ['frame-src', sources['frame-src'].join(' ')],
     ['worker-src', "'self'"],
     ['object-src', "'none'"],
     ['base-uri', "'none'"],
@@ -327,6 +426,31 @@ function hardenedWebPreferences () {
   })
 }
 
+/**
+ * Keep the sign-in popup on the one site that serves it.
+ *
+ * The popup is a renderer like any other, so it runs the same switches and the
+ * same session partition as the main window (its Google account cookie then
+ * survives a restart). What it must not become is a general-purpose browser, so
+ * navigation inside it is refused unless it stays on the sign-in origin.
+ */
+function guardAuthPopup (childWindow) {
+  if (!childWindow || !childWindow.webContents) {
+    throw new TypeError('guardAuthPopup needs a BrowserWindow')
+  }
+  const childContents = childWindow.webContents
+  const stay = (event, legacyUrl) => {
+    const targetUrl = event && typeof event.url === 'string' ? event.url : legacyUrl
+    if (isAuthPopupUrl(targetUrl)) return
+    event.preventDefault()
+  }
+  childContents.on('will-navigate', stay)
+  childContents.on('will-redirect', stay)
+  childContents.on('will-attach-webview', event => event.preventDefault())
+  // A popup that opens a popup is not part of signing in.
+  childContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+}
+
 function safeOpenExternal (shell, url) {
   // A link the OS cannot open is not a reason to crash the shell.
   Promise.resolve()
@@ -337,11 +461,19 @@ function safeOpenExternal (shell, url) {
 }
 
 function hardenSession (webSession, config) {
-  // Nothing the app needs before sign-in is a privileged permission. Clipboard
-  // writes stay allowed because the app's copy buttons are ordinary UI; every
-  // other request (camera, microphone, geolocation, notifications) is refused
-  // until a later phase decides to support it on purpose.
-  const allowed = permission => permission === 'clipboard-sanitized-write'
+  // The window is the whole web app, so it grants the permissions that app has
+  // ordinary UI for and refuses the rest:
+  // - clipboard-sanitized-write: the copy buttons (BoardViews, SettingsView).
+  // - notifications: the bell reminder prompt (NotificationPermissionPrompt)
+  //   and the settings toggle. Refused, "Enable notifications" fails silently.
+  // - display-capture: screen sharing (ScreenSharing.jsx getDisplayMedia).
+  // Camera, microphone, geolocation and openExternal stay refused.
+  const ALLOWED_PERMISSIONS = [
+    'clipboard-sanitized-write',
+    'notifications',
+    'display-capture',
+  ]
+  const allowed = permission => ALLOWED_PERMISSIONS.includes(permission)
   webSession.setPermissionRequestHandler((_contents, permission, callback) => callback(allowed(permission)))
   webSession.setPermissionCheckHandler((_contents, permission) => allowed(permission))
 
@@ -396,11 +528,12 @@ function createWorkSpaceWindow (options = {}) {
   contents.on('will-navigate', guard)
   contents.on('will-redirect', guard)
 
-  // No second renderer, ever. A same-origin popup is folded back into this
-  // window; anything else is the browser's job.
+  // Google Identity Services is the one child renderer because it needs
+  // window.opener to return the credential. A same-origin popup is folded back
+  // into this window; every other outside destination is the browser's job.
   contents.setWindowOpenHandler(({ url }) => {
-    const decision = decideNavigation(url, config)
-    if (decision.action === 'allow') {
+    const decision = decideWindowOpen(url, config)
+    if (decision.action === 'load') {
       // Loading inside the handler would run a navigation during the popup
       // decision, so it waits for the current task to finish.
       setImmediate(() => {
@@ -408,11 +541,23 @@ function createWorkSpaceWindow (options = {}) {
           // did-fail-load has already reported why the page did not load.
         })
       })
-    } else if (decision.action === 'external') {
-      safeOpenExternal(shell, decision.url)
+      return { action: 'deny' }
     }
+    if (decision.action === 'popup') {
+      // Same hardening as the main window and no preload: the Google page gets
+      // the session partition and nothing else.
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: { webPreferences: hardenedWebPreferences() },
+      }
+    }
+    if (decision.action === 'external') safeOpenExternal(shell, decision.url)
     return { action: 'deny' }
   })
+
+  // The sign-in popup is the only child window that may exist, so it is the only
+  // one that needs confining.
+  contents.on('did-create-window', guardAuthPopup)
 
   // webviewTag is off; refuse an attached guest anyway if a page ever tries.
   contents.on('will-attach-webview', event => event.preventDefault())
@@ -440,8 +585,14 @@ module.exports = {
   isLoopbackHost,
   resolveServerConfig,
   decideNavigation,
+  decideWindowOpen,
+  isAuthPopupUrl,
+  guardAuthPopup,
+  AUTH_POPUP_ORIGIN,
+  hardenSession,
   CSP_HEADER,
   INLINE_SCRIPT_HASHES,
+  THIRD_PARTY_SOURCES,
   buildContentSecurityPolicy,
   buildPolicyDirectives,
   shouldPoliceDocument,

@@ -20,13 +20,18 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const {
+  AUTH_POPUP_ORIGIN,
   CSP_HEADER,
   DEFAULT_DEV_SERVER_URL,
   INLINE_SCRIPT_HASHES,
   SESSION_PARTITION,
   ServerConfigError,
+  THIRD_PARTY_SOURCES,
   buildContentSecurityPolicy,
   decideNavigation,
+  decideWindowOpen,
+  guardAuthPopup,
+  hardenSession,
   hardenedWebPreferences,
   installContentSecurityPolicy,
   resolveServerConfig,
@@ -141,6 +146,50 @@ test('another origin opens externally rather than loading in the window', () => 
   }
 })
 
+test('only the Google sign-in origin stays attached as a child window', () => {
+  const config = withUrl('https://work.example.com')
+  const google = decideWindowOpen('https://accounts.google.com/gsi/select?client_id=example', config)
+
+  assert.equal(google.action, 'popup')
+  assert.equal(new URL(google.url).origin, AUTH_POPUP_ORIGIN)
+  assert.equal(decideWindowOpen('https://example.org/help', config).action, 'external')
+  assert.equal(decideWindowOpen('https://work.example.com/projects/12', config).action, 'load')
+  assert.equal(decideWindowOpen('https://user:pass@accounts.google.com/gsi/select', config).action, 'deny')
+  assert.equal(decideWindowOpen('https://accounts.google.com.evil.invalid/gsi/select', config).action, 'external')
+  assert.equal(decideWindowOpen('https://accounts.google.com/gsi/select', null).action, 'deny')
+})
+
+test('the Google child refuses navigation and nested windows outside its origin', () => {
+  const handlers = {}
+  let openHandler
+  const googleWindow = {
+    webContents: {
+      on (name, handler) { handlers[name] = handler },
+      setWindowOpenHandler (handler) { openHandler = handler },
+    },
+  }
+  guardAuthPopup(googleWindow)
+
+  const runGuard = (name, url) => {
+    let prevented = false
+    handlers[name]({ url, preventDefault () { prevented = true } })
+    return prevented
+  }
+
+  assert.equal(runGuard('will-navigate', 'https://accounts.google.com/v3/signin/identifier'), false)
+  assert.equal(runGuard('will-redirect', 'https://workspace.tijha.com/'), true)
+  assert.equal(runGuard('will-navigate', 'https://user:pass@accounts.google.com/'), true)
+  assert.equal(runGuard('will-navigate', 'https://accounts.google.com.evil.invalid/'), true)
+  assert.equal(runGuard('will-navigate', 'not a url'), true)
+  assert.deepEqual(openHandler({ url: 'https://accounts.google.com/' }), { action: 'deny' })
+
+  let webviewPrevented = false
+  handlers['will-attach-webview']({ preventDefault () { webviewPrevented = true } })
+  assert.equal(webviewPrevented, true)
+  assert.throws(() => guardAuthPopup(null), TypeError)
+  assert.throws(() => guardAuthPopup({}), TypeError)
+})
+
 test('script, file and data URLs are denied, not opened', () => {
   const config = withUrl('https://work.example.com')
   for (const target of [
@@ -211,13 +260,17 @@ function runListener (listener, details) {
 
 function fakeSession () {
   const registrations = []
+  const permissionHandlers = {}
   return {
     registrations,
+    permissionHandlers,
     webRequest: {
       onHeadersReceived (filter, listener) {
         registrations.push({ filter, listener })
       },
     },
+    setPermissionRequestHandler (handler) { permissionHandlers.request = handler },
+    setPermissionCheckHandler (handler) { permissionHandlers.check = handler },
   }
 }
 
@@ -228,7 +281,7 @@ test('the policy for a real server refuses inline and eval script', () => {
   assert.deepEqual(directives.get('default-src'), ["'self'"])
   // The whole point: injected markup served from the same origin gets no script
   // execution, so the signed-in session cookie cannot be spent by it.
-  assert.deepEqual(directives.get('script-src'), ["'self'", ...INLINE_SCRIPT_HASHES.map(hash => `'${hash}'`)])
+  assert.deepEqual(directives.get('script-src'), ["'self'", ...INLINE_SCRIPT_HASHES.map(hash => `'${hash}'`), 'https://accounts.google.com'])
   // An unquoted hash is an invalid source list entry: Chromium ignores it and
   // the theme bootstrap would be blocked, so the quoting is checked here too.
   assert.match(policy, /script-src 'self' 'sha256-[A-Za-z0-9+/=]+'/)
@@ -242,8 +295,8 @@ test('the policy for a real server refuses inline and eval script', () => {
   assert.deepEqual(directives.get('base-uri'), ["'none'"])
   assert.deepEqual(directives.get('frame-ancestors'), ["'none'"])
   assert.deepEqual(directives.get('form-action'), ["'self'"])
-  assert.deepEqual(directives.get('connect-src'), ["'self'"])
-  assert.deepEqual(directives.get('frame-src'), ["'self'"])
+  assert.deepEqual(directives.get('connect-src'), ["'self'", 'https://accounts.google.com'])
+  assert.deepEqual(directives.get('frame-src'), ["'self'", 'https://accounts.google.com'])
   assert.deepEqual(directives.get('worker-src'), ["'self'"])
 
   // A header value with a line break is dropped by Chromium, which would leave
@@ -253,11 +306,71 @@ test('the policy for a real server refuses inline and eval script', () => {
   assert.equal(policy.endsWith(';'), false)
 })
 
+test('the policy allows exactly the outside hosts the web app loads', () => {
+  const directives = parsePolicy(buildContentSecurityPolicy(withUrl('https://work.example.com')))
+
+  // Each one is a feature of the app rather than a convenience: the Google
+  // sign-in button, the Inter font every screen is set in, and the signed
+  // Cloudinary URLs uploaded avatars and files are rendered from. Blocked,
+  // the sign-in screen says it cannot connect and nothing tells the person why.
+  assert.equal(directives.get('script-src').includes('https://accounts.google.com'), true)
+  assert.equal(directives.get('frame-src').includes('https://accounts.google.com'), true)
+  assert.equal(directives.get('connect-src').includes('https://accounts.google.com'), true)
+  assert.equal(directives.get('style-src').includes('https://fonts.googleapis.com'), true)
+  assert.equal(directives.get('font-src').includes('https://fonts.gstatic.com'), true)
+  assert.equal(directives.get('img-src').includes('https://res.cloudinary.com'), true)
+
+  // Widening is per host and https only: no wildcard, no plain http, and no
+  // host that could be swapped for another.
+  for (const [directive, sources] of Object.entries(THIRD_PARTY_SOURCES)) {
+    assert.ok(directives.has(directive), directive + ' must stay in the policy')
+    for (const source of sources) {
+      assert.match(source, /^https:\/\/[a-z0-9.-]+$/)
+    }
+  }
+
+  // Google may run, and only Google: no other outside host is a script source,
+  // and script still cannot be inline or eval.
+  assert.deepEqual(directives.get('script-src').filter(source => source.startsWith('http')), ['https://accounts.google.com'])
+  assert.equal(directives.get('script-src').includes("'unsafe-eval'"), false)
+})
+
+test('the window grants only the permissions the app has UI for', () => {
+  const session = fakeSession()
+  hardenSession(session, withUrl('https://work.example.com'))
+
+  const decisions = []
+  const ask = permission => session.permissionHandlers.request({}, permission, value => decisions.push([permission, value]))
+  ask('notifications')
+  ask('display-capture')
+  ask('clipboard-sanitized-write')
+  ask('media')
+  ask('geolocation')
+
+  // Reminder bells, screen sharing and the copy buttons are ordinary app UI.
+  // A camera, a microphone and a location reading are not something this window
+  // needs, so they stay refused.
+  assert.deepEqual(decisions, [
+    ['notifications', true],
+    ['display-capture', true],
+    ['clipboard-sanitized-write', true],
+    ['media', false],
+    ['geolocation', false],
+  ])
+
+  // Chromium consults the synchronous check handler too; it has to agree.
+  assert.equal(session.permissionHandlers.check({}, 'notifications'), true)
+  assert.equal(session.permissionHandlers.check({}, 'media'), false)
+})
+
 test('development loosens script-src only enough for the Vite dev server', () => {
   const directives = parsePolicy(buildContentSecurityPolicy(withUrl('http://localhost:5183')))
-  assert.deepEqual(directives.get('script-src'), ["'self'", ...INLINE_SCRIPT_HASHES.map(hash => `'${hash}'`), "'unsafe-inline'"])
+  assert.deepEqual(
+    directives.get('script-src'),
+    ["'self'", ...INLINE_SCRIPT_HASHES.map(hash => `'${hash}'`), "'unsafe-inline'", 'https://accounts.google.com'],
+  )
   // Hot reload talks to the dev server's own websocket, not to some other host.
-  assert.deepEqual(directives.get('connect-src'), ["'self'", 'ws://localhost:5183'])
+  assert.deepEqual(directives.get('connect-src'), ["'self'", 'ws://localhost:5183', 'https://accounts.google.com'])
   assert.deepEqual(directives.get('object-src'), ["'none'"])
 })
 

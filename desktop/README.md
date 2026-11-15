@@ -190,6 +190,20 @@ The probe view opens automatically in development and can be turned off with
 - Keep `nodeIntegration: false`, `contextIsolation: true` and `sandbox: true`,
   and keep the bridge on the probe view only. The WorkSpace web view must never
   receive this preload (plan section 4.1).
+- The WorkSpace window is the whole web app, so its policy allows more than
+  `'self'`. `THIRD_PARTY_SOURCES` in `electron/windows.js` names three outside
+  hosts, each because app code needs it, and `hardenSession` grants three
+  permissions: notifications, screen capture and clipboard writes. Tightening
+  either list without checking the feature it serves breaks it silently. Sign-in
+  shows "Google sign-in could not load", the Inter font falls back to a system
+  face, uploaded avatars and files 404, and the bell prompt does nothing.
+- Google sign-in is the one popup kept inside Electron. Google Identity
+  Services returns its credential through `window.opener`, so handing that
+  popup to the default browser leaves the button looking active but unable to
+  sign the desktop window in. The child keeps the hardened web preferences,
+  may navigate only on `https://accounts.google.com`, and cannot open another
+  child window. Every other outside link still opens in the default browser.
+
 - Workspace and task ids belong to the probe's own throwaway workspace, per
   the isolation rules in `desktop/reports/phase-0.md` section 4. Set
   `ZURICOPILOT_PROBE_WORKSPACE_ID` to that workspace's id; a blank or invalid
