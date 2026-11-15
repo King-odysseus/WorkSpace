@@ -20,9 +20,60 @@ Run from `desktop/`:
 | `npm run start:smoke` | boots the web view path with the window hidden, prints the Electron/Node/contract versions and exits 0 once the page loads. This is how the start command is checked without leaving a window on someone's desktop. |
 | `npm run probe:smoke` | boots the probe view hidden and checks it end to end: the bridge, a read and a write, the table it renders, an injected inline script, a blocked network call and a blocked navigation. Exits 0 only if every check passes, and never touches a server. |
 | `npm run check` | runs the contract tests with Node's built-in test runner (no test framework dependency). The script names the test file explicitly: `node --test <dir>` fails on Node 22 and a glob fails on Node 20, so a second contract test file must be added to the script. |
+| `npm run dist` | builds the Windows installer: `dist/zuricopilot-desktop-<version>-setup.exe`, plus an unpacked copy in `dist/win-unpacked/`. `dist/` is already git-ignored. |
+| `npm run install:local -- -ServerUrl https://...` | builds, installs for the current Windows user, records the server address and opens the app. See [Installing it for testing](#installing-it-for-testing). |
 
 Nothing in these scripts runs from the repository root, and no root script,
 dependency or build setting is required to use them.
+
+## Installing it for testing
+
+```powershell
+npm run install:local -- -ServerUrl https://your-workspace-host
+```
+
+Add `-SkipBuild` to install the newest installer already in `dist/`, or
+`-SkipLaunch` to stop before opening the app.
+
+A packaged build will not talk to a localhost address
+(`loopback_not_allowed_in_packaged_build`) and will not start without one
+(`missing_url_for_packaged_build`). Both refusals are deliberate: the window
+holds a signed-in session, so it only loads an https origin it was told about
+(see `electron/windows.js`). The address is therefore the one thing the
+installer needs from you, and it has to be the https deployment, not the Vite
+dev server.
+
+What the script does, in order, and what it leaves behind:
+
+1. Validates the address by calling `resolveServerConfig` from
+   `electron/windows.js` with `isPackaged: true`, so the install script and the
+   app cannot disagree about what a valid address is. A bad address fails here,
+   before a two-minute build.
+2. Builds the installer with electron-builder unless `-SkipBuild` was given.
+3. Runs it silently (`/S /currentuser`). It installs per-user, so there is no
+   administrator prompt, into `%LOCALAPPDATA%\Programs\ZuriCopilot`.
+4. Stores the address as the per-user `WORKSPACE_SERVER_URL` environment
+   variable, which is what the app reads. Explorer keeps its own copy of the
+   environment, so the script also broadcasts `WM_SETTINGCHANGE`; without that,
+   a shortcut launched from the Start Menu would start without the address until
+   the next sign-in.
+5. Checks that the Start Menu and Desktop shortcuts exist, then runs the
+   installed `ZuriCopilot.exe --smoke-test`, the same load check as
+   `npm run start:smoke`, against the installed copy. A server that is down fails
+   here rather than after the window opens.
+6. Opens the app unless `-SkipLaunch` was given.
+
+The build is unsigned, so Windows SmartScreen may warn the first time the
+installer runs; choose "More info" then "Run anyway". The probe view is closed
+by default in a packaged build; add `--probe-view` to open it.
+
+To remove it again, uninstall "ZuriCopilot" from Windows settings (or run
+`%LOCALAPPDATA%\Programs\ZuriCopilot\Uninstall ZuriCopilot.exe`) and clear the
+recorded address:
+
+```powershell
+[Environment]::SetEnvironmentVariable('WORKSPACE_SERVER_URL', $null, 'User')
+```
 
 ## What exists here now
 
@@ -62,8 +113,13 @@ provider, local database, docking layout and the `use_copilot` permission.
   install-time requirement only: once installed, `npm start` and
   `npm run check` also run on Node 20, because the app ships its own Electron
   runtime. The `engines` field in `package.json` records the requirement.
-- No packaging tooling yet: nothing is packaged, so there is no builder config
-  to keep in step.
+- Packaging is electron-builder, a build-time dependency only: nothing it adds
+  is bundled into the app, and `dist/` is git-ignored. Its toolchain (NSIS,
+  `winCodeSign`) is cached in `%LOCALAPPDATA%\electron-builder`, so the first
+  build downloads roughly 100 MB and later ones do not.
+- The installer is NSIS, per-user, unsigned, with no auto-update: signing and
+  updates are later phases. The packaged app ships Electron's default icon
+  until someone adds a real one.
 
 ## The probe contract
 
