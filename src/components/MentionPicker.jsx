@@ -17,6 +17,8 @@ export default function MentionPicker({ members = [], value, onChange, currentUs
     const found = /(?:^|\s)@([\w.-]*)$/.exec(input.value.slice(0, caret))
     setTyped(found ? { start: caret - found[1].length - 1, caret, query: found[1].toLowerCase() } : null)
     setActive(0)
+    // Typing an @name swaps the full member list for the filtered suggestions.
+    if (found) setOpen(false)
   }
   const pick = member => {
     const input = inputRef.current

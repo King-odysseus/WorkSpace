@@ -41,3 +41,22 @@ it('offers nothing for an @ in the middle of a word, such as an email address', 
   fireEvent.input(box)
   expect(screen.queryByRole('listbox')).toBeNull()
 })
+
+it('swaps the open member list for filtered suggestions once you type an @name', () => {
+  const Harness = () => {
+    const [text, setText] = React.useState('')
+    return <MentionPicker members={[{ id: 2, email: 'greg@example.com', first_name: 'Gregory' }, { id: 3, email: 'ani@example.com', first_name: 'Ani' }]} value={text} onChange={setText}>{inputRef => <textarea aria-label="Comment" ref={inputRef} value={text} onChange={event => setText(event.target.value)} />}</MentionPicker>
+  }
+  render(<Harness />)
+  fireEvent.click(screen.getByRole('button', { name: 'Mention a teammate' }))
+  expect(screen.getByRole('listbox', { name: 'Mention a workspace member' })).toBeTruthy()
+  const box = screen.getByLabelText('Comment')
+  box.focus()
+  fireEvent.change(box, { target: { value: '@GREG' } })
+  box.setSelectionRange(5, 5)
+  fireEvent.input(box)
+  expect(screen.queryByRole('listbox', { name: 'Mention a workspace member' })).toBeNull()
+  expect(screen.getAllByRole('option')).toHaveLength(1)
+  fireEvent.keyDown(box, { key: 'Enter' })
+  expect(box.value).toBe('@greg ')
+})
