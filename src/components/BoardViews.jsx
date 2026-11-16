@@ -6063,7 +6063,7 @@ function TodayDashboard({
     return (
       <article
         key={task.id}
-        className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 last:border-b-0"
+        className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 py-2 last:border-b-0"
       >
         <button
           type="button"
@@ -6086,7 +6086,7 @@ function TodayDashboard({
             type="button"
             onClick={() => onOpenTask(task)}
             className={cn(
-              "block max-w-full truncate text-left text-[14px] font-medium leading-[17px] text-text-primary hover:underline",
+              "max-w-full break-words text-left text-[14px] font-medium leading-[17px] text-text-primary line-clamp-2 hover:underline",
               done && "text-text-muted line-through",
             )}
           >
@@ -6104,7 +6104,7 @@ function TodayDashboard({
         >
           {STATUS_LABEL[task.status] || task.status}
         </span>
-        <span className="w-20 shrink-0 text-right text-[12px] leading-[15px] text-text-secondary">
+        <span className="w-16 shrink-0 text-right text-[12px] leading-[15px] text-text-secondary sm:w-20">
           {taskRowDate(task)}
         </span>
         <Avatar

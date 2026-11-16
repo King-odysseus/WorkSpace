@@ -6038,6 +6038,20 @@ mark.chat-mention {
   .projects-view .project-updated { flex: 0 0 100%; margin-right: 0; line-height: 15px; }
 }
 
+/* Phones: the project card drops its pixel-positioned layout and flows, so a long
+   name wraps onto a second line instead of ending in an ellipsis. */
+@media (max-width: 640px) {
+  .projects-view .project-card { display: flex; height: auto; min-height: 0; flex-direction: column; gap: 12px; padding: 20px 20px 16px; }
+  .projects-view .project-card > * { position: static; top: auto; right: auto; left: auto; }
+  .projects-view .project-card-heading { gap: 12px; }
+  .projects-view .project-card-heading h3 { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; white-space: normal; text-overflow: clip; }
+  .projects-view .project-card-description { display: -webkit-box; height: auto; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+  .projects-view .project-card-owner-row { height: auto; min-height: 28px; flex-wrap: wrap; row-gap: 6px; }
+  .projects-view .project-card-rule { flex: 0 0 1px; }
+  .projects-view .project-task-stats { height: auto; }
+  .projects-view .project-footer { height: auto; flex-wrap: wrap; row-gap: 6px; }
+}
+
 /* P52-P61 My planner. Geometry and state treatment are taken directly from the
    approved desktop and mobile frames in Workspace.fig. */
 .personal-planner-view { width: 100%; max-width: none; }
@@ -9208,6 +9222,12 @@ header.shell-header { flex-basis: 84px; height: 84px !important; padding: 0 32px
    these controls, and their rows and footer buttons must keep their normal shape. */
 .shell-appbar-controls button:not(.shell-appbar-avatar-button):not(.workspace-popup-panel *) { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; padding: 0; border-radius: 50%; background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
 .shell-appbar-controls { gap: 8px !important; }
+/* Narrow phones: six round buttons at 38px left the page title about 65px, so
+   "Follow-up" and "Projects" ended in an ellipsis. Smaller buttons give it room. */
+@media (max-width: 420px) {
+  .shell-appbar-controls { gap: 4px !important; }
+  .shell-appbar-controls button:not(.shell-appbar-avatar-button):not(.workspace-popup-panel *) { width: 34px; height: 34px; }
+}
 
 
 /* ==========================================================================
