@@ -9972,6 +9972,9 @@ aside[class*='bg-navy'].is-sidebar-collapsed nav button[aria-current='page'] > s
 .chat-mention-picker[aria-label="Mention suggestions"] button:hover, .chat-mention-picker[aria-label="Mention suggestions"] button.is-active { background: var(--pencil-surface-muted); box-shadow: inset 3px 0 0 #C49A6C; }
 .chat-mention-picker[aria-label="Mention suggestions"] strong { font-size: 13px; font-weight: 600; }
 .chat-mention-picker[aria-label="Mention suggestions"] span { color: var(--pencil-text-muted); font-size: 12px; }
+/* A comment composer sits at the bottom of a scrolling dialog, so its suggestions
+   open upward; dropping below would be clipped by the dialog edge. */
+.checkin-detail-composer .chat-mention-picker[aria-label="Mention suggestions"] { top: auto; right: auto; bottom: calc(100% + 8px); left: 0; }
 
 .team-day-task-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .team-day-delete { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid var(--pencil-border); border-radius: 999px; background: var(--pencil-surface); color: #b42318; cursor: pointer; }
