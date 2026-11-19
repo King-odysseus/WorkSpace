@@ -149,6 +149,7 @@ i tests 216
 i pass 216
 i fail 0
 ```
+Exit code: 0 (full check passed)
 
 The one skipped test is a file-permission test that only applies on Linux and Mac. The suite
 runs in two halves because the Node on this machine is version 20 and has no built-in
