@@ -10,7 +10,9 @@
     "start": "electron .",
     "start:smoke": "electron . --smoke-test",
     "probe:smoke": "electron . --probe-view-smoke",
-    "check": "node --test features/copilot",
+    "build:main": "node scripts/build-main.mjs",
+    "typecheck": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project tsconfig.renderer.json",
+    "check": "npm run typecheck && npm run build:main && node scripts/run-tests.mjs",
     "dist": "electron-builder --win nsis --x64",
     "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1"
   },

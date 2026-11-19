@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read the p6 check, failingChecks and the baseline-write flow in the verifier",
+      "state": "done"
+    },
+    {
+      "text": "Make p6 a hard failure by default when the pinned mockup fingerprint drifts",
+      "state": "done"
+    },
+    {
+      "text": "Add regression tests proving drift fails the run and blocks --record-baseline",
+      "state": "done"
+    },
+    {
+      "text": "Run the helper tests and the full proof to confirm the new default",
+      "state": "done"
+    },
+    {
+      "text": "Update desktop/reports/phase-0.md to match, then commit and push",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-14T20:45:24.041Z"
+}

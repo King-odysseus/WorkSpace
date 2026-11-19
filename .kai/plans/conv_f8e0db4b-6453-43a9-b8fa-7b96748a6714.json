@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read zuricopilot-plan.md and existing probe contract files",
+      "state": "done"
+    },
+    {
+      "text": "Inspect backend auth/task endpoints the probe must call",
+      "state": "done"
+    },
+    {
+      "text": "Implement workspace-api module (read probe, CSRF, write, cleanup)",
+      "state": "done"
+    },
+    {
+      "text": "Write dedicated tests for signed-out, denied, missing CSRF, failures",
+      "state": "done"
+    },
+    {
+      "text": "Run desktop checks and root build, report changed files",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-14T16:38:02.898Z"
+}

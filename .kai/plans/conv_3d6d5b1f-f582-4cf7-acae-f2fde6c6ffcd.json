@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read zuricopilot-plan.md and existing desktop spike code",
+      "state": "done"
+    },
+    {
+      "text": "Record the Phase 1 baseline in a report file",
+      "state": "done"
+    },
+    {
+      "text": "Add TypeScript config and desktop-only build scripts (main bundle + Vite React renderer)",
+      "state": "done"
+    },
+    {
+      "text": "Write zod IPC contract with strict request/response schemas",
+      "state": "done"
+    },
+    {
+      "text": "Single production IPC registration point with sender trust",
+      "state": "done"
+    },
+    {
+      "text": "Narrow preload methods plus typed window.copilot declaration",
+      "state": "done"
+    },
+    {
+      "text": "safeStorage keychain with unavailable-storage handling",
+      "state": "done"
+    },
+    {
+      "text": "Renderer screen that uses the typed bridge",
+      "state": "done"
+    },
+    {
+      "text": "Contract tests for schemas, handlers, preload, keychain",
+      "state": "done"
+    },
+    {
+      "text": "Verify: desktop check + build, root test/build untouched, report results",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-15T16:46:32.445Z"
+}

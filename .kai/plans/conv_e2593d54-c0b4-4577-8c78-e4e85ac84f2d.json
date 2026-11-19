@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "1. In desktop/features/copilot/main/chat/context.test.js line 565, change CONTEXT_MESSAGES to _CONTEXT_MESSAGES. Done when grep finds no bare use outside lines 67 and 78.",
+      "state": "done"
+    },
+    {
+      "text": "2. In the same file near line 861, change BEGIN(`summary:${THREAD_ID}`) to BEGIN('summary'). Done when grep for 'summary:' finds no fence.",
+      "state": "done"
+    },
+    {
+      "text": "3. Run cd desktop && npm run build:main && npm run check, and fix any failure in context.test.js. Done when it exits 0.",
+      "state": "active"
+    },
+    {
+      "text": "4. Run git add desktop/features/copilot/main/chat/context.test.js and commit with the message 'Make chat context fence labels unique memory-N and summary'. Done when git log -1 --stat shows only that file.",
+      "state": "pending"
+    }
+  ],
+  "updatedAt": "2026-11-19T08:22:53.148Z"
+}

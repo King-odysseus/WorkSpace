@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Reopen the registry correction and Google-session items in plan file conv_91fc2e91",
+      "state": "done"
+    },
+    {
+      "text": "Guard DisplayName/DisplayIcon/UninstallString property reads in install-local.ps1",
+      "state": "done"
+    },
+    {
+      "text": "Add dependency-free install-local.test.ps1 covering the five resolver cases",
+      "state": "done"
+    },
+    {
+      "text": "Run the regression check under Windows PowerShell and confirm no PropertyNotFoundException",
+      "state": "done"
+    },
+    {
+      "text": "Run npm test, npm run build, desktop check, windows.test.js, start:smoke, probe:smoke and record outcomes",
+      "state": "active"
+    },
+    {
+      "text": "Build NSIS installer, install per-user, verify shortcut targets and installed --smoke-test exit 0",
+      "state": "pending"
+    },
+    {
+      "text": "Close setup terminal, launch via Start Menu/Explorer, verify page opens with no probe window",
+      "state": "pending"
+    },
+    {
+      "text": "Capture exact Google failure without secrets and classify configuration vs other",
+      "state": "pending"
+    },
+    {
+      "text": "Update README for resolver and launch behaviour",
+      "state": "pending"
+    },
+    {
+      "text": "Commit only the correction files and report installation, auth and Copilot status separately",
+      "state": "pending"
+    }
+  ],
+  "updatedAt": "2026-11-15T11:54:05.219Z"
+}

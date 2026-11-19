@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read the plan's Phase 1 scope, section 21 approvals and Phase 0 report",
+      "state": "done"
+    },
+    {
+      "text": "Inspect root package.json, .gitignore and desktop/ state",
+      "state": "done"
+    },
+    {
+      "text": "Create desktop/package.json and lockfile with Electron only",
+      "state": "done"
+    },
+    {
+      "text": "Create desktop build config (no root build changes)",
+      "state": "done"
+    },
+    {
+      "text": "Write shared probe contract: validated input schema and sanitized result schema",
+      "state": "done"
+    },
+    {
+      "text": "Write minimal Electron main + preload spike, no generic IPC or URL access",
+      "state": "done"
+    },
+    {
+      "text": "Write contract tests and run them plus desktop start/check commands",
+      "state": "done"
+    },
+    {
+      "text": "Confirm root build and dependency files untouched",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-14T16:04:50.163Z"
+}

@@ -3,6 +3,10 @@ dist/
 staticfiles/
 .tmp-mockup-build/
 .env
+
+# Desktop build output: the bundled main-process entry and the renderer page.
+# Both are produced by desktop/ npm run build and neither is source.
+/desktop/build/
 .env.*
 !.env.example
 db.sqlite3

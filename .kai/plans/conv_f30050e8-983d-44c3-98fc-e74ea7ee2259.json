@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read existing provider layer: contracts, guardedFetch, token/structured helpers, existing adapters",
+      "state": "done"
+    },
+    {
+      "text": "Read the shared provider contract suite to see what adapters must satisfy",
+      "state": "done"
+    },
+    {
+      "text": "Design config-driven OpenAI-compatible adapter shape and capability model",
+      "state": "done"
+    },
+    {
+      "text": "Foundation: transport seam, wire helpers, capability model, provider presets",
+      "state": "done"
+    },
+    {
+      "text": "Implement Anthropic adapter",
+      "state": "done"
+    },
+    {
+      "text": "Implement OpenAI-compatible adapter for all seven presets",
+      "state": "done"
+    },
+    {
+      "text": "Provider registry and preset list",
+      "state": "done"
+    },
+    {
+      "text": "Wire adapters into the bundled exports (ipc index)",
+      "state": "done"
+    },
+    {
+      "text": "Contract, transport, catalogue, capability and guard-integration tests",
+      "state": "done"
+    },
+    {
+      "text": "Run desktop typecheck, bundle build and full desktop test suite",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-16T11:01:51.696Z"
+}

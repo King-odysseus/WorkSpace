@@ -70,7 +70,18 @@ const PERMISSION_LABELS = [
   ["manage_ai_access", "Manage Zuri member access"],
   ["manage_ai_providers", "Manage Zuri providers"],
   ["view_reports", "View reports"],
+  // Deliberately not a manager default: the server keeps it out of the default
+  // set, so an owner grants the desktop assistant per manager.
+  ["use_copilot", "Use desktop assistant"],
 ];
+
+// Count only the rows this list renders: a manager may hold a newer server key
+// that has no checkbox here, and counting it would read "17 of 16".
+const countGrantedPermissions = (permissions) =>
+  PERMISSION_LABELS.reduce(
+    (total, [key]) => (permissions.includes(key) ? total + 1 : total),
+    0,
+  );
 
 const minutesToHoursInput = (minutes) => {
   const hours = Number(minutes || 0) / 60;
@@ -4072,14 +4083,14 @@ function SettingsView({
                             .join(" ") || manager.email;
                         return (
                           // Collapsed by default: this panel is a list of people,
-                          // and thirteen checkboxes each is a wall nobody reads.
+                          // and a long list of checkboxes each is a wall nobody reads.
                           // The heading carries the count, so the state is
                           // legible without opening anything.
                           <CollapsibleSection
                             key={manager.id}
                             className="settings-manager-card"
                             title={name}
-                            hint={`${draft.length} of ${PERMISSION_LABELS.length} granted`}
+                            hint={`${countGrantedPermissions(draft)} of ${PERMISSION_LABELS.length} granted`}
                             contentClassName="settings-permission-body"
                           >
                             <span className="block text-xs text-text-muted">

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read chat/context.ts, its tests, and related memory/summary types",
+      "state": "done"
+    },
+    {
+      "text": "Design data-boundary format with source ids and escaping",
+      "state": "done"
+    },
+    {
+      "text": "Implement trusted-instruction notice and quoted data framing",
+      "state": "done"
+    },
+    {
+      "text": "Add regression tests for injected instructions, forged headings, closing delimiters",
+      "state": "done"
+    },
+    {
+      "text": "Update context budget tests for boundary overhead and newest-turn preservation",
+      "state": "done"
+    },
+    {
+      "text": "Run focused tests and type check",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-16T21:37:34.560Z"
+}

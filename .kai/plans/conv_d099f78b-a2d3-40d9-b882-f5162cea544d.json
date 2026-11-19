@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read plan doc, design system and mockup",
+      "state": "done"
+    },
+    {
+      "text": "Read existing desktop shell code",
+      "state": "done"
+    },
+    {
+      "text": "Fix startup show, theme, dev-only flags, quit path",
+      "state": "done"
+    },
+    {
+      "text": "Keep isolation, sandbox, CSP, navigation",
+      "state": "done"
+    },
+    {
+      "text": "Extend tests for modes, resize, theme, styles",
+      "state": "done"
+    },
+    {
+      "text": "Run tests and build, report files",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-15T23:44:03.320Z"
+}

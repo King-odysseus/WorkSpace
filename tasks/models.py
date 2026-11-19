@@ -103,13 +103,19 @@ PERMISSION_KEYS = (
     'create_workstreams', 'manage_workstreams',
     'use_ai', 'manage_ai_access', 'manage_ai_providers', 'comment_check_ins',
     'view_reports', 'post_memos', 'manage_requests', 'approve_leave',
+    'use_copilot',
 )
+
+# The desktop assistant is deliberately not a manager default: an owner grants
+# it per manager. Owners still get it because owners get every key, and members
+# never do because their set is fixed.
+MANAGER_DEFAULT_PERMISSION_EXCLUSIONS = frozenset({'use_copilot'})
 
 # The manager default mirrors every capability the old coarse owner-or-manager
 # ("leader") checks used to grant unconditionally, so introducing granular
 # permissions changes nothing for an existing workspace until an owner
 # deliberately narrows a specific manager's grant.
-MANAGER_DEFAULT_PERMISSIONS = frozenset(PERMISSION_KEYS)
+MANAGER_DEFAULT_PERMISSIONS = frozenset(PERMISSION_KEYS) - MANAGER_DEFAULT_PERMISSION_EXCLUSIONS
 MEMBER_DEFAULT_PERMISSIONS = frozenset({'create_tasks', 'edit_own_tasks', 'use_ai', 'view_reports', 'comment_check_ins'})
 
 

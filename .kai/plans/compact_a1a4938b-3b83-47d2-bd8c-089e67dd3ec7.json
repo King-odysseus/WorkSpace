@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "In privacy.test.js, replace provider-shaped fixture with stored seq 3 row; pass assembled.messages directly to buildCloudPayload",
+      "state": "active"
+    },
+    {
+      "text": "In phase-3-acceptance.md, label F11 as resolved and keep web-build gate and live local-model run explicit",
+      "state": "pending"
+    },
+    {
+      "text": "In phase-3-security-review.md, label F11 verdict as resolved and align with tested correction",
+      "state": "pending"
+    }
+  ],
+  "updatedAt": "2026-11-19T13:16:27.166Z"
+}

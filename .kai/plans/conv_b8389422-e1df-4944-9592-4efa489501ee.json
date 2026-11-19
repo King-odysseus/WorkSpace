@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Analyze current context.ts implementation to identify specific issues with F11 privacy blocker",
+      "state": "done"
+    },
+    {
+      "text": "Fix memorySource function to properly handle all positions without duplicates",
+      "state": "active"
+    },
+    {
+      "text": "Fix position counting consistency in memoryWithin function",
+      "state": "pending"
+    },
+    {
+      "text": "Fix index restart per kind issue in recallText function",
+      "state": "pending"
+    },
+    {
+      "text": "Fix summary label to always be 'summary:a'",
+      "state": "pending"
+    },
+    {
+      "text": "Restore build scripts in package.json",
+      "state": "pending"
+    },
+    {
+      "text": "Add tests for the fixes",
+      "state": "pending"
+    },
+    {
+      "text": "Verify all changes work correctly with npm test",
+      "state": "pending"
+    }
+  ],
+  "updatedAt": "2026-11-18T11:55:32.771Z"
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read current sanitize.js, its tests, and every caller of sanitizeHeaders/sanitizePath",
+      "state": "active"
+    },
+    {
+      "text": "Change sanitizeHeaders to an allowlist of safe headers, redacting anything else",
+      "state": "pending"
+    },
+    {
+      "text": "Change sanitizePath to redact sensitive query values (access_token, api_key, etc.)",
+      "state": "pending"
+    },
+    {
+      "text": "Add regression tests for unknown headers and sensitive query params",
+      "state": "pending"
+    },
+    {
+      "text": "Update README/RESULTS wording if it states the old keep-verbatim rule",
+      "state": "pending"
+    },
+    {
+      "text": "Run harness unit tests and confirm no caller breaks",
+      "state": "pending"
+    }
+  ],
+  "updatedAt": "2026-11-14T18:33:17.897Z"
+}

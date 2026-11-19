@@ -1,0 +1,338 @@
+/*
+ * The desktop renderer's one stylesheet, and the reason there is only one.
+ *
+ * It imports the application's token sheet read-only rather than declaring a
+ * second palette: the shell is the same product as the web app, so a colour that
+ * changed in one place must change in both. Nothing in this repository's
+ * `src/pencil.css` is edited from here; the file is consumed, not owned.
+ *
+ * `@source` points Tailwind at this folder so the utilities used by the shell
+ * components are generated. Without it Tailwind would scan from the token
+ * sheet's own directory and emit nothing for these files.
+ *
+ * The remote font import inside the token sheet is stripped by the Vite plugin
+ * in `desktop/vite.config.ts`: a local page under this CSP must not fetch a
+ * stylesheet, and the desktop ships the system font stack instead.
+ */
+@import "../../../src/pencil.css";
+
+@source "./";
+
+/*
+ * The shell fills the window.
+ *
+ * The token sheet gives `html, body, #root` a `min-height` and no definite height,
+ * which is enough for the web app: its pages are documents that grow downwards. The
+ * assistant screen is not a document - it is a three-column layout that sizes itself
+ * with `height: 100%` - and a percentage height resolves against the parent's
+ * *height*, not its minimum. With nothing definite above it the screen collapsed to
+ * the height of its contents: measured at 557px inside an 800px window, which cut the
+ * foot of the sidebar and of every panel and left the page background showing under
+ * them. `height: 100%` on these three elements is what turns the chain definite, and
+ * it is scoped to this stylesheet because the web app is never rendered from it.
+ */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/*
+ * The assistant sidebar's current row is the same pill as its neighbours.
+ *
+ * The application's token sheet styles `aside[class*=bg-navy] nav
+ * button[aria-current=page]` with a `0 8px 8px 0` corner and `!important`. That is
+ * the web app's own sidebar look, and it reads correctly there because every row in
+ * that rail is rounded the same way. In this shell the other rows are pills, so the
+ * one square corner landed on the row a person had just clicked: the control changed
+ * shape as they used it, which is the opposite of what an active state should say.
+ *
+ * The radius is replaced rather than removed, so the app keeps ownership of the two
+ * things that actually mark the selection - the bronze leading edge and the
+ * translucent fill. Both theme variants are written out because the app has one rule
+ * per theme and a selector that only matched the light one would lose to the darker
+ * one's higher specificity.
+ */
+aside[class*="bg-navy"] nav.zuri-rail button[aria-current="page"],
+html[data-theme="dark"] aside[class*="bg-navy"] nav.zuri-rail button[aria-current="page"] {
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+/*
+ * The assistant's nav rows are pills in every state, hover included.
+ *
+ * The web app's button primitive is a pill and its sidebar rows are rounded, so a
+ * square row here would be the one control in the window shaped unlike the rest of
+ * the product. Stated once for the whole rail rather than per row, because the rows
+ * are generated and a utility on each one is what drifted in the first place.
+ *
+ * The rail's own cells take the app's sidebar corner instead of a full pill. Each of
+ * those is two lines - an icon above its name - and a capsule around a two-line cell
+ * reads as a blob rather than a selected destination. The web app's sidebar rows use
+ * this same 8px, so the chrome and the assistant sidebar stay one family.
+ */
+[data-shell="rail"] button {
+  border-radius: 8px !important;
+}
+
+/*
+ * Rail labels are 10px and stay on one line.
+ *
+ * The row asks for `text-[10px]` and never got it. The token sheet carries its own
+ * unlayered `button, input, select, textarea { font: inherit }`, and an unlayered rule
+ * beats every rule inside Tailwind's `@layer utilities` whatever its specificity - so
+ * the label rendered at the inherited 16px. At 16px "Workspace" measures 87px inside a
+ * 52px label box, so `break-words` split it into "Works pace" over two lines of a 56px
+ * row: the destination name, the one thing a rail item is for, was the part that broke.
+ *
+ * Setting the size here is the fix rather than deleting the utility: this file is
+ * unlayered too, and `[data-shell="rail"] button > span` outranks the sheet's `button`,
+ * so it lands. At 10px the longest label needs 54.2px, and the row's side padding is
+ * removed below to give the label the rail's full 60px, so it fits with room to spare
+ * and a break inside a word is refused outright.
+ */
+[data-shell="rail"] button {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+[data-shell="rail"] button > span {
+  font-size: 10px;
+  line-height: 12px;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
+}
+
+/*
+ * A disabled control says so with the cursor too.
+ *
+ * The controls carry `disabled:cursor-not-allowed`, and it never applied: the token
+ * sheet's unlayered `button { cursor: pointer }` beats anything inside Tailwind's
+ * utilities layer. Measured on the composer's send button while the box was empty -
+ * disabled, half opacity, and a pointer cursor over it, which is the half of the
+ * signal that says "click me" contradicting the half that says "not yet".
+ *
+ * Stated for the whole shell rather than for the conversation screen, because the
+ * Models screen disables its buttons on the same condition and deserves the same
+ * cursor. It lives here, above the first rule that names a screen, so the scoping
+ * guard below does not have to carry an exception for it.
+ */
+[data-shell] button:disabled {
+  cursor: not-allowed;
+}
+
+/*
+ * The Models screen's controls are shaped like the web app's controls.
+ *
+ * This block used to square them off. It no longer does: the desktop shell is the
+ * same product as the web app, whose button primitive is a pill and whose fields are
+ * rounded, and a settings screen that is the only square thing in the window reads as
+ * a different application. What is kept from the old rule is the part that was right -
+ * no hairline border and no shadow, because a filled pill does not need an outline to
+ * be found.
+ *
+ * Scoped to one screen by its data attribute so nothing else in the shell is affected,
+ * and stated once here rather than repeated as utility classes on every control - the
+ * utilities lose to the theme rules and would read as intent while doing nothing.
+ *
+ * The focus ring is not touched: it is an outline, which this leaves alone, so a
+ * keyboard user still sees where they are.
+ */
+[data-shell="models-screen"] input,
+[data-shell="models-screen"] select,
+[data-shell="models-screen"] button {
+  border-radius: 999px !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+}
+
+/*
+ * Fields keep a focus ring.
+ *
+ * The application's token sheet paints `input:focus` and `select:focus` with
+ * `outline: 0` plus a blue box-shadow, and the rule above removes that shadow for
+ * this screen because a shadow on a borderless field reads as a border. Between the
+ * two, a keyboard user would tab to a field and see nothing at all - which is what
+ * happened before this rule. The outline is restored here in the app's own focus
+ * colour, the same bronze the buttons already use, so the ring survives the shadow
+ * being gone without inventing a second visual language.
+ */
+[data-shell="models-screen"] input:focus-visible,
+[data-shell="models-screen"] select:focus-visible {
+  outline: 2px solid var(--pencil-bronze) !important;
+  outline-offset: 2px !important;
+}
+
+/*
+ * Fields get the card surface rather than the app's soft grey fill.
+ *
+ * The token sheet paints inputs with `--soft-field`, which on this screen's grey
+ * panel is the same grey, so a borderless field would be invisible - a key box
+ * nobody can find is worse than a hairline. The card surface is distinct in both
+ * themes, which is what makes a field read as a field once the border is gone.
+ */
+[data-shell="models-screen"] input,
+[data-shell="models-screen"] select {
+  background-color: var(--pencil-surface) !important;
+}
+
+/*
+ * The conversation screen's controls, shaped the way the design system shapes them.
+ *
+ * The Models screen is a settings surface, but it is not squared off: its controls are
+ * pills too, which is what the token sheet's own button primitives draw and what the
+ * screen below the web app's other settings looks like. An earlier revision of this
+ * file squared that screen off and made it the only square thing in the window; the
+ * rule further up now restores the pill. This one is not squared off either: the
+ * design system draws the chat controls as pills and the
+ * composer as a rounded box, and a person who has used the web app should not have
+ * to learn a second set of shapes when the window is the desktop shell. So the
+ * radius is *replaced* rather than removed, one property at a time, and only the
+ * properties the token sheet pins with `!important` are restated with `!important`
+ * - the bronze focus treatment, the fills and the type are left to the app.
+ *
+ * Scoped by `data-shell` on the screen's own root so the rail, the Models screen and
+ * every dialog keep the treatment they have today. The stylesheet is shared, and a
+ * selector without that scope would restyle the whole shell from here.
+ */
+[data-shell="chat-screen"] button {
+  border-radius: 999px !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+}
+
+/*
+ * An icon-only button is a circle, not a pill.
+ *
+ * A pill around a single glyph is a stadium that is wider than it is tall, which
+ * reads as a button with a missing label. The circle is the same 999px idea applied
+ * to a square box. `data-icon-only` is set by the button itself rather than guessed
+ * from the absence of a label, because a glyph can be drawn from a font, a span or
+ * an svg and none of those is a reliable way to ask "is this button icon-only".
+ */
+[data-shell="chat-screen"] button[data-icon-only="true"] {
+  border-radius: 50% !important;
+}
+
+/*
+ * Fields are borderless pills on the card surface.
+ *
+ * The token sheet gives an input a hairline border, a 12px radius and the app's soft
+ * grey fill, all with `!important`. The border goes for the same reason it goes on
+ * the Models screen: a filled, rounded field does not need an outline to be found,
+ * and the grey fill is nearly the same grey as this screen's panel, so the card
+ * surface is what makes the field read as one.
+ */
+[data-shell="chat-screen"] input,
+[data-shell="chat-screen"] textarea {
+  border-radius: 999px !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+  background-color: var(--pencil-surface) !important;
+}
+
+/*
+ * The composer is a box, not a pill.
+ *
+ * Stated after the rule above and with the same specificity, so it wins on order.
+ * It has to be its own rule because the composer holds several lines: a pill radius
+ * on a growing textarea pulls its first and last lines into the curve and reads as a
+ * single-line field that happened to get tall. 28px is the design system's own
+ * composer radius, so this matches the web app rather than approximating it.
+ */
+[data-shell="chat-screen"] textarea {
+  border-radius: 28px !important;
+}
+
+/*
+ * Message bubbles keep the design system's 20px radius, with the speaker's own
+ * corner squared off.
+ *
+ * The radius is restated even though the token sheet already draws it, because the
+ * bubble carries its own data attribute and a later pass of this file could easily
+ * remove the sheet's version; saying the number here is what makes the shape the
+ * screen's decision rather than a coincidence. The 6px corner is the tail: it points
+ * at whoever spoke, which is the one thing that tells a person at a glance who in
+ * the conversation a paragraph belongs to. The user's tail is bottom-right and the
+ * assistant's is bottom-left, so the two never sit on the same side.
+ */
+[data-shell="chat-screen"] [data-bubble="true"] {
+  border-radius: 20px !important;
+}
+
+[data-shell="chat-screen"] [data-bubble="user"] {
+  border-radius: 20px 20px 6px 20px !important;
+}
+
+[data-shell="chat-screen"] [data-bubble="assistant"] {
+  border-radius: 20px 20px 20px 6px !important;
+}
+
+/*
+ * Every control on this screen keeps a visible keyboard ring.
+ *
+ * The token sheet paints `input:focus` and `select:focus` with `outline: 0` and a
+ * blue box-shadow instead, and the rules above remove the shadow here because a
+ * shadow on a borderless surface reads as a border. Between the two, a keyboard user
+ * would tab through the composer and the send button and see nothing move. The
+ * outline is restored in the app's own bronze, the same ring the Models screen uses,
+ * so there is one focus language in the shell and not two. `:focus-visible` rather
+ * than `:focus` so a mouse click does not leave a ring behind on every button.
+ */
+[data-shell="chat-screen"] button:focus-visible,
+[data-shell="chat-screen"] input:focus-visible,
+[data-shell="chat-screen"] textarea:focus-visible,
+[data-shell="chat-screen"] select:focus-visible {
+  outline: 2px solid var(--pencil-bronze) !important;
+  outline-offset: 2px !important;
+}
+
+/*
+ * A select is shaped like a field, not like a dropdown from the operating system.
+ *
+ * Same geometry as the inputs above, stated separately rather than folded into that
+ * rule so the composer override in between cannot be read as applying to it too.
+ * Without this a form on this screen would show one pill and one 12px rounded box side
+ * by side, which is the kind of drift that makes an app look assembled from parts.
+ *
+ * The fill is the app's second surface, not the card surface. The three pickers in
+ * this screen's header - business, provider, model - sit on the card surface itself,
+ * so a field filled with that same white had no surface at all: measured white on
+ * white with no border, which left three dropdowns reading as plain text with a
+ * chevron beside them. The muted tone is the app's own fill for a control that sits
+ * on a card, so the fields read as fields in both themes without a border being drawn
+ * around them.
+ */
+[data-shell="chat-screen"] select {
+  border-radius: 999px !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+  background-color: var(--pencil-surface-muted) !important;
+}
+
+/*
+ * The composer sits on a different tone from the panel behind it.
+ *
+ * The rule above gives every field the card surface, which is right for a field in a
+ * rail or a card. Here it is wrong: the composer is drawn on that same surface, so a
+ * field filled with it disappears and the placeholder reads as a heading floating
+ * above the footer. The muted tone is the app's own second surface, so the composer
+ * reads as a field without a border being drawn around it.
+ */
+[data-shell="chat-screen"] textarea[data-composer="true"] {
+  background-color: var(--pencil-surface-muted) !important;
+  /*
+   * The composer grows with what is typed in it, up to a cap, and then scrolls.
+   *
+   * It is a one-row box by default, so a message that wrapped to a second line was
+   * cut off at the pill's edge: the person could not see the end of what they were
+   * about to send. `field-sizing` is the CSS way to do this; the alternative is an
+   * inline style on the element, which the page's own policy forbids and the
+   * renderer rule against inline styles exists to prevent.
+   */
+  field-sizing: content;
+  max-height: 160px;
+  overflow-y: auto;
+}

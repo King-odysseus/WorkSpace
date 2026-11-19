@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read client.js, probe contract, and existing tests",
+      "state": "done"
+    },
+    {
+      "text": "Rewrite readJson to enforce MAX_BODY_BYTES while streaming and cancel oversized bodies",
+      "state": "done"
+    },
+    {
+      "text": "Add streaming bodies to test doubles plus an oversized chunked response test",
+      "state": "done"
+    },
+    {
+      "text": "Run the desktop contract tests (node --test) and the web build",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-14T16:45:27.248Z"
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read plan section 20 and existing eval harness/results",
+      "state": "done"
+    },
+    {
+      "text": "Expand memory set to 24 prompts with expectations",
+      "state": "done"
+    },
+    {
+      "text": "Expand drafting set to 24 prompts with expectations",
+      "state": "done"
+    },
+    {
+      "text": "Enforce per-case isolation and separate failure counts",
+      "state": "done"
+    },
+    {
+      "text": "Run both sets against configured models",
+      "state": "done"
+    },
+    {
+      "text": "Write report results summary and run repo checks",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-17T08:01:57.400Z"
+}

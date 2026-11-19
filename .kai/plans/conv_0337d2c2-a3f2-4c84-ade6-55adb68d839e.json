@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read documents/zip.ts and documents/pdf.ts at the flagged regions",
+      "state": "done"
+    },
+    {
+      "text": "Fix ZIP STORE size validation and cumulative budget",
+      "state": "done"
+    },
+    {
+      "text": "Fix PDF cumulative decoded-byte budget before collecting streams",
+      "state": "done"
+    },
+    {
+      "text": "Add malformed-size ZIP tests and repeated-reference PDF test",
+      "state": "done"
+    },
+    {
+      "text": "Run desktop checks and confirm nothing regressed",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-17T12:58:29.230Z"
+}

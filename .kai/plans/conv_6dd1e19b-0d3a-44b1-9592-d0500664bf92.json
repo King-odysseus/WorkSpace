@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read the zuricopilot plan and locate Phase 0 requirements",
+      "state": "active"
+    },
+    {
+      "text": "Record phase-start commit and root production build asset filenames",
+      "state": "pending"
+    },
+    {
+      "text": "Run baseline npm run build, vitest, and Django tests; capture results",
+      "state": "pending"
+    },
+    {
+      "text": "Define isolated test workspace with throwaway users for the write probe",
+      "state": "pending"
+    },
+    {
+      "text": "Confirm raw logs/build output stay in ignored locations; check git status",
+      "state": "pending"
+    },
+    {
+      "text": "Write desktop/reports/phase-0.md and verify acceptance criteria",
+      "state": "pending"
+    }
+  ],
+  "updatedAt": "2026-11-14T15:10:36.778Z"
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read existing desktop shell, window, contract and probe code",
+      "state": "done"
+    },
+    {
+      "text": "Read plan doc sections on IPC, debug renderer and CSP",
+      "state": "done"
+    },
+    {
+      "text": "Build preload bridge exposing narrow IPC methods only",
+      "state": "done"
+    },
+    {
+      "text": "Build main-process IPC handlers with request + sender validation",
+      "state": "done"
+    },
+    {
+      "text": "Build minimal debug renderer with strict CSP and navigation block",
+      "state": "done"
+    },
+    {
+      "text": "Write tests for IPC validation, sender check and CSP",
+      "state": "done"
+    },
+    {
+      "text": "Run desktop checks and web build",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-14T17:12:29.569Z"
+}

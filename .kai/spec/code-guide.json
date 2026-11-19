@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "history": [
+    {
+      "at": "2026-11-14T14:39:54.675Z",
+      "stepId": "versioned",
+      "title": "Put the project under version control"
+    },
+    {
+      "at": "2026-11-14T14:39:54.675Z",
+      "stepId": "committed",
+      "title": "Save your first checkpoint"
+    }
+  ],
+  "narrative": null,
+  "narrativeFor": "",
+  "narrativeAt": null
+}

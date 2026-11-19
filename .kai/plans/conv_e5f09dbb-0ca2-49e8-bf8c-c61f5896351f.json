@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read the plan doc and existing desktop/electron code",
+      "state": "done"
+    },
+    {
+      "text": "Write desktop/electron/windows.js (server URL, trusted ports, persist:ws, nav policy)",
+      "state": "done"
+    },
+    {
+      "text": "Write desktop/electron/main.js (boot, smoke test, config errors)",
+      "state": "done"
+    },
+    {
+      "text": "Verify: unit tests, smoke runs, runtime guard/session checks, no src/tasks/backend changes",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-14T16:33:22.699Z"
+}

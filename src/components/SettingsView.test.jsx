@@ -2630,3 +2630,120 @@ it('offers Remove logo only once a workspace has one', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
   expect(screen.getByRole('button', { name: 'Remove logo' })).toBeInTheDocument()
 })
+
+// The manager panel lists a fixed set of rows, while the server can add a
+// permission key before this list learns about it. These tests pin the tally to
+// what is actually rendered, and pin the panel to owners.
+
+// Every manager-default key: the server's full list minus use_copilot.
+const DEFAULT_MANAGER_PERMISSIONS = [
+  'create_tasks',
+  'edit_own_tasks',
+  'edit_team_tasks',
+  'assign_tasks',
+  'create_projects',
+  'manage_projects',
+  'create_workstreams',
+  'manage_workstreams',
+  'comment_check_ins',
+  'post_memos',
+  'manage_requests',
+  'approve_leave',
+  'use_ai',
+  'manage_ai_access',
+  'manage_ai_providers',
+  'view_reports',
+]
+
+const managerMember = (permissions) => ({
+  id: 2,
+  first_name: 'Amara',
+  last_name: 'Okafor',
+  email: 'amara@example.test',
+  role: 'manager',
+  daily_capacity_minutes: 480,
+  working_days: [0, 1, 2, 3, 4],
+  weekly_capacity_minutes: 2400,
+  permissions,
+})
+
+const openWorkspaceAccess = ({ role = 'owner', members = [] } = {}) => {
+  render(
+    <SettingsView
+      currentWorkspace={{ id: 1, name: 'Northstar', role }}
+      currentUserName="Test"
+      currentUserEmail="test@example.test"
+      currentUserId={1}
+      members={members}
+      notifications={[]}
+      workspaceId={1}
+      canManageMembers
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Workspace access' }))
+}
+
+// The count sits on the collapsed trigger, so it is readable before expanding.
+const expandManagerCard = (name) => {
+  fireEvent.click(screen.getByRole('button', { name: `Show ${name}` }))
+  return screen
+    .getByRole('button', { name: `Hide ${name}` })
+    .closest('[data-slot="collapsible-section"]')
+}
+
+it('shows the desktop assistant permission granted to a manager and counts it', () => {
+  mockApi({})
+  openWorkspaceAccess({
+    members: [managerMember([...DEFAULT_MANAGER_PERMISSIONS, 'use_copilot'])],
+  })
+
+  expect(screen.getByText('17 of 17 granted')).toBeInTheDocument()
+
+  const card = expandManagerCard('Amara Okafor')
+  expect(
+    within(card).getByRole('checkbox', { name: 'Use desktop assistant' }),
+  ).toBeChecked()
+})
+
+it('shows the desktop assistant permission unchecked for a default manager', () => {
+  mockApi({})
+  openWorkspaceAccess({ members: [managerMember(DEFAULT_MANAGER_PERMISSIONS)] })
+
+  expect(screen.getByText('16 of 17 granted')).toBeInTheDocument()
+
+  const card = expandManagerCard('Amara Okafor')
+  expect(
+    within(card).getByRole('checkbox', { name: 'Use desktop assistant' }),
+  ).not.toBeChecked()
+})
+
+it('counts only the permissions the panel actually renders', () => {
+  mockApi({})
+  openWorkspaceAccess({
+    members: [managerMember(['create_tasks', 'future_unknown_key'])],
+  })
+
+  // The unknown key has no row here, so it must not inflate the tally.
+  expect(screen.getByText('1 of 17 granted')).toBeInTheDocument()
+
+  const card = expandManagerCard('Amara Okafor')
+  expect(within(card).getAllByRole('checkbox')).toHaveLength(17)
+  const checked = within(card).getAllByRole('checkbox', { checked: true })
+  expect(checked).toHaveLength(1)
+  expect(checked[0]).toBe(within(card).getByRole('checkbox', { name: 'Create tasks' }))
+})
+
+it('keeps the manager permissions panel owner-only', () => {
+  mockApi({})
+  openWorkspaceAccess({
+    role: 'manager',
+    members: [managerMember(DEFAULT_MANAGER_PERMISSIONS)],
+  })
+
+  // The panel body rendered for this manager, yet the grant controls did not.
+  expect(screen.getByRole('textbox', { name: 'Workspace name' })).toBeInTheDocument()
+  expect(screen.queryByText('Manager permissions')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Show Amara Okafor' }),
+  ).not.toBeInTheDocument()
+})

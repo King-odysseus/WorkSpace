@@ -110,7 +110,8 @@ it('holds permission changes until they are saved', async () => {
   // Collapsed, with the granted count in the heading: thirteen checkboxes per
   // manager is a wall nobody reads.
   const heading = screen.getByRole('button', { name: /Show Gregory Ikhine/ })
-  expect(heading).toHaveTextContent('2 of 16 granted')
+  // Seventeen keys, because the desktop assistant permission joined the list.
+  expect(heading).toHaveTextContent('2 of 17 granted')
 
   fireEvent.click(heading)
   const card = heading.closest('section')

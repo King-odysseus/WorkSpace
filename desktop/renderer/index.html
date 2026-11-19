@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!--
+      The policy travels with the page because a local file has no response
+      headers to carry one. connect-src 'none' is what stops this renderer
+      making a request of its own: every Copilot call goes through the preload
+      bridge to the main process instead. No inline script and no inline style
+      are allowed, so the built bundle must stay in separate files.
+
+      This policy describes the built page. A Vite dev server injects its own
+      inline refresh preamble and needs a websocket, so it will be blocked here;
+      that is deliberate, because the shipped renderer is the file on disk.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+    <title>ZuriCopilot</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Analyze current context.ts to verify memorySource/summarySource already use counter-based labels",
+      "state": "active"
+    },
+    {
+      "text": "Run TypeScript checks to ensure no regressions (npm run build:main && npm run check)",
+      "state": "pending"
+    }
+  ],
+  "updatedAt": "2026-11-18T20:29:00.672Z"
+}

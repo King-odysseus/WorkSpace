@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Read plan 4.1 CSP requirements and current windows.js/main.js",
+      "state": "done"
+    },
+    {
+      "text": "Design and implement restrictive CSP for the authenticated renderer",
+      "state": "done"
+    },
+    {
+      "text": "Add tests covering the CSP policy",
+      "state": "done"
+    },
+    {
+      "text": "Prove enforcement in real Chromium (inline, foreign script, eval blocked)",
+      "state": "done"
+    },
+    {
+      "text": "Run npm run test and npm run build",
+      "state": "done"
+    },
+    {
+      "text": "Confirm only owned desktop files changed",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-14T16:54:46.831Z"
+}

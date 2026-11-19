@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "text": "Inspect repo state: server key already in HEAD commit, no web-display fix yet",
+      "state": "done"
+    },
+    {
+      "text": "Review helper output: server tests file and web settings display fix plus tests",
+      "state": "done"
+    },
+    {
+      "text": "Run python manage.py test tasks.test_assistant_access, then the full Django suite",
+      "state": "done"
+    },
+    {
+      "text": "Run focused frontend tests with --maxWorkers=2 and npm run build",
+      "state": "done"
+    },
+    {
+      "text": "Record exact server and web-display exceptions (plus commit messages) in desktop/reports/phase-1.md",
+      "state": "done"
+    },
+    {
+      "text": "Report changed files and verification results",
+      "state": "done"
+    }
+  ],
+  "updatedAt": "2026-11-16T00:06:42.665Z"
+}
