@@ -576,13 +576,6 @@ test('digit-heavy memory and summary IDs are allowed while user-supplied long nu
     updatedAt: '2026-11-16T09:30:00.000Z',
   }
 
-  const conversation = [
-    {
-      role: 'user',
-      parts: [{ type: 'text', text: 'Move the quote to Friday.' }],
-    },
-  ]
-
   // Assemble context with digit-heavy IDs and pass [storedMessage] directly
   const storedMessage = {
     id: 'b000003',

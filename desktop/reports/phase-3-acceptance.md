@@ -9,6 +9,7 @@ The test in `privacy.test.js` passes stored memory, a summary and a seq 3 user t
 `assembleContext` and sends `assembled.messages` directly to `buildCloudPayload`. Both
 memory texts, the summary and the user turn reach the allowed payload without any of the
 three digit-heavy row IDs. A user-supplied long number remains blocked as `long_number`.
+The current desktop check ran 897 tests (1 skipped) and 216 database tests, all passing.
 
 **Historical F11 failure.** The F1 correction originally fenced records with their row
 IDs. A hexadecimal ID could contain seven consecutive digits and trigger the privacy
@@ -24,7 +25,8 @@ because that rests on a decision only the owner can make.
 
 **What did move forward.** F1, F2, F3 and F11 are resolved; the evaluation sets are
 complete at 24 cases per feature. Section 2 preserves the earlier suite run, including
-its pre-fix F11 failure, alongside the other verification evidence.
+its pre-fix F11 failure, alongside the other verification evidence. The current desktop
+check ran 897 tests (1 skipped) and 216 database tests, all passing.
 
 Three things were found while verifying. All three are recorded in section 4 rather than
 quietly fixed:
@@ -132,6 +134,28 @@ That count includes the areas criterion 1 names:
 - **memory persistence**: items surviving a restart, and edits and deletions sticking
 - **proposal safety**: a reply that *says* "create a task" creates nothing, while the
   same words in the person's own message produces a draft
+
+### Desktop suite - current run
+
+```
+$ cd desktop && npm run check
+run-tests: unit tests under node (50 files)
+# tests 897
+# pass 896
+# fail 0
+# skipped 1
+run-tests: database tests under Electron node (12 files)
+i tests 216
+i pass 216
+i fail 0
+```
+
+The one skipped test is a file-permission test that only applies on Linux and Mac. The suite
+runs in two halves because the Node on this machine is version 20 and has no built-in
+database engine; the storage tests run under Electron's own Node, which is the engine
+the shipped app uses.
+
+**Current F11 verification.** The test in `privacy.test.js` ("digit-heavy memory and summary IDs are allowed while user-supplied long numbers are blocked") passes stored memory, a summary and a seq 3 user turn through `assembleContext` and sends `assembled.messages` directly to `buildCloudPayload`. The allowed payload contains both memory texts, the summary text and the seq 3 user text, while excluding all three digit-heavy IDs. A separate user-supplied long number (`08031234567`) remains blocked as `long_number`. This regression verifies the F11 fence-label correction.
 
 ### Electron window
 
