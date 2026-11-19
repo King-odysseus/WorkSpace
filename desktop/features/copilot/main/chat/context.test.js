@@ -903,7 +903,7 @@ test('fence labels use counter-based identifiers, not raw row IDs to prevent lon
   const messages = messagesOfSize(1, 100);
   const contextOne = assembleContext({ summary: null, memory, messages });
   
-  // Verify that the context contains counter-based labels like 'memory-a', not raw IDs
+  // Verify that the context contains counter-based labels like 'memory-1' and 'memory-2', not raw IDs
   assert.ok(textOfTurn(contextOne.messages[0]).includes('memory-1'), 'Should use counter-based label for first item');
   assert.ok(textOfTurn(contextOne.messages[0]).includes('memory-2'), 'Should use counter-based label for second item');
   
