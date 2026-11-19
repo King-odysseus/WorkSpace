@@ -6,7 +6,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 
-const { PROBE_CHANNEL } = require('../../shared/probe-contract.js')
+const { PROBE_CHANNEL, CONTRACT_INFO_CHANNEL } = require('../../shared/probe-contract.js')
 
 const PRELOAD = path.join(__dirname, '..', '..', '..', '..', 'electron', 'preload', 'copilot.js')
 
@@ -112,12 +112,24 @@ test('arguments handed to the bridge cannot change what is sent', async () => {
   assert.equal(api.probe.write.length, 0)
 })
 
+test('contractInfo sends the contract-info channel with an empty request', async () => {
+  const { api, invocations } = bridge()
+
+  await api.contractInfo()
+
+  assert.equal(invocations.length, 1)
+  assert.equal(invocations[0].channel, CONTRACT_INFO_CHANNEL)
+  assert.deepEqual(invocations[0].request, {})
+  assert.equal(api.contractInfo.length, 0)
+})
+
 test('the channel literal in the preload is the one in the contract', () => {
   const source = fs.readFileSync(PRELOAD, 'utf8')
 
   // The literal has to be repeated because a sandboxed preload cannot import the
   // contract. This is the check that stops the two drifting apart.
   assert.ok(source.includes(`'${PROBE_CHANNEL}'`), 'the preload does not name the contract channel')
+  assert.ok(source.includes(`'${CONTRACT_INFO_CHANNEL}'`), 'the preload does not name the contract-info channel')
   assert.equal(source.includes('ipcRenderer.invoke('), true)
   // One call site, fed by the two fixed methods, and nothing else.
   assert.equal((source.match(/ipcRenderer\.invoke\(/g) || []).length, 1)

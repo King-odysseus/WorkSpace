@@ -21,6 +21,7 @@ const CONTRACT_VERSION = 1
 
 // One channel, one action pair. There is deliberately no generic invoke.
 const PROBE_CHANNEL = 'copilot:probe:run'
+const CONTRACT_INFO_CHANNEL = 'copilot:contract:info'
 
 const PROBE_ACTIONS = Object.freeze(['read', 'write'])
 
@@ -221,6 +222,7 @@ function isSanitizedProbeResult (value) {
 module.exports = {
   CONTRACT_VERSION,
   PROBE_CHANNEL,
+  CONTRACT_INFO_CHANNEL,
   PROBE_ACTIONS,
   PROBE_ERROR_CODES,
   PROBE_RESULT_FIELDS,
