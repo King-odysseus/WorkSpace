@@ -57,11 +57,11 @@ function bridge () {
   return { api: exposed.copilot, invocations }
 }
 
-test('the preload exposes one bridge with two methods and no generic invoke', () => {
+test('the preload exposes one bridge with three methods and no generic invoke', () => {
   const { exposed } = loadPreload()
 
   assert.deepEqual(Object.keys(exposed), ['copilot'])
-  assert.deepEqual(Object.keys(exposed.copilot), ['probe'])
+  assert.deepEqual(Object.keys(exposed.copilot), ['probe', 'contractInfo'])
   assert.deepEqual(Object.keys(exposed.copilot.probe).sort(), ['read', 'write'])
 
   // The whole point of the bridge: no channel parameter, no event listener and
