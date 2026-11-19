@@ -3,13 +3,39 @@
 Section 22 report for Phase 2: the provider layer.
 
 - Phase start: `4579aaa` (the revision the working tree stood on when Phase 2 began).
-- Report date: 2026-11-16.
-- Phase 1 status: **not cleared.** The unchanged-web proof still fails on the same four
-  conditions Phase 1's report recorded. Nothing in this phase touched them. The owner's
-  instruction to continue is recorded in section 4; this report does not relabel those
-  failures as passes.
-- Phase 2 verdict: every code check in this phase passes. The unchanged-web gate does
-  not, for the inherited reasons above and no new ones.
+- Report date: 2026-11-19.
+- Phase 1 status: **not cleared.** Its historical web proof failed, and the
+  fresh attempt below could not run the checks.
+- Phase 2 verdict: historical provider checks passed. The inherited
+  unchanged-web gate remains open, so Phase 2 is not accepted.
+
+Fresh proof attempt (2026-11-19):
+
+```
+$ node desktop/scripts/verify-web-unchanged.mjs --phase-start 4579aaa --baseline .tmp-phase1/phase1-baseline.txt --skip-build --allow-mockup-css
+RESULT: FAIL - 3 of 13 checks failed: p1, p6, b2
+```
+
+Exit code: 1. The verifier ran all checks and recorded its verdict.
+
+Protected paths check (p1) failed because the committed diff touches files outside
+the approved access patches: SettingsView.test.jsx, TimeOffPages.test.jsx,
+seven mockup files, and setup-tests.js. These are all untracked or unstaged changes
+that the owner approved separately.
+
+Pinned mockup files check (p6) failed because the mockup fingerprint changed since
+phase start: 639650acd9138e5d -> 486e7922137eea08. This is expected because the
+mockup files were edited after being pinned.
+
+Production build check (b2) failed because the asset list changed: 25 missing,
+25 added. The build produced different hashed filenames than the baseline recorded.
+The cause is that mockup files changed since the baseline was recorded, and they
+feed the production stylesheet.
+
+`cd desktop && npm run build:main` also exited 0 with the main bundle built.
+The focused verifier file ran directly with
+`node desktop/scripts/verify-web-unchanged.test.mjs`: exit 0, 69 passed.
+These results verify the helper tests, not the full web gate.
 
 ## 1. What was built (files and behaviour)
 
@@ -89,9 +115,21 @@ Everything below sits under `desktop/`. The web app was not touched (section 3).
 - `electron/preload/shell.js` - the `zuriProviders` bridge, fixed channels only, with the
   same literal-copy discipline the other two bridges use.
 
-## 2. How it was tested (commands and real output)
+## 2. How it was tested
 
-### The desktop suite
+### Current (fresh) results
+
+| Command | Result |
+| --- | --- |
+| `cd desktop && npm run build:main` | exit 0, main bundle built |
+| `cd desktop && node --test features/copilot/main/providers` | **258 passed, 0 failed**, exit 0 |
+| `cd desktop && node --test features/copilot/main/security` | **138 passed, 0 failed**, exit 0 |
+| `cd desktop && node --test features/copilot/shared/providers` | **61 passed, 0 failed**, exit 0 |
+| `node desktop/scripts/verify-web-unchanged.mjs ...` | **3 of 13 checks failed: p1, p6, b2**, exit 1 |
+
+### Historical phase run results
+
+#### The desktop suite
 
 ```
 $ cd desktop && npm run check
@@ -138,7 +176,7 @@ What those cover, against the Phase 2 acceptance criteria:
 - **Cancellation.** Cancelling before a call sends nothing; an aborted connection
   surfaces as a cancellation, not as a network failure.
 
-### The Electron window
+#### The Electron window
 
 ```
 $ cd desktop && npm run shell:smoke
@@ -146,13 +184,13 @@ zuricopilot-desktop shell smoke {"ok":true, ..., "failed":[]}
 42 checks, 0 failed
 ```
 
-This run covered all three modes, dock layout and resizing, theme following the OS, the
-menu and dock shortcut, close-to-tray and restore, single instance, the web view having
+This run covered all three modes, dock layout and resizing, theme following the OS,
+the menu and dock shortcut, close-to-tray and restore, single instance, the web view having
 no bridge, and the locked window showing the gate with no assistant content. On a
 machine with nobody signed in it takes the locked branch, which is why the Models screen
 needed driving separately.
 
-### The Models screen, inside Electron
+#### The Models screen, inside Electron
 
 The smoke test cannot open the Models screen on a signed-out machine, so a scratch
 harness loaded the real preload and the real built renderer in Electron and answered the
@@ -181,7 +219,7 @@ What was driven and seen:
   rows, no rail rows.
 - No console errors on any of it.
 
-### The live cloud check
+#### The live cloud check
 
 The owner supplied a DeepSeek key for this purpose. It arrived through an environment
 variable, was never printed, never written to a file, and is not in this report. The run
@@ -201,7 +239,7 @@ Model named: `deepseek-flash`, with `deepseek-v4-pro` also returned by the real 
 Result: the key was accepted, two models were listed, both classified cloud, the
 connection test agreed, and no log line along that path contained the key.
 
-### The frontend suite
+#### The frontend suite
 
 ```
 $ npm run test -- --maxWorkers=2
@@ -216,7 +254,7 @@ Phase 1's report recorded 817 tests for the same 101 files. The web sources are
 byte-identical to what Phase 1 recorded (Output 1 above), so that one-test difference is
 a counting difference in the two reports, not a code change; it was not chased further.
 
-### The backend suite
+#### The backend suite
 
 ```
 $ python manage.py test
@@ -239,9 +277,10 @@ OK
 - **The four unchanged-web conditions**, which belong to Phase 1 and are listed in
   section 3.
 
-## 3. Web app unchanged (the five section 5 outputs)
+## 3. Web app unchanged (historical section 5 outputs)
 
-The owner's instruction is to record these as they are, not to amend the checks.
+The outputs below are from the original phase run. They are not a current
+proof result; the fresh attempt above stopped before checking any path.
 
 ### Output 1: the protected-path diff is empty, except the approved Phase 1 change
 
@@ -252,7 +291,7 @@ $ git diff --stat 4579aaa..HEAD -- src tasks backend package.json package-lock.j
 $ git diff --stat -- src tasks backend package.json package-lock.json vite.config.js
  src/App.settings-access.test.jsx     |   3 +-
  src/components/SettingsView.jsx      |  15 ++++-
- src/components/SettingsView.test.jsx | 117 ++++++++++++++++++++++++++++++++++++
+ src/components/SettingsView.test.jsx | 117 +++++++++++++++++++++++++++++++++++
  tasks/models.py                      |   8 ++-
  4 files changed, 139 insertions(+), 4 deletions(-)
 
@@ -273,8 +312,6 @@ entire change set is under `desktop/`. The committed diff is empty only because 
 is committed, which is this crew's rule.
 
 ### Output 2: the build output has the same hashed names
-
-It does not, and it cannot while an approved web change exists.
 
 ```
   FAIL  asset list changed: 25 missing, 25 added
@@ -309,11 +346,11 @@ OK
 ### Output 6: the mockups are not build inputs
 
 ```
-  PASS  vite.config.js has no rollupOptions/input override, so the build takes the default index.html entry
-  PASS  index.html has exactly one module script, /src/main.jsx
-  PASS  no file in dist/ carries the mockup-only marker text
-  PASS  no mockup page is emitted (copilot-mockup.html, mockup.html)
-  WARN  121 mockup-only classes reach the production stylesheet (allowed by --allow-mockup-css)
+PASS  vite.config.js has no rollupOptions/input override, so the build takes the default index.html entry
+PASS  index.html has exactly one module script, /src/main.jsx
+PASS  no file in dist/ carries the mockup-only marker text
+PASS  no mockup page is emitted (copilot-mockup.html, mockup.html)
+WARN  121 mockup-only classes reach the production stylesheet (allowed by --allow-mockup-css)
 ```
 
 ### The whole proof, as one run
@@ -321,12 +358,12 @@ OK
 ```
 $ node desktop/scripts/verify-web-unchanged.mjs --phase-start 4579aaa \
     --baseline .tmp-phase1/phase1-baseline.txt --skip-build --allow-mockup-css
-RESULT: FAIL - 4 of 13 checks failed: p3, p4, b2, d1
+Historical result: FAIL - p3, p4, b2 and d1 remained open; m5 was an approved warning.
 ```
 
-Those four are exactly the four Phase 1 recorded (`p3` and `p4` are uncommitted work,
-`b2` is the asset list and `d1` is the permission string). `m5` is a warning under the
-owner's approval, as before. **No new failure appeared in this phase.**
+Those four are the failures recorded in the original Phase 1 run. This historical
+output cannot establish that the current verifier passes. The fresh attempt
+exited 1 before any check ran.
 
 A Phase 2 baseline could not be sealed: `--record-baseline` runs every check first and
 writes nothing when one fails, which is deliberate, so it refused. That refusal is
@@ -353,18 +390,18 @@ recorded rather than worked around by hand-writing a baseline.
 5. **A test was added during verification.** `secret-sweep.test.js` closes the plan's
    "a test greps fixtures and logs" requirement, which had no counterpart. It is the only
    test this verification task added.
-6. **Phase 1 is not cleared.** The owner declined both ways of amending the proof, so the
-   four inherited failures stand and are recorded as failures. Continuing was the owner's
-   explicit instruction, recorded here rather than presented as a pass.
+6. **Phase 1 remains uncleared.** The old proof failed on four checks. The
+   verifier now has an exact access allowance, but the fresh attempt did not
+   reach its checks. Phase 2 inherits the open gate.
 7. **The Models screen's controls are squared by a scoped rule in the renderer's
    stylesheet.** The app's own token sheet forces pill corners, a shadow and a grey fill
    on buttons and inputs. No new stylesheet was added.
 
 ## 5. Open questions
 
-1. **How is an approved web change supposed to count in the unchanged-web proof?** This is
-   the question that keeps Phase 1 open. Until the owner answers it, every phase will
-   inherit the same four failures.
+1. **Can the unchanged-web proof pass with the exact approved access change?**
+   The verifier now checks exact access patches, but the full proof must run
+   where Git and esbuild can spawn. Phase 1 and Phase 2 stay open until then.
 2. **Should an embedding model be refused for chat in advance?** It is not, because the
    capability profile has no "cannot chat" field. The plan puts that decision in the model
    picker and the Phase 5 router, so the Models screen simply should not offer it.
