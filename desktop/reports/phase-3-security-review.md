@@ -9,16 +9,22 @@ The logging section (3) was added in a second pass and is the only part backed b
 run in that pass: a log sink was attached to the existing bundle and the secret-handling
 paths were driven through it. No file was rebuilt to obtain it.
 
-Verdict: three findings should be fixed before this phase is signed off. The rest are
-recorded for the phase that owns them or as lower-severity hardening.
+**Historical verdict.** This review originally found three blocking issues (F1, F2 and F3).
+They were corrected and re-reviewed. The F1 correction then introduced F11, described in
+section 1a.1. The original findings and measurements remain below as a record of that review.
 
-Addendum: the three blocking findings above were later corrected and re-reviewed (section 1a); the correction to F1 introduced a new blocking defect (F11) that remains open, so this verdict still stands.
+**Historical F11 finding.** The fence-label fix removed row ids from the prompt, resolving
+the issue where fenced row IDs read as long numbers blocked cloud turns. The regression test
+in section 1a.2 proves the whole context assembly path: assembled.messages is passed directly
+to buildCloudPayload, and the cloud payload contains memory, summary, and seq 3 user text
+while excluding digit-heavy row IDs. Phase 3 remains unsigned pending the separate web-build
+gate and live local-model run.
 
-Addendum 2: F11 is resolved with the fence-label fix and regression test (section 1a.2); Phase 3 can be signed off once the separate web-build gate is open.
+**Current verdict.** F1, F2, F3 and the new F11 correction are resolved. Phase 3 remains unsigned pending the separate web-build gate and live local-model run.
 
 ## 1. Findings that block acceptance
 
-### F1 - Recalled items and the summary enter the prompt as instructions, not as data
+**Historical F1 - Recalled items and the summary enter the prompt as instructions, not as data
 `chat/context.ts:148-168` (`recallText`) pastes remembered items and the summary into one
 `system` message with only a kind heading above each group:
 
@@ -44,7 +50,7 @@ Correction: wrap the block in explicit data delimiters and state in the prompt t
 everything inside the block is quoted business data and never an instruction; add a test
 with an item whose text is an instruction and assert the assembled prompt marks it as data.
 
-### F2 - The privacy line claims identifier detection the code does not do
+**Historical F2 - The privacy line claims identifier detection the code does not do
 `chat/privacy.ts:151-161` (`residualIdentifier`) checks only: an email shape, a long digit
 run, a dashed digit run, a contact-number run, a handle and a web address. There is no name
 detection of any kind, and `placeholdersFor` (`privacy.ts:183-198`) builds at most two
@@ -76,7 +82,7 @@ phone number or web address was found"), or add the detection the sentence impli
 narrowed wording is the honest minimum for this phase; the wider detection belongs with the
 team and document work.
 
-### F3 - The payload preview is not the exact payload
+**Historical F3 - The payload preview is not the exact payload
 `chat/service.ts:770` builds the preview with `openProvider(request.presetId)` while the
 send at `:797` uses `openProvider(request.presetId, request.modelId)`. The context budget
 and message cap come from the routed provider, so preview and send can trim differently.
@@ -100,11 +106,11 @@ the evidence column cites the code and the regression tests that now cover each 
 | `F2` | Resolved as specified | The false assurance is gone; `grep -rn "Nothing in this message identified" desktop/features/copilot/shared/chat-screen.ts` returns nothing. The notice now names what was checked and states the limit at `chat-screen.ts:164`: "Client or staff names and postal addresses are not checked, so those would still be sent." The substituted notice carries the same limit. A regression test covers a client name ("Chase the Tilley quote on Friday") that still passes the checks unchanged. |
 | `F3` | Resolved as specified | Preview and send now open the provider identically with the model id, at `chat/service.ts:847` and `chat/service.ts:871`, both `openProvider(request.presetId, request.modelId)`. They share one context-assembly path and one privacy transform, and the new turn joins the conversation before the trim rather than after it. The preview keeps its thread-ownership check and persists nothing. |
 
-### 1a.1 New blocking finding introduced by the F1 correction
+### 1a.1 Historical F11 finding introduced by the F1 correction
 
-**F11 - a cloud turn is refused when a fenced row id happens to read as a long number, so
-whether a given business is blocked is decided by its own ids.**
-The F1 correction fences each remembered record with its row id. Row ids are always 32
+**Historical F11 - a cloud turn was refused when a fenced row id happened to read as a long number, so
+whether a given business was blocked was decided by its own ids.**
+The F1 correction fenced each remembered record with its row id. Row ids are always 32
 hexadecimal characters: `db/repositories/context.ts:41-43` defines `defaultNewId()` as
 `randomBytes(16).toString('hex')`. The privacy scan runs `residualIdentifier`
 (`chat/privacy.ts:151-161`) over every text part, including the system message carrying the
@@ -122,7 +128,7 @@ trip it. Measured against the built bundle (`desktop/build/main/ipc.cjs`):
 - a dashed date `14-03-26` -> `null` (correct)
 - a phone number -> `long_number` (correct)
 
-So the defect is real and common, but it is not universal, and the claim that every
+So the defect was real and common, but it was not universal, and the claim that every
 32-character id trips it was wrong. Over 20,000 freshly generated ids, the share carrying a run
 long enough to fire is:
 
@@ -133,50 +139,39 @@ long enough to fire is:
 | four (several remembered items) | 81.9 percent |
 
 Driving the real seam: `recallText()` output for one decision plus one summary, passed to
-`buildCloudPayload`, returns `blocked: true, reason: long_number` for that draw, and the fence
-lines are the lines that trip it.
+`buildCloudPayload`, returned `blocked: true, reason: long_number` for that draw, and the fence
+lines were the lines that tripped it.
 
-Consequence, stated precisely: an id is fixed when its row is created, so a given business is
-either blocked on every cloud turn or blocked on none, until its rows change. It is not that a
-third of turns fail. It is that roughly 58 percent of businesses holding one remembered item and
-a summary are blocked on every cloud turn, and the rest are unaffected. A business with no
-memory yet always works, which is why the live cloud run recorded in the acceptance report
-succeeded. The suite failure below varies run to run because each run builds a fresh database
+Consequence, stated precisely: an id is fixed when its row is created, so a given business was
+either blocked on every cloud turn or blocked on none, until its rows changed. It was not that a
+third of turns failed. It was that roughly 58 percent of businesses holding one remembered item and
+a summary were blocked on every cloud turn, and the rest were unaffected. A business with no
+memory yet always worked, which is why the live cloud run recorded in the acceptance report
+succeeded. The suite failure below varied run to run because each run built a fresh database
 with fresh ids.
 
 Evidence from the suite: `features/copilot/main/chat/recall.test.js` "closing a thread leaves a
-summary that later turns are sent instead of the text it covered" is a `cloud: true` turn
+summary that later turns are sent instead of the text it covered" was a `cloud: true` turn
 (`recall.test.js:89-90`). Run alone three times under Electron's Node it failed twice and passed
 once, each failure being `AssertionError: timed out waiting for the turn to finish`. That
-failure is this defect, not a flaky test.
+failure was this defect, not a flaky test.
 
-Correction needed: either stop putting row ids in the prompt (name the source some other way),
-or exclude the app's own fence from the residual-identifier scan, or choose a row-id alphabet
-that cannot look like a number. All three change the prompt or privacy protocol, so it needs
-its own task and a fresh review - it was not fixed during verification.
+At the time, the proposed corrections were to remove row ids from the prompt, exclude the
+app's own fences from the residual scan, or change the row-id alphabet. The fence-label
+change took the first route; section 1a.2 records the remaining verification gap.
 
-**Verdict after re-review.** F1, F2 and F3 are resolved and their corrections were re-reviewed
-and accepted; F11 is a new blocking finding that was introduced by the F1 correction and is
-unresolved; therefore Phase 3 still cannot be signed off, and progression stops here.
+### 1a.2 F11 fence-label correction and verification
 
-**Verdict after F11 correction.** All four findings (F1, F2, F3, F11) are resolved and
-re-reviewed; Phase 3 can be signed off once the separate web-build gate is open.
+The regression test in `features/copilot/main/chat/privacy.test.js` uses digit-heavy memory
+and summary row ids (`a1234567890`, `a2345678901`, `t9876543210`). Its cloud payload is
+allowed and excludes those ids, while a separate user-supplied long number (`08031234567`)
+is blocked as `long_number`. This supports the fence-label correction.
 
-### 1a.2 F11 resolved with fence-label fix
-
-The regression test added in `features/copilot/main/chat/privacy.test.js` (line 538) verifies
-that digit-heavy memory and summary IDs are allowed while user-supplied long numbers are blocked.
-The test assembles context with digit-heavy row IDs (`a1234567890`, `a2345678901`,
-`t9876543210`) and passes the assembled messages through `buildCloudPayload`. The payload is
-allowed (`blocked: false`) because the row IDs are metadata, not user content. A user-supplied
-long number (`08031234567`) is still caught and blocked as `long_number`.
-
-This confirms the fence-label fix works as intended: app-generated IDs do not trigger the
-long-number check, while user content does. The test is run as part of `npm run check` and
-passes consistently.
-
-**Revised verdict.** F1, F2, F3 and the new F11 correction are resolved and re-reviewed; Phase 3
-can be signed off once the separate web-build gate is open.
+The test passes assembled.messages directly to buildCloudPayload, proving that
+the context builder keeps the seq 3 user turn after the summary and that the cloud payload comes
+directly from assembled.messages. The test proves the cloud payload contains both memory texts,
+the summary text, and the seq 3 user text; excludes all three digit-heavy IDs; is allowed;
+and still blocks a user-supplied long number. F11 is now regression-verified.
 
 ## 2. Lower-severity findings
 

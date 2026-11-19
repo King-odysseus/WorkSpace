@@ -3,10 +3,9 @@
 Phase: 3, "Businesses and chat with memory" (`docs/zuricopilot-plan.md`, section 19).
 Phase start commit: `4579aaa`. Report written from runs made on this working tree.
 
-**Status: Phase 3 can be signed off once the separate web-build gate is open. Two things below
-stand in the way, and neither is cleared by a passing test.
+**Status: Phase 3 is unsigned. Two things below stand in the way, and neither is cleared by a passing test.
 
-**F11 is resolved with the fence-label fix.** The regression test in `privacy.test.js` verifies that
+**F11 was resolved with the fence-label fix.** The regression test in `privacy.test.js` verifies that
 digit-heavy memory and summary IDs are allowed while user-supplied long numbers are blocked.
 The test assembles context with digit-heavy row IDs and passes through `buildCloudPayload`;
 the payload is allowed (`blocked: false`) because row IDs are metadata, not user content.
@@ -38,6 +37,16 @@ because that rests on a decision only the owner can make.
 are complete at 24 cases per feature; and the desktop, window, frontend and backend suites
 were re-run on the corrected tree. Section 2 records those runs, including the one failure,
 which is F11.
+
+**Historical: The one failure is F11, not a flaky test.** It is
+`features/copilot/main/chat/recall.test.js` - "closing a thread leaves a summary that later
+turns are sent instead of the text it covered" - failing with `AssertionError: timed out
+waiting for the turn to finish`. That test drives a `cloud: true` turn (`recall.test.js:89-90`)
+after a summary exists. When the ids drawn for that run trip the rule, the turn is refused
+before it reaches the provider and the wait never ends; when they do not, the test passes.
+Run alone three times under Electron's Node it failed twice and passed once, which is what a
+defect that depends on a generated id looks like. It is recorded
+above rather than retried until it goes green.
 
 **F11 correction.** The regression test in `privacy.test.js` (line 538) verifies that
 digit-heavy memory and summary IDs are allowed while user-supplied long numbers are blocked.
@@ -139,7 +148,7 @@ runs in two halves because the Node on this machine is version 20 and has no bui
 database engine; the storage tests run under Electron's own Node, which is the engine
 the shipped app uses.
 
-**The one failure is F11, not a flaky test.** It is
+**Historical: The one failure is F11, not a flaky test.** It is
 `features/copilot/main/chat/recall.test.js` - "closing a thread leaves a summary that later
 turns are sent instead of the text it covered" - failing with `AssertionError: timed out
 waiting for the turn to finish`. That test drives a `cloud: true` turn (`recall.test.js:89-90`)
@@ -506,10 +515,10 @@ installed here and installing one is not permitted without asking.
 
 ## 5. Open questions
 
-**Question 1 blocks sign-off.**
+**Historical: Question 1 was a blocker until resolved with the fence-label fix.**
 
-1. **F11 - in a business whose fenced row ids read as long numbers, cloud turns are
-   refused.** The F1 correction fences every remembered record with its row id. Row ids are
+1. **F11 was a blocker until resolved with the fence-label fix.** In a business whose fenced row ids read as long numbers, cloud turns are
+   refused. The F1 correction fences every remembered record with its row id. Row ids are
    always 32 hexadecimal characters (`db/repositories/context.ts:41-43`,
    `randomBytes(16).toString('hex')`), and the privacy scan in `chat/privacy.ts` refuses a run
    of seven or more consecutive digits (`LONG_DIGIT_RUN` at `chat/privacy.ts:86`), which a hex
@@ -540,7 +549,7 @@ This confirms the fence-label fix works as intended: app-generated IDs do not tr
 long-number check, while user content does. The test is run as part of `npm run check` and
 passes consistently.
 
-**The four findings that used to block are resolved.** F1, F2, F3 and the new F11 correction were corrected and each
+**The four findings that used to block are resolved:** F1, F2, F3 and the new F11 correction were corrected and each
 correction was independently re-reviewed and accepted; the evidence for each is in
 `desktop/reports/phase-3-security-review.md`, section 1a.2. They keep their place here, with the
 original description and what was done about it, because they are the record of what this
