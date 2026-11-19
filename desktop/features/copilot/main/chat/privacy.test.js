@@ -583,7 +583,7 @@ test('digit-heavy memory and summary IDs are allowed while user-supplied long nu
     },
   ]
 
-  // Add a stored message with seq > coversThroughSeq (seq=3) that should appear in payload
+  // Assemble context with digit-heavy IDs and pass [storedMessage] directly
   const storedMessage = {
     id: 'b000003',
     threadId: summaryRow.threadId,
@@ -596,39 +596,41 @@ test('digit-heavy memory and summary IDs are allowed while user-supplied long nu
     createdAt: '2026-11-16T09:30:00.000Z',
   }
 
-  // Assemble context with digit-heavy IDs
   const assembled = api.assembleContext({
     summary: summaryRow,
     memory: memoryRows,
-    messages: conversation,
+    messages: [storedMessage],
   })
 
-  // Add the stored message to assembled.messages for buildCloudPayload
-  const messagesWithStored = [...assembled.messages, {
-    role: 'user',
-    parts: [{ type: 'text', text: storedMessage.content }],
-  }]
-
-  // Build cloud payload from the assembled context (including stored message)
+  // Pass assembled.messages directly to buildCloudPayload (no messagesWithStored)
   const identity = {
     businessName: 'Zuri Lofts',
     displayName: 'Zuri',
     email: 'zuri.owner@zuri.example.test',
   }
-  const { messages, preview } = api.buildCloudPayload(messagesWithStored, identity)
+  const { messages, preview } = api.buildCloudPayload(assembled.messages, identity)
 
-  // Assert the payload is allowed: digit-heavy IDs are not blocked
-  assert.equal(preview.blocked, false, 'the payload with digit-heavy IDs was blocked')
-  assert.equal(preview.blockedReason, null, 'a reason was given for the block')
+  // Assert both memory texts appear in the payload (both are metadata, not user content)
+  const payloadText = JSON.stringify(messages)
+  assert.equal(payloadText.includes('Quotes go out on Fridays.'), true, 'memory decision text appears in payload')
+  assert.equal(payloadText.includes('The studio is in Abuja.'), true, 'memory fact text appears in payload')
+
+  // Assert the summary text appears in the payload
+  assert.equal(payloadText.includes('Earlier: the Tilley quote was moved to Friday.'), true, 'summary text appears in payload')
 
   // Assert no row IDs appear in the assembled text (they are metadata, not content)
-  const payloadText = JSON.stringify(messages)
   assert.equal(payloadText.includes('a1234567890'), false, 'memory row ID a1234567890 appears in the payload')
   assert.equal(payloadText.includes('a2345678901'), false, 'memory row ID a2345678901 appears in the payload')
   assert.equal(payloadText.includes('t9876543210'), false, 'summary thread ID t9876543210 appears in the payload')
 
   // Assert the stored message with seq=3 appears in the payload (seq > coversThroughSeq)
-  assert.equal(payloadText.includes('Also include the Tilley deposit'), true, 'the stored message with seq=3 was excluded from payload')
+  assert.equal(payloadText.includes('Also include the Tilley deposit'), true, 'the stored message with seq=3 was passed directly to buildCloudPayload')
+
+  // Assert the payload is allowed: digit-heavy IDs are not blocked
+  assert.equal(preview.blocked, false, 'the payload with digit-heavy IDs was blocked')
+  assert.equal(preview.blockedReason, null, 'a reason was given for the block')
+
+
 
   // Now add a user-supplied long number that should be blocked
   const conversationWithLongNumber = [
