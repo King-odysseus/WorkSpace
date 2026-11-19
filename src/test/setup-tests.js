@@ -85,7 +85,8 @@ export function mockApi(routes) {
 /** Assert a request was made to a URL containing `fragment`, optionally with a method. */
 export function expectRequest(fetchMock, fragment, method) {
   const call = fetchMock.mock.calls.find(([url, init = {}]) =>
-    String(url).includes(fragment) && (!method || (init.method || 'GET') === method))
+    String(url).includes(fragment) && (!method || (init.method || 'GET') === method)
+  )
   expect(call, `expected a ${method || 'GET'} request to ${fragment}`).toBeTruthy()
   return call
 }
