@@ -57,7 +57,7 @@ function bridge () {
   return { api: exposed.copilot, invocations }
 }
 
-test('the preload exposes one bridge with three methods and no generic invoke', () => {
+test('the preload exposes one bridge with three methods (probe.read, probe.write, contractInfo) and no generic invoke', () => {
   const { exposed } = loadPreload()
 
   assert.deepEqual(Object.keys(exposed), ['copilot'])
