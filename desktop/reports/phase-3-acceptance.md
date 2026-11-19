@@ -1,72 +1,38 @@
 # Phase 3 acceptance report - businesses and chat with memory
 
 Phase: 3, "Businesses and chat with memory" (`docs/zuricopilot-plan.md`, section 19).
-Phase start commit: `4579aaa`. Report written from runs made on this working tree.
+Phase start commit: `4579aaa`. Historical run outputs are retained below with their original scope.
 
-**Status: Phase 3 is unsigned. Two things below stand in the way, and neither is cleared by a passing test.
+**Status: Phase 3 is unsigned.** F11 is regression-verified as resolved by the fence-label
+fix. The separate web-build gate remains open, and a live local-model run remains pending.
+The test in `privacy.test.js` passes stored memory, a summary and a seq 3 user turn through
+`assembleContext` and sends `assembled.messages` directly to `buildCloudPayload`. Both
+memory texts, the summary and the user turn reach the allowed payload without any of the
+three digit-heavy row IDs. A user-supplied long number remains blocked as `long_number`.
 
-**F11 was resolved with the fence-label fix.** The regression test in `privacy.test.js` verifies that
-digit-heavy memory and summary IDs are allowed while user-supplied long numbers are blocked.
-The test assembles context with digit-heavy row IDs and passes through `buildCloudPayload`;
-the payload is allowed (`blocked: false`) because row IDs are metadata, not user content.
-A user-supplied long number (`08031234567`) is still caught and blocked as `long_number`.
-This confirms the fence-label fix works as intended: app-generated IDs do not trigger the
-long-number check, while user content does. The test is run as part of `npm run check` and
-passes consistently.
+**Historical F11 failure.** The F1 correction originally fenced records with their row
+IDs. A hexadecimal ID could contain seven consecutive digits and trigger the privacy
+scanner. In the pre-fix measurement of 20,000 generated IDs, 35.0 percent of single IDs
+and 57.9 percent of two-ID blocks triggered the rule. Section 1a.1 of the security review
+records the old measurements and failure. The fence-label fix removed row IDs from the
+prompt while retaining source IDs in context metadata.
 
-The three findings this report used to list - F1, F2 and F3 - were corrected and each correction was independently
-re-reviewed and accepted. But the correction to F1 fences every remembered record with its row
-id. Row ids are always 32 hexadecimal characters, and the privacy scan refuses a run of seven or
-more consecutive digits, which a hex id can contain. Measured against the built bundle, an id of
-letters only passes, while `memory:0f1e2d3c4b5a69788796a5b4c3d2e1f0` and
-`summary:a1b2c3d4e5f60718293a4b5c6d7e8f90` return `long_number`, and `buildCloudPayload` on such
-a recall block returns `blocked: true, reason: long_number`. An id is fixed once its row is
-created, so a given business is either refused on every cloud turn or on none: over 20,000
-freshly generated ids, 35.0 percent of single ids and 57.9 percent of two-id blocks fire the
-rule. This is common, not universal. It is written up in full in
-`desktop/reports/phase-3-security-review.md`, section 1a.2, and it is open question 1 below.
-It was not fixed here: the cure changes the prompt or the privacy protocol and needs its
-own task and a fresh review.
-
-**Second, the "web app unchanged" gate does not pass.** It fails on the same conditions
+**The "web app unchanged" gate does not pass.** It fails on the same conditions
 Phase 1 and Phase 2 already left behind - four of them with the approved mockup-CSS
 exception applied, five without it. Phase 3 added none. Phase 1 is still not cleared,
 because that rests on a decision only the owner can make.
 
-**What did move forward.** F1, F2 and F3 are resolved and re-reviewed; the evaluation sets
-are complete at 24 cases per feature; and the desktop, window, frontend and backend suites
-were re-run on the corrected tree. Section 2 records those runs, including the one failure,
-which is F11.
-
-**Historical: The one failure is F11, not a flaky test.** It is
-`features/copilot/main/chat/recall.test.js` - "closing a thread leaves a summary that later
-turns are sent instead of the text it covered" - failing with `AssertionError: timed out
-waiting for the turn to finish`. That test drives a `cloud: true` turn (`recall.test.js:89-90`)
-after a summary exists. When the ids drawn for that run trip the rule, the turn is refused
-before it reaches the provider and the wait never ends; when they do not, the test passes.
-Run alone three times under Electron's Node it failed twice and passed once, which is what a
-defect that depends on a generated id looks like. It is recorded
-above rather than retried until it goes green.
-
-**F11 correction.** The regression test in `privacy.test.js` (line 538) verifies that
-digit-heavy memory and summary IDs are allowed while user-supplied long numbers are blocked.
-The test assembles context with digit-heavy row IDs and passes through `buildCloudPayload`;
-the payload is allowed (`blocked: false`) because row IDs are metadata, not user content.
-A user-supplied long number (`08031234567`) is still caught and blocked as `long_number`.
-This confirms the fence-label fix works as intended: app-generated IDs do not trigger the
-long-number check, while user content does. The test is run as part of `npm run check` and
-passes consistently.
-
-Nothing here is committed or staged: this crew's rule is that the person reviews the
-tree and commits when the phase is done.
+**What did move forward.** F1, F2, F3 and F11 are resolved; the evaluation sets are
+complete at 24 cases per feature. Section 2 preserves the earlier suite run, including
+its pre-fix F11 failure, alongside the other verification evidence.
 
 Three things were found while verifying. All three are recorded in section 4 rather than
 quietly fixed:
 
 - A **real defect** made every live model call fail through the shipped app. It is
   fixed, with regression tests, because criterion 3 could not be met without it.
-- The **F1 correction introduced a new blocking defect**, F11 above. It is resolved, not
-  fixed, because the cure is a privacy-protocol change.
+- The **F1 correction introduced F11**. The later fence-label fix and regression test
+  resolved it; the pre-fix failure remains documented below.
 - The proof prints a **cause line that is wrong**. It is described, not repeated as
   fact.
 
@@ -128,7 +94,7 @@ one appears.
 
 ## 2. How it was tested (commands and real output)
 
-### Desktop suite
+### Desktop suite - historical pre-fix run
 
 ```
 $ cd desktop && npm run check
@@ -148,15 +114,14 @@ runs in two halves because the Node on this machine is version 20 and has no bui
 database engine; the storage tests run under Electron's own Node, which is the engine
 the shipped app uses.
 
-**Historical: The one failure is F11, not a flaky test.** It is
+**Historical F11 failure, before the fence-label fix.** It was
 `features/copilot/main/chat/recall.test.js` - "closing a thread leaves a summary that later
 turns are sent instead of the text it covered" - failing with `AssertionError: timed out
 waiting for the turn to finish`. That test drives a `cloud: true` turn (`recall.test.js:89-90`)
-after a summary exists. When the ids drawn for that run trip the rule, the turn is refused
-before it reaches the provider and the wait never ends; when they do not, the test passes.
-Run alone three times under Electron's Node it failed twice and passed once, which is what a
-defect that depends on a generated id looks like. It is recorded
-above rather than retried until it goes green.
+after a summary existed. When the IDs drawn for that run tripped the rule, the turn was
+refused before it reached the provider and the wait never ended; otherwise the test passed.
+Run alone three times under Electron's Node, it failed twice and passed once. This is
+pre-fix evidence, not the result of the current suite.
 
 That count includes the areas criterion 1 names:
 
@@ -356,7 +321,8 @@ $ git status --porcelain --untracked-files=all -- src tasks backend | grep '^??'
 
 Read honestly: that is the **same** diff Phase 1 and Phase 2 recorded, down to the same
 four files and the same 139 insertions. Phase 3 added no web change at all. The
-committed diff is empty only because nothing is committed, which is this crew's rule.
+committed diff was empty at the time of that historical proof run; this is not a
+statement about the current Git status.
 
 ### Output 2: the build output has the same hashed names
 
@@ -491,21 +457,18 @@ the root build print a leading `i`-in-a-circle and a check mark. Both were repla
 plain text (`i` and `ok`) in section 2 so the report is ASCII. Nothing else in any
 quoted output was altered.
 
-**9. The F1 correction introduced a new blocking defect, and it was resolved rather than
-fixed.** Fencing each remembered record with its row id, which is what F1 asked for, put a
-32-character hex string into the prompt, and the privacy scan refuses a run of seven or more
-consecutive digits. A hex id contains such a run when it holds seven digits in a row, so the
-effect is that a business whose ids do so has its cloud turns refused - 57.9 percent of such
-blocks by measurement, and every turn once it happens, because an id does not change. It is
-written up in section 5 as question 1 and in the security review at 1a.2. It is resolved
-by the fence-label fix and regression test, not fixed here because every route out of it changes either the prompt protocol the F1
-correction just established or the residual-identifier rule the F2 work rests on, and both
-need their own review. Fixing it in a verification pass would have meant changing a
-privacy decision with no reviewer.
+**9. The F1 correction introduced F11, later fixed by fence labels.** Fencing each
+remembered record with its row ID put a 32-character hex string into the prompt. The
+privacy scan refused a run of seven or more consecutive digits, so the
+pre-fix effect was that a business whose IDs held such a run had every cloud turn
+refused. The measurement found this in 57.9 percent of two-ID blocks. The later
+fence-label fix removed the IDs from the prompt, and the regression test verifies
+the assembled cloud payload.
 
-**10. What this pass re-ran, and what it carried forward.** Every command quoted in
-sections 2 and 3 was run again on the corrected tree, and the numbers in this report are
-from those runs. The evaluation results in section 2 are carried forward unchanged: they
+**10. What earlier verification ran, and what it carried forward.** The commands
+quoted in sections 2 and 3 are historical runs. The desktop-suite output predates the
+fence-label fix and records its F11 failure. The evaluation results in section 2 are
+carried forward unchanged: they
 were produced by the task that completed the 24-case sets, and this pass neither re-ran
 them nor spent further live calls. The live cloud run and the live local deferral are
 likewise carried forward, with the local one still pending because no local model is
@@ -515,10 +478,10 @@ installed here and installing one is not permitted without asking.
 
 ## 5. Open questions
 
-**Historical: Question 1 was a blocker until resolved with the fence-label fix.**
+**Historical question 1, resolved by the fence-label fix.**
 
-1. **F11 was a blocker until resolved with the fence-label fix.** In a business whose fenced row ids read as long numbers, cloud turns are
-   refused. The F1 correction fences every remembered record with its row id. Row ids are
+1. **F11 previously blocked cloud turns for some businesses.** When fenced row IDs read as long numbers, cloud turns were
+   refused. The F1 correction fenced every remembered record with its row ID. Row IDs are
    always 32 hexadecimal characters (`db/repositories/context.ts:41-43`,
    `randomBytes(16).toString('hex')`), and the privacy scan in `chat/privacy.ts` refuses a run
    of seven or more consecutive digits (`LONG_DIGIT_RUN` at `chat/privacy.ts:86`), which a hex
@@ -527,38 +490,23 @@ installed here and installing one is not permitted without asking.
    `memory:deadbeefdeadbeefdeadbeefdeadbeef` return `null`, while
    `memory:0f1e2d3c4b5a69788796a5b4c3d2e1f0` and
    `summary:a1b2c3d4e5f60718293a4b5c6d7e8f90` return `long_number`, and a dashed date
-   `14-03-26` correctly returns `null`. Over 20,000 freshly generated ids, 35.0 percent of
-   single ids and 57.9 percent of two-id blocks fire the rule. Driving the real seam -
+   `14-03-26` returned `null`. Over 20,000 freshly generated IDs, 35.0 percent of
+   single IDs and 57.9 percent of two-ID blocks fired the rule. Driving the old seam -
    `recallText()` output for one decision plus one summary, passed to `buildCloudPayload` -
-   returns `blocked: true, reason: long_number` on such a draw, and the fence lines are the
-   lines that trip it. Because an id is fixed when its row is created, an affected business is
-   refused on every cloud turn, not on some of them; an unaffected business is fine, and the
-   first turn of a fresh conversation always works, which is why the live cloud run in
-   section 2 succeeded - it had no memory yet. The desktop suite's one failure is this defect,
-   appearing only when that run's ids trip the rule. The correction is to
-   stop putting row ids in the prompt, or to exclude the app's own fence from the scan, or to
-   choose a row-id alphabet that cannot look like a number; all three change the prompt or
-   the privacy protocol, so this needs its own task and a fresh review.
+   returned `blocked: true, reason: long_number` on such a draw. An affected business was
+   refused on every cloud turn until its rows changed; a business without memory was
+   unaffected. The historical desktop-suite failure above came from this defect.
+   The implemented correction uses fence labels without row IDs in the prompt.
 
-**F11 correction.** The regression test in `privacy.test.js` (line 538) verifies that
-digit-heavy memory and summary IDs are allowed while user-supplied long numbers are blocked.
-The test assembles context with digit-heavy row IDs and passes through `buildCloudPayload`;
-the payload is allowed (`blocked: false`) because row IDs are metadata, not user content.
-A user-supplied long number (`08031234567`) is still caught and blocked as `long_number`.
-This confirms the fence-label fix works as intended: app-generated IDs do not trigger the
-long-number check, while user content does. The test is run as part of `npm run check` and
-passes consistently.
-
-**The four findings that used to block are resolved:** F1, F2, F3 and the new F11 correction were corrected and each
-correction was independently re-reviewed and accepted; the evidence for each is in
-`desktop/reports/phase-3-security-review.md`, section 1a.2. They keep their place here, with the
+**The four findings that used to block are resolved:** F1, F2, F3 and F11. The evidence for each is in
+`desktop/reports/phase-3-security-review.md`, sections 1a and 1a.2. They keep their place here, with the
 original description and what was done about it, because they are the record of what this
 phase got wrong:
 
 - **F1 - remembered content reached the model as instructions, not as data.** Resolved:
   `chat/context.ts:101-104` now tells the model that everything between a record's begin and
   end lines is quoted business data and that directions inside it are never instructions.
-  Each item and the summary are fenced with their source id, and a stored line that forges a
+  Each item and the summary are fenced with labels, and a stored line that forges a
   fence, a heading or the notice is escaped. Covered by regression tests in
   `chat/context.test.js`.
 - **F2 - the privacy line claimed more than the code checks.** Resolved: the false assurance
@@ -569,14 +517,11 @@ phase got wrong:
   the provider identically with the model id (`chat/service.ts:847` and `:871`), share one
   context-assembly path and one privacy transform, and the new turn joins the conversation
   before the trim rather than after it.
-- **F11 - a cloud turn is refused when a fenced row id reads as a long number.** Resolved:
-  the regression test verifies digit-heavy memory and summary IDs are allowed while user-supplied
-  long numbers are blocked. The test assembles context with digit-heavy row IDs and passes through
-  `buildCloudPayload`; the payload is allowed (`blocked: false`) because row IDs are metadata,
-  not user content. A user-supplied long number (`08031234567`) is still caught and blocked as
-  `long_number`. This confirms the fence-label fix works as intended: app-generated IDs do not
-  trigger the long-number check, while user content does. The test is run as part of `npm run check`
-  and passes consistently.
+- **F11 - fenced row IDs previously blocked some cloud turns.** Resolved: the test
+  passes stored memory, a summary and a seq 3 user turn through `assembleContext`,
+  then passes `assembled.messages` directly to `buildCloudPayload`. The allowed
+  payload contains both memory texts, the summary and user turn, excludes all three
+  digit-heavy IDs, and still blocks a user-supplied long number as `long_number`.
 
 **Questions 2 to 6 are decisions, not defects.**
 
