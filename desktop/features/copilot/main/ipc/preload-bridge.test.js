@@ -131,6 +131,6 @@ test('the channel literal in the preload is the one in the contract', () => {
   assert.ok(source.includes(`'${PROBE_CHANNEL}'`), 'the preload does not name the contract channel')
   assert.ok(source.includes(`'${CONTRACT_INFO_CHANNEL}'`), 'the preload does not name the contract-info channel')
   assert.equal(source.includes('ipcRenderer.invoke('), true)
-  // One call site, fed by the two fixed methods, and nothing else.
+  // One call site, fed by the three fixed methods (probe.read, probe.write, contractInfo), and nothing else.
   assert.equal((source.match(/ipcRenderer\.invoke\(/g) || []).length, 1)
 })
