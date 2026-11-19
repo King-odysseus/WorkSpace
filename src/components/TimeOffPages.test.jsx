@@ -109,8 +109,12 @@ describe('WhereWeWorkView', () => {
   it('saves my usual week and the optional office days', async () => {
     const fetchMock = mockApi({ '/locations/': people, '/location-pattern/': { my_pattern: {} }, '/office-days/': { office_days: [1] } })
     render(<WhereWeWorkView workspaceId={4} currentUserId={1} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Save my usual week' }))
+    const saveButton = await screen.findByRole('button', { name: 'Save my usual week' })
+    await waitFor(() => expect(saveButton).toBeEnabled())
+    fireEvent.click(saveButton)
     await waitFor(() => expectRequest(fetchMock, '/location-pattern/', 'PUT'))
+    const [, locationPatternInit] = expectRequest(fetchMock, '/location-pattern/', 'PUT')
+    expect(JSON.parse(locationPatternInit.body)).toMatchObject({ pattern: {} })
     fireEvent.click(screen.getByRole('button', { name: 'Save office days' }))
     await waitFor(() => expectRequest(fetchMock, '/office-days/', 'PATCH'))
   })
