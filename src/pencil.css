@@ -9475,6 +9475,19 @@ body:has([data-slot='dialog-content'].ai-chat-window) .main-content { overflow: 
 .memo-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .memo-actions > span { margin-right: auto; color: var(--pencil-text-muted); font-size: 13px; }
 .memo-error { margin: 8px 0 0; color: var(--color-danger); font-size: 13px; }
+.articles-view { min-width: 0; }
+.article-back { margin: 0 0 12px -8px; }
+.article-reader { max-width: 820px; margin: 8px auto 0; padding: clamp(20px, 5vw, 52px); border: 1px solid var(--pencil-border); border-radius: 18px; background: var(--pencil-surface); box-shadow: var(--shadow-soft); }
+.article-reader h1 { margin: 0; color: var(--pencil-text); font-size: clamp(26px, 4vw, 38px); line-height: 1.2; letter-spacing: -0.025em; }
+.article-meta { margin: 12px 0 28px; color: var(--pencil-text-muted); font-size: 13px; }
+.article-body { color: var(--pencil-text-secondary); font-size: 16px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.article-draft-label { display: inline-block; margin-bottom: 12px; padding: 4px 9px; border-radius: 999px; background: var(--color-info-soft); color: var(--color-info); font-size: 12px; font-weight: 700; }
+.article-owner-actions { justify-content: flex-start; border-top: 1px solid var(--pencil-border); padding-top: 16px; }
+.article-editor { display: grid; gap: 16px; margin: 22px 0; padding: clamp(16px, 3vw, 24px); border: 1px solid var(--pencil-border); border-radius: 16px; background: var(--pencil-surface); }
+.article-editor > label { display: grid; gap: 7px; color: var(--pencil-text-secondary); font-size: 13px; font-weight: 600; }
+.article-editor input, .article-editor textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--pencil-border); border-radius: 10px; background: var(--pencil-surface); color: var(--pencil-text); font: inherit; font-size: 14px; }
+.article-editor textarea { min-height: 280px; line-height: 1.65; resize: vertical; }
+.article-card .memo-card-preview { white-space: pre-line; }
 
 /* Team availability: Busy and Offline get their own looks instead of reading as Available. */
 .pencil-team-status.busy { background: var(--color-info-soft); color: var(--color-info); }

@@ -27,6 +27,7 @@ import {
   ArrowUpRight,
   BarChart3,
   Bell,
+  BookOpen,
   Building2,
   CalendarDays,
   Camera,
@@ -91,6 +92,7 @@ import { TaskProgressActions } from "./components/TaskProgressBar.jsx";
 import { flowbiteTheme } from "./lib/flowbite-theme.js";
 import MemoBanner from "./components/MemoBanner.jsx";
 import MemosView from "./components/MemosView.jsx";
+const ArticlesView = lazyRoute("ArticlesView", () => import("./components/ArticlesView.jsx"));
 import { installAutoGrow } from "./lib/auto-grow.js";
 import { NavCountsFeeder } from "./lib/use-nav-counts.js";
 import LeaveView from "./components/LeaveView.jsx";
@@ -3272,6 +3274,7 @@ function App() {
         },
         { label: "Check-ins", icon: Check },
         { label: "Memos/Requests", icon: Megaphone, badge: navCounts.memos, badgeTone: "warning" },
+        { label: "Articles", icon: BookOpen },
         { label: "Time off", icon: CalendarOff, badge: navCounts.timeOff, badgeTone: "warning" },
         { label: "Where we work", icon: MapPin },
       ],
@@ -9229,6 +9232,10 @@ function WorkspaceView({
         role={currentWorkspace?.role}
       />
     );
+  }
+
+  if (active === "Articles") {
+    return <ArticlesView workspaceId={workspaceId} currentUserId={currentUserId} role={currentWorkspace?.role} />;
   }
 
   if (active === "Check-ins") {

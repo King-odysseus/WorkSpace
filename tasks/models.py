@@ -2219,6 +2219,37 @@ class Memo(models.Model):
         }
 
 
+class Article(models.Model):
+    """A lasting learning article shared with a workspace."""
+    DRAFT = 'draft'
+    PUBLISHED = 'published'
+    STATUS_CHOICES = [(DRAFT, 'Draft'), (PUBLISHED, 'Published')]
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='articles')
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='workspace_articles')
+    title = models.CharField(max_length=180)
+    body = models.TextField(max_length=50000)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
+    published_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-published_at', '-created_at', '-id']
+        indexes = [models.Index(fields=['workspace', 'status', '-published_at'])]
+
+    def as_dict(self):
+        author = self.author
+        return {
+            'id': self.id, 'workspace_id': self.workspace_id, 'title': self.title, 'body': self.body,
+            'author_id': self.author_id,
+            'author_name': (author.get_full_name() or author.email) if author else 'Former member',
+            'status': self.status,
+            'published_at': self.published_at.isoformat() if self.published_at else None,
+            'created_at': self.created_at.isoformat(), 'updated_at': self.updated_at.isoformat(),
+        }
+
+
 class MemoResponse(models.Model):
     """One person's answer to a request memo."""
     memo = models.ForeignKey(Memo, on_delete=models.CASCADE, related_name='responses')

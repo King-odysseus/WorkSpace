@@ -7,6 +7,7 @@ from .team_day_views import team_day, team_day_member, team_week
 from .leave_views import leave_detail, leave_list
 from .location_views import office_days_policy, work_location_pattern, work_locations
 from .memo_views import memo_respond, memo_detail, memo_dismiss, memo_list
+from .article_views import article_detail, article_list
 from .views import check_in_preference, reminder_detail, reminder_list, activity_list, audit_log_list, calendar_event_detail, calendar_event_list, calendar_feed_token, calendar_ics, chat_channel_detail, chat_channel_list, chat_message_detail, chat_message_list, chat_message_pin, chat_message_reaction, chat_message_star, chat_pinned_messages, direct_message_pin, direct_message_star, direct_pinned_messages, starred_messages, check_in_comment_list, check_in_list, direct_conversation_delete, direct_conversation_detail, direct_conversation_list, direct_conversation_restore, direct_message_detail, direct_message_list, direct_message_reaction, follow_up_comment_list, follow_up_detail, follow_up_list, health, invitation_accept, invitation_decline, invitation_detail, invitation_list, invitation_public_detail, invitation_resend, lookup_value_detail, lookup_value_list, member_detail, member_list, notification_list, notification_preference_detail, plan_bucket_detail, plan_bucket_list, plan_bucket_reorder, project_detail, project_expense_detail, project_expense_list, project_list, project_resource_detail, project_resource_list, project_stakeholder_detail, project_stakeholder_list, project_template_apply, project_template_detail, project_template_list, report_summary, risk_issue_detail, risk_issue_list, saved_view_detail, saved_view_list, task_attachment_detail, task_attachment_download, task_attachment_list, task_comment_list, task_detail, task_history_list, task_list, task_reorder, task_subtask_detail, task_subtask_list, task_template_apply, task_template_detail, task_template_list, work_shift_list, workspace_archive, workspace_delete, workspace_leave, workspace_rename, workspace_restore, workspace_search, workspace_webhook_detail, workspace_webhook_list
 from .board_views import board_members
 from .pulse import workspace_pulse
@@ -118,6 +119,8 @@ urlpatterns = [
     path('workspaces/<int:workspace_id>/starred-messages/', starred_messages, name='starred-messages'),
     path('workspaces/<int:workspace_id>/reminders/', reminder_list, name='reminder-list'),
     path('workspaces/<int:workspace_id>/memos/', memo_list, name='memo-list'),
+    path('workspaces/<int:workspace_id>/articles/', article_list, name='article-list'),
+    path('workspaces/<int:workspace_id>/articles/<int:article_id>/', article_detail, name='article-detail'),
     path('workspaces/<int:workspace_id>/memos/<int:memo_id>/respond/', memo_respond, name='memo-respond'),
     path('workspaces/<int:workspace_id>/requests/', work_request_list, name='work-request-list'),
     path('workspaces/<int:workspace_id>/requests/<int:request_id>/', work_request_detail, name='work-request-detail'),
