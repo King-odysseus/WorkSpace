@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .models import Article
-from .views import require_workspace_member
+from .views import create_notification, require_workspace_member
 
 TITLE_LIMIT = 180
 BODY_LIMIT = 50000
@@ -44,6 +44,15 @@ def _can_manage(membership, article, user):
     return can_write and (article.author_id == user.id or membership.role == 'owner')
 
 
+def notify_article_published(article, author):
+    for membership in article.workspace.memberships.exclude(user=author).select_related('user'):
+        create_notification(
+            article.workspace_id, membership.user, 'article_published',
+            f'New learning article: {article.title}'[:200], article.body[:200],
+            target_type='article', target_id=article.id,
+        )
+
+
 @require_http_methods(['GET', 'POST'])
 def article_list(request, workspace_id):
     membership, error = require_workspace_member(request, workspace_id)
@@ -76,6 +85,8 @@ def article_list(request, workspace_id):
         status=status,
         published_at=timezone.now() if status == Article.PUBLISHED else None,
     )
+    if status == Article.PUBLISHED:
+        notify_article_published(article, request.user)
     return JsonResponse({'article': article.as_dict()}, status=201)
 
 
@@ -103,12 +114,16 @@ def article_detail(request, workspace_id, article_id):
     for field in ('title', 'body'):
         if field in cleaned:
             setattr(article, field, cleaned[field])
+    newly_published = False
     if 'status' in cleaned:
         previous = article.status
         article.status = cleaned['status']
         if article.status == Article.PUBLISHED and previous != Article.PUBLISHED:
             article.published_at = timezone.now()
+            newly_published = True
         elif article.status == Article.DRAFT:
             article.published_at = None
     article.save()
+    if newly_published:
+        notify_article_published(article, request.user)
     return JsonResponse({'article': article.as_dict()})

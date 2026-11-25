@@ -10,6 +10,7 @@ from django.utils import timezone
 from .board_access import is_board_member, visible_buckets, visible_projects, visible_tasks, visible_workstreams
 from .models import AiAction, LookupValue, Membership, PlanBucket, Project, Task, TaskComment, WorkspaceDocument
 from .memo_views import memo_list
+from .article_views import article_list
 from .views import task_detail, task_list, project_detail, project_list
 
 
@@ -84,6 +85,7 @@ ACTION_FIELDS = {
     'project.update': {'project_id', 'name', 'description', 'status', 'due_date', 'start_date', 'end_date'},
     'project.delete': {'project_id'},
     'memo.create': {'title', 'body', 'banner_days', 'kind', 'due_date'},
+    'article.create': {'title', 'body'},
 }
 
 # Deletes are permanent, so they are held to a stricter rule than every other
@@ -483,11 +485,12 @@ def action_instructions(snapshot):
         'When a request needs more than that, propose the first batch as actions, then say in "answer" how many are left and that the user can reply "continue" for the next batch. '
         'On "continue", skip every task whose title already appears in the snapshot or in your earlier replies and propose the next batch; never propose the same task twice. '
         'A spreadsheet to load in bulk with its own columns belongs in Import data, which previews every row before anything is written. '
-        'Allowed action kinds are task.create, task.update, task.archive, task.delete, project.create, project.update, project.delete, and memo.create. '
+        'Allowed action kinds are task.create, task.update, task.archive, task.delete, project.create, project.update, project.delete, memo.create, and article.create. '
         'memo.create writes a company memo with title (short), body (plain text, no markdown) and optional banner_days (0 to 60, default 7; 0 means no banner). '
         'Set kind to "request" (with an optional due_date, YYYY-MM-DD) when the user wants to ask the team for something they must answer; otherwise leave kind out. '
         'Only owners and managers can post memos; when the user asks for a memo, draft it in full in "answer" and also return the memo.create action so they can confirm or change it. '
         'A memo goes to everyone, so never put private data, salaries or personal details in it. '
+        'article.create saves a plain-text learning article draft with a title and full body. Only owners and managers with posting permission can create one. When asked to write an article, use information supplied in the conversation or workspace snapshot; do not invent company policies or processes. Put the complete draft in "answer" and return article.create so the user can confirm saving it. Confirmation saves it as a private draft only; it is not published until the user publishes it on the Articles page. Never send an article notification or claim it is published while drafting. '
         'task.archive uses task_id: it takes a task off the board but keeps it, and an owner or manager may ask for it. '
         'Prefer task.archive when the user says archive, clear, or take something off; use task.delete only when they ask to delete or remove it for good. '
         'Work lives in a project or in an operations workstream such as Daily operations, never both. The snapshot lists "workstreams" and "buckets"; '
@@ -510,7 +513,7 @@ def action_instructions(snapshot):
         'Never show a task or project id, code or number in "answer"; ids belong only inside action fields. '
         'The action fields are: task.create uses title, description, status, priority, due_date, start_date, project_id, workstream_id, assignee_ref, bucket, labels, progress_percent; '
         'task.update uses task_id plus any of those fields; project.create uses name, description, status, due_date, start_date, end_date; '
-        'project.update uses project_id plus any project field. Do not propose comments, documents, invitations, budgets, expenses, or personal data. '
+        'project.update uses project_id plus any project field; article.create uses title and body. Do not propose comments, documents, invitations, budgets, expenses, or personal data. '
         f'Workspace snapshot: {json.dumps(snapshot, separators=(",", ":"))}'
     )
 
@@ -709,11 +712,12 @@ def _validate_action(action, registry, workspace_id, actor):
                 raise ActionValidationError('Banner days must be a whole number from 0 to 60.')
             cleaned[field] = value
         elif field == 'body':
-            cleaned[field] = _clean_string(value, registry, field, 4000)
+            cleaned[field] = _clean_string(value, registry, field, 50000 if kind == 'article.create' else 4000)
             if not cleaned[field]:
-                raise ActionValidationError('Memo text is required.')
+                raise ActionValidationError('Article or memo text is required.')
         elif field in {'title', 'name'}:
-            cleaned[field] = _clean_string(value, registry, field, 160 if kind == 'memo.create' or field == 'name' else 200)
+            title_limit = 160 if kind == 'memo.create' or field == 'name' else 180 if kind == 'article.create' else 200
+            cleaned[field] = _clean_string(value, registry, field, title_limit)
             if not cleaned[field]:
                 raise ActionValidationError(f'{field.title()} is required.')
         elif field in {'description', 'blocker_details'}:
@@ -748,6 +752,8 @@ def _validate_action(action, registry, workspace_id, actor):
         raise ActionValidationError('Task title is required.')
     if kind == 'memo.create' and not (cleaned.get('title') and cleaned.get('body')):
         raise ActionValidationError('A memo needs a title and text.')
+    if kind == 'article.create' and not (cleaned.get('title') and cleaned.get('body')):
+        raise ActionValidationError('An article needs a title and text.')
     if kind == 'task.update':
         if not cleaned.get('task_id'):
             raise ActionValidationError('Task is required.')
@@ -780,6 +786,10 @@ def _validate_action(action, registry, workspace_id, actor):
     if kind == 'memo.create':
         if not membership.has_permission('post_memos'):
             raise ActionValidationError('You do not have permission to post memos. Ask an owner or manager.')
+        return kind, cleaned
+    if kind == 'article.create':
+        if membership.role not in {'owner', 'manager'} or not membership.has_permission('post_memos'):
+            raise ActionValidationError('Only owners and managers with article posting permission can ask Zuri to draft an article.')
         return kind, cleaned
     if kind == 'task.archive':
         # The same rule the archive endpoint applies, said here so a refusal
@@ -856,6 +866,8 @@ def _action_summary(kind, payload, registry):
         noun = 'request memo' if payload.get('kind') == 'request' else 'memo'
         due = f' Answers needed by {payload["due_date"]}.' if payload.get('kind') == 'request' and payload.get('due_date') else ''
         return f'Post {noun} "{registry.expand(payload.get("title") or "Untitled memo")[:120]}" to everyone in the workspace.{due}{banner}'
+    if kind == 'article.create':
+        return f'Save "{registry.expand(payload.get("title") or "Untitled article")[:120]}" as an unpublished article draft. It will not be visible to the team until an owner or manager publishes it.'
     if kind == 'project.delete':
         project = Project.objects.filter(id=payload.get('project_id')).only('name').first()
         name = registry.expand(project.name if project else 'Unknown project')[:120]
@@ -974,6 +986,14 @@ def execute_action(action, actor):
         request = factory.post(f'/api/workspaces/{action.workspace_id}/memos/', data=json.dumps(action.payload), content_type='application/json')
         request.user = actor
         return _call_view(memo_list, request, workspace_id=action.workspace_id)
+    if action.kind == 'article.create':
+        request = factory.post(
+            f'/api/workspaces/{action.workspace_id}/articles/',
+            data=json.dumps({**action.payload, 'status': 'draft'}),
+            content_type='application/json',
+        )
+        request.user = actor
+        return _call_view(article_list, request, workspace_id=action.workspace_id)
     if action.kind == 'task.create':
         request = factory.post('/api/tasks/', data=json.dumps(action.payload), content_type='application/json')
         request.user = actor

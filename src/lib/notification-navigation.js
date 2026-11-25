@@ -10,6 +10,7 @@ export const notificationDestinations = {
   risk: 'Projects',
   workstream: 'Planner',
   document: 'Files',
+  article: 'Articles',
   workspace: 'Today',
 }
 

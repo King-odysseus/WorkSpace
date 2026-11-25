@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { Button } from './ui/button.jsx'
 import { WorkspaceViewHeading } from './workspace-ui.jsx'
 import { workspaceCall } from '../lib/workspace-api.js'
+import { OPEN_ARTICLE_EVENT, takePendingArticle } from '../lib/article-navigation.js'
 
 const dateLabel = value => value ? new Date(value).toLocaleDateString([], { dateStyle: 'medium' }) : ''
 
@@ -43,6 +44,7 @@ export default function ArticlesView({ workspaceId, currentUserId, role }) {
   const [editing, setEditing] = useState(undefined)
   const [tab, setTab] = useState('published')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [pendingOpenId, setPendingOpenId] = useState(null)
 
   const load = async () => {
     setLoaded(false)
@@ -53,7 +55,35 @@ export default function ArticlesView({ workspaceId, currentUserId, role }) {
       setError('')
     } catch (loadError) { setError(loadError.message) } finally { setLoaded(true) }
   }
-  useEffect(() => { load() }, [workspaceId])
+  useEffect(() => {
+    const claim = () => {
+      const id = takePendingArticle()
+      if (id) setPendingOpenId(id)
+    }
+    const reload = () => load()
+    claim()
+    load()
+    window.addEventListener(OPEN_ARTICLE_EVENT, claim)
+    window.addEventListener('workspace:articles-changed', reload)
+    return () => {
+      window.removeEventListener(OPEN_ARTICLE_EVENT, claim)
+      window.removeEventListener('workspace:articles-changed', reload)
+    }
+  }, [workspaceId])
+
+  useEffect(() => {
+    if (!pendingOpenId || !loaded) return
+    const article = articles.find(item => Number(item.id) === pendingOpenId)
+    if (article) {
+      setSelected(article)
+      setPendingOpenId(null)
+      return
+    }
+    workspaceCall(workspaceId, `articles/${pendingOpenId}/`, 'GET')
+      .then(payload => setSelected(payload.article))
+      .catch(() => toast.error('That article is no longer available.'))
+      .finally(() => setPendingOpenId(null))
+  }, [pendingOpenId, loaded, articles, workspaceId])
 
   const canManage = article => canWrite && (article.author_id === currentUserId || role === 'owner')
   const save = async fields => {
@@ -92,7 +122,7 @@ export default function ArticlesView({ workspaceId, currentUserId, role }) {
 
   if (selected) {
     return <section className="workspace-view articles-view">
-      <Button variant="ghost" className="article-back" onClick={() => { setSelected(null); setConfirmDelete(false) }}><ArrowLeft size={16} aria-hidden="true" /> All articles</Button>
+      <Button variant="ghost" className="article-back" onClick={() => { setSelected(null); setPendingOpenId(null); setConfirmDelete(false) }}><ArrowLeft size={16} aria-hidden="true" /> All articles</Button>
       <article className="article-reader">
         {selected.status === 'draft' && <span className="article-draft-label">Draft</span>}
         <h1>{selected.title}</h1>
@@ -115,7 +145,7 @@ export default function ArticlesView({ workspaceId, currentUserId, role }) {
       const items = articles.filter(article => tab === 'drafts' ? article.status === 'draft' : article.status === 'published')
       return items.length ? <div className="memo-list">{items.map(article => <article className="memo-card article-card" key={article.id}>
         <span className="memo-card-icon" aria-hidden="true"><BookOpen size={18} /></span><div className="memo-card-main">
-          <button type="button" className="memo-card-title" onClick={() => setSelected(article)}>{article.title}</button>
+          <button type="button" className="memo-card-title" onClick={() => { setPendingOpenId(null); setSelected(article) }}>{article.title}</button>
           <p className="memo-card-meta">{article.author_name} - {dateLabel(article.published_at || article.created_at)}{article.status === 'draft' ? ' - Draft' : ''}</p>
           <p className="memo-card-preview">{article.body}</p>
         </div>

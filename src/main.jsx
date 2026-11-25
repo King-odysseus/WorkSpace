@@ -98,6 +98,7 @@ import { NavCountsFeeder } from "./lib/use-nav-counts.js";
 import LeaveView from "./components/LeaveView.jsx";
 import WhereWeWorkView from "./components/WhereWeWorkView.jsx";
 import { requestMemo } from "./lib/memo-navigation.js";
+import { requestArticle } from "./lib/article-navigation.js";
 import { OPEN_TASK_BOARD_EVENT, flashTaskCard } from "./lib/board-navigation.js";
 import { Button } from "./components/ui/button.jsx";
 import TodayPrivatePlan from "./components/TodayPrivatePlan.jsx";
@@ -2673,6 +2674,11 @@ function App() {
     if (targetType === "memo") {
       requestMemo(targetId);
       setActive("Memos/Requests");
+      return;
+    }
+    if (targetType === "article") {
+      requestArticle(targetId);
+      setActive("Articles");
       return;
     }
     if (targetType === "request") {
@@ -8177,6 +8183,7 @@ function WorkspaceView({
       }
       if (kind.startsWith("check_in")) return { Icon: CheckCircle2, tone: "complete" };
       if (kind.startsWith("calendar")) return { Icon: CalendarDays, tone: "calendar" };
+      if (kind === "article_published") return { Icon: BookOpen, tone: "task" };
       if (kind.includes("document") || kind.includes("attachment")) return { Icon: File, tone: "file" };
       return { Icon: ClipboardList, tone: "task" };
     };
@@ -8198,6 +8205,7 @@ function WorkspaceView({
         calendar_reminder: "Calendar reminder",
         reminder: "Reminder",
         memo: "Memo",
+        article_published: "Article published",
         request: "Request",
         leave: "Time off",
         risk_issue_assigned: "Risk assigned",

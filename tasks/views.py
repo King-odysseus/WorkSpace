@@ -180,6 +180,7 @@ NOTIFICATION_KIND_PREFERENCE = {
     'calendar_reminder': 'calendar_reminders',
     'reminder': 'task_updates',
     'memo': 'task_updates',
+    'article_published': 'task_updates',
     'request': 'task_updates',
     'day_digest': 'task_updates',
     'leave': 'task_updates',
@@ -212,7 +213,7 @@ P16_RISK_MEMBER_KINDS = frozenset({
 # change the category through a subtraction rule.
 P16_TASK_UPDATE_KINDS = frozenset({
     'task_assigned', 'task_status', 'task_comment', 'task_attachment',
-    'task_attachment_deleted', 'task_created', 'task_permanently_deleted',
+    'task_attachment_deleted', 'task_created', 'task_permanently_deleted', 'article_published',
     'task_archived', 'task_title', 'task_priority', 'task_due_date',
     'task_recurrence', 'task_bucket', 'task_labels', 'task_project',
     'subtask_created', 'follow_up_assigned', 'follow_up_unassigned',

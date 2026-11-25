@@ -1258,6 +1258,7 @@ function useAssistantConversation(workspaceId, transcriptRef) {
         const result = await response.json()
         const action = result.action
         if (decision === 'confirm' && response.ok && action?.kind === 'memo.create') window.dispatchEvent(new Event('workspace:memos-changed'))
+        if (decision === 'confirm' && response.ok && action?.kind === 'article.create') window.dispatchEvent(new Event('workspace:articles-changed'))
         if (decision === 'confirm' && response.ok && action?.kind === 'task.delete' && action.result?.restore) {
           setUndoable(current => [...current, { id: action.id, title: action.result.restore.title }])
         }
